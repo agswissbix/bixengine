@@ -1,7 +1,9 @@
 *.pyc
-__pycache__/
+
 *.sqlite3
 bixengine/.env
+__pycache__/
+bixengine/__pycache__/
 commonapp/__pycache__/
 customapp_*/
 
