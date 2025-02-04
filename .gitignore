@@ -7,3 +7,4 @@ bixengine/__pycache__/
 commonapp/__pycache__/
 customapp_*/
 
+/bixengine/__pycache__
