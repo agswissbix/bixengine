@@ -8,3 +8,5 @@ commonapp/__pycache__/
 customapp_*/
 
 
+bixengine/__pycache__/settings.cpython-311.pyc
+bixengine/__pycache__/urls.cpython-311.pyc

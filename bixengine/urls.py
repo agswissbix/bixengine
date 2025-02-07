@@ -9,5 +9,4 @@ urlpatterns = [
     path('auth/logout/', logout_view, name='logout'),
     path('auth/user/', user_info, name='user_info'),
     path('commonapp/', include('commonapp.urls')),
-    path('customapp_pitservice/', include('customapp_pitservice.urls')),
 ]
