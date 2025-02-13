@@ -9,6 +9,9 @@ import json
 from django.middleware.csrf import get_token
 from django.contrib.auth.decorators import login_required
 from functools import wraps
+from .bixmodels.sys_table import *
+from .bixmodels.user_record import *
+from .bixmodels.user_table import *
 
 @ensure_csrf_cookie
 def get_csrf_token(request):
@@ -66,17 +69,42 @@ def get_examplepost(request):
         try:
             # Decodifica il corpo della richiesta JSON
             data = json.loads(request.body)
-            selectedMenu1 = data.get('selectedMenu1')
 
             # Crea una risposta basata sui dati ricevuti
             response_data = {
-                "userId": 1,
-                "name": "John BixDoe2",
-                "email": "johndoe@example.com",
-                "menuItemBackend": f"{selectedMenu1}-Backend" if selectedMenu1 else "No Menu Item"
+                "responseExampleValue": "Risposta dal backend"
             }
+
             return JsonResponse(response_data)
         except json.JSONDecodeError:
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
 
     return JsonResponse({'error': 'Invalid request method'}, status=405)
+
+@login_required_api  
+def get_sidebarmenu_items(request):  
+    print("Function: get_sidebarmenu_items")
+    tables=SysTable.get_user_tables(1)
+    workspaces_tables=dict()
+    for table in tables:
+        workspace = table["workspace"]
+        
+        if workspace not in workspaces_tables:
+            workspaces_tables[workspace] = {}
+            workspaces_tables[workspace]["id"]=table['workspace']
+            workspaces_tables[workspace]["title"]=table['workspace']
+            workspaces_tables[workspace]["icon"]='Home'
+        subitem={}
+        subitem['id']=table['id']
+        subitem['title']=table['description']
+        subitem['href']="#"
+        if "subItems" not in workspaces_tables[workspace]:
+            workspaces_tables[workspace]['subItems']=[]
+        workspaces_tables[workspace]["subItems"].append(subitem)
+
+    response = {
+        "menuItems": workspaces_tables
+    }
+
+
+    return JsonResponse(response, safe=False)
