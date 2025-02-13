@@ -135,6 +135,7 @@ def csrf_test_view(request):
     csrf_header = request.META.get('HTTP_X_CSRFTOKEN')
     print("Header X-CSRFToken:", csrf_header)
     print("Cookie csrftoken:", request.COOKIES.get('csrftoken'))
+    print("Session ID:", request.COOKIES.get('sessionid'))
     if request.method == 'GET':
         # La GET serve a far impostare il cookie CSRF dal browser
         return JsonResponse({
