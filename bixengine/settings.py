@@ -142,6 +142,8 @@ CORS_ORIGIN_ALLOW_ALL = False
 CORS_ORIGIN_WHITELIST = [
     'https://localhost:8000',
     'http://localhost:3000',
+    'http://192.168.10.11',
+    'http://192.168.10.11:3000',
     env('BIXENGINE_SERVER'),
     env('BIXPORTAL_SERVER'),
 ]
@@ -156,8 +158,11 @@ CSRF_COOKIE_SECURE = False    # True in produzione con HTTPS
 CSRF_TRUSTED_ORIGINS = [
     'https://localhost:8000',
     'http://localhost:3000',
+    'http://192.168.10.11',
+    'http://192.168.10.11:3000',
     env('BIXENGINE_SERVER'),
     env('BIXPORTAL_SERVER'),
-    # Se usi HTTPS in locale, aggiungi la versione https:
-    # 'https://localhost:3000',
 ]
+
+SESSION_COOKIE_SAMESITE = 'Lax'  # Add this
+CSRF_COOKIE_SAMESITE = 'Lax'    # Add this
