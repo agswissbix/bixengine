@@ -140,7 +140,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ORIGIN_ALLOW_ALL = False
 CORS_ORIGIN_WHITELIST = [
-    "http://localhost:3000",
+    env('BIXPORTAL_SERVER'),
 ]
 CORS_ALLOW_CREDENTIALS = True
 
@@ -151,7 +151,7 @@ CSRF_COOKIE_SECURE = False    # True in produzione con HTTPS
 
 # 2. Se usi Django >= 4.0, devi aggiungere l'origin di frontend qui:
 CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:3000',
+    env('BIXPORTAL_SERVER'),
     # Se usi HTTPS in locale, aggiungi la versione https:
     # 'https://localhost:3000',
 ]
