@@ -8,4 +8,5 @@ urlpatterns = [
     path('get_sidebarmenu_items/', get_sidebarmenu_items, name='get_sidebarmenu_items'),
     path('test_connection/', test_connection, name='test_connection'),
     
+    
 ]

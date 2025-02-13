@@ -38,6 +38,7 @@ def login_view(request):
     print("Function: login_view")
     print("Header X-CSRFToken:", request.META.get('HTTP_X_CSRFTOKEN'))
     print("Cookie csrftoken:", request.COOKIES.get('csrftoken'))
+    print("SessionID:", request.COOKIES.get('sessionid'))
     username = request.POST.get("username")
     password = request.POST.get("password")
 
@@ -127,4 +128,28 @@ def check_csrf(request):
     }
     return JsonResponse(response, safe=False)
 
+
+@ensure_csrf_cookie
+def csrf_test_view(request):
+    print("Function: csrf_test_view")
+    csrf_header = request.META.get('HTTP_X_CSRFTOKEN')
+    print("Header X-CSRFToken:", csrf_header)
+    print("Cookie csrftoken:", request.COOKIES.get('csrftoken'))
+    if request.method == 'GET':
+        # La GET serve a far impostare il cookie CSRF dal browser
+        return JsonResponse({
+            'message': 'CSRF cookie impostato. Usa questo endpoint per inviare la POST.'
+        })
+    elif request.method == 'POST':
+        # La POST è protetta dal middleware CSRF; se il token non è valido, la richiesta fallirà
+        try:
+            data = json.loads(request.body)
+        except Exception:
+            data = {}
+        return JsonResponse({
+            'message': 'POST ricevuta correttamente!',
+            'data': data
+        })
+    else:
+        return JsonResponse({'message': 'Metodo non consentito'}, status=405)
 
