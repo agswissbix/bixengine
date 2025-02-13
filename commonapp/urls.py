@@ -5,4 +5,6 @@ from commonapp.views import *
 urlpatterns = [
     path('examplepost/', get_examplepost, name='examplepost'),
     path('get_sidebarmenu_items/', get_sidebarmenu_items, name='get_sidebarmenu_items'),
+    path('test_connection/', test_connection, name='test_connection'),
+    
 ]

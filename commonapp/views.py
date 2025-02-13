@@ -105,6 +105,11 @@ def get_sidebarmenu_items(request):
     response = {
         "menuItems": workspaces_tables
     }
+    return JsonResponse(response, safe=False)
 
-
+@csrf_exempt
+def test_connection(request):
+    response = {
+        "Stato": "Connessione riuscita",
+    }
     return JsonResponse(response, safe=False)
