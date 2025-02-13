@@ -34,6 +34,9 @@ def login_required_api(view_func):
 
 @require_POST
 def login_view(request):
+    print("Function: login_view")
+    print("Header X-CSRFToken:", request.META.get('HTTP_X_CSRFTOKEN'))
+    print("Cookie csrftoken:", request.COOKIES.get('csrftoken'))
     username = request.POST.get("username")
     password = request.POST.get("password")
 
@@ -113,3 +116,14 @@ def test_connection(request):
         "Stato": "Connessione riuscita",
     }
     return JsonResponse(response, safe=False)
+
+@csrf_exempt
+def check_csrf(request):
+    print("Header X-CSRFToken:", request.META.get('HTTP_X_CSRFTOKEN'))
+    print("Cookie csrftoken:", request.COOKIES.get('csrftoken'))
+    response = {
+        "X-CSRFToken": "OK",
+    }
+    return JsonResponse(response, safe=False)
+
+
