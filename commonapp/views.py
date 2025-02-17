@@ -140,7 +140,8 @@ def csrf_test_view(request):
     if request.method == 'GET':
         # La GET serve a far impostare il cookie CSRF dal browser
         return JsonResponse({
-            'message': 'CSRF cookie impostato. Usa questo endpoint per inviare la POST.'
+            'message': 'CSRF cookie impostato. Usa questo endpoint per inviare la POST.',
+            'csrftoken': get_token(request),
         })
     elif request.method == 'POST':
         # La POST è protetta dal middleware CSRF; se il token non è valido, la richiesta fallirà
