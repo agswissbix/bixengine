@@ -140,10 +140,15 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ORIGIN_ALLOW_ALL = False
 CORS_ALLOWED_ORIGINS = [
-    'https://localhost:8000',
+    'http://localhost:8000',
+    'http://localhost:8001',
+    'https://localhost:8002',
     'http://localhost:3000',
-    'http://192.168.10.11',
+    'http://localhost:3001',
+    'https://localhost:3002',
     'http://192.168.10.11:3000',
+    'http://192.168.10.11:3001',
+    'https://192.168.10.11:3002',
     env('BIXENGINE_SERVER'),
     env('BIXPORTAL_SERVER'),
 ]
@@ -156,10 +161,15 @@ SESSION_COOKIE_AGE = 1209600  # 2 settimane, ad esempio
 
 # 2. Se usi Django >= 4.0, devi aggiungere l'origin di frontend qui:
 CSRF_TRUSTED_ORIGINS = [
-    'https://localhost:8000',
+    'http://localhost:8000',
+    'http://localhost:8001',
+    'https://localhost:8002',
     'http://localhost:3000',
-    'http://192.168.10.11',
+    'http://localhost:3001',
+    'https://localhost:3002',
     'http://192.168.10.11:3000',
+    'http://192.168.10.11:3001',
+    'https://192.168.10.11:3002',
     env('BIXENGINE_SERVER'),
     env('BIXPORTAL_SERVER'),
 ]
