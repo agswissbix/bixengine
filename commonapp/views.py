@@ -38,8 +38,10 @@ def login_view(request):
     print("Header X-CSRFToken:", request.META.get('HTTP_X_CSRFTOKEN'))
     print("Cookie csrftoken:", request.COOKIES.get('csrftoken'))
     print("SessionID:", request.COOKIES.get('sessionid'))
-    username = request.POST.get("username")
-    password = request.POST.get("password")
+
+    data = json.loads(request.body)
+    username = data.get("username")
+    password = data.get("password")
 
     user = authenticate(request, username=username, password=password)
 
