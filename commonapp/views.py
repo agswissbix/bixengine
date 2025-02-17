@@ -33,7 +33,6 @@ def login_required_api(view_func):
     return wrapped
 
 @require_POST
-@csrf_exempt
 def login_view(request):
     print("Function: login_view")
     print("Header X-CSRFToken:", request.META.get('HTTP_X_CSRFTOKEN'))
