@@ -119,7 +119,6 @@ def test_connection(request):
     }
     return JsonResponse(response, safe=False)
 
-@csrf_exempt
 def check_csrf(request):
     print("Header X-CSRFToken:", request.META.get('HTTP_X_CSRFTOKEN'))
     print("Cookie csrftoken:", request.COOKIES.get('csrftoken'))
