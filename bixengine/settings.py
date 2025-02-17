@@ -147,21 +147,7 @@ CORS_ORIGIN_WHITELIST = [
     env('BIXENGINE_SERVER'),
     env('BIXPORTAL_SERVER'),
 ]
-CORS_ALLOWED_ORIGINS = [
-    "http://192.168.10.11:3000",  # or whatever port your React dev server uses
-]
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_HEADERS = [
-    'Accept',
-    'Accept-Encoding',
-    'Authorization',
-    'Content-Type',
-    'DNT',
-    'Origin',
-    'User-Agent',
-    'X-CSRFToken',
-    'X-Requested-With',
-]
 
 CSRF_COOKIE_NAME = "csrftoken"
 SESSION_COOKIE_AGE = 1209600  # 2 settimane, ad esempio
