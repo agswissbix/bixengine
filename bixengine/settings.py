@@ -139,7 +139,7 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ORIGIN_ALLOW_ALL = False
-CORS_ORIGIN_WHITELIST = [
+CORS_ALLOWED_ORIGINS = [
     'https://localhost:8000',
     'http://localhost:3000',
     'http://192.168.10.11',
@@ -147,6 +147,7 @@ CORS_ORIGIN_WHITELIST = [
     env('BIXENGINE_SERVER'),
     env('BIXPORTAL_SERVER'),
 ]
+
 CORS_ALLOW_CREDENTIALS = True
 
 CSRF_COOKIE_NAME = "csrftoken"
