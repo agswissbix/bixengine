@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'commonapp',
     'corsheaders',
+    'sslserver',
 ]
 
 MIDDLEWARE = [
@@ -151,8 +152,7 @@ CORS_ALLOW_CREDENTIALS = True
 
 CSRF_COOKIE_NAME = "csrftoken"
 SESSION_COOKIE_AGE = 1209600  # 2 settimane, ad esempio
-SESSION_COOKIE_SECURE = False # True in produzione con HTTPS
-CSRF_COOKIE_SECURE = False    # True in produzione con HTTPS
+
 
 # 2. Se usi Django >= 4.0, devi aggiungere l'origin di frontend qui:
 CSRF_TRUSTED_ORIGINS = [
@@ -164,5 +164,10 @@ CSRF_TRUSTED_ORIGINS = [
     env('BIXPORTAL_SERVER'),
 ]
 
-SESSION_COOKIE_SAMESITE = 'Lax'  # Add this
-CSRF_COOKIE_SAMESITE = 'Lax'    # Add this
+SESSION_COOKIE_SAMESITE = 'None'  # Add this
+CSRF_COOKIE_SAMESITE = 'None'    # Add this
+
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_SECURE = True
+SECURE_SSL_REDIRECT = False  # Per ora, per testare in locale
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
