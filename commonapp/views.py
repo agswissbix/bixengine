@@ -129,6 +129,7 @@ def check_csrf(request):
 
 
 @ensure_csrf_cookie
+@csrf_exempt
 def csrf_test_view(request):
     print("Function: csrf_test_view")
     csrf_header = request.META.get('HTTP_X_CSRFTOKEN')
