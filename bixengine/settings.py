@@ -29,7 +29,7 @@ SECRET_KEY = 'django-insecure-in)&iyx749f@sq53z%%lbf(y7o_ch8&ifst-dk3od373(*%gj(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost','192.168.10.10']
+ALLOWED_HOSTS = ['localhost','192.168.10.10','192.168.10.11']
 
 
 # Application definition
@@ -141,16 +141,24 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ORIGIN_ALLOW_ALL = False
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:8000',
+    'http2://localhost:8000',
     'http://localhost:8001',
+    'https://localhost:8001',
+    'http://localhost:8002',
     'https://localhost:8002',
     'http://localhost:3000',
+    'https://localhost:3000',
     'http://localhost:3001',
+    'https://localhost:3001',
+    'http://localhost:3002',
     'https://localhost:3002',
     'http://192.168.10.11:3000',
+    'https://192.168.10.11:3000',
     'http://192.168.10.11:3001',
+    'https://192.168.10.11:3001',
+    'http://192.168.10.11:3002',
     'https://192.168.10.11:3002',
     'https://192.168.10.11:443',
-    'https://192.168.10.11',
     env('BIXENGINE_SERVER'),
     env('BIXPORTAL_SERVER'),
 ]
@@ -164,16 +172,24 @@ SESSION_COOKIE_AGE = 1209600  # 2 settimane, ad esempio
 # 2. Se usi Django >= 4.0, devi aggiungere l'origin di frontend qui:
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8000',
+    'http2://localhost:8000',
     'http://localhost:8001',
+    'https://localhost:8001',
+    'http://localhost:8002',
     'https://localhost:8002',
     'http://localhost:3000',
+    'https://localhost:3000',
     'http://localhost:3001',
+    'https://localhost:3001',
+    'http://localhost:3002',
     'https://localhost:3002',
     'http://192.168.10.11:3000',
+    'https://192.168.10.11:3000',
     'http://192.168.10.11:3001',
+    'https://192.168.10.11:3001',
+    'http://192.168.10.11:3002',
     'https://192.168.10.11:3002',
     'https://192.168.10.11:443',
-    'https://192.168.10.11',
     env('BIXENGINE_SERVER'),
     env('BIXPORTAL_SERVER'),
 ]
