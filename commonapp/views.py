@@ -20,7 +20,7 @@ def get_csrf_token(request):
     """
     token = get_token(request)
     print("CSRF Token impostato:", token)
-    return JsonResponse({"detail": "CSRF cookie set"})
+    return JsonResponse({"detail": "CSRF cookie set",'csrftoken': token})
 
 
 def login_required_api(view_func):
