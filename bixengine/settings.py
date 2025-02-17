@@ -160,6 +160,8 @@ CORS_ALLOWED_ORIGINS = [
     'https://192.168.10.11:3002',
     'https://192.168.10.11:443',
     'https://192.168.10.11',
+    'https://81.62.161.14:443',
+    'https://81.62.161.14',
     env('BIXENGINE_SERVER'),
     env('BIXPORTAL_SERVER'),
 ]
@@ -192,6 +194,8 @@ CSRF_TRUSTED_ORIGINS = [
     'https://192.168.10.11:3002',
     'https://192.168.10.11:443',
     'https://192.168.10.11',
+    'https://81.62.161.14:443',
+    'https://81.62.161.14',
     env('BIXENGINE_SERVER'),
     env('BIXPORTAL_SERVER'),
 ]
