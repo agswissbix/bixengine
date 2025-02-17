@@ -33,7 +33,6 @@ def login_required_api(view_func):
     return wrapped
 
 @require_POST
-@csrf_exempt
 def login_view(request):
     print("Function: login_view")
     print("Header X-CSRFToken:", request.META.get('HTTP_X_CSRFTOKEN'))
@@ -50,11 +49,12 @@ def login_view(request):
     else:
         return JsonResponse({"success": False, "detail": "Invalid credentials"}, status=401)
 
-@csrf_exempt
+@login_required_api  
 def logout_view(request):
     logout(request)
     return JsonResponse({"success": True, "detail": "User logged out"})
 
+@login_required_api  
 def user_info(request):
     if request.user.is_authenticated:
         return JsonResponse({
@@ -112,7 +112,6 @@ def get_sidebarmenu_items(request):
     }
     return JsonResponse(response, safe=False)
 
-@csrf_exempt
 def test_connection(request):
     response = {
         "Stato": "Connessione riuscita",
@@ -130,7 +129,6 @@ def check_csrf(request):
 
 
 @ensure_csrf_cookie
-@csrf_exempt
 def csrf_test_view(request):
     print("Function: csrf_test_view")
     csrf_header = request.META.get('HTTP_X_CSRFTOKEN')
