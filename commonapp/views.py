@@ -34,7 +34,7 @@ def login_required_api(view_func):
 
 @require_POST
 def login_view(request):
-    print("Function: login_view")
+    print("Function: login_view") 
     print("Header X-CSRFToken:", request.META.get('HTTP_X_CSRFTOKEN'))
     print("Cookie csrftoken:", request.COOKIES.get('csrftoken'))
     print("SessionID:", request.COOKIES.get('sessionid'))
