@@ -112,6 +112,7 @@ def get_sidebarmenu_items(request):
     }
     return JsonResponse(response, safe=False)
 
+@csrf_exempt
 def test_connection(request):
     response = {
         "Stato": "Connessione riuscita",
