@@ -59,8 +59,8 @@ def get_shifts_and_volunteers(request):
         {"date": "2025-02-03", "timeSlot": "11.30-15.30", "name": "Mariangela Rosa", "shift": "C", "dev": "", "access": access2},
         {"date": "2025-02-07", "timeSlot": "15.30-19.30", "name": "ta test", "shift": "L", "dev": "X", "access": access3},
         {"date": "2025-02-23", "timeSlot": "19.30-23.30", "name": "Mariangela Rosa", "shift": "M", "dev": "", "access": access1},
-        {"date": "2025-02-24", "timeSlot": "19.30-23.30", "name": "ta test", "shift": "M", "dev": "", "access": access4},
-        {"date": "2025-03-15", "timeSlot": "19.30-23.30", "name": "ta test", "shift": "M", "dev": "", "access": access1},
+        {"date": "2025-02-24", "timeSlot": "19.30-23.30", "name": "ta test", "shift": "M", "dev": "", "access": access1},
+        {"date": "2025-03-15", "timeSlot": "19.30-23.30", "name": "ta test", "shift": "M", "dev": "", "access": access4},
     ]
 
     return Response({"shifts": shifts, "volunteers": volunteers, "slots": slots, "timeSlots": time_slots})
