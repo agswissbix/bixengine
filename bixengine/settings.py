@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'commonapp',
+    'customapp_telefonoamico',
     'corsheaders',
 ]
 
@@ -81,10 +82,6 @@ WSGI_APPLICATION = 'bixengine.wsgi.application'
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
 DATABASES = {
-    'sqllite': {
-        'ENGINE': 'django.db.bixdata_backend.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    },
     'default': {
         'ENGINE': env('DATABASE_ENGINE'),
         'NAME': env('DATABASE_NAME'),
@@ -207,3 +204,13 @@ CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_SECURE = True
 SECURE_SSL_REDIRECT = False  # Per ora, per testare in locale
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework.authentication.SessionAuthentication',  # Usa sessioni Django
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',  # Protegge le API
+    ),
+}

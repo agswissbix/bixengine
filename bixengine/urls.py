@@ -9,6 +9,7 @@ urlpatterns = [
     path('auth/logout/', logout_view, name='logout'),
     path('auth/user/', user_info, name='user_info'),
     path('commonapp/', include('commonapp.urls')),
+    path('customapp_telefonoamico/', include('customapp_telefonoamico.urls')),
     path('csrf-test/', csrf_test_view, name='csrf_test'),
     
     
