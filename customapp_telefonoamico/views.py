@@ -18,6 +18,9 @@ def test(request):
 def get_shifts_and_volunteers(request):
     """Restituisce la lista dei turni, volontari e slot assegnati"""
 
+    user_id = request.user.id
+    username = request.user.username
+
     shifts = [
         {"value": "B", "label": "Bellinzona"},
         {"value": "C", "label": "Casa"},
@@ -39,12 +42,25 @@ def get_shifts_and_volunteers(request):
     ]
 
     today = datetime.date.today()
+    access1='view'
+    access2='view'
+    access3='view'
+    access4='view'
+    if username=='mariangela.rosa':
+        access1='edit'
+        access2='edit'
+        access3='edit'
+        access4='edit'
+    if username=='ta.test':
+        access4='edit'
 
     slots = [
-        {"date": "2024-12-02", "timeSlot": "07.30-11.30", "name": "Alessandro Galli", "shift": "B", "dev": "X", "access": "edit"},
-        {"date": "2024-12-03", "timeSlot": "11.30-15.30", "name": "Mariangela Rosa", "shift": "C", "dev": "", "access": "view"},
-        {"date": "2024-12-07", "timeSlot": "15.30-19.30", "name": "Giovanni Bianchi", "shift": "L", "dev": "X", "access": "delete"},
-        {"date": "2024-12-10", "timeSlot": "19.30-23.30", "name": "Lucia Verdi", "shift": "M", "dev": "", "access": "edit"}
+        {"date": "2025-02-02", "timeSlot": "07.30-11.30", "name": f"Alessandro Galli {username}", "shift": "B", "dev": "X", "access": access1},
+        {"date": "2025-02-03", "timeSlot": "11.30-15.30", "name": "Mariangela Rosa", "shift": "C", "dev": "", "access": access2},
+        {"date": "2025-02-07", "timeSlot": "15.30-19.30", "name": "ta test", "shift": "L", "dev": "X", "access": access3},
+        {"date": "2025-02-23", "timeSlot": "19.30-23.30", "name": "Mariangela Rosa", "shift": "M", "dev": "", "access": access1},
+        {"date": "2025-02-24", "timeSlot": "19.30-23.30", "name": "ta test", "shift": "M", "dev": "", "access": access4},
+        {"date": "2025-03-15", "timeSlot": "19.30-23.30", "name": "ta test", "shift": "M", "dev": "", "access": access1},
     ]
 
     return Response({"shifts": shifts, "volunteers": volunteers, "slots": slots, "timeSlots": time_slots})
