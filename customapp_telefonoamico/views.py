@@ -56,7 +56,9 @@ def get_shifts_and_volunteers(request):
 
     slots = [
         {"date": "2025-02-02", "timeSlot": "07.30-11.30", "name": f"Alessandro Galli {username}", "shift": "B", "dev": "X", "access": access1},
+        {"date": "2025-02-03", "timeSlot": "07.30-11.30", "name": "Alessandro Galli", "shift": "C", "dev": "", "access": access2},
         {"date": "2025-02-03", "timeSlot": "11.30-15.30", "name": "Mariangela Rosa", "shift": "C", "dev": "", "access": access2},
+        {"date": "2025-02-03", "timeSlot": "15.30-19.30", "name": "Alessandro Galli", "shift": "C", "dev": "", "access": access2},
         {"date": "2025-02-07", "timeSlot": "15.30-19.30", "name": "ta test", "shift": "L", "dev": "X", "access": access3},
         {"date": "2025-02-23", "timeSlot": "19.30-23.30", "name": "Mariangela Rosa", "shift": "M", "dev": "", "access": access1},
         {"date": "2025-02-24", "timeSlot": "19.30-23.30", "name": "ta test", "shift": "M", "dev": "", "access": access1},
