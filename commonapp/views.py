@@ -13,6 +13,11 @@ from .bixmodels.sys_table import *
 from .bixmodels.user_record import *
 from .bixmodels.user_table import *
 
+import pyotp
+import qrcode
+import base64
+from io import BytesIO
+
 @ensure_csrf_cookie
 def get_csrf_token(request):
     """
@@ -158,15 +163,6 @@ def csrf_test_view(request):
         return JsonResponse({'message': 'Metodo non consentito'}, status=405)
     
 
-
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.contrib.auth.decorators import login_required
-import pyotp
-import qrcode
-import base64
-from io import BytesIO
-
 @csrf_exempt
 @login_required
 def enable_2fa(request):
@@ -221,7 +217,7 @@ def verify_2fa(request):
 
     totp = pyotp.TOTP(secret)
     if totp.verify(otp_token):
-        return JsonResponse({"message": "Autenticazione 2FA riuscita"})
+        return JsonResponse({"message": "2FA verificato con successo"})
     else:
         return JsonResponse({"message": "Codice OTP errato"}, status=400)
     
