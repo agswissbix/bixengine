@@ -1,4 +1,4 @@
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.http import JsonResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
@@ -261,5 +261,29 @@ def disable_2fa(request):
         request.session.save()
 
     return JsonResponse({"message": "2FA disabilitato con successo"})
+    
+@csrf_exempt
+@login_required
+def change_password(request):
+    try:
+        data = json.loads(request.body)
+        old_password = data.get('old_password')
+        new_password = data.get('new_password')
+
+        # Verifica che l'utente abbia fornito la password corretta
+        if not request.user.check_password(old_password):
+            return JsonResponse({'error': 'Password attuale non corretta'}, status=400)
+
+        # Cambia la password
+        request.user.set_password(new_password)
+        request.user.save()
+        
+        # Importante: aggiorna la sessione per mantenere l'utente loggato
+        update_session_auth_hash(request, request.user)
+        
+        return JsonResponse({'message': 'Password aggiornata con successo'})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
 
 
