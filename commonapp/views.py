@@ -18,10 +18,18 @@ import qrcode
 import base64
 from io import BytesIO
 from commonapp.models import UserProfile
+from commonapp import helper
 
+
+@csrf_exempt
+def test_connection(request):
+    response = {
+        "Stato": "Connessione riuscita",
+    }
+    return JsonResponse(response, safe=False)
 
 @ensure_csrf_cookie
-def get_csrf_token(request):
+def test_connection_get_csrf(request):
     """
     Assicura che venga impostato un cookie CSRF in risposta.
     """
@@ -29,15 +37,41 @@ def get_csrf_token(request):
     print("CSRF Token impostato:", token)
     return JsonResponse({"detail": "CSRF cookie set",'csrftoken': token})
 
+@login_required_api
+def test_connection_post(request):
+    print("Function: csrf_test_view")
+    csrf_header = request.META.get('HTTP_X_CSRFTOKEN')
+    print("Header X-CSRFToken:", csrf_header)
+    print("Cookie csrftoken:", request.COOKIES.get('csrftoken'))
+    print("Session ID:", request.COOKIES.get('sessionid'))
+    if request.method == 'GET':
+        # La GET serve a far impostare il cookie CSRF dal browser
+        return JsonResponse({
+            'message': 'CSRF cookie impostato. Usa questo endpoint per inviare la POST.',
+            'csrftoken': get_token(request),
+        })
+    elif request.method == 'POST':
+        # La POST è protetta dal middleware CSRF; se il token non è valido, la richiesta fallirà
+        try:
+            data = json.loads(request.body)
+        except Exception:
+            data = {}
+        return JsonResponse({
+            'message': 'POST ricevuta correttamente!',
+            'data': data
+        })
+    else:
+        return JsonResponse({'message': 'Metodo non consentito'}, status=405)
 
-def login_required_api(view_func):
-    @wraps(view_func)
-    def wrapped(request, *args, **kwargs):
-        print("sessionid:", request.COOKIES.get("sessionid"))
-        if not request.user.is_authenticated:
-            return JsonResponse({'error': 'Not authenticated'}, status=401)
-        return view_func(request, *args, **kwargs)
-    return wrapped
+
+@ensure_csrf_cookie
+def get_csrf(request):
+    """
+    Assicura che venga impostato un cookie CSRF in risposta.
+    """
+    token = get_token(request)
+    print("CSRF Token impostato:", token)
+    return JsonResponse({"detail": "CSRF cookie set",'csrftoken': token})
 
 @require_POST
 def login_view(request):
@@ -121,12 +155,7 @@ def get_sidebarmenu_items(request):
     }
     return JsonResponse(response, safe=False)
 
-@csrf_exempt
-def test_connection(request):
-    response = {
-        "Stato": "Connessione riuscita",
-    }
-    return JsonResponse(response, safe=False)
+
 
 def check_csrf(request):
     print("Header X-CSRFToken:", request.META.get('HTTP_X_CSRFTOKEN'))
@@ -137,32 +166,7 @@ def check_csrf(request):
     return JsonResponse(response, safe=False)
 
 
-@ensure_csrf_cookie
-@csrf_exempt
-def csrf_test_view(request):
-    print("Function: csrf_test_view")
-    csrf_header = request.META.get('HTTP_X_CSRFTOKEN')
-    print("Header X-CSRFToken:", csrf_header)
-    print("Cookie csrftoken:", request.COOKIES.get('csrftoken'))
-    print("Session ID:", request.COOKIES.get('sessionid'))
-    if request.method == 'GET':
-        # La GET serve a far impostare il cookie CSRF dal browser
-        return JsonResponse({
-            'message': 'CSRF cookie impostato. Usa questo endpoint per inviare la POST.',
-            'csrftoken': get_token(request),
-        })
-    elif request.method == 'POST':
-        # La POST è protetta dal middleware CSRF; se il token non è valido, la richiesta fallirà
-        try:
-            data = json.loads(request.body)
-        except Exception:
-            data = {}
-        return JsonResponse({
-            'message': 'POST ricevuta correttamente!',
-            'data': data
-        })
-    else:
-        return JsonResponse({'message': 'Metodo non consentito'}, status=405)
+
     
 
 @csrf_exempt

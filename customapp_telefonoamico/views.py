@@ -9,6 +9,7 @@ from django.views.decorators.csrf import csrf_exempt
 from commonapp.bixmodels.helper_db import *
 from commonapp.bixmodels.user_record import *
 from commonapp.bixmodels.user_table import *
+from commonapp.helper import *
 
 
 def test(request):
@@ -17,8 +18,8 @@ def test(request):
 
 @api_view(['GET','POST'])
 #@permission_classes([IsAuthenticated])  # Protegge l'API con autenticazione
-@ensure_csrf_cookie
-@csrf_exempt
+#@ensure_csrf_cookie
+#@csrf_exempt
 @renderer_classes([JSONRenderer])  # Forza il ritorno di JSON
 def get_shifts_and_volunteers(request):
     """Restituisce la lista dei turni, volontari e slot assegnati"""
