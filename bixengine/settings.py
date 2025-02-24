@@ -29,7 +29,7 @@ SECRET_KEY = 'django-insecure-in)&iyx749f@sq53z%%lbf(y7o_ch8&ifst-dk3od373(*%gj(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost','192.168.10.10','192.168.10.11','81.62.161.14']
+ALLOWED_HOSTS = ['localhost','192.168.10.10','192.168.10.11','81.62.161.14','tabellone.swissbix.com']
 
 
 # Application definition
@@ -159,6 +159,8 @@ CORS_ALLOWED_ORIGINS = [
     'https://192.168.10.11',
     'https://81.62.161.14:443',
     'https://81.62.161.14',
+    'https://tabellone.swissbix.com',
+    'https://tabellone.swissbix.com:443',
     env('BIXENGINE_SERVER'),
     env('BIXPORTAL_SERVER'),
 ]
@@ -193,6 +195,8 @@ CSRF_TRUSTED_ORIGINS = [
     'https://192.168.10.11',
     'https://81.62.161.14:443',
     'https://81.62.161.14',
+    'https://tabellone.swissbix.com',
+    'https://tabellone.swissbix.com:443',
     env('BIXENGINE_SERVER'),
     env('BIXPORTAL_SERVER'),
 ]
