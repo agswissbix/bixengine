@@ -94,7 +94,7 @@ def get_examplepost(request):
     return JsonResponse({'error': 'Invalid request method'}, status=405)
 
 @login_required_api  
-def get_sidebarmenu_items(request):  
+def get_sidebarmenu_items(request):
     print("Function: get_sidebarmenu_items")
     tables=SysTable.get_user_tables(1)
     workspaces_tables=dict()
@@ -167,19 +167,21 @@ def csrf_test_view(request):
 @login_required
 def enable_2fa(request):
     user = request.user
-    
+    user_profile = user.userprofile  # Ottieni il profilo dell'utente
+
     if request.method != "POST":
         return JsonResponse({"message": "Metodo non permesso"}, status=405)
 
     # Controlla se il 2FA è già attivo
-    if request.session.get("otp_secret"):
+    if user_profile.is_2fa_enabled:
         return JsonResponse({"message": "2FA già attivato"}, status=400)
 
     try:
-        # Genera un segreto OTP per l'utente
+        # Se 2FA non è attivo, generiamo un nuovo segreto OTP
         secret = pyotp.random_base32()
-        request.session["otp_secret"] = secret
-        request.session.save()
+        user_profile.otp_secret = secret
+        user_profile.is_2fa_enabled = True  # Attiva il 2FA
+        user_profile.save()  # Salva il profilo con il nuovo segreto
 
         # Genera l'URL del QR Code
         totp = pyotp.TOTP(secret)
@@ -210,11 +212,16 @@ def verify_2fa(request):
     
     if not otp_token:
         return JsonResponse({"message": "Codice OTP mancante"}, status=400)
-    
-    secret = request.session.get("otp_secret")
-    if not secret:
+
+    # Ottieni il profilo utente e il segreto OTP
+    user_profile = request.user.userprofile  # Ottieni il profilo dell'utente
+
+    if not user_profile.is_2fa_enabled:
         return JsonResponse({"message": "2FA non attivato per questo utente"}, status=400)
 
+    secret = user_profile.otp_secret  # Ottieni il segreto OTP salvato nel profilo
+
+    # Verifica l'OTP
     totp = pyotp.TOTP(secret)
     if totp.verify(otp_token):
         return JsonResponse({"message": "2FA verificato con successo"})
