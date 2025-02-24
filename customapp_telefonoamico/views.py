@@ -9,8 +9,6 @@ from commonapp.bixmodels.user_record import *
 from commonapp.bixmodels.user_table import *
 
 
-
-
 def test(request):
     print("Test in customapp_telefonoamico")
     return JsonResponse({"detail": "Test in customapp_telefonoamico"})
@@ -136,3 +134,7 @@ def delete_shift(request):
     print(f"Turno eliminato: {new_shift}")  # Debug
 
     return Response(new_shift, status=201)
+
+
+
+
