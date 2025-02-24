@@ -17,6 +17,8 @@ import pyotp
 import qrcode
 import base64
 from io import BytesIO
+from commonapp.models import UserProfile
+
 
 @ensure_csrf_cookie
 def get_csrf_token(request):
@@ -235,14 +237,25 @@ def disable_2fa(request):
     if request.method != "POST":
         return JsonResponse({"message": "Metodo non permesso"}, status=405)
     
-    # Controlla se il 2FA è attivo
-    if not request.session.get("otp_secret"):
+    # Ottieni il profilo utente
+    try:
+        user_profile = request.user.userprofile
+    except UserProfile.DoesNotExist:
+        return JsonResponse({"message": "Profilo utente non trovato"}, status=404)
+
+    # Verifica se il 2FA è attivo
+    if not user_profile.is_2fa_enabled:
         return JsonResponse({"message": "2FA non è attivo per questo utente"}, status=400)
 
-    # Rimuovi il segreto dalla sessione
-    del request.session["otp_secret"]
-    request.session.save()
-    
+    # Disabilita il 2FA nel database
+    user_profile.is_2fa_enabled = False
+    user_profile.save()  # Salva le modifiche al profilo utente
+
+    # Pulisci il segreto dalla sessione, se presente
+    if "otp_secret" in request.session:
+        del request.session["otp_secret"]
+        request.session.save()
+
     return JsonResponse({"message": "2FA disabilitato con successo"})
 
 
