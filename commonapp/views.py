@@ -52,7 +52,6 @@ def login_view(request):
 
     if user is not None:
         login(request, user)
-        verify_2fa(request)
         return JsonResponse({"success": True, "detail": "User logged in"})
     else:
         return JsonResponse({"success": False, "detail": "Invalid credentials"}, status=401)
