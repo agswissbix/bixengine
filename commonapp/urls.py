@@ -10,6 +10,7 @@ urlpatterns = [
     path('verify_2fa/', verify_2fa, name='verify_2fa'),
     path('enable_2fa/', enable_2fa, name='enable_2fa'),
     path('disable_2fa/', disable_2fa, name='disable_2fa'),
+    path('change_password/', change_password, name='change_password'),
     
     
 ]
