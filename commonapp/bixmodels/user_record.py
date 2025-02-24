@@ -22,8 +22,8 @@ from django_user_agents.utils import get_user_agent
 from django import template
 from bs4 import BeautifulSoup
 from django.db.models import OuterRef, Subquery
-from .helper_db import *
-from ..helper import *
+from commonapp.bixmodels.helper_db import *
+from commonapp.helper import *
 
 bixdata_server = os.environ.get('BIXDATA_SERVER')
 
@@ -129,7 +129,7 @@ class UserRecord:
             
             current_datetime=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             sqlinsert=f"INSERT INTO user_{self.tableid} (recordid_,creatorid_,creation_,id) VALUES ('{next_recordid}',{self.userid},'{current_datetime}',{next_id}) "
-            self.db_helper.sql_execute(sqlinsert)
+            HelpderDB.sql_execute(sqlinsert)
             self.recordid=next_recordid
             self.save()
 

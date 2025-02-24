@@ -5,6 +5,9 @@ from rest_framework.response import Response
 from rest_framework.renderers import JSONRenderer
 from django.shortcuts import render
 from commonapp.bixmodels.helper_db import *
+from commonapp.bixmodels.user_record import *
+from commonapp.bixmodels.user_table import *
+
 
 
 
@@ -92,6 +95,14 @@ def save_shift(request):
         "shift": shift,
         "dev": dev
     }
+
+    record_shift=UserRecord('turni')
+    record_shift.values['data']=date
+    record_shift.values['fasciaoraria']=timeSlot
+    record_shift.values['sede']=shift
+    record_shift.save()
+    
+
 
     print(f"Nuovo turno salvato: {new_shift}")  # Debug
 
