@@ -4,6 +4,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.renderers import JSONRenderer
 from django.shortcuts import render
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.csrf import csrf_exempt
 from commonapp.bixmodels.helper_db import *
 from commonapp.bixmodels.user_record import *
 from commonapp.bixmodels.user_table import *
@@ -16,7 +18,9 @@ def test(request):
     return JsonResponse({"detail": "Test in customapp_telefonoamico"})
 
 @api_view(['GET','POST'])
-@permission_classes([IsAuthenticated])  # Protegge l'API con autenticazione
+#@permission_classes([IsAuthenticated])  # Protegge l'API con autenticazione
+@ensure_csrf_cookie
+@csrf_exempt
 @renderer_classes([JSONRenderer])  # Forza il ritorno di JSON
 def get_shifts_and_volunteers(request):
     """Restituisce la lista dei turni, volontari e slot assegnati"""
@@ -57,6 +61,8 @@ def get_shifts_and_volunteers(request):
     if username=='ta.test':
         access4='edit'
 
+    turni_table=UserTable('turni')
+    turni=turni_table.get_results_records()
     slots = [
         {"date": "2025-02-02", "timeSlot": "07.30-11.30", "name": f"Alessandro Galli {username}", "shift": "B", "dev": "X", "access": access1},
         {"date": "2025-02-03", "timeSlot": "07.30-11.30", "name": "Alessandro Galli", "shift": "C", "dev": "", "access": access2},
@@ -67,6 +73,19 @@ def get_shifts_and_volunteers(request):
         {"date": "2025-02-24", "timeSlot": "19.30-23.30", "name": "ta test", "shift": "M", "dev": "", "access": access1},
         {"date": "2025-03-15", "timeSlot": "19.30-23.30", "name": "ta test", "shift": "M", "dev": "", "access": access4},
     ]
+
+    slots = []
+
+    for turno in turni:
+        slot = {
+            "date": turno["data"],
+            "timeSlot": turno["fasciaoraria"],
+            "name": "Alessandro Galli",
+            "shift": turno["sede"],
+            "dev": "",
+            "access": access4
+        }
+        slots.append(slot)
 
     return Response({"shifts": shifts, "volunteers": volunteers, "slots": slots, "timeSlots": time_slots})
 

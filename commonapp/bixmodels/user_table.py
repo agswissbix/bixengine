@@ -24,7 +24,8 @@ from django_user_agents.utils import get_user_agent
 from django import template
 from bs4 import BeautifulSoup
 from django.db.models import OuterRef, Subquery
-from .helper_db import *
+from commonapp.bixmodels.helper_db import *
+from commonapp.helper import *
 
 bixdata_server = os.environ.get('BIXDATA_SERVER')
 
