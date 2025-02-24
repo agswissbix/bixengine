@@ -187,7 +187,7 @@ def enable_2fa(request):
 
         # Genera l'URL del QR Code
         totp = pyotp.TOTP(secret)
-        otp_url = totp.provisioning_uri(name=user.username, issuer_name="MyApp")
+        otp_url = totp.provisioning_uri(name=user.username, issuer_name="Tabellone")
 
         # Genera il QR Code e convertilo in base64
         img = qrcode.make(otp_url)
