@@ -80,11 +80,11 @@ def get_shifts_and_volunteers(request):
         {"date": "2025-03-15", "timeSlot": "19.30-23.30", "name": "ta test", "shift": "M", "dev": "", "access": access4},
     ]
 
-    slots = []
+    #lots = []
 
     for turno in turni:
         slot = {
-            "date": turno["data"],
+            "date": turno["data"].isoformat() + "T00:00:00Z",
             "timeSlot": turno["fasciaoraria"],
             "name": "Alessandro Galli",
             "shift": turno["sede"],
@@ -127,6 +127,7 @@ def save_shift(request):
     record_shift.values['data']=date
     record_shift.values['fasciaoraria']=timeSlot
     record_shift.values['sede']=shift
+    record_shift.values['tipo']='telefono'
     utente_recordid=HelpderDB.sql_query_value(f"SELECT * FROM user_utenti WHERE nome='{name}'",'recordid_')
     record_shift.values['recordidutenti_']=utente_recordid
     record_shift.save()
