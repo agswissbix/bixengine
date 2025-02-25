@@ -85,10 +85,13 @@ def login_view(request):
     password = data.get("password")
 
     user = authenticate(request, username=username, password=password)
-
+    
     if user is not None:
+        recordid_utente=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_utenti WHERE nomeutente='{username}'",'recordid_')
+        record_utente=UserRecord('utenti',recordid_utente)
+        ruolo=record_utente.values['ruolo']
         login(request, user)
-        return JsonResponse({"success": True, "detail": "User logged in"})
+        return JsonResponse({"success": True, "detail": "User logged in", "ruolo":ruolo})
     else:
         return JsonResponse({"success": False, "detail": "Invalid credentials"}, status=401)
 

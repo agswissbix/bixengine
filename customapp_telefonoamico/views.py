@@ -20,6 +20,7 @@ def test(request):
 #@permission_classes([IsAuthenticated])  # Protegge l'API con autenticazione
 #@ensure_csrf_cookie
 #@csrf_exempt
+@login_required_api
 @renderer_classes([JSONRenderer])  # Forza il ritorno di JSON
 def get_shifts_and_volunteers(request):
     """Restituisce la lista dei turni, volontari e slot assegnati"""
@@ -41,6 +42,12 @@ def get_shifts_and_volunteers(request):
         "Giovanni Bianchi",
         "Lucia Verdi"
     ]
+    volunteers=[]
+    utenti=HelpderDB.sql_query(f"SELECT * FROM user_utenti")
+    for utente in utenti:
+        volunteers.append(utente['nome'])
+   
+   
 
     time_slots = [
         "07.30-11.30", "11.30-15.30", "15.30-19.30",
@@ -102,6 +109,8 @@ def save_shift(request):
     shift = data.get("shift")
     dev = data.get("dev", "")
 
+    
+
     #if not date or not timeSlot or not name or not shift:
         #return Response({"error": "Dati mancanti"}, status=400)
 
@@ -118,7 +127,11 @@ def save_shift(request):
     record_shift.values['data']=date
     record_shift.values['fasciaoraria']=timeSlot
     record_shift.values['sede']=shift
+    user=HelpderDB.sql_query_row(f"SELECT * FROM sys_user WHERE lastname='{name}'")
+    record_shift.values['utente']=user['id']
     record_shift.save()
+    
+
     
 
 

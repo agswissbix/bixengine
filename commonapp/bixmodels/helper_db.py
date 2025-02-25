@@ -37,6 +37,14 @@ class HelpderDB:
             return rows[0]
         else:
             return None
+    
+    @classmethod 
+    def sql_query_value(cls,sql,column):
+        row=HelpderDB.sql_query_row(sql)
+        if row:
+            return row[column]
+        else:
+            return None
         
     @classmethod 
     def sql_execute(cls,sql):
