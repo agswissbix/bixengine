@@ -36,12 +36,7 @@ def get_shifts_and_volunteers(request):
         {"value": "S", "label": "Stabio"}
     ]
 
-    volunteers = [
-        "Alessandro Galli",
-        "Mariangela Rosa",
-        "Giovanni Bianchi",
-        "Lucia Verdi"
-    ]
+  
     volunteers=[]
     utenti=HelpderDB.sql_query(f"SELECT * FROM user_utenti where deleted_='N'")
     for utente in utenti:
@@ -69,24 +64,16 @@ def get_shifts_and_volunteers(request):
 
     turni_table=UserTable('turni')
     turni=turni_table.get_results_records()
-    slots = [
-        {"date": "2025-02-02", "timeSlot": "07.30-11.30", "name": f"Alessandro Galli {username}", "shift": "B", "dev": "X", "access": access1},
-        {"date": "2025-02-03", "timeSlot": "07.30-11.30", "name": "Alessandro Galli", "shift": "C", "dev": "", "access": access2},
-        {"date": "2025-02-03", "timeSlot": "11.30-15.30", "name": "Mariangela Rosa", "shift": "C", "dev": "", "access": access2},
-        {"date": "2025-02-03", "timeSlot": "15.30-19.30", "name": "Alessandro Galli", "shift": "C", "dev": "", "access": access2},
-        {"date": "2025-02-07", "timeSlot": "15.30-19.30", "name": "ta test", "shift": "L", "dev": "X", "access": access3},
-        {"date": "2025-02-23", "timeSlot": "19.30-23.30", "name": "Mariangela Rosa", "shift": "M", "dev": "", "access": access1},
-        {"date": "2025-02-24", "timeSlot": "19.30-23.30", "name": "ta test", "shift": "M", "dev": "", "access": access1},
-        {"date": "2025-03-15", "timeSlot": "19.30-23.30", "name": "ta test", "shift": "M", "dev": "", "access": access4},
-    ]
+  
 
     slots = []
 
     for turno in turni:
+        nome=HelpderDB.sql_query_value(f"SELECT nome FROM user_utenti WHERE recordid_='{turno['recordidutenti_']}'",'nome')
         slot = {
             "date": turno["data"],
             "timeSlot": turno["fasciaoraria"],
-            "name": "Alessandro Galli",
+            "name": nome,
             "shift": turno["sede"],
             "dev": "",
             "access": access4
