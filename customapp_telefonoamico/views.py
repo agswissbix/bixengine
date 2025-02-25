@@ -43,7 +43,7 @@ def get_shifts_and_volunteers(request):
         "Lucia Verdi"
     ]
     volunteers=[]
-    utenti=HelpderDB.sql_query(f"SELECT * FROM user_utenti")
+    utenti=HelpderDB.sql_query(f"SELECT * FROM user_utenti where deleted_='N'")
     for utente in utenti:
         volunteers.append(utente['nome'])
    
