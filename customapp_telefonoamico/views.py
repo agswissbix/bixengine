@@ -127,8 +127,8 @@ def save_shift(request):
     record_shift.values['data']=date
     record_shift.values['fasciaoraria']=timeSlot
     record_shift.values['sede']=shift
-    user=HelpderDB.sql_query_row(f"SELECT * FROM sys_user WHERE lastname='{name}'")
-    record_shift.values['utente']=user['id']
+    utente_recordid=HelpderDB.sql_query_value(f"SELECT * FROM user_utenti WHERE nome='{name}'",'recordid_')
+    record_shift.values['recordidutenti_']=utente_recordid
     record_shift.save()
     
 
