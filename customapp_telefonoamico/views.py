@@ -84,7 +84,7 @@ def get_shifts_and_volunteers(request):
 
     for turno in turni:
         slot = {
-            "date": turno["data"].isoformat() + "T00:00:00Z",
+            "date": turno["data"],
             "timeSlot": turno["fasciaoraria"],
             "name": "Alessandro Galli",
             "shift": turno["sede"],
