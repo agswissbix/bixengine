@@ -80,7 +80,7 @@ def get_shifts_and_volunteers(request):
         {"date": "2025-03-15", "timeSlot": "19.30-23.30", "name": "ta test", "shift": "M", "dev": "", "access": access4},
     ]
 
-    #lots = []
+    slots = []
 
     for turno in turni:
         slot = {
