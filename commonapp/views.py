@@ -102,6 +102,7 @@ def logout_view(request):
 
 @login_required_api  
 def user_info(request):
+    print("Function: user_info")    
     if request.user.is_authenticated:
         return JsonResponse({
             "isAuthenticated": True,
