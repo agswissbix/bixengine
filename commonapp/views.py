@@ -107,7 +107,7 @@ def user_info(request):
         return JsonResponse({
             "isAuthenticated": True,
             "username": request.user.username,
-            "role": 'pagliac'
+            "role": ''
         })
     else:
         return JsonResponse({"isAuthenticated": False}, status=401)
