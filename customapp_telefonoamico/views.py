@@ -50,10 +50,10 @@ def get_shifts_and_volunteers(request):
     ]
 
     today = datetime.date.today()
-    access1='view'
-    access2='view'
-    access3='view'
-    access4='view'
+    access1='edit'
+    access2='edit'
+    access3='edit'
+    access4='edit'
     if username=='mariangela.rosa':
         access1='edit'
         access2='edit'
@@ -109,8 +109,12 @@ def save_shift(request):
         "shift": shift,
         "dev": dev
     }
-
-    record_shift=UserRecord('turni')
+    #verifico se il turno e' già impostato
+    recordid_shift=HelpderDB.sql_query_value(f"SELECT * FROM user_turni WHERE data='{date}' AND fasciaoraria='{timeSlot}'  AND tipo='telefono'",'recordid_')
+    if recordid_shift:
+        record_shift=UserRecord('turni',recordid_shift)
+    else:
+        record_shift=UserRecord('turni')
     record_shift.values['data']=date
     record_shift.values['fasciaoraria']=timeSlot
     record_shift.values['sede']=shift
@@ -151,6 +155,8 @@ def delete_shift(request):
         "shift": shift,
         "dev": dev
     }
+
+    HelpderDB.sql_execute(f"UPDATE user_turni SET deleted_='Y' WHERE data='{date}' AND fasciaoraria='{timeSlot}'  AND tipo='telefono'")
 
     print(f"Turno eliminato: {new_shift}")  # Debug
 
