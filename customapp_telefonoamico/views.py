@@ -69,7 +69,69 @@ def get_shifts_and_volunteers(request):
     slots = []
 
     for turno in turni:
-        nome=HelpderDB.sql_query_value(f"SELECT nome FROM user_utenti WHERE recordid_='{turno['recordidutenti_']}'",'nome')
+        nome=HelpderDB.sql_query_value(f"SELECT nome FROM user_utenti WHERE recordid_='{turno['recordidutenti_']}' ",'nome')
+        slot = {
+            "date": turno["data"],
+            "timeSlot": turno["fasciaoraria"],
+            "name": nome,
+            "shift": turno["sede"],
+            "dev": "",
+            "access": access4
+        }
+        slots.append(slot)
+
+    return Response({"shifts": shifts, "volunteers": volunteers, "slots": slots, "timeSlots": time_slots})
+
+@api_view(['GET','POST'])
+#@permission_classes([IsAuthenticated])  # Protegge l'API con autenticazione
+#@ensure_csrf_cookie
+#@csrf_exempt
+@login_required_api
+@renderer_classes([JSONRenderer])  # Forza il ritorno di JSON
+def get_shifts_and_volunteers_chat(request):
+    """Restituisce la lista dei turni, volontari e slot assegnati"""
+
+    user_id = request.user.id
+    username = request.user.username
+
+    shifts = [
+        {"value": "C", "label": "Casa"},
+    ]
+
+  
+    volunteers=[]
+    utenti=HelpderDB.sql_query(f"SELECT * FROM user_utenti where deleted_='N'")
+    for utente in utenti:
+        volunteers.append(utente['nome'])
+   
+   
+
+    time_slots = [
+        "14.00-16.00", "16.00-18.00", "18.00-20.00",
+        "20.00-22.00"
+    ]
+
+    today = datetime.date.today()
+    access1='edit'
+    access2='edit'
+    access3='edit'
+    access4='edit'
+    if username=='mariangela.rosa':
+        access1='edit'
+        access2='edit'
+        access3='edit'
+        access4='edit'
+    if username=='ta.test':
+        access4='edit'
+
+    turni_table=UserTable('turni')
+    turni=turni_table.get_results_records(conditions_list=['tipo="chat"'])
+  
+
+    slots = []
+
+    for turno in turni:
+        nome=HelpderDB.sql_query_value(f"SELECT nome FROM user_utenti WHERE recordid_='{turno['recordidutenti_']}' ",'nome')
         slot = {
             "date": turno["data"],
             "timeSlot": turno["fasciaoraria"],
@@ -84,6 +146,7 @@ def get_shifts_and_volunteers(request):
 
 
 
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])  # Protegge l'API
 def save_shift(request):
@@ -95,6 +158,7 @@ def save_shift(request):
     name = data.get("name")
     shift = data.get("shift")
     dev = data.get("dev", "")
+    type = data.get("type")
 
     
 
@@ -107,10 +171,11 @@ def save_shift(request):
         "timeSlot": timeSlot,
         "name": name,
         "shift": shift,
-        "dev": dev
+        "dev": dev,
+        "type": type
     }
     #verifico se il turno e' già impostato
-    recordid_shift=HelpderDB.sql_query_value(f"SELECT * FROM user_turni WHERE data='{date}' AND fasciaoraria='{timeSlot}'  AND tipo='telefono'",'recordid_')
+    recordid_shift=HelpderDB.sql_query_value(f"SELECT * FROM user_turni WHERE data='{date}' AND fasciaoraria='{timeSlot}'  AND tipo='{type}' AND deleted_='N'",'recordid_')
     if recordid_shift:
         record_shift=UserRecord('turni',recordid_shift)
     else:
@@ -118,7 +183,7 @@ def save_shift(request):
     record_shift.values['data']=date
     record_shift.values['fasciaoraria']=timeSlot
     record_shift.values['sede']=shift
-    record_shift.values['tipo']='telefono'
+    record_shift.values['tipo']=type
     utente_recordid=HelpderDB.sql_query_value(f"SELECT * FROM user_utenti WHERE nome='{name}'",'recordid_')
     record_shift.values['recordidutenti_']=utente_recordid
     record_shift.save()
