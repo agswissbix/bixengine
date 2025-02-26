@@ -104,10 +104,15 @@ def logout_view(request):
 def user_info(request):
     print("Function: user_info")    
     if request.user.is_authenticated:
+        sql=f"SELECT * FROM user_utenti WHERE nomeutente='{request.user.username}'"
+        record_utente=HelpderDB.sql_query_row(sql)
+        nome=record_utente['nome']
+        ruolo=record_utente['ruolo']
         return JsonResponse({
             "isAuthenticated": True,
             "username": request.user.username,
-            "role": ''
+            "name": nome,
+            "role": 'Amministratore'
         })
     else:
         return JsonResponse({"isAuthenticated": False}, status=401)
