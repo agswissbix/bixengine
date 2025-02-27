@@ -112,17 +112,11 @@ def get_shifts_and_volunteers_chat(request):
     ]
 
     today = datetime.date.today()
-    access1='edit'
-    access2='edit'
-    access3='edit'
-    access4='edit'
-    if username=='mariangela.rosa':
-        access1='edit'
-        access2='edit'
-        access3='edit'
-        access4='edit'
-    if username=='ta.test':
-        access4='edit'
+    access1='view'
+    access2='view'
+    access3='view'
+    access4='view'
+   
 
     turni_table=UserTable('turni')
     turni=turni_table.get_results_records(conditions_list=['tipo="chat"'])
@@ -208,6 +202,7 @@ def delete_shift(request):
     name = data.get("name")
     shift = data.get("shift")
     dev = data.get("dev", "")
+    type = data.get("type", "")
 
     #if not date or not timeSlot or not name or not shift:
         #return Response({"error": "Dati mancanti"}, status=400)
@@ -218,10 +213,11 @@ def delete_shift(request):
         "timeSlot": timeSlot,
         "name": name,
         "shift": shift,
-        "dev": dev
+        "dev": dev,
+        "type": type
     }
 
-    HelpderDB.sql_execute(f"UPDATE user_turni SET deleted_='Y' WHERE data='{date}' AND fasciaoraria='{timeSlot}'  AND tipo='telefono'")
+    HelpderDB.sql_execute(f"UPDATE user_turni SET deleted_='Y' WHERE data='{date}' AND fasciaoraria='{timeSlot}'  AND tipo='{type}'")
 
     print(f"Turno eliminato: {new_shift}")  # Debug
 
