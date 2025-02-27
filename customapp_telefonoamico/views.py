@@ -38,7 +38,7 @@ def get_shifts_and_volunteers(request):
 
   
     volunteers=[]
-    utenti=HelpderDB.sql_query(f"SELECT * FROM user_utenti where deleted_='N'")
+    utenti=HelpderDB.sql_query(f"SELECT * FROM user_utenti where tabtelefono='Si' AND (abilitato is null or abilitato!='No') AND deleted_='N'")
     for utente in utenti:
         volunteers.append(utente['nome'])
    
@@ -100,7 +100,7 @@ def get_shifts_and_volunteers_chat(request):
 
   
     volunteers=[]
-    utenti=HelpderDB.sql_query(f"SELECT * FROM user_utenti where deleted_='N'")
+    utenti=HelpderDB.sql_query(f"SELECT * FROM user_utenti where tabchat='Si' AND (abilitato is null or abilitato!='No') AND deleted_='N'")
     for utente in utenti:
         volunteers.append(utente['nome'])
    
@@ -178,7 +178,7 @@ def save_shift(request):
     record_shift.values['fasciaoraria']=timeSlot
     record_shift.values['sede']=shift
     record_shift.values['tipo']=type
-    utente_recordid=HelpderDB.sql_query_value(f"SELECT * FROM user_utenti WHERE nome='{name}'",'recordid_')
+    utente_recordid=HelpderDB.sql_query_value(f"SELECT * FROM user_utenti WHERE nome='{name}' AND deleted_='N'",'recordid_')
     record_shift.values['recordidutenti_']=utente_recordid
     record_shift.save()
     
