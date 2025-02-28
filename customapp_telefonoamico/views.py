@@ -54,13 +54,7 @@ def get_shifts_and_volunteers(request):
     access2='edit'
     access3='edit'
     access4='edit'
-    if username=='mariangela.rosa':
-        access1='edit'
-        access2='edit'
-        access3='edit'
-        access4='edit'
-    if username=='ta.test':
-        access4='edit'
+  
 
     turni_table=UserTable('turni')
     turni=turni_table.get_results_records()
@@ -112,10 +106,10 @@ def get_shifts_and_volunteers_chat(request):
     ]
 
     today = datetime.date.today()
-    access1='view'
-    access2='view'
-    access3='view'
-    access4='view'
+    access1='edit'
+    access2='edit'
+    access3='edit'
+    access4='edit'
    
 
     turni_table=UserTable('turni')
