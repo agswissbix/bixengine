@@ -12,6 +12,7 @@ from django import template
 from bs4 import BeautifulSoup
 from django.db.models import OuterRef, Subquery
 from functools import wraps
+from commonapp.bixmodels.user_record import *
 
 def login_required_api(view_func):
     @wraps(view_func)
@@ -29,5 +30,23 @@ class Helper:
         if var is None or var=='None' or var=='' or var=='null' or var==0:
             return True
         else:
+            return False
+        
+    @classmethod
+    def set_log(userid,action,tableid='',recordid='',informations=''):
+        
+        try:
+            # Ottenere la data nel formato YYYY-MM-DD
+            date_now = datetime.now().strftime("%Y-%m-%d")
+
+            # Ottenere l'ora nel formato HH:MM
+            time_now = datetime.now().strftime("%H:%M")
+
+            record_log=UserRecord('log')
+            record_log.values['date']=date_now
+            record_log.values['date']=time_now
+            return True
+
+        except Exception as e:
             return False
     

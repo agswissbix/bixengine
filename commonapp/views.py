@@ -3,6 +3,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 from django.shortcuts import redirect
+from datetime import datetime
 
 from django.views.decorators.csrf import csrf_exempt
 import json
@@ -19,6 +20,7 @@ import base64
 from io import BytesIO
 from commonapp.models import UserProfile
 from commonapp import helper
+from commonapp.bixmodels import helper_db
 
 
 @csrf_exempt
@@ -27,6 +29,8 @@ def test_connection(request):
         "Stato": "Connessione riuscita",
     }
     return JsonResponse(response, safe=False)
+
+
 
 @ensure_csrf_cookie
 def test_connection_get_csrf(request):
