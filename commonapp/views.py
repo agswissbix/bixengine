@@ -112,7 +112,9 @@ def user_info(request):
             "isAuthenticated": True,
             "username": request.user.username,
             "name": nome,
-            "role": record_utente['ruolo']
+            "role": record_utente['ruolo'],
+            "chat": record_utente['tabchat'],
+            "telefono": record_utente['tabtelefono']
         })
     else:
         return JsonResponse({"isAuthenticated": False}, status=401)
