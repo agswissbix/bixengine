@@ -91,8 +91,11 @@ def login_view(request):
     user = authenticate(request, username=username, password=password)
     
     if user is not None:
-        recordid_utente=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_utenti WHERE nomeutente='{username}' AND deleted_='N'",'recordid_')
-        record_utente=UserRecord('utenti',recordid_utente)
+        #Temp solution
+        activeServer = HelpderDB.sql_query_row("SELECT value FROM sys_settings WHERE setting='cliente_id'")
+        if activeServer['value'] == 'telefonoamico':
+            recordid_utente=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_utenti WHERE nomeutente='{username}' AND deleted_='N'",'recordid_')
+            record_utente=UserRecord('utenti',recordid_utente)
         #ruolo=record_utente.values['ruolo']
         ruolo = ''
         login(request, user)
