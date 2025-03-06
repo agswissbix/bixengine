@@ -14,7 +14,5 @@ urlpatterns = [
     path('enable_2fa/', enable_2fa, name='enable_2fa'),
     path('disable_2fa/', disable_2fa, name='disable_2fa'),
     path('change_password/', change_password, name='change_password'),
-
-    
-    
+    path('get_active_server/', get_active_server, name='get_active_server'),
 ]
