@@ -30,7 +30,7 @@ class AuthUser(models.Model):
 
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)  # Relazione 1:1 con User
-    otp_secret = models.CharField(max_length=32, default=pyotp.random_base32, unique=True)  # Secret per OTP
+    otp_secret = models.CharField(max_length=32, default=pyotp.random_base32)  # Secret per OTP
     is_2fa_enabled = models.BooleanField(default=False)  # Flag per attivare/disattivare 2FA
 
     def generate_otp(self):
