@@ -93,7 +93,8 @@ def login_view(request):
     if user is not None:
         recordid_utente=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_utenti WHERE nomeutente='{username}' AND deleted_='N'",'recordid_')
         record_utente=UserRecord('utenti',recordid_utente)
-        ruolo=record_utente.values['ruolo']
+        #ruolo=record_utente.values['ruolo']
+        ruolo = ''
         login(request, user)
         return JsonResponse({"success": True, "detail": "User logged in", "ruolo":ruolo})
     else:
@@ -108,20 +109,34 @@ def logout_view(request):
 def user_info(request):
     print("Function: user_info")    
     if request.user.is_authenticated:
-        sql=f"SELECT * FROM user_utenti WHERE nomeutente='{request.user.username}' AND deleted_='N'"
-        record_utente=HelpderDB.sql_query_row(sql)
-        nome=record_utente['nome']
-        ruolo=record_utente['ruolo']
-        return JsonResponse({
-            "isAuthenticated": True,
-            "username": request.user.username,
-            "name": nome,
-            "role": record_utente['ruolo'],
-            "chat": record_utente['tabchat'],
-            "telefono": record_utente['tabtelefono']
-        })
+        #Temp solution
+        activeServer = HelpderDB.sql_query_row("SELECT value FROM sys_settings WHERE setting='cliente_id'")
+        if activeServer['value'] == 'telefonoamico':
+            sql=f"SELECT * FROM user_utenti WHERE nomeutente='{request.user.username}' AND deleted_='N'"
+            record_utente=HelpderDB.sql_query_row(sql)
+            nome=record_utente['nome']
+            ruolo=record_utente['ruolo']
+            return JsonResponse({
+                "isAuthenticated": True,
+                "username": request.user.username,
+                "name": nome,
+                "role": record_utente['ruolo'],
+                "chat": record_utente['tabchat'],
+                "telefono": record_utente['tabtelefono']
+            })
+        else:
+            return JsonResponse({
+                "isAuthenticated": True,
+                "username": request.user.username,
+                "name": '',
+                "role": '',
+                "chat": '',
+                "telefono": ''
+            })
     else:
         return JsonResponse({"isAuthenticated": False}, status=401)
+        
+        
 
 @login_required_api  
 def get_examplepost(request):  
@@ -300,6 +315,12 @@ def change_password(request):
         return JsonResponse({'message': 'Password aggiornata con successo'})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def get_active_server(request):
+    active_server = HelpderDB.sql_query_row("SELECT value FROM sys_settings WHERE setting='cliente_id'")
+    return JsonResponse({"activeServer": active_server['value']})
+
 
 
 
