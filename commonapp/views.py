@@ -91,7 +91,7 @@ def login_view(request):
     user = authenticate(request, username=username, password=password)
     
     if user is not None:
-        recordid_utente=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_utenti WHERE nomeutente='{username}'",'recordid_')
+        recordid_utente=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_utenti WHERE nomeutente='{username}' AND deleted_='N'",'recordid_')
         record_utente=UserRecord('utenti',recordid_utente)
         ruolo=record_utente.values['ruolo']
         login(request, user)
@@ -108,7 +108,7 @@ def logout_view(request):
 def user_info(request):
     print("Function: user_info")    
     if request.user.is_authenticated:
-        sql=f"SELECT * FROM user_utenti WHERE nomeutente='{request.user.username}'"
+        sql=f"SELECT * FROM user_utenti WHERE nomeutente='{request.user.username}' AND deleted_='N'"
         record_utente=HelpderDB.sql_query_row(sql)
         nome=record_utente['nome']
         ruolo=record_utente['ruolo']
