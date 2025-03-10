@@ -9,6 +9,7 @@ urlpatterns = [
     path('auth/user/', user_info, name='user_info'),
     path('commonapp/', include('commonapp.urls')),
     path('customapp_telefonoamico/', include('customapp_telefonoamico.urls')),
+    path('customapp_winteler/', include('customapp_winteler.urls')),
   
     
     
