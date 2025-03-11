@@ -4,30 +4,49 @@ from django.http import JsonResponse
 from rest_framework.response import Response
 from rest_framework.renderers import JSONRenderer
 from django.views.decorators.csrf import csrf_exempt
+from rest_framework.decorators import api_view
+from rest_framework import status
 
 # Create your views here.
 
 @csrf_exempt
+@api_view(['POST'])
 def winteler_wip_barcode_scan(request):
-    if request.method == "POST":
-        try:
-            data = json.loads(request.body)
-            barcode_lotto = data.get("barcode_lotto")
-            barcode_wip = data.get("barcode_wip", [])
+    """
+    Esempio di funzione che riceve un barcode lotto (barcodeLotto)
+    e una lista di barcode wip (barcodeWipList).
+    """
+    # Estraggo i dati dal body della richiesta
+    barcode_lotto = request.data.get('barcodeLotto', None)
+    barcode_wip_list = request.data.get('barcodeWipList', [])
 
-            # Controlli di validità
-            if not barcode_lotto:
-                return JsonResponse({"success": False, "message": "Barcode lotto mancante"}, status=400)
-            if not isinstance(barcode_wip, list):
-                return JsonResponse({"success": False, "message": "Barcode WIP deve essere una lista"}, status=400)
+    # Verifico la presenza di barcodeLotto
+    if not barcode_lotto:
+        return Response(
+            {"detail": "barcodeLotto è obbligatorio"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
-            # Simulazione salvataggio dati (puoi aggiungere il salvataggio nel database)
-            print(f"Salvataggio barcode lotto: {barcode_lotto}")
-            print(f"Salvataggio barcode WIP: {barcode_wip}")
+    # Verifico che barcodeWipList sia effettivamente una lista
+    if not isinstance(barcode_wip_list, list):
+        return Response(
+            {"detail": "barcodeWipList deve essere una lista di barcode"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
-            return JsonResponse({"success": True, "message": "Salvataggio completato con successo"})
+    # Da qui puoi inserire la logica che serve per salvare i dati nel database
+    # o processarli come meglio credi. Ad esempio:
+    # for wip in barcode_wip_list:
+    #     # Salvataggio su DB o altra logica
+    #     WipModel.objects.create(lotto=barcode_lotto, wip_code=wip)
+    #
+    # Oppure puoi semplicemente ritornare una conferma
 
-        except json.JSONDecodeError:
-            return JsonResponse({"success": False, "message": "Dati JSON non validi"}, status=400)
-
-    return JsonResponse({"success": False, "message": "Metodo non consentito"}, status=405)
+    return Response(
+        {
+            "message": "Dati ricevuti con successo!",
+            "barcodeLotto": barcode_lotto,
+            "barcodeWipList": barcode_wip_list
+        },
+        status=status.HTTP_200_OK
+    )
