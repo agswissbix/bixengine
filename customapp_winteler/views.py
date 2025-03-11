@@ -6,6 +6,10 @@ from rest_framework.renderers import JSONRenderer
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view
 from rest_framework import status
+from commonapp.bixmodels.helper_db import *
+from commonapp.bixmodels.user_record import *
+from commonapp.bixmodels.user_table import *
+from commonapp.helper import *
 
 # Create your views here.
 
@@ -41,6 +45,14 @@ def winteler_wip_barcode_scan(request):
     #     WipModel.objects.create(lotto=barcode_lotto, wip_code=wip)
     #
     # Oppure puoi semplicemente ritornare una conferma
+    for barcode_wip in barcode_wip_list:
+        print(barcode_wip)
+        #wip_record=UserRecord('wipbarcode')
+        #wip_record.values['wipbarcode']=barcode_wip
+        #wip_record.values['lottobarcode']=barcode_lotto
+        #wip_record.save()
+        sql=f"INSERT INTO t_wipbarcode (wipbarcode,lottobarcode) VALUES ('{barcode_wip}','{barcode_lotto}')"
+        HelpderDB.sql_execute(sql)
 
     return Response(
         {
