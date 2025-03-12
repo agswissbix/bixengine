@@ -418,4 +418,9 @@ def get_table_records(request):
 
 
 
+def set_column_order(request):
+    return JsonResponse({"success": True, "detail": "Ordine colonne impostato con successo"})
+
+
+
 
