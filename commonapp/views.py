@@ -414,7 +414,7 @@ def get_table_records(request):
         ]
     }
 
-    return JsonResponse({"success": True, "detail": "Record ottenuti con successo", "data": response_data})
+    return JsonResponse(response_data)
 
 
 
@@ -427,26 +427,26 @@ def get_pitservice_pivot_lavanderia(request):
                         "recordid": "1",
                         "css": "#",
                         "fields": [
-                            {"recordid": "", "css": "bg-blue-200", "type": "standard", "value": "Casa Sirio Via Giuseppe Stabile 3"},
-                            {"recordid": "", "css": "", "type": "standard", "value": "2025"},
-                            {"recordid": "", "css": "", "type": "standard", "value": "2025"},
-                            {"recordid": "", "css": "", "type": "standard", "value": "2025"}
+                            {"recordid": "", "css": "", "type": "standard", "value": "Reg.Sole"},
+                            {"recordid": "", "css": "", "type": "standard", "value": "x"},
+                            {"recordid": "", "css": "", "type": "standard", "value": "x"},
+                            {"recordid": "", "css": "", "type": "standard", "value": ""}
                         ]
                     },
                     {
                         "recordid": "2",
                         "css": "#",
                         "fields": [
-                            {"recordid": "", "css": "", "type": "standard", "value": "Condominio San Giorgio"},
-                            {"recordid": "", "css": "", "type": "standard", "value": "2025"},
-                            {"recordid": "", "css": "", "type": "standard", "value": "2025"},
-                            {"recordid": "", "css": "", "type": "standard", "value": "2025"}
+                            {"recordid": "", "css": "", "type": "standard", "value": "Via Rava 11"},
+                            {"recordid": "", "css": "", "type": "standard", "value": "x"},
+                            {"recordid": "", "css": "", "type": "standard", "value": "x"},
+                            {"recordid": "", "css": "bg-green-500", "type": "standard", "value": "x"}
                         ]
                     }
                 ],
                 "fields": [
-                    {"fieldid": "1", "value": "Marvel Gestioni e Immobili Sagl", "css": ""},
-                    {"fieldid": "2", "value": "indirizzo 1", "css": "bg-green-500"}
+                    {"fieldid": "1", "value": "Cofis", "css": ""},
+                    {"fieldid": "2", "value": "indirizzo 1", "css": ""}
                 ]
             },
             {
@@ -455,7 +455,7 @@ def get_pitservice_pivot_lavanderia(request):
                         "recordid": "3",
                         "css": "#",
                         "fields": [
-                            {"recordid": "", "css": "", "type": "standard", "value": "Agenzia Immobiliare Ceresio SA"}
+                            {"recordid": "", "css": "", "type": "standard", "value": "Via D.Fontana 6"}
                         ]
                     },
                     {
@@ -463,14 +463,14 @@ def get_pitservice_pivot_lavanderia(request):
                         "css": "#",
                         "fields": [
                             {"recordid": "", "css": "", "type": "standard", "value": "Residenza Salice Via Frontini 8"},
-                            {"recordid": "", "css": "", "type": "standard", "value": "2025"},
-                            {"recordid": "", "css": "", "type": "standard", "value": "2025"},
-                            {"recordid": "", "css": "", "type": "standard", "value": "4050"}
+                            {"recordid": "", "css": "", "type": "standard", "value": "x"},
+                            {"recordid": "", "css": "", "type": "standard", "value": "x"},
+                            {"recordid": "", "css": "", "type": "standard", "value": ""}
                         ]
                     }
                 ],
                 "fields": [
-                    {"fieldid": "1", "value": "Agenzia Immobiliare Ceresio SA", "css": ""},
+                    {"fieldid": "1", "value": "Agogestilioni", "css": ""},
                     {"fieldid": "2", "value": "indirizzo2", "css": ""}
                 ]
             },
@@ -488,9 +488,9 @@ def get_pitservice_pivot_lavanderia(request):
                         "css": "#",
                         "fields": [
                             {"recordid": "", "css": "", "type": "standard", "value": "Condominio Liberty Via Domenico Fontana 6"},
-                            {"recordid": "", "css": "", "type": "standard", "value": "2025"},
-                            {"recordid": "", "css": "", "type": "standard", "value": "4050"},
-                            {"recordid": "", "css": "", "type": "standard", "value": "12150"}
+                            {"recordid": "", "css": "", "type": "standard", "value": "x"},
+                            {"recordid": "", "css": "", "type": "standard", "value": "x"},
+                            {"recordid": "", "css": "", "type": "standard", "value": ""}
                         ]
                     }
                 ],
@@ -501,12 +501,21 @@ def get_pitservice_pivot_lavanderia(request):
             }
         ],
         "columns": [
-            {"fieldtypeid": "Parola", "desc": "Nome"},
-            {"fieldtypeid": "Parola", "desc": "Totale"},
+            {"fieldtypeid": "Parola", "desc": ""},
+            {"fieldtypeid": "Parola", "desc": "Città"},
             {"fieldtypeid": "Parola", "desc": "Gennaio"},
             {"fieldtypeid": "Parola", "desc": "Febbraio"},
             {"fieldtypeid": "Parola", "desc": "Marzo"},
-            {"fieldtypeid": "Parola", "desc": "Totale Complessivo"}
+            {"fieldtypeid": "Parola", "desc": "Aprile"},
+            {"fieldtypeid": "Parola", "desc": "Maggio"},
+            {"fieldtypeid": "Parola", "desc": "Giugno"},
+            {"fieldtypeid": "Parola", "desc": "Luglio"},
+            {"fieldtypeid": "Parola", "desc": "Agosto"},
+            {"fieldtypeid": "Parola", "desc": "Settembre"},
+            {"fieldtypeid": "Parola", "desc": "Ottobre"},
+            {"fieldtypeid": "Parola", "desc": "Novembre"},
+            {"fieldtypeid": "Parola", "desc": "Dicembre"},
+
         ]
     }
 
