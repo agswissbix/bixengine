@@ -15,4 +15,6 @@ urlpatterns = [
     path('disable_2fa/', disable_2fa, name='disable_2fa'),
     path('change_password/', change_password, name='change_password'),
     path('get_active_server/', get_active_server, name='get_active_server'),
+    path('delete_record/', delete_record, name='delete_record'),
+    path('get_table_records/', get_table_records, name='get_table_records'),
 ]

@@ -325,5 +325,97 @@ def get_active_server(request):
     return JsonResponse({"activeServer": active_server['value']})
 
 
+@csrf_exempt
+def delete_record(request):
+    return JsonResponse({"success": True, "detail": "Record eliminato con successo"})
+
+
+def get_table_records(request):
+    response_data = {
+        "rows": [
+            {
+                "recordid": "1",
+                "css": "#",
+                "fields": [
+                    {
+                        "recordid": "",
+                        "css": "",
+                        "type": "standard",
+                        "value": "macbook"
+                    },
+                    {
+                        "recordid": "",
+                        "css": "",
+                        "type": "standard",
+                        "value": "nero"
+                    },
+                    {
+                        "recordid": "",
+                        "css": "",
+                        "type": "standard",
+                        "value": "Laptop"
+                    },
+                    {
+                        "recordid": "",
+                        "css": "",
+                        "type": "standard",
+                        "value": "2k"
+                    },
+                ]
+            },
+            {
+                "recordid": "2",
+                "css": "#",
+                "fields": [
+                    {
+                        "recordid": "",
+                        "css": "",
+                        "type": "standard",
+                        "value": "surface",
+                    },
+                    {
+                        "recordid": "",
+                        "css": "",
+                        "type": "standard",
+                        "value": "bianco",
+                    },
+                    {
+                        "recordid": "",
+                        "css": "",
+                        "type": "standard",
+                        "value": "Laptop",
+                    },
+                    {
+                        "recordid": "",
+                        "css": "",
+                        "type": "standard",
+                        "value": "1k",
+                    },
+                ]
+            },
+        ],
+        "columns": [
+            {
+                "fieldtypeid": "Numero",
+                "desc": "Product name"
+            },
+            {
+                "fieldtypeid": "Numero",
+                "desc": "Color"
+            },
+            {
+                "fieldtypeid": "Numero",
+                "desc": "Type"
+            },
+            {
+                "fieldtypeid": "Numero",
+                "desc": "Price"
+            },
+        ]
+    }
+
+    return JsonResponse({"success": True, "detail": "Record ottenuti con successo", "data": response_data})
+
+
 
 
