@@ -418,9 +418,97 @@ def get_table_records(request):
 
 
 
-def set_column_order(request):
-    return JsonResponse({"success": True, "detail": "Ordine colonne impostato con successo"})
+def get_pitservice_pivot_lavanderia(request):
+    response_data = {
+        "groups": [
+            {
+                "rows": [
+                    {
+                        "recordid": "1",
+                        "css": "#",
+                        "fields": [
+                            {"recordid": "", "css": "bg-blue-200", "type": "standard", "value": "Casa Sirio Via Giuseppe Stabile 3"},
+                            {"recordid": "", "css": "", "type": "standard", "value": "2025"},
+                            {"recordid": "", "css": "", "type": "standard", "value": "2025"},
+                            {"recordid": "", "css": "", "type": "standard", "value": "2025"}
+                        ]
+                    },
+                    {
+                        "recordid": "2",
+                        "css": "#",
+                        "fields": [
+                            {"recordid": "", "css": "", "type": "standard", "value": "Condominio San Giorgio"},
+                            {"recordid": "", "css": "", "type": "standard", "value": "2025"},
+                            {"recordid": "", "css": "", "type": "standard", "value": "2025"},
+                            {"recordid": "", "css": "", "type": "standard", "value": "2025"}
+                        ]
+                    }
+                ],
+                "fields": [
+                    {"fieldid": "1", "value": "Marvel Gestioni e Immobili Sagl", "css": ""},
+                    {"fieldid": "2", "value": "indirizzo 1", "css": "bg-green-500"}
+                ]
+            },
+            {
+                "rows": [
+                    {
+                        "recordid": "3",
+                        "css": "#",
+                        "fields": [
+                            {"recordid": "", "css": "", "type": "standard", "value": "Agenzia Immobiliare Ceresio SA"}
+                        ]
+                    },
+                    {
+                        "recordid": "4",
+                        "css": "#",
+                        "fields": [
+                            {"recordid": "", "css": "", "type": "standard", "value": "Residenza Salice Via Frontini 8"},
+                            {"recordid": "", "css": "", "type": "standard", "value": "2025"},
+                            {"recordid": "", "css": "", "type": "standard", "value": "2025"},
+                            {"recordid": "", "css": "", "type": "standard", "value": "4050"}
+                        ]
+                    }
+                ],
+                "fields": [
+                    {"fieldid": "1", "value": "Agenzia Immobiliare Ceresio SA", "css": ""},
+                    {"fieldid": "2", "value": "indirizzo2", "css": ""}
+                ]
+            },
+            {
+                "rows": [
+                    {
+                        "recordid": "5",
+                        "css": "#",
+                        "fields": [
+                            {"recordid": "", "css": "", "type": "standard", "value": "Aggestioni Sagl"}
+                        ]
+                    },
+                    {
+                        "recordid": "6",
+                        "css": "#",
+                        "fields": [
+                            {"recordid": "", "css": "", "type": "standard", "value": "Condominio Liberty Via Domenico Fontana 6"},
+                            {"recordid": "", "css": "", "type": "standard", "value": "2025"},
+                            {"recordid": "", "css": "", "type": "standard", "value": "4050"},
+                            {"recordid": "", "css": "", "type": "standard", "value": "12150"}
+                        ]
+                    }
+                ],
+                "fields": [
+                    {"fieldid": "1", "value": "Aggestioni Sagl", "css": ""},
+                    {"fieldid": "2", "value": "indirizzo3", "css": ""}
+                ]
+            }
+        ],
+        "columns": [
+            {"fieldtypeid": "Parola", "desc": "Nome"},
+            {"fieldtypeid": "Parola", "desc": "Totale"},
+            {"fieldtypeid": "Parola", "desc": "Gennaio"},
+            {"fieldtypeid": "Parola", "desc": "Febbraio"},
+            {"fieldtypeid": "Parola", "desc": "Marzo"},
+            {"fieldtypeid": "Parola", "desc": "Totale Complessivo"}
+        ]
+    }
 
-
-
+    return JsonResponse(response_data)
 
