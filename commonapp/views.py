@@ -334,6 +334,7 @@ def delete_record(request):
 
 
 def get_table_records(request):
+    """
     data = json.loads(request.body)
     tableid = data.get("tableid")
     viewid= data.get("view")
@@ -353,7 +354,9 @@ def get_table_records(request):
         row['fields']=[]
         for field in record:
             if field != 'recordid_':
-                row['fields'].append({'recordid':record['recordid_'],'css':'','type':'standard','value':record[field]})
+                row['fields'].append({'recordid':record['recordid_'],'css':'','type':'standard','value':record[field]})"
+    
+    """
         
 
     response_data = {
