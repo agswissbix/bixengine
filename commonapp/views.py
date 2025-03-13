@@ -445,7 +445,7 @@ def get_table_records(request):
 
 def get_pitservice_pivot_lavanderia(request):
     table=UserTable('rendicontolavanderia')
-    sql="SELECT * FROM user_rendicontolavanderia WHERE deleted_='N' ORDER BY recordidcliente_"
+    sql="SELECT recordid_ FROM user_rendicontolavanderia WHERE deleted_='N' ORDER BY recordidcliente_"
     query_result=HelpderDB.sql_query(sql)
     print(query_result[0])
 
