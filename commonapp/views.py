@@ -445,10 +445,11 @@ def get_table_records(request):
 
 def get_pitservice_pivot_lavanderia(request):
     table=UserTable('rendicontolavanderia')
-    query_result=table.get_results_records()
+    sql="SELECT * FROM user_rendicontolavanderia WHERE deleted_='N' ORDER BY recordidcliente_"
+    query_result=HelpderDB.sql_query(sql)
     print(query_result[0])
 
-    mesi = sorted({record['mese'] for record in query_result})
+    mesi = ['01.Gennaio', '02.Febbraio', '03.Marzo', '04.Aprile', '05.Maggio', '06.Giugno', '07.Luglio', '08.Agosto', '09.Settembre', '10.Ottobre', '11.Novembre', '12.Dicembre']
     
     # Raggruppa i record per cliente
     gruppi_per_cliente = defaultdict(list)
@@ -464,7 +465,11 @@ def get_pitservice_pivot_lavanderia(request):
         
         # Campi del gruppo: ad esempio potresti voler inserire il nome del cliente o altre info
         record_cliente=UserRecord('cliente',recordid_cliente)
-        group_fields = [{"fieldid": "cliente", "value": record_cliente.values['nome_cliente'], "css": ""}]
+        if record_cliente.values is not None:
+            nome_cliente = record_cliente.values.get('nome_cliente', '')
+        else:
+            nome_cliente = ''
+        group_fields = [{"fieldid": "cliente", "value": nome_cliente, "css": ""}]
         group["fields"] = group_fields
         group["rows"] = []
         # Costruiamo le righe: in questo esempio una sola riga per cliente
@@ -472,7 +477,15 @@ def get_pitservice_pivot_lavanderia(request):
         for record in records:
             row = {"recordid": record['recordid_'], "css": "#", "fields": []}
             recordid_stabile=record['recordidstabile_']
-            row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": recordid_stabile})
+            record_stabile=UserRecord('stabile',recordid_stabile)
+            if record_stabile.values is not None:
+                titolo_stabile = record_cliente.values.get('titolo_stabile', '')
+                citta = record_cliente.values.get('citta', '')
+            else:
+                titolo_stabile = ''
+                citta=''
+            row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": titolo_stabile})
+            row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": citta})
             for mese in mesi:
                 if any(r['mese'] == mese for r in records):
                     valore = "x"
