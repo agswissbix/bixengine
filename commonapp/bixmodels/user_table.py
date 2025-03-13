@@ -60,31 +60,20 @@ class UserTable:
         for condition in conditions_list:
             conditions=conditions+f" AND {condition}"   
 
-        sql=f"SELECT {select_fields} from user_{self.tableid} where {conditions} ORDER BY {orderby} "
+        sql=f"SELECT {select_fields} from user_{self.tableid} where {conditions} ORDER BY {orderby} LIMIT 50"
         records = HelpderDB.sql_query(sql)
         return records
     
     def get_results_columns(self):
         sql=f"""
-            SELECT
-            sys_user_order.userid,
-            sys_user_order.tableid,
-            sys_user_order.fieldid,
-            sys_user_order.fieldorder,
-            sys_user_order.typepreference,
-            sys_field.fieldtypeid,
-            sys_field.description,
-            sys_field.fieldtypewebid,
-            sys_field.tablelink,
-            sys_field.keyfieldlink
-            FROM sys_user_order
-            INNER JOIN sys_field
-                ON sys_user_order.tableid = sys_field.tableid
-                AND sys_user_order.fieldid = sys_field.fieldid
-            WHERE sys_user_order.typepreference = 'risultatiricerca'
-            AND sys_user_order.tableid = '{self.tableid}'
-            AND sys_user_order.userid = {self.userid}
-            ORDER BY sys_user_order.fieldorder
+            SELECT *
+            FROM sys_user_field_order
+            LEFT JOIN sys_field ON sys_user_field_order.tableid=sys_field.tableid AND sys_user_field_order.fieldid=sys_field.id
+            WHERE sys_user_field_order.typepreference = 'search_results_fields'
+            AND sys_user_field_order.tableid = '{self.tableid}'
+            AND sys_user_field_order.userid = {self.userid}
+            ORDER BY sys_user_field_order.fieldorder
             """
+        print(sql)
         columns=HelpderDB.sql_query(sql)
         return columns

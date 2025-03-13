@@ -10,6 +10,8 @@ import json
 from django.middleware.csrf import get_token
 from django.contrib.auth.decorators import login_required
 from functools import wraps
+
+from commonapp.bixmodels import helper_db   
 from .bixmodels.sys_table import *
 from .bixmodels.user_record import *
 from .bixmodels.user_table import *
@@ -20,7 +22,7 @@ import base64
 from io import BytesIO
 from commonapp.models import UserProfile
 from commonapp import helper
-from commonapp.bixmodels import helper_db
+
 
 
 @csrf_exempt
@@ -331,6 +333,28 @@ def delete_record(request):
 
 
 def get_table_records(request):
+    data = json.loads(request.body)
+    tableid = data.get("tableid")
+    viewid= data.get("view")
+    searchTerm= data.get("searchTerm")
+    tableid='stabile'
+    viewid=3 #temporaneo
+
+    records = []
+    table=UserTable(tableid)
+    records=table.get_results_records()
+    columns=table.get_results_columns()
+    rows=[]
+    for record in records:
+        row={}
+        row['recordid']=record['recordid_']
+        row['css']= "#"
+        row['fields']=[]
+        for field in record:
+            if field != 'recordid_':
+                row['fields'].append({'recordid':record['recordid_'],'css':'','type':'standard','value':record[field]})
+        
+
     response_data = {
         "rows": [
             {
