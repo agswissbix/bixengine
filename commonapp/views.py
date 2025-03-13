@@ -20,6 +20,7 @@ import pyotp
 import qrcode
 import base64
 from io import BytesIO
+from collections import defaultdict
 from commonapp.models import UserProfile
 from commonapp import helper
 
@@ -443,6 +444,51 @@ def get_table_records(request):
 
 
 def get_pitservice_pivot_lavanderia(request):
+    table=UserTable('rendicontolavanderia')
+    query_result=table.get_results_records()
+    print(query_result[0])
+
+    mesi = sorted({record['mese'] for record in query_result})
+    
+    # Raggruppa i record per cliente
+    gruppi_per_cliente = defaultdict(list)
+    for record in query_result:
+        cliente = record.get('cliente')
+        gruppi_per_cliente[cliente].append(record)
+    
+    # Costruisci la struttura di risposta
+    response_data = {"groups": []}
+    
+    for cliente, records in gruppi_per_cliente.items():
+        group = {}
+        
+        # Campi del gruppo: ad esempio potresti voler inserire il nome del cliente o altre info
+        group_fields = [{"fieldid": "cliente", "value": cliente, "css": ""}]
+        
+        # Costruiamo le righe: in questo esempio una sola riga per cliente
+        # Per ogni mese verifichiamo se esiste un record per quel mese
+        row = {"recordid": cliente, "css": "#", "fields": []}
+        for mese in mesi:
+            if any(r['mese'] == mese for r in records):
+                valore = "x"
+                css = "bg-green-500"
+            else:
+                valore = ""
+                css = ""
+            row["fields"].append({
+                "recordid": "",
+                "css": css,
+                "type": "standard",
+                "value": valore
+            })
+        
+        group["rows"] = [row]
+        group["fields"] = group_fields
+        
+        response_data["groups"].append(group)
+
+
+
     response_data = {
         "groups": [
             {
