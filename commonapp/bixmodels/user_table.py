@@ -60,7 +60,7 @@ class UserTable:
         for condition in conditions_list:
             conditions=conditions+f" AND {condition}"   
 
-        sql=f"SELECT {select_fields} from user_{self.tableid} where {conditions} ORDER BY {orderby} LIMIT 50"
+        sql=f"SELECT {select_fields} from user_{self.tableid} where {conditions} ORDER BY {orderby} "
         records = HelpderDB.sql_query(sql)
         return records
     
