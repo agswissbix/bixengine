@@ -22,7 +22,7 @@ def test(request):
 #@csrf_exempt
 @login_required_api
 @renderer_classes([JSONRenderer])  # Forza il ritorno di JSON
-def get_shifts_and_volunteers(request):
+def get_shifts_and_volunteers_telefono(request):
     """Restituisce la lista dei turni, volontari e slot assegnati"""
 
     user_id = request.user.id
