@@ -629,3 +629,16 @@ def get_pitservice_pivot_lavanderia(request):
 
     return JsonResponse(response_data)
 
+@csrf_exempt
+def save_record_fields(request):
+    data = json.loads(request.body)
+    recordid = data.get("recordid")
+    tableid = data.get("tableid")
+    fields = data.get("fields")
+    print("recordid:", recordid)
+    print("tableid:", tableid)
+    print("fields:", fields)
+    return JsonResponse({"success": True, "detail": "Campi del record salvati con successo"})
+
+    
+

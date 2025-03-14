@@ -18,4 +18,5 @@ urlpatterns = [
     path('delete_record/', delete_record, name='delete_record'),
     path('get_table_records/', get_table_records, name='get_table_records'),
     path('get_pitservice_pivot_lavanderia/', get_pitservice_pivot_lavanderia, name='get_pitservice_pivot_lavanderia'),
+    path('save_record_fields/', save_record_fields, name='save_record_fields'),
 ]
