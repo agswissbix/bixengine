@@ -19,4 +19,11 @@ urlpatterns = [
     path('get_table_records/', get_table_records, name='get_table_records'),
     path('get_pitservice_pivot_lavanderia/', get_pitservice_pivot_lavanderia, name='get_pitservice_pivot_lavanderia'),
     path('save_record_fields/', save_record_fields, name='save_record_fields'),
+    path('get_table_views/', get_table_views, name='get_table_views'),
+    path('get_record_badge/', get_record_badge, name='get_record_badge'),
+    path('get_record_card_fields/', get_record_card_fields, name='get_record_card_fields'),
+    path('get_record_linked_tables/', get_record_linked_tables, name='get_record_linked_tables'),
+    
+    
+    
 ]

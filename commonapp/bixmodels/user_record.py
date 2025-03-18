@@ -134,53 +134,65 @@ class UserRecord:
             self.save()
 
     def get_linked_tables(self):
-        linked_tables=[]
-        linked_tables = [
-            {
-                "tableid": "company",
-                "description": "Azienda",
-                "rowsCount": 1,
-            },
-            {
-                "tableid": "contact",
-                "description": "Contatti",
-                "rowsCount": 1,
-            },
-            {
-                "tableid": "tableid",
-                "description": "siung",
-                "rowsCount": 1,
-            },
-            {
-                "tableid": "tableid",
-                "description": "siung",
-                "rowsCount": 1,
-            },
-            {
-                "tableid": "tableid",
-                "description": "siung",
-                "rowsCount": 1,
-            },
-            {
-                "tableid": "tableid",
-                "description": "siung",
-                "rowsCount": 1,
-            },
-            {
-                "tableid": "tableid",
-                "description": "siung",
-                "rowsCount": 1,
-            },
-            {
-                "tableid": "tableid",
-                "description": "siung",
-                "rowsCount": 1,
-            },
-            {
-                "tableid": "tableid",
-                "description": "siung",
-                "rowsCount": 1,
-            },
-        ]
+        sql=f"SELECT sys_user_order.tableid,sys_table.description  FROM sys_user_order LEFT JOIN sys_table ON sys_user_order.fieldid=sys_table.id  WHERE sys_user_order.tableid='{self.tableid}' AND typepreference='keylabel' AND userid={self.userid} order by fieldorder asc"
+
+        linked_tables=HelpderDB.sql_query(sql)
+        for linked_table in linked_tables:
+            linked_table['rowsCount']=5
+    
 
         return linked_tables
+    
+
+    def get_badge_fields(self):
+        sql=f"""
+            SELECT f.*
+            FROM sys_user_field_order AS fo LEFT JOIN sys_field AS f ON fo.tableid=f.tableid AND fo.fieldid=f.id
+
+            WHERE fo.tableid='{self.tableid}' AND typepreference='badge_fields' AND fo.userid={self.userid} ORDER BY fieldorder
+        """
+        fields=HelpderDB.sql_query(sql)
+        badge_fields=[]
+        for field in fields:
+            fieldid=field['fieldid']
+            value=self.values[fieldid]
+            badge_fields.append({"fieldid":fieldid,"value":value})
+        return badge_fields
+    
+    def get_record_card_fields(self):
+        sql=f"""
+            SELECT f.*
+            FROM sys_user_field_order AS fo LEFT JOIN sys_field AS f ON fo.tableid=f.tableid AND fo.fieldid=f.id
+
+            WHERE fo.tableid='{self.tableid}' AND typepreference='insert_fields' AND fo.userid={self.userid} ORDER BY fieldorder
+        """
+        fields=HelpderDB.sql_query(sql)
+        insert_fields=[]
+        for field in fields:
+            insert_field={}
+            fieldid=field['fieldid']
+            value=self.values[fieldid]
+            if not value:
+                value=""
+            insert_field['tableid']="1"
+            insert_field['fieldid']=fieldid
+            insert_field['fieldorder']="1"
+            insert_field['description']=field['description']
+            insert_field['value']={"code": value, "value": value}
+            insert_field['fieldtype']="Parola"
+            insert_field['lookupitemsuser']=[
+                            {"id": '1', "firstname": 'Mario', "lastname": 'Rossi', "link": 'user', "linkdefield": 'id', "linkedvalue": '1'},
+                            {"id": '2', "firstname": 'Luca', "lastname": 'Bianchi', "link": 'user', "linkdefield": 'id', "linkedvalue": '2'}
+                        ]
+            insert_field["fieldtypewebid"]= "multiselect",
+            insert_field['settings']={
+                "calcolato": "false",
+                "default": "",
+                "nascosto": "false",
+                "obbligatorio": "false"
+            }
+            
+            insert_fields.append(insert_field)
+
+
+        return insert_fields

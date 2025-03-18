@@ -36,7 +36,15 @@ class UserTable:
         self.userid=userid
         self.context=''
 
-    def get_results_records(self,viewid='',searchTerm='', conditions_list=list(),fields=None,offset=0,limit=None,orderby='recordid_ desc'):
+    def get_table_records(self,viewid='',searchTerm='', conditions_list=list(),fields=None,offset=0,limit=None,orderby='recordid_ desc'):
+        columns = self.get_results_columns()
+        fields=[]
+        for column in columns:
+            fields.append(column['fieldid'])
+        records = self.get_records(viewid,searchTerm,conditions_list,fields,offset,limit,orderby)
+        return records
+    
+    def get_records(self,viewid='',searchTerm='', conditions_list=list(),fields=None,offset=0,limit=None,orderby='recordid_ desc'):
         """Ottieni elenco record in base ai parametri di ricerca
 
         Args:
@@ -49,18 +57,16 @@ class UserTable:
         """ 
         select_fields='*'
         if fields:
-            select_fields=''
+            select_fields='recordid_'
             for field in fields:
-                if select_fields!='':
-                    select_fields=select_fields+','
-                select_fields=select_fields+field
+                select_fields=select_fields+','+field
                 
         conditions="deleted_='N'"
         #conditions=conditions+f" AND companyname like '%{searchTerm}%' " 
         for condition in conditions_list:
             conditions=conditions+f" AND {condition}"   
 
-        sql=f"SELECT {select_fields} from user_{self.tableid} where {conditions} ORDER BY {orderby} "
+        sql=f"SELECT {select_fields} from user_{self.tableid} where {conditions}  ORDER BY {orderby} LIMIT 20 "
         records = HelpderDB.sql_query(sql)
         return records
     
@@ -74,6 +80,20 @@ class UserTable:
             AND sys_user_field_order.userid = {self.userid}
             ORDER BY sys_user_field_order.fieldorder
             """
-        print(sql)
         columns=HelpderDB.sql_query(sql)
         return columns
+    
+    def get_table_views(self):
+        sql=f"""
+            SELECT *
+            FROM sys_view
+            WHERE tableid = '{self.tableid}'
+            """
+        views=HelpderDB.sql_query(sql)
+        return views
+    
+    def get_default_viewid(self):
+        sql="SELECT value FROM sys_user_table_settings WHERE tableid = '"+self.tableid+"' AND userid=1 AND settingid='default_viewid'"
+        viewid=HelpderDB.sql_query_value(sql=sql,column='value')
+        return viewid
+                                    

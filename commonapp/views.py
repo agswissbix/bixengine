@@ -334,113 +334,42 @@ def delete_record(request):
 
 
 def get_table_records(request):
-    """
+    
     data = json.loads(request.body)
     tableid = data.get("tableid")
     viewid= data.get("view")
     searchTerm= data.get("searchTerm")
-    tableid='stabile'
-    viewid=3 #temporaneo
+
+    table=UserTable(tableid)
+
+    if viewid == '':
+        viewid=table.get_default_viewid()
 
     records = []
-    table=UserTable(tableid)
-    records=table.get_results_records()
-    columns=table.get_results_columns()
+    
+    records=table.get_table_records(viewid=viewid,searchTerm=searchTerm)
+    table_columns=table.get_results_columns()
     rows=[]
     for record in records:
         row={}
         row['recordid']=record['recordid_']
         row['css']= "#"
         row['fields']=[]
-        for field in record:
-            if field != 'recordid_':
-                row['fields'].append({'recordid':record['recordid_'],'css':'','type':'standard','value':record[field]})"
+        for fieldid in record:
+            if fieldid != 'recordid_':
+                row['fields'].append({'recordid':record['recordid_'],'css':'','type':'standard','value':record[fieldid],'fieldid':fieldid})
+        rows.append(row)
     
-    """
-        
+    columns=[]
+    for table_column in table_columns:
+        columns.append({'fieldtypeid':table_column['fieldtypeid'],'desc':table_column['description']})
 
     response_data = {
-        "rows": [
-            {
-                "recordid": "1",
-                "css": "#",
-                "fields": [
-                    {
-                        "recordid": "",
-                        "css": "",
-                        "type": "standard",
-                        "value": "macbook"
-                    },
-                    {
-                        "recordid": "",
-                        "css": "",
-                        "type": "standard",
-                        "value": "nero"
-                    },
-                    {
-                        "recordid": "",
-                        "css": "",
-                        "type": "standard",
-                        "value": "Laptop"
-                    },
-                    {
-                        "recordid": "",
-                        "css": "",
-                        "type": "standard",
-                        "value": "2k"
-                    },
-                ]
-            },
-            {
-                "recordid": "2",
-                "css": "#",
-                "fields": [
-                    {
-                        "recordid": "",
-                        "css": "",
-                        "type": "standard",
-                        "value": "surface",
-                    },
-                    {
-                        "recordid": "",
-                        "css": "",
-                        "type": "standard",
-                        "value": "bianco",
-                    },
-                    {
-                        "recordid": "",
-                        "css": "",
-                        "type": "standard",
-                        "value": "Laptop",
-                    },
-                    {
-                        "recordid": "",
-                        "css": "",
-                        "type": "standard",
-                        "value": "1k",
-                    },
-                ]
-            },
-        ],
-        "columns": [
-            {
-                "fieldtypeid": "Numero",
-                "desc": "Product name"
-            },
-            {
-                "fieldtypeid": "Numero",
-                "desc": "Color"
-            },
-            {
-                "fieldtypeid": "Numero",
-                "desc": "Type"
-            },
-            {
-                "fieldtypeid": "Numero",
-                "desc": "Price"
-            },
-        ]
+        "rows": rows,
+        "columns": columns
     }
+        
+
 
     return JsonResponse(response_data)
 
@@ -634,11 +563,54 @@ def save_record_fields(request):
     data = json.loads(request.body)
     recordid = data.get("recordid")
     tableid = data.get("tableid")
-    fields = data.get("fields")
-    print("recordid:", recordid)
-    print("tableid:", tableid)
-    print("fields:", fields)
+    saved_fields = data.get("fields")
+    record=UserRecord(tableid,recordid)
+    for saved_fieldid, saved_value in saved_fields.items():
+        record.values[saved_fieldid]=saved_value
+    record.save()
+
     return JsonResponse({"success": True, "detail": "Campi del record salvati con successo"})
 
     
+def get_table_views(request):
+    data = json.loads(request.body)
+    tableid= data.get("tableid")
+    table=UserTable(tableid)
+    table_views=table.get_table_views()
+    views=[ ]
+    for table_view in table_views:
+        views.append({'id':table_view['id'],'name':table_view['name']})
+    response={ "views": views}
 
+    return JsonResponse(response)
+
+
+def get_record_badge(request):
+    data = json.loads(request.body)
+    tableid= data.get("tableid")
+    recordid= data.get("recordid")
+
+    record=UserRecord(tableid,recordid)
+    badgeItems=record.get_badge_fields()
+    response={ "badgeItems": badgeItems}
+    return JsonResponse(response)
+
+def get_record_card_fields(request):
+    data = json.loads(request.body)
+    tableid= data.get("tableid")
+    recordid= data.get("recordid")
+
+    record=UserRecord(tableid,recordid)
+    card_fields=record.get_record_card_fields()
+    response={ "fields": card_fields, "recordid": recordid}
+    return JsonResponse(response)
+
+def get_record_linked_tables(request):
+    data = json.loads(request.body)
+    master_tableid= data.get("masterTableid")
+    master_recordid= data.get("masterRecordid")
+
+    record=UserRecord(master_tableid,master_recordid)
+    linkedTables=record.get_linked_tables()
+    response={ "linkedTables": linkedTables}
+    return JsonResponse(response)
