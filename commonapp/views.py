@@ -24,6 +24,8 @@ from collections import defaultdict
 from commonapp.models import UserProfile
 from commonapp import helper
 import time
+from typing import List
+
 
 
 
@@ -346,19 +348,19 @@ def get_table_records(request):
     if viewid == '':
         viewid=table.get_default_viewid()
 
-    records = []
+    records: List[UserRecord]
     
     records=table.get_table_records_obj(viewid=viewid,searchTerm=searchTerm)
     table_columns=table.get_results_columns()
     rows=[]
     for record in records:
         row={}
-        row['recordid']=record['recordid_']
+        row['recordid']=record.recordid
         row['css']= "#"
         row['fields']=[]
-        for fieldid in record:
-            if fieldid != 'recordid_':
-                row['fields'].append({'recordid':record['recordid_'],'css':'','type':'standard','value':record[fieldid],'fieldid':fieldid})
+        fields=record.get_record_results_fields()
+        for field in fields:
+                row['fields'].append({'recordid':'','css':'','type':'standard','value':field['value'],'fieldid':field['fieldid']})
         rows.append(row)
     
     columns=[]

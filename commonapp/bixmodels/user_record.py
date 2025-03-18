@@ -47,6 +47,13 @@ class UserRecord:
 
         if recordid:
             self.values=HelpderDB.sql_query_row(f"SELECT * FROM user_{self.tableid} WHERE recordid_='{self.recordid}'")
+            for fieldid,value in self.values.items():
+                if value is None:
+                    self.values[fieldid]=""
+                if fieldid != "recordid_" and fieldid in self.fields:
+                    self.fields[fieldid]['value'] = value
+                    self.fields[fieldid]['convertedvalue'] = 'converted' + str(value)
+                
 
 
     def get_record_badge_fields(self):
@@ -60,6 +67,19 @@ class UserRecord:
             return_field['value']=self.values[fieldid]
             return_fields.append(return_field)
         return return_fields
+    
+    def get_record_results_fields(self):
+        return_fields=[]
+        sql = f"SELECT sys_field.* FROM sys_field join sys_user_field_order on sys_field.id=sys_user_field_order.fieldid WHERE sys_field.tableid='{self.tableid}' AND sys_user_field_order.userid=1 AND sys_user_field_order.tableid='{self.tableid}' AND typePreference='search_results_fields' ORDER BY fieldorder asc"
+        fields = HelpderDB.sql_query(sql)
+        for field in fields:
+            fieldid = field['fieldid']
+            return_field={}
+            return_field['fieldid']=fieldid
+            return_field['value']=self.values[fieldid]
+            return_fields.append(return_field)
+        return return_fields
+        
     
     def get_fields_plain(self):
         fields_plain=self.fields

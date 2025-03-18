@@ -51,7 +51,7 @@ class UserTable:
         for record in records:
             record_obj=UserRecord(self.tableid,record['recordid_'],self.userid)
             records_obj.append(record_obj)
-        return records
+        return records_obj
     
     def get_records(self,viewid='',searchTerm='', conditions_list=list(),fields=None,offset=0,limit=None,orderby='recordid_ desc'):
         """Ottieni elenco record in base ai parametri di ricerca
