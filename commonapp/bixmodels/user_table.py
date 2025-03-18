@@ -25,6 +25,7 @@ from django import template
 from bs4 import BeautifulSoup
 from django.db.models import OuterRef, Subquery
 from commonapp.bixmodels.helper_db import *
+from commonapp.bixmodels.user_record import *
 from commonapp.helper import *
 
 bixdata_server = os.environ.get('BIXDATA_SERVER')
@@ -42,6 +43,14 @@ class UserTable:
         for column in columns:
             fields.append(column['fieldid'])
         records = self.get_records(viewid,searchTerm,conditions_list,fields,offset,limit,orderby)
+        return records
+    
+    def get_table_records_obj(self,viewid='',searchTerm='', conditions_list=list(),fields=None,offset=0,limit=None,orderby='recordid_ desc'):
+        records=self.get_table_records(viewid,searchTerm,conditions_list,fields,offset,limit,orderby)
+        records_obj=[]
+        for record in records:
+            record_obj=UserRecord(self.tableid,record['recordid_'],self.userid)
+            records_obj.append(record_obj)
         return records
     
     def get_records(self,viewid='',searchTerm='', conditions_list=list(),fields=None,offset=0,limit=None,orderby='recordid_ desc'):

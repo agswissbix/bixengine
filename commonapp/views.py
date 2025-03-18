@@ -23,6 +23,7 @@ from io import BytesIO
 from collections import defaultdict
 from commonapp.models import UserProfile
 from commonapp import helper
+import time
 
 
 
@@ -347,7 +348,7 @@ def get_table_records(request):
 
     records = []
     
-    records=table.get_table_records(viewid=viewid,searchTerm=searchTerm)
+    records=table.get_table_records_obj(viewid=viewid,searchTerm=searchTerm)
     table_columns=table.get_results_columns()
     rows=[]
     for record in records:
@@ -369,7 +370,7 @@ def get_table_records(request):
         "columns": columns
     }
         
-
+    #time.sleep(4)
 
     return JsonResponse(response_data)
 
