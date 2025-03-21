@@ -25,6 +25,7 @@ from commonapp.models import UserProfile
 from commonapp import helper
 import time
 from typing import List
+import pandas as pd
 
 
 
@@ -380,17 +381,25 @@ def get_table_records(request):
 
 def get_pitservice_pivot_lavanderia(request):
     table=UserTable('rendicontolavanderia')
-    sql="SELECT recordid_ FROM user_rendicontolavanderia WHERE deleted_='N' ORDER BY recordidcliente_"
+    sql="SELECT * FROM user_rendicontolavanderia  WHERE  deleted_='N' ORDER BY recordidcliente_"
     query_result=HelpderDB.sql_query(sql)
-    print(query_result[0])
-
+    df = pd.DataFrame(query_result)
     mesi = ['01.Gennaio', '02.Febbraio', '03.Marzo', '04.Aprile', '05.Maggio', '06.Giugno', '07.Luglio', '08.Agosto', '09.Settembre', '10.Ottobre', '11.Novembre', '12.Dicembre']
     
+    pivot_df = pd.pivot_table(df,
+                               index=['recordidcliente_', 'recordidstabile_'],
+                               columns='mese',
+                               values='anno',
+                               aggfunc='sum')
+    pivot_df = pivot_df.sort_index(axis=1)
+    pivot_array = pivot_df.reset_index().values.tolist()
+    for row in pivot_array:
+        print(row)
     # Raggruppa i record per cliente
     gruppi_per_cliente = defaultdict(list)
-    for record in query_result:
-        cliente = record.get('recordidcliente_')
-        gruppi_per_cliente[cliente].append(record)
+    for record in pivot_array:
+        recordid_cliente = record[0]
+        gruppi_per_cliente[recordid_cliente].append(record)
     
     # Costruisci la struttura di risposta
     response_data = {"groups": []}
@@ -399,64 +408,63 @@ def get_pitservice_pivot_lavanderia(request):
         group = {}
         
         # Campi del gruppo: ad esempio potresti voler inserire il nome del cliente o altre info
-        record_cliente=UserRecord('cliente',recordid_cliente)
-        if record_cliente.values is not None:
+        if recordid_cliente != 'None':
+            record_cliente=UserRecord('cliente',recordid_cliente)
             nome_cliente = record_cliente.values.get('nome_cliente', '')
         else:
-            nome_cliente = ''
+            nome_cliente = 'Cliente non definito'
         group_fields = [{"fieldid": "cliente", "value": nome_cliente, "css": ""}]
         group["fields"] = group_fields
         group["rows"] = []
         # Costruiamo le righe: in questo esempio una sola riga per cliente
         # Per ogni mese verifichiamo se esiste un record per quel mese
         for record in records:
-            row = {"recordid": record['recordid_'], "css": "#", "fields": []}
-            recordid_stabile=record['recordidstabile_']
-            record_stabile=UserRecord('stabile',recordid_stabile)
-            if record_stabile.values is not None:
-                titolo_stabile = record_cliente.values.get('titolo_stabile', '')
-                citta = record_cliente.values.get('citta', '')
+            row = {"recordid": record[0], "css": "#", "fields": []}
+            recordid_stabile=record[1]
+            if recordid_stabile != 'None':
+                record_stabile=UserRecord('stabile',recordid_stabile)
+                titolo_stabile = record_stabile.values.get('titolo_stabile', '')
+                citta = record_stabile.values.get('citta', '')
             else:
-                titolo_stabile = ''
+                titolo_stabile = 'Stabile non definito'
                 citta=''
             row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": titolo_stabile})
             row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": citta})
-            for mese in mesi:
-                if any(r['mese'] == mese for r in records):
-                    valore = "x"
-                    css = ""
+
+            for elemento in record[2:]:
+                if pd.isnull(elemento):
+                    value = ''
                 else:
-                    valore = ""
-                    css = ""
-            row["fields"].append({
-                "recordid": "",
-                "css": css,
-                "type": "standard",
-                "value": valore
-            })
+                    value = 'X'
+                row["fields"].append({
+                    "recordid": "",
+                    "css": '',
+                    "type": "standard",
+                    "value": value
+                })
             group["rows"].append(row)
         
         
         response_data["groups"].append(group)
 
 
-        response_data["columns"] = [
-            {"fieldtypeid": "Parola", "desc": ""},
-            {"fieldtypeid": "Parola", "desc": "Città"},
-            {"fieldtypeid": "Parola", "desc": "Gennaio"},
-            {"fieldtypeid": "Parola", "desc": "Febbraio"},
-            {"fieldtypeid": "Parola", "desc": "Marzo"},
-            {"fieldtypeid": "Parola", "desc": "Aprile"},
-            {"fieldtypeid": "Parola", "desc": "Maggio"},
-            {"fieldtypeid": "Parola", "desc": "Giugno"},
-            {"fieldtypeid": "Parola", "desc": "Luglio"},
-            {"fieldtypeid": "Parola", "desc": "Agosto"},
-            {"fieldtypeid": "Parola", "desc": "Settembre"},
-            {"fieldtypeid": "Parola", "desc": "Ottobre"},
-            {"fieldtypeid": "Parola", "desc": "Novembre"},
-            {"fieldtypeid": "Parola", "desc": "Dicembre"},
+    response_data["columns"] = [
+        {"fieldtypeid": "Parola", "desc": ""},
+        {"fieldtypeid": "Parola", "desc": "Città"},
+        {"fieldtypeid": "Parola", "desc": "Gennaio"},
+        {"fieldtypeid": "Parola", "desc": "Febbraio"},
+        {"fieldtypeid": "Parola", "desc": "Marzo"},
+        {"fieldtypeid": "Parola", "desc": "Aprile"},
+        {"fieldtypeid": "Parola", "desc": "Maggio"},
+        {"fieldtypeid": "Parola", "desc": "Giugno"},
+        {"fieldtypeid": "Parola", "desc": "Luglio"},
+        {"fieldtypeid": "Parola", "desc": "Agosto"},
+        {"fieldtypeid": "Parola", "desc": "Settembre"},
+        {"fieldtypeid": "Parola", "desc": "Ottobre"},
+        {"fieldtypeid": "Parola", "desc": "Novembre"},
+        {"fieldtypeid": "Parola", "desc": "Dicembre"},
 
-        ]
+    ]
 
         
     response_dataDEV = {
