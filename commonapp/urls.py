@@ -23,6 +23,8 @@ urlpatterns = [
     path('get_record_badge/', get_record_badge, name='get_record_badge'),
     path('get_record_card_fields/', get_record_card_fields, name='get_record_card_fields'),
     path('get_record_linked_tables/', get_record_linked_tables, name='get_record_linked_tables'),
+    path('prepara_email/', prepara_email, name='prepara_email'),
+    path('save_email/', save_email, name='save_email'),
     
     
     

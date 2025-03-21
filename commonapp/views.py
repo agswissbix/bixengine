@@ -617,3 +617,19 @@ def get_record_linked_tables(request):
     linkedTables=record.get_linked_tables()
     response={ "linkedTables": linkedTables}
     return JsonResponse(response)
+
+@csrf_exempt
+def prepara_email(request):
+    email_fields = {
+        "cc": "cc",
+        "bcc": "bcc",	
+        "subject": "subject",
+        "text": "email text",
+    }
+    return JsonResponse({"success": True, "emailFields": email_fields})
+
+
+@csrf_exempt
+def save_email(request):
+    print('save_email')
+    return JsonResponse({"success": True})
