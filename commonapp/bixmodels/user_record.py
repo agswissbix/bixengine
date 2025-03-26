@@ -74,10 +74,19 @@ class UserRecord:
         fields = HelpderDB.sql_query(sql)
         for field in fields:
             fieldid = field['fieldid']
+            value=self.values[fieldid]
+            if not Helper.isempty(field['keyfieldlink']):
+                value=self.values[fieldid.lstrip('_') + '_']
+                field['fieldtypeid']='standard'
+                sql=f"SELECT {field['keyfieldlink']} FROM user_{field['tablelink']} WHERE recordid_='{value}' "
+                newvalue=HelpderDB.sql_query_value(sql,field['keyfieldlink'])
+                value=newvalue
+            
             return_field={}
+            return_field['type']='standard'
             return_field['fieldid']=fieldid
-            return_field['value']=self.values[fieldid]
-            return_fields.append(return_field)
+            return_field['value']=value
+            return_fields.append(return_field) 
         return return_fields
         
     
@@ -154,11 +163,14 @@ class UserRecord:
             self.save()
 
     def get_linked_tables(self):
-        sql=f"SELECT sys_user_order.tableid,sys_table.description  FROM sys_user_order LEFT JOIN sys_table ON sys_user_order.fieldid=sys_table.id  WHERE sys_user_order.tableid='{self.tableid}' AND typepreference='keylabel' AND userid={self.userid} order by fieldorder asc"
+        sql=f"SELECT sys_table.id as tableid,sys_table.description  FROM sys_user_order LEFT JOIN sys_table ON sys_user_order.fieldid=sys_table.id  WHERE sys_user_order.tableid='{self.tableid}' AND typepreference='keylabel' AND userid={self.userid} order by fieldorder asc"
 
         linked_tables=HelpderDB.sql_query(sql)
         for linked_table in linked_tables:
-            linked_table['rowsCount']=5
+            linked_tableid=linked_table['tableid']
+            sql=f"SELECT count(recordid_) as counter FROM user_{linked_tableid} WHERE recordid{self.tableid}_='{self.recordid}'"
+            counter=HelpderDB.sql_query_value(sql,'counter')
+            linked_table['rowsCount']=counter
     
 
         return linked_tables

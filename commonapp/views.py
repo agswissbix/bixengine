@@ -361,7 +361,7 @@ def get_table_records(request):
         row['fields']=[]
         fields=record.get_record_results_fields()
         for field in fields:
-                row['fields'].append({'recordid':'','css':'','type':'standard','value':field['value'],'fieldid':field['fieldid']})
+                row['fields'].append({'recordid':'','css':'','type':field['type'],'value':field['value'],'fieldid':field['fieldid']})
         rows.append(row)
     
     columns=[]
