@@ -472,7 +472,7 @@ def get_pitservice_pivot_lavanderia(request):
         ]
     
     if tableid == 'letturagasolio':
-        sql="SELECT * FROM user_letturagasolio  WHERE  deleted_='N' ORDER BY recordidcliente_"
+        sql="SELECT * FROM user_letturagasolio  WHERE anno='2025' and  deleted_='N' ORDER BY recordidcliente_"
         query_result=HelpderDB.sql_query(sql)
         df = pd.DataFrame(query_result)
         mesi = ['01.Gennaio', '02.Febbraio', '03.Marzo', '04.Aprile', '05.Maggio', '06.Giugno', '07.Luglio', '08.Agosto', '09.Settembre', '10.Ottobre', '11.Novembre', '12.Dicembre']
@@ -534,6 +534,7 @@ def get_pitservice_pivot_lavanderia(request):
                         "type": "standard",
                         "value": value
                     })
+                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": ''})
                 row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": ''})
                 row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": ''})
                 row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": ''})
