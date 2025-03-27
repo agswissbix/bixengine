@@ -177,18 +177,20 @@ class UserRecord:
     
 
     def get_badge_fields(self):
-        sql=f"""
-            SELECT f.*
-            FROM sys_user_field_order AS fo LEFT JOIN sys_field AS f ON fo.tableid=f.tableid AND fo.fieldid=f.id
-
-            WHERE fo.tableid='{self.tableid}' AND typepreference='badge_fields' AND fo.userid={self.userid} ORDER BY fieldorder
-        """
-        fields=HelpderDB.sql_query(sql)
         badge_fields=[]
-        for field in fields:
-            fieldid=field['fieldid']
-            value=self.values[fieldid]
-            badge_fields.append({"fieldid":fieldid,"value":value})
+        if not self.recordid=='':
+            sql=f"""
+                SELECT f.*
+                FROM sys_user_field_order AS fo LEFT JOIN sys_field AS f ON fo.tableid=f.tableid AND fo.fieldid=f.id
+
+                WHERE fo.tableid='{self.tableid}' AND typepreference='badge_fields' AND fo.userid={self.userid} ORDER BY fieldorder
+            """
+            fields=HelpderDB.sql_query(sql)
+            
+            for field in fields:
+                fieldid=field['fieldid']
+                value=self.values[fieldid]
+                badge_fields.append({"fieldid":fieldid,"value":value})
         return badge_fields
     
     def get_record_card_fields(self):
@@ -203,15 +205,17 @@ class UserRecord:
         for field in fields:
             insert_field={}
             fieldid=field['fieldid']
-            value=self.values[fieldid]
-            if not value:
+            if self.recordid=='':
                 value=""
+            else:
+                value=self.values[fieldid]
+                if not value:
+                    value=""
             insert_field['tableid']="1"
             insert_field['fieldid']=fieldid
             insert_field['fieldorder']="1"
             insert_field['description']=field['description']
             insert_field['value']={"code": value, "value": value}
-            insert_field['fieldtype']="Parola"
             insert_field['lookupitemsuser']=[
                             {"id": '1', "firstname": 'Mario', "lastname": 'Rossi', "link": 'user', "linkdefield": 'id', "linkedvalue": '1'},
                             {"id": '2', "firstname": 'Luca', "lastname": 'Bianchi', "link": 'user', "linkdefield": 'id', "linkedvalue": '2'}
@@ -224,6 +228,15 @@ class UserRecord:
                 "obbligatorio": "false"
             }
             
+            fieldtype='Parola'
+            if not Helper.isempty(field['keyfieldlink']):
+                fieldtype='linkedmaster'
+
+            if field['fieldtypeid'] == 'Data':
+                fieldtype='Data'
+
+            insert_field['fieldtype']=fieldtype
+
             insert_fields.append(insert_field)
 
 

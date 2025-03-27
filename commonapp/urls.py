@@ -25,6 +25,7 @@ urlpatterns = [
     path('get_record_linked_tables/', get_record_linked_tables, name='get_record_linked_tables'),
     path('prepara_email/', prepara_email, name='prepara_email'),
     path('save_email/', save_email, name='save_email'),
+    path('get_input_linked/', get_input_linked, name='save_get_input_linkedemail'),
     
     
     

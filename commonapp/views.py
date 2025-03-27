@@ -380,175 +380,80 @@ def get_table_records(request):
 
 
 def get_pitservice_pivot_lavanderia(request):
-    table=UserTable('rendicontolavanderia')
-    sql="SELECT * FROM user_rendicontolavanderia  WHERE  deleted_='N' ORDER BY recordidcliente_"
-    query_result=HelpderDB.sql_query(sql)
-    df = pd.DataFrame(query_result)
-    mesi = ['01.Gennaio', '02.Febbraio', '03.Marzo', '04.Aprile', '05.Maggio', '06.Giugno', '07.Luglio', '08.Agosto', '09.Settembre', '10.Ottobre', '11.Novembre', '12.Dicembre']
-    
-    pivot_df = pd.pivot_table(df,
-                               index=['recordidcliente_', 'recordidstabile_'],
-                               columns='mese',
-                               values='anno',
-                               aggfunc='sum')
-    pivot_df = pivot_df.sort_index(axis=1)
-    pivot_array = pivot_df.reset_index().values.tolist()
-    for row in pivot_array:
-        print(row)
-    # Raggruppa i record per cliente
-    gruppi_per_cliente = defaultdict(list)
-    for record in pivot_array:
-        recordid_cliente = record[0]
-        gruppi_per_cliente[recordid_cliente].append(record)
-    
     # Costruisci la struttura di risposta
     response_data = {"groups": []}
-    
-    for recordid_cliente, records in gruppi_per_cliente.items():
-        group = {}
+    response_data["columns"] = []
+    data = json.loads(request.body)
+    tableid = data.get("tableid")
+    table=UserTable(tableid)
+    if tableid == 'rendicontolavanderia':
+        sql="SELECT * FROM user_rendicontolavanderia  WHERE  deleted_='N' ORDER BY recordidcliente_"
+        query_result=HelpderDB.sql_query(sql)
+        df = pd.DataFrame(query_result)
+        mesi = ['01.Gennaio', '02.Febbraio', '03.Marzo', '04.Aprile', '05.Maggio', '06.Giugno', '07.Luglio', '08.Agosto', '09.Settembre', '10.Ottobre', '11.Novembre', '12.Dicembre']
         
-        # Campi del gruppo: ad esempio potresti voler inserire il nome del cliente o altre info
-        if recordid_cliente != 'None':
-            record_cliente=UserRecord('cliente',recordid_cliente)
-            nome_cliente = record_cliente.values.get('nome_cliente', '')
-        else:
-            nome_cliente = 'Cliente non definito'
-        group_fields = [{"fieldid": "cliente", "value": nome_cliente, "css": ""}]
-        group["fields"] = group_fields
-        group["rows"] = []
-        # Costruiamo le righe: in questo esempio una sola riga per cliente
-        # Per ogni mese verifichiamo se esiste un record per quel mese
-        for record in records:
-            row = {"recordid": record[0], "css": "#", "fields": []}
-            recordid_stabile=record[1]
-            if recordid_stabile != 'None':
-                record_stabile=UserRecord('stabile',recordid_stabile)
-                titolo_stabile = record_stabile.values.get('titolo_stabile', '')
-                citta = record_stabile.values.get('citta', '')
+        pivot_df = pd.pivot_table(df,
+                                index=['recordidcliente_', 'recordidstabile_'],
+                                columns='mese',
+                                values='anno',
+                                aggfunc='sum')
+        pivot_df = pivot_df.sort_index(axis=1)
+        pivot_array = pivot_df.reset_index().values.tolist()
+        for row in pivot_array:
+            print(row)
+        # Raggruppa i record per cliente
+        gruppi_per_cliente = defaultdict(list)
+        for record in pivot_array:
+            recordid_cliente = record[0]
+            gruppi_per_cliente[recordid_cliente].append(record)
+        
+        
+        
+        for recordid_cliente, records in gruppi_per_cliente.items():
+            group = {}
+            
+            # Campi del gruppo: ad esempio potresti voler inserire il nome del cliente o altre info
+            if recordid_cliente != 'None':
+                record_cliente=UserRecord('cliente',recordid_cliente)
+                nome_cliente = record_cliente.values.get('nome_cliente', '')
             else:
-                titolo_stabile = 'Stabile non definito'
-                citta=''
-            row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": titolo_stabile})
-            row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": citta})
-
-            for elemento in record[2:]:
-                if pd.isnull(elemento):
-                    value = ''
+                nome_cliente = 'Cliente non definito'
+            group_fields = [{"fieldid": "cliente", "value": nome_cliente, "css": ""}]
+            group["fields"] = group_fields
+            group["rows"] = []
+            # Costruiamo le righe: in questo esempio una sola riga per cliente
+            # Per ogni mese verifichiamo se esiste un record per quel mese
+            for record in records:
+                row = {"recordid": record[0], "css": "#", "fields": []}
+                recordid_stabile=record[1]
+                if recordid_stabile != 'None':
+                    record_stabile=UserRecord('stabile',recordid_stabile)
+                    titolo_stabile = record_stabile.values.get('titolo_stabile', '')
+                    citta = record_stabile.values.get('citta', '')
                 else:
-                    value = 'X'
-                row["fields"].append({
-                    "recordid": "",
-                    "css": '',
-                    "type": "standard",
-                    "value": value
-                })
-            group["rows"].append(row)
-        
-        
-        response_data["groups"].append(group)
+                    titolo_stabile = 'Stabile non definito'
+                    citta=''
+                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": titolo_stabile})
+                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": citta})
+
+                for elemento in record[2:]:
+                    if pd.isnull(elemento):
+                        value = ''
+                    else:
+                        value = 'X'
+                    row["fields"].append({
+                        "recordid": "",
+                        "css": '',
+                        "type": "standard",
+                        "value": value
+                    })
+                group["rows"].append(row)
+            
+            
+            response_data["groups"].append(group)
 
 
-    response_data["columns"] = [
-        {"fieldtypeid": "Parola", "desc": ""},
-        {"fieldtypeid": "Parola", "desc": "Città"},
-        {"fieldtypeid": "Parola", "desc": "Gennaio"},
-        {"fieldtypeid": "Parola", "desc": "Febbraio"},
-        {"fieldtypeid": "Parola", "desc": "Marzo"},
-        {"fieldtypeid": "Parola", "desc": "Aprile"},
-        {"fieldtypeid": "Parola", "desc": "Maggio"},
-        {"fieldtypeid": "Parola", "desc": "Giugno"},
-        {"fieldtypeid": "Parola", "desc": "Luglio"},
-        {"fieldtypeid": "Parola", "desc": "Agosto"},
-        {"fieldtypeid": "Parola", "desc": "Settembre"},
-        {"fieldtypeid": "Parola", "desc": "Ottobre"},
-        {"fieldtypeid": "Parola", "desc": "Novembre"},
-        {"fieldtypeid": "Parola", "desc": "Dicembre"},
-
-    ]
-
-        
-    response_dataDEV = {
-        "groups": [
-            {
-                "rows": [
-                    {
-                        "recordid": "1",
-                        "css": "#",
-                        "fields": [
-                            {"recordid": "", "css": "", "type": "standard", "value": "Reg.Sole"},
-                            {"recordid": "", "css": "", "type": "standard", "value": "x"},
-                            {"recordid": "", "css": "", "type": "standard", "value": "x"},
-                            {"recordid": "", "css": "", "type": "standard", "value": ""}
-                        ]
-                    },
-                    {
-                        "recordid": "2",
-                        "css": "#",
-                        "fields": [
-                            {"recordid": "", "css": "", "type": "standard", "value": "Via Rava 11"},
-                            {"recordid": "", "css": "", "type": "standard", "value": "x"},
-                            {"recordid": "", "css": "", "type": "standard", "value": "x"},
-                            {"recordid": "", "css": "bg-green-500", "type": "standard", "value": "x"}
-                        ]
-                    }
-                ],
-                "fields": [
-                    {"fieldid": "1", "value": "Cofis", "css": ""},
-                    {"fieldid": "2", "value": "indirizzo 1", "css": ""}
-                ]
-            },
-            {
-                "rows": [
-                    {
-                        "recordid": "3",
-                        "css": "#",
-                        "fields": [
-                            {"recordid": "", "css": "", "type": "standard", "value": "Via D.Fontana 6"}
-                        ]
-                    },
-                    {
-                        "recordid": "4",
-                        "css": "#",
-                        "fields": [
-                            {"recordid": "", "css": "", "type": "standard", "value": "Residenza Salice Via Frontini 8"},
-                            {"recordid": "", "css": "", "type": "standard", "value": "x"},
-                            {"recordid": "", "css": "", "type": "standard", "value": "x"},
-                            {"recordid": "", "css": "", "type": "standard", "value": ""}
-                        ]
-                    }
-                ],
-                "fields": [
-                    {"fieldid": "1", "value": "Agogestilioni", "css": ""},
-                    {"fieldid": "2", "value": "indirizzo2", "css": ""}
-                ]
-            },
-            {
-                "rows": [
-                    {
-                        "recordid": "5",
-                        "css": "#",
-                        "fields": [
-                            {"recordid": "", "css": "", "type": "standard", "value": "Aggestioni Sagl"}
-                        ]
-                    },
-                    {
-                        "recordid": "6",
-                        "css": "#",
-                        "fields": [
-                            {"recordid": "", "css": "", "type": "standard", "value": "Condominio Liberty Via Domenico Fontana 6"},
-                            {"recordid": "", "css": "", "type": "standard", "value": "x"},
-                            {"recordid": "", "css": "", "type": "standard", "value": "x"},
-                            {"recordid": "", "css": "", "type": "standard", "value": ""}
-                        ]
-                    }
-                ],
-                "fields": [
-                    {"fieldid": "1", "value": "Aggestioni Sagl", "css": ""},
-                    {"fieldid": "2", "value": "indirizzo3", "css": ""}
-                ]
-            }
-        ],
-        "columns": [
+        response_data["columns"] = [
             {"fieldtypeid": "Parola", "desc": ""},
             {"fieldtypeid": "Parola", "desc": "Città"},
             {"fieldtypeid": "Parola", "desc": "Gennaio"},
@@ -565,7 +470,116 @@ def get_pitservice_pivot_lavanderia(request):
             {"fieldtypeid": "Parola", "desc": "Dicembre"},
 
         ]
-    }
+    
+    if tableid == 'letturagasolio':
+        sql="SELECT * FROM user_letturagasolio  WHERE  deleted_='N' ORDER BY recordidcliente_"
+        query_result=HelpderDB.sql_query(sql)
+        df = pd.DataFrame(query_result)
+        mesi = ['01.Gennaio', '02.Febbraio', '03.Marzo', '04.Aprile', '05.Maggio', '06.Giugno', '07.Luglio', '08.Agosto', '09.Settembre', '10.Ottobre', '11.Novembre', '12.Dicembre']
+        
+        pivot_df = pd.pivot_table(df,
+                                index=['recordidcliente_', 'recordidstabile_','recordidinformazionigasolio_'],
+                                columns='mese',
+                                values='lettura',
+                                aggfunc='sum')
+        pivot_df = pivot_df.sort_index(axis=1)
+        pivot_array = pivot_df.reset_index().values.tolist()
+        for row in pivot_array:
+            print(row)
+        # Raggruppa i record per cliente
+        gruppi_per_cliente = defaultdict(list)
+        for record in pivot_array:
+            recordid_cliente = record[0]
+            gruppi_per_cliente[recordid_cliente].append(record)
+        
+        
+        
+        for recordid_cliente, records in gruppi_per_cliente.items():
+            group = {}
+            
+            # Campi del gruppo: ad esempio potresti voler inserire il nome del cliente o altre info
+            if recordid_cliente != 'None':
+                record_cliente=UserRecord('cliente',recordid_cliente)
+                nome_cliente = record_cliente.values.get('nome_cliente', '')
+            else:
+                nome_cliente = 'Cliente non definito'
+            group_fields = [{"fieldid": "cliente", "value": nome_cliente, "css": ""}]
+            group["fields"] = group_fields
+            group["rows"] = []
+            # Costruiamo le righe: in questo esempio una sola riga per cliente
+            # Per ogni mese verifichiamo se esiste un record per quel mese
+            for record in records:
+                row = {"recordid": record[0], "css": "#", "fields": []}
+                recordid_stabile=record[1]
+                if recordid_stabile != 'None':
+                    record_stabile=UserRecord('stabile',recordid_stabile)
+                    titolo_stabile = record_stabile.values.get('titolo_stabile', '')
+                    citta = record_stabile.values.get('citta', '')
+                else:
+                    titolo_stabile = 'Stabile non definito'
+                    citta=''
+                
+                
+                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": titolo_stabile})
+                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": citta})
+
+                for elemento in record[3:]:
+                    if pd.isnull(elemento):
+                        value = ''
+                    else:
+                        value = elemento
+                    row["fields"].append({
+                        "recordid": "",
+                        "css": '',
+                        "type": "standard",
+                        "value": value
+                    })
+                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": ''})
+                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": ''})
+                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": ''})
+                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": ''})
+                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": ''})
+                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": ''})
+                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": ''})
+                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": ''})
+
+                recordid_cisterna=record[2]
+                if recordid_cisterna != 'None':
+                    record_cisterna=UserRecord('informazionigasolio',recordid_cisterna)
+                    capienzacisterna = record_cisterna.values.get('capienzacisterna', '')
+                    livellominimo = record_cisterna.values.get('livellominimo', '')
+                else:
+                    capienzacisterna = 'Cisterna non definita'
+                    livellominimo='Cisterna non definita'
+                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": capienzacisterna})
+                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": livellominimo})
+                group["rows"].append(row)
+            
+            
+            response_data["groups"].append(group)
+
+
+        response_data["columns"] = [
+            {"fieldtypeid": "Parola", "desc": ""},
+            {"fieldtypeid": "Parola", "desc": "Città"},
+            {"fieldtypeid": "Parola", "desc": "Gennaio"},
+            {"fieldtypeid": "Parola", "desc": "Febbraio"},
+            {"fieldtypeid": "Parola", "desc": "Marzo"},
+            {"fieldtypeid": "Parola", "desc": "Aprile"},
+            {"fieldtypeid": "Parola", "desc": "Maggio"},
+            {"fieldtypeid": "Parola", "desc": "Giugno"},
+            {"fieldtypeid": "Parola", "desc": "Luglio"},
+            {"fieldtypeid": "Parola", "desc": "Agosto"},
+            {"fieldtypeid": "Parola", "desc": "Settembre"},
+            {"fieldtypeid": "Parola", "desc": "Ottobre"},
+            {"fieldtypeid": "Parola", "desc": "Novembre"},
+            {"fieldtypeid": "Parola", "desc": "Dicembre"},
+            {"fieldtypeid": "Parola", "desc": "Capienza"},
+            {"fieldtypeid": "Parola", "desc": "Livello minimo"},
+
+        ]
+
+    
 
     return JsonResponse(response_data)
 
@@ -641,3 +655,28 @@ def prepara_email(request):
 def save_email(request):
     print('save_email')
     return JsonResponse({"success": True})
+
+@csrf_exempt
+def get_input_linked(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            searchTerm = data.get('searchTerm', '').lower()
+            # tableid = data.get('tableid') # Puoi usare tableid se necessario
+
+            # Qui dovresti sostituire i dati di esempio con la tua logica di database
+            # o qualsiasi altra fonte di dati.
+            items = [
+                {'recordid': '1', 'name': 'Python'},
+                {'recordid': '2', 'name': 'JavaScript'},
+                {'recordid': '3', 'name': 'TypeScript'},
+            ]
+
+            # Filtra gli elementi in base al searchTerm
+            filtered_items = [item for item in items if searchTerm in item['name'].lower()]
+
+            return JsonResponse(filtered_items, safe=False)
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    else:
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
