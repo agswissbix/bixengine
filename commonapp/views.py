@@ -664,20 +664,22 @@ def get_input_linked(request):
         try:
             data = json.loads(request.body)
             searchTerm = data.get('searchTerm', '').lower()
-            tableid = data.get('tableid') # Puoi usare tableid se necessario
-
+            linkedmaster_tableid_array = data.get('linkedmaster_tableid') # Puoi usare tableid se necessario
+            linkedmaster_tableid=linkedmaster_tableid_array[0]
+            tableid=data.get('tableid')
+            fieldid=data.get('fieldid')
             # Qui dovresti sostituire i dati di esempio con la tua logica di database
             # o qualsiasi altra fonte di dati.
-            items = [
-                {'recordid': '1', 'name': 'Python'},
-                {'recordid': '2', 'name': 'JavaScript'},
-                {'recordid': '3', 'name': 'TypeScript'},
-            ]
+            sql=f"SELECT keyfieldlink FROM sys_field WHERE tableid='{tableid}' AND fieldid='{fieldid}'"
+            kyefieldlink=HelpderDB.sql_query_value(sql,'keyfieldlink')
+            sql=f"SELECT recordid_ as recordid, {kyefieldlink} as name FROM user_{linkedmaster_tableid} where {kyefieldlink} like '%{searchTerm}%' AND deleted_='N' LIMIT 20"
 
+            query_result=HelpderDB.sql_query(sql)
+            items=query_result
             # Filtra gli elementi in base al searchTerm
-            filtered_items = [item for item in items if searchTerm in item['name'].lower()]
+            #filtered_items = [item for item in items if searchTerm in item['name'].lower()]
 
-            return JsonResponse(filtered_items, safe=False)
+            return JsonResponse(items, safe=False)
         except json.JSONDecodeError:
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
     else:
