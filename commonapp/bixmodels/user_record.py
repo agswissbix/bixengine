@@ -205,6 +205,8 @@ class UserRecord:
         for field in fields:
             insert_field={}
             fieldid=field['fieldid']
+            if fieldid.startswith("_"):
+                fieldid= fieldid[1:] + "_"
             if self.recordid=='':
                 value=""
             else:
