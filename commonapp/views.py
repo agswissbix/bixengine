@@ -664,7 +664,7 @@ def get_input_linked(request):
         try:
             data = json.loads(request.body)
             searchTerm = data.get('searchTerm', '').lower()
-            # tableid = data.get('tableid') # Puoi usare tableid se necessario
+            tableid = data.get('tableid') # Puoi usare tableid se necessario
 
             # Qui dovresti sostituire i dati di esempio con la tua logica di database
             # o qualsiasi altra fonte di dati.
