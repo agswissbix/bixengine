@@ -343,15 +343,16 @@ def get_table_records(request):
     tableid = data.get("tableid")
     viewid= data.get("view")
     searchTerm= data.get("searchTerm")
-
+    master_tableid= data.get("masterTableid")
+    master_recordid= data.get("masterRecordid")
     table=UserTable(tableid)
 
     if viewid == '':
         viewid=table.get_default_viewid()
 
     records: List[UserRecord]
-    
-    records=table.get_table_records_obj(viewid=viewid,searchTerm=searchTerm)
+    conditions_list=list()
+    records=table.get_table_records_obj(viewid=viewid,searchTerm=searchTerm,conditions_list=conditions_list,master_tableid=master_tableid,master_recordid=master_recordid)
     table_columns=table.get_results_columns()
     rows=[]
     for record in records:

@@ -45,7 +45,11 @@ class UserTable:
         records = self.get_records(viewid,searchTerm,conditions_list,fields,offset,limit,orderby)
         return records
     
-    def get_table_records_obj(self,viewid='',searchTerm='', conditions_list=list(),fields=None,offset=0,limit=None,orderby='recordid_ desc'):
+    def get_table_records_obj(self,viewid='',searchTerm='', conditions_list=list(),fields=None,offset=0,limit=None,orderby='recordid_ desc',master_tableid=None,master_recordid=None):
+        if master_tableid and master_recordid:
+            conditions_list.append(f"recordid{master_tableid}_='{master_recordid}'")
+        if self.tableid == 'contattostabile':
+            print('get_table_records_obj')
         records=self.get_table_records(viewid,searchTerm,conditions_list,fields,offset,limit,orderby)
         records_obj=[]
         for record in records:
