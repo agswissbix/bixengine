@@ -586,6 +586,14 @@ def get_pitservice_pivot_lavanderia(request):
 
 @csrf_exempt
 def save_record_fields(request):
+
+    """
+        for file_key, uploaded_file in request.FILES.items():
+        file_path = f"uploads/{tableid}/{recordid}/{uploaded_file.name}"
+        saved_path = default_storage.save(file_path, uploaded_file)  # Salva il file
+        record.values[file_key] = saved_path  # Salva il percorso nel database
+        print(f"File salvato: {file_key} -> {saved_path}")
+    """
     data = json.loads(request.body)
     recordid = data.get("recordid")
     tableid = data.get("tableid")
@@ -664,7 +672,7 @@ def get_input_linked(request):
             data = json.loads(request.body)
             searchTerm = data.get('searchTerm', '').lower()
             tableid = data.get('tableid') # Puoi usare tableid se necessario
-
+    
             # Qui dovresti sostituire i dati di esempio con la tua logica di database
             # o qualsiasi altra fonte di dati.
             items = [
