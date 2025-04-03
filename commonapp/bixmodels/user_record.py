@@ -205,6 +205,8 @@ class UserRecord:
         for field in fields:
             insert_field={}
             fieldid=field['fieldid']
+            if fieldid.startswith("_"):
+                fieldid= fieldid[1:] + "_"
             if self.recordid=='':
                 value=""
             else:
@@ -220,7 +222,10 @@ class UserRecord:
                             {"id": '1', "firstname": 'Mario', "lastname": 'Rossi', "link": 'user', "linkdefield": 'id', "linkedvalue": '1'},
                             {"id": '2', "firstname": 'Luca', "lastname": 'Bianchi', "link": 'user', "linkdefield": 'id', "linkedvalue": '2'}
                         ]
-            insert_field["fieldtypewebid"]= "multiselect",
+            insert_field["fieldtypewebid"]= "",
+            insert_field["lookuptableid"]= field['lookuptableid'],
+            insert_field["tablelink"]= field['tablelink'],
+            insert_field['linked_mastertable']=field['tablelink'],
             insert_field['settings']={
                 "calcolato": "false",
                 "default": "",
@@ -231,6 +236,9 @@ class UserRecord:
             fieldtype='Parola'
             if not Helper.isempty(field['keyfieldlink']):
                 fieldtype='linkedmaster'
+                sql=f"SELECT {field['keyfieldlink']} FROM user_{field['tablelink']} where recordid_='{value}' "
+                value2=HelpderDB.sql_query_value(sql,field['keyfieldlink'])
+                insert_field['value']={"code": value2, "value": value2}
 
             if field['fieldtypeid'] == 'Data':
                 fieldtype='Data'
