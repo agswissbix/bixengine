@@ -29,7 +29,7 @@ SECRET_KEY = 'django-insecure-in)&iyx749f@sq53z%%lbf(y7o_ch8&ifst-dk3od373(*%gj(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost','192.168.10.10','192.168.10.11','81.62.161.14','tabellone.swissbix.com','10.30.6.69','pc-pitgestional']
+ALLOWED_HOSTS = ['localhost','192.168.10.10','192.168.10.11','81.62.161.14','tabellone.swissbix.com','10.30.6.69','pc-pitgestional','bixbelotti.swissbix.com']
 
 
 # Application definition
