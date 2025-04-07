@@ -243,6 +243,9 @@ class UserRecord:
             if field['fieldtypeid'] == 'Data':
                 fieldtype='Data'
 
+            if field['fieldtypewebid'] == 'file':
+                fieldtype='Attachment'
+
             insert_field['fieldtype']=fieldtype
 
             insert_fields.append(insert_field)
