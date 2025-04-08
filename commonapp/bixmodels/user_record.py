@@ -75,7 +75,7 @@ class UserRecord:
         for field in fields:
             fieldid = field['fieldid']
             value=self.values[fieldid]
-            if not Helper.isempty(field['keyfieldlink']):
+            if fieldid.startswith('_') and not Helper.isempty(field['keyfieldlink']):
                 value=self.values[fieldid.lstrip('_') + '_']
                 field['fieldtypeid']='standard'
                 sql=f"SELECT {field['keyfieldlink']} FROM user_{field['tablelink']} WHERE recordid_='{value}' "
