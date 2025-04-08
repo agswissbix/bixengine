@@ -243,6 +243,12 @@ class UserRecord:
             if field['fieldtypeid'] == 'Data':
                 fieldtype='Data'
 
+            if field['fieldtypeid'] == 'Utente':
+                fieldtype='Utente'
+
+            if field['fieldtypeid'] == 'Memo':
+                fieldtype='Memo'
+
             if field['fieldtypewebid'] == 'file':
                 fieldtype='Attachment'
 
