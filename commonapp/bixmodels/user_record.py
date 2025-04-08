@@ -219,8 +219,11 @@ class UserRecord:
             insert_field['description']=field['description']
             insert_field['value']={"code": value, "value": value}
             insert_field['lookupitemsuser']=[
-                            {"id": '1', "firstname": 'Mario', "lastname": 'Rossi', "link": 'user', "linkdefield": 'id', "linkedvalue": '1'},
-                            {"id": '2', "firstname": 'Luca', "lastname": 'Bianchi', "link": 'user', "linkdefield": 'id', "linkedvalue": '2'}
+                            {"id": '1', "firstname": 'Lory', "lastname": '', "link": 'user', "linkdefield": 'id', "linkedvalue": '1'},
+                            {"id": '2', "firstname": 'Petar', "lastname": '', "link": 'user', "linkdefield": 'id', "linkedvalue": '2'},
+                            {"id": '3', "firstname": 'Vanessa', "lastname": '', "link": 'user', "linkdefield": 'id', "linkedvalue": '2'},
+                            {"id": '4', "firstname": 'Sara', "lastname": '', "link": 'user', "linkdefield": 'id', "linkedvalue": '2'},
+                            {"id": '2', "firstname": 'Pepo', "lastname": '', "link": 'user', "linkdefield": 'id', "linkedvalue": '2'}
                         ]
             insert_field["fieldtypewebid"]= "",
             insert_field["lookuptableid"]= field['lookuptableid'],
