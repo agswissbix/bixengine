@@ -613,6 +613,7 @@ def save_record_fields(request):
 
         # Costruisci il percorso relativo
         file_path = f"uploads/{tableid}/{recordid}/{clean_key}{ext}"
+        record_path=f"{tableid}/{recordid}/{clean_key}{ext}"
 
         # Salva il file e ottieni il percorso relativo salvato
         saved_path = default_storage.save(file_path, uploaded_file)
@@ -624,7 +625,7 @@ def save_record_fields(request):
             full_path = os.path.join(settings.MEDIA_ROOT, saved_path)
 
         # Salva il percorso relativo o assoluto, a seconda delle esigenze
-        record.values[clean_key] = saved_path 
+        record.values[clean_key] = record_path
     record.save()
 
     return JsonResponse({"success": True, "detail": "Campi del record salvati con successo"})
