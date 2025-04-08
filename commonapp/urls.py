@@ -1,5 +1,7 @@
 from django.contrib import admin
 from django.urls import path
+from django.conf.urls.static import static
+from django.conf import settings
 from commonapp.views import *
 
 urlpatterns = [
@@ -30,3 +32,5 @@ urlpatterns = [
     
     
 ]
+
+urlpatterns += static(settings.UPLOADS_URL, document_root=settings.UPLOADS_ROOT)

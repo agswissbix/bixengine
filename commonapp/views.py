@@ -8,6 +8,8 @@ from datetime import datetime
 from django.views.decorators.csrf import csrf_exempt
 import json
 from django.middleware.csrf import get_token
+from django.conf import settings
+from django.core.files.storage import default_storage
 from django.contrib.auth.decorators import login_required
 from functools import wraps
 
@@ -587,13 +589,42 @@ def get_pitservice_pivot_lavanderia(request):
 
 @csrf_exempt
 def save_record_fields(request):
-    data = json.loads(request.body)
-    recordid = data.get("recordid")
-    tableid = data.get("tableid")
-    saved_fields = data.get("fields")
+    recordid = request.POST.get('recordid')
+    tableid = request.POST.get('tableid')
+    saved_fields = request.POST.get('fields')
+    try:
+        saved_fields_dict = json.loads(saved_fields)
+    except json.JSONDecodeError:
+        saved_fields_dict = {}
     record=UserRecord(tableid,recordid)
-    for saved_fieldid, saved_value in saved_fields.items():
+    for saved_fieldid, saved_value in saved_fields_dict.items():
         record.values[saved_fieldid]=saved_value
+    
+
+    for file_key, uploaded_file in request.FILES.items():
+        # Estrai il nome pulito dal campo
+        if file_key.startswith('files[') and file_key.endswith(']'):
+            clean_key = file_key[6:-1]  # es: "fotostabile"
+        else:
+            clean_key = file_key
+
+        # Ottieni l'estensione del file originale (es: '.jpg', '.pdf')
+        _, ext = os.path.splitext(uploaded_file.name)
+
+        # Costruisci il percorso relativo
+        file_path = f"uploads/{tableid}/{recordid}/{clean_key}{ext}"
+
+        # Salva il file e ottieni il percorso relativo salvato
+        saved_path = default_storage.save(file_path, uploaded_file)
+
+        # Ottieni il percorso assoluto (solo se default_storage è FileSystemStorage)
+        if default_storage.exists(saved_path):
+            full_path = default_storage.path(saved_path)
+        else:
+            full_path = os.path.join(settings.MEDIA_ROOT, saved_path)
+
+        # Salva il percorso relativo o assoluto, a seconda delle esigenze
+        record.values[clean_key] = saved_path 
     record.save()
 
     return JsonResponse({"success": True, "detail": "Campi del record salvati con successo"})
