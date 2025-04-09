@@ -716,3 +716,68 @@ def get_input_linked(request):
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
     else:
         return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+@csrf_exempt
+def stampa_bollettini(request):
+    data={}
+    filename='bollettino.pdf'
+    
+    recordid_bollettino = ''
+    data = json.loads(request.body)
+    recordid_bollettino = data.get('recordid')
+    record_bollettino = UserRecord('bollettini',recordid_bollettino)
+    recordid_stabile=record_bollettino.get_field('recordidstabile_')
+    record_stabile=UserRecord('stabile',recordid_stabile)
+    recordid_dipendente=record_bollettino.get_field('recordiddipendente_')
+    record_dipendente=UserRecord('dipendente',recordid_dipendente)
+    recordid_cliente=record_bollettino.get_field('recordidcliente_')
+    record_cliente=UserRecord('cliente',recordid_cliente)
+    data['nome_cliente']=record_cliente.get_field('nome_cliente')
+    data['indirizzo_cliente']=record_cliente.get_field('indirizzo')
+    data['cap_cliente']=record_cliente.get_field('cap')
+    data['citta_cliente']=record_cliente.get_field('citta')
+    data['riferimento']=record_stabile.get_field('riferimento')
+    data['data']=record_bollettino.get_field('data')
+    data['dipendente']=record_dipendente.get_field('nome')+' '+record_dipendente.get_field('cognome')
+    data['informazioni']=record_bollettino.get_field('informazioni')
+    data['contattatoda']=record_bollettino.get_field('contattatoda')
+    data['causa']=record_bollettino.get_field('causa')
+    data['interventorichiesto']=record_bollettino.get_field('interventorichiesto')
+    data['id']=record_bollettino.get_field('id')  
+    data['nr']=record_bollettino.get_field('nr')
+    data['sostituzionedal']=record_bollettino.get_field('sostituzionedal')
+    data['sostituzioneal']=record_bollettino.get_field('sostituzioneal')
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
+    config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
+    
+    tipo_bollettino=record_bollettino.fields['tipo_bollettino']
+    if tipo_bollettino=='Generico':
+        content = render_to_string('pdf/bollettino_generico.html', data)
+    if tipo_bollettino=='Sostituzione':
+        content = render_to_string('pdf/bollettino_sostituzione.html', data)
+    if tipo_bollettino=='Pulizia':
+        content = render_to_string('pdf/bollettino_pulizia.html', data)
+    if tipo_bollettino=='Tinteggio':
+        content = render_to_string('pdf/bollettino_tinteggio.html', data)
+    if tipo_bollettino=='Picchetto':
+        content = render_to_string('pdf/bollettino_picchetto.html', data)
+    if tipo_bollettino=='Giardino':
+        content = render_to_string('pdf/bollettino_giardino.html', data)
+
+    filename_with_path = os.path.dirname(os.path.abspath(__file__))
+    filename_with_path = filename_with_path.rsplit('views', 1)[0]
+    filename_with_path = filename_with_path + '\\static\\pdf\\' + filename
+    pdfkit.from_string(content, filename_with_path, configuration=config, options={"enable-local-file-access": ""})
+
+    #return HttpResponse(content)
+
+    try:
+        with open(filename_with_path, 'rb') as fh:
+            response = HttpResponse(fh.read(), content_type="application/pdf")
+            response['Content-Disposition'] = f'inline; filename={filename}'
+            return response
+        return response
+
+    finally:
+        os.remove(filename_with_path)

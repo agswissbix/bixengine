@@ -261,3 +261,13 @@ class UserRecord:
 
 
         return insert_fields
+
+
+    def get_field(self,field_key):
+        if field_key in self.fields:
+            if (self.fields[field_key] is None  or self.fields[field_key]=='None'):
+                return ''  
+            else:
+                return self.fields[field_key]      
+        else:
+            return ''
