@@ -25,6 +25,7 @@ from django.db.models import OuterRef, Subquery
 from commonapp.bixmodels.helper_db import *
 from commonapp.bixmodels.helper_sys import *
 from commonapp.helper import *
+from commonapp.bixmodels.sys_field import SysField  # Import SysField if it exists in this module
 
 bixdata_server = os.environ.get('BIXDATA_SERVER')
 
@@ -43,6 +44,10 @@ class UserRecord:
         if tableid:
             fields=HelpderDB.sql_query(f"SELECT * FROM sys_field WHERE tableid='{self.tableid}'")
             for field in fields:
+                sql="SELECT * FROM sys_user_field_settings WHERE fieldid='"+field['fieldid']+"' AND tableid='"+self.tableid+"' AND userid='"+str(1)+"'"
+                field['settings']=HelpderDB.sql_query(sql)
+                sql="SELECT * FROM sys_user_field_settings WHERE settingid='default' AND fieldid='"+field['fieldid']+"' AND tableid='"+self.tableid+"' AND userid='"+str(1)+"'"
+                field['defaultvalue']=HelpderDB.sql_query_value(sql,'value')
                 self.fields[field['fieldid']]=field
 
 
@@ -204,6 +209,7 @@ class UserRecord:
         fields=HelpderDB.sql_query(sql)
         insert_fields=[]
         for field in fields:
+            defaultvalue=''
             insert_field={}
             fieldid=field['fieldid']
             if fieldid.startswith("_"):
@@ -239,6 +245,13 @@ class UserRecord:
 
             if field['fieldtypeid'] == 'Data':
                 fieldtype='Data'
+                defaultvalue=self.fields[fieldid]['defaultvalue']
+                if defaultvalue == '$today$':
+                    defaultvalue='2025-04-10'
+                    
+
+            if self.tableid == 'telefonate' and fieldid == 'ora_inizio':
+                defaultvalue = datetime.datetime.now().strftime("%H:%M")
 
             if field['fieldtypeid'] == 'Utente':
                 fieldtype='Utente'
@@ -261,6 +274,9 @@ class UserRecord:
                 fieldtype='Attachment'
 
             insert_field['fieldtype']=fieldtype
+
+            if self.recordid=='' and value=='':
+                insert_field['value']={"code": defaultvalue, "value": defaultvalue}
 
             insert_fields.append(insert_field)
 
