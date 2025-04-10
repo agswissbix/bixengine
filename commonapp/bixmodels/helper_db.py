@@ -11,6 +11,7 @@ from django_user_agents.utils import get_user_agent
 from django import template
 from bs4 import BeautifulSoup
 from django.db.models import OuterRef, Subquery
+from django.core.mail import send_mail, BadHeaderError, EmailMessage
 
 
 class HelpderDB:
@@ -60,3 +61,44 @@ class HelpderDB:
             dict(zip(columns, row))
             for row in cursor.fetchall()
         ]
+    
+    @classmethod
+    def send_email(request=None, emails=None, subject=None, message=None, html_message=None, cc=None, bcc=None, recordid=None):
+        # Inizializza CC e BCC solo se non sono forniti
+        if cc is None:
+            cc = []
+        if bcc is None:
+            bcc = []
+            
+        email_fields = dict()
+        email_fields['subject'] = subject
+        email_fields['mailbody'] = message
+        email_fields['date'] = datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')
+        email_fields['timestamp'] = datetime.datetime.now().strftime('%H:%M:%S')
+        email_fields['recipients'] = ';'.join(emails)
+        email_fields['cc'] = cc
+        email_fields['bcc'] = bcc
+
+        try:
+            email = EmailMessage(
+                subject,
+                html_message,
+                'bixdata@sender.swissbix.ch',
+                emails,
+                bcc=bcc,
+                cc=cc,
+            )
+            email.content_subtype = "html"
+            send_return = email.send(fail_silently=False)
+
+            with connections['default'].cursor() as cursor:
+                cursor.execute("UPDATE user_email SET status = 'Inviata' WHERE recordid_ = %s", [recordid])
+
+        except Exception as e:
+            error = str(e)
+            with connections['default'].cursor() as cursor:
+                cursor.execute("UPDATE user_email SET status = 'Errore', note = %s WHERE recordid_ = %s",
+                            [error, recordid])
+            return False
+        
+        return True
