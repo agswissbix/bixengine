@@ -28,6 +28,8 @@ from commonapp import helper
 import time
 from typing import List
 import pandas as pd
+import pdfkit
+from django.http import HttpResponseForbidden
 
 
 
@@ -781,3 +783,53 @@ def stampa_bollettini(request):
 
     finally:
         os.remove(filename_with_path)
+
+
+
+@csrf_exempt
+def stampa_bollettini_test(request):
+    data={}
+    filename='bollettino.pdf'
+    
+    recordid_bollettino = ''
+    data = json.loads(request.body)
+    recordid_bollettino = data.get('recordid')
+    
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
+    config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
+    
+    content = render_to_string('pdf/bollettino_test.html', data)
+
+    filename_with_path = os.path.dirname(os.path.abspath(__file__))
+    filename_with_path = filename_with_path.rsplit('views', 1)[0]
+    filename_with_path = filename_with_path + '\\static\\pdf\\' + filename
+    pdfkit.from_string(content, filename_with_path, configuration=config, options={"enable-local-file-access": ""})
+
+    #return HttpResponse(content)
+
+    try:
+        with open(filename_with_path, 'rb') as fh:
+            response = HttpResponse(fh.read(), content_type="application/pdf")
+            response['Content-Disposition'] = f'inline; filename={filename}'
+            return response
+        return response
+
+    finally:
+        os.remove(filename_with_path)
+
+@csrf_exempt
+def send_emails(request):
+    emails_to_send=[]
+    emails = HelpderDB.sql_query("SELECT * FROM user_email")
+    for email in emails:
+        if email['status'] == 'Da inviare':
+            emails_to_send.append(email)
+    
+    for email in emails_to_send:
+        HelpderDB.send_email(email['recipients'], email['subject'], email['mailbody'], '', email['cc'], email['ccn'], email['recordid_'])
+
+
+    return HttpResponse("Email inviate con successo!")
+
+
