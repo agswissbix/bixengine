@@ -827,6 +827,8 @@ def send_emails(request):
             emails_to_send.append(email)
     
     for email in emails_to_send:
+        file_path = os.path.join(settings.MEDIA_ROOT, attachment['file'])
+
         HelpderDB.send_email(email['recipients'], email['subject'], email['mailbody'], '', email['cc'], email['ccn'], email['recordid_'])
 
 
