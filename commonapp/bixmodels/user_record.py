@@ -23,6 +23,7 @@ from django import template
 from bs4 import BeautifulSoup
 from django.db.models import OuterRef, Subquery
 from commonapp.bixmodels.helper_db import *
+from commonapp.bixmodels.helper_sys import *
 from commonapp.helper import *
 
 bixdata_server = os.environ.get('BIXDATA_SERVER')
@@ -218,13 +219,6 @@ class UserRecord:
             insert_field['fieldorder']="1"
             insert_field['description']=field['description']
             insert_field['value']={"code": value, "value": value}
-            insert_field['lookupitemsuser']=[
-                            {"id": '1', "firstname": 'Lory', "lastname": '', "link": 'user', "linkdefield": 'id', "linkedvalue": '1'},
-                            {"id": '2', "firstname": 'Petar', "lastname": '', "link": 'user', "linkdefield": 'id', "linkedvalue": '2'},
-                            {"id": '3', "firstname": 'Vanessa', "lastname": '', "link": 'user', "linkdefield": 'id', "linkedvalue": '2'},
-                            {"id": '4', "firstname": 'Sara', "lastname": '', "link": 'user', "linkdefield": 'id', "linkedvalue": '2'},
-                            {"id": '2', "firstname": 'Pepo', "lastname": '', "link": 'user', "linkdefield": 'id', "linkedvalue": '2'}
-                        ]
             insert_field["fieldtypewebid"]= "",
             insert_field["lookuptableid"]= field['lookuptableid'],
             insert_field["tablelink"]= field['tablelink'],
@@ -248,7 +242,18 @@ class UserRecord:
 
             if field['fieldtypeid'] == 'Utente':
                 fieldtype='Utente'
-
+                lookupitemsusers=[]
+                users=HelperSys.get_users()
+                for user in users:
+                    lookupitemsuser={}
+                    lookupitemsuser['id']=user['id']
+                    lookupitemsuser['firstname']=user['firstname']
+                    lookupitemsuser['lastname']=user['lastname']
+                    lookupitemsuser['link']=''
+                    lookupitemsuser['linkdefield']=''
+                    lookupitemsuser['linkedvalue']=''
+                    lookupitemsusers.append(lookupitemsuser)
+                insert_field['lookupitemsuser']=lookupitemsusers
             if field['fieldtypeid'] == 'Memo':
                 fieldtype='Memo'
 
