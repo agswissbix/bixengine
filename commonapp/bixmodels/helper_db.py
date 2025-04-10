@@ -69,36 +69,29 @@ class HelpderDB:
             cc = []
         if bcc is None:
             bcc = []
-            
+
         email_fields = dict()
         email_fields['subject'] = subject
         email_fields['mailbody'] = message
         email_fields['date'] = datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')
         email_fields['timestamp'] = datetime.datetime.now().strftime('%H:%M:%S')
-        email_fields['recipients'] = ';'.join(emails)
+        # Ensure emails is a list
+        email_fields['recipients'] = emails if isinstance(emails, (list, tuple)) else emails.split(';')
         email_fields['cc'] = cc
         email_fields['bcc'] = bcc
 
-        try:
-            email = EmailMessage(
-                subject,
-                html_message,
-                'bixdata@sender.swissbix.ch',
-                emails,
-                bcc=bcc,
-                cc=cc,
-            )
-            email.content_subtype = "html"
-            send_return = email.send(fail_silently=False)
+        email = EmailMessage(
+            subject,
+            html_message,
+            'bixdata@sender.swissbix.ch',
+            email_fields['recipients'],  # Ensure this is a list or tuple
+            bcc=bcc,
+            cc=cc,
+        )
+        email.content_subtype = "html"
+        send_return = email.send(fail_silently=False)
 
-            with connections['default'].cursor() as cursor:
-                cursor.execute("UPDATE user_email SET status = 'Inviata' WHERE recordid_ = %s", [recordid])
+        with connections['default'].cursor() as cursor:
+            cursor.execute("UPDATE user_email SET status = 'Inviata' WHERE recordid_ = %s", [recordid])
 
-        except Exception as e:
-            error = str(e)
-            with connections['default'].cursor() as cursor:
-                cursor.execute("UPDATE user_email SET status = 'Errore', note = %s WHERE recordid_ = %s",
-                            [error, recordid])
-            return False
-        
         return True

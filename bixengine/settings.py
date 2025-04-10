@@ -33,6 +33,13 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['localhost','192.168.10.10','192.168.10.11','81.62.161.14','tabellone.swissbix.com','10.30.6.69','pc-pitgestional','bixbelotti.swissbix.com']
 
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = env('EMAIL_HOST')
+EMAIL_PORT = env('EMAIL_PORT')
+EMAIL_USE_TLS = env('EMAIL_TLS')
+EMAIL_HOST_USER = env('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
+
 
 # Application definition
 
