@@ -50,3 +50,14 @@ class Helper:
         except Exception as e:
             return False
     
+    @classmethod
+    def get_userid(cls,request):
+        django_userid=request.user.id
+        userid = 0
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT id FROM sys_user WHERE bixid = %s", [django_userid])
+            row = cursor.fetchone()
+            if row:
+                userid = row[0]
+        return userid
+    

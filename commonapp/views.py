@@ -661,7 +661,7 @@ def get_record_card_fields(request):
     tableid= data.get("tableid")
     recordid= data.get("recordid")
 
-    record=UserRecord(tableid,recordid)
+    record=UserRecord(tableid,recordid,Helper.get_userid(request))
     card_fields=record.get_record_card_fields()
     response={ "fields": card_fields, "recordid": recordid}
     return JsonResponse(response)

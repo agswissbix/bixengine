@@ -204,7 +204,7 @@ class UserRecord:
             SELECT f.*
             FROM sys_user_field_order AS fo LEFT JOIN sys_field AS f ON fo.tableid=f.tableid AND fo.fieldid=f.id
 
-            WHERE fo.tableid='{self.tableid}' AND typepreference='insert_fields' AND fo.userid={self.userid} ORDER BY fieldorder
+            WHERE fo.tableid='{self.tableid}' AND typepreference='insert_fields' AND fo.userid=1 ORDER BY fieldorder
         """
         fields=HelpderDB.sql_query(sql)
         insert_fields=[]
@@ -267,6 +267,7 @@ class UserRecord:
                     lookupitemsuser['linkedvalue']=''
                     lookupitemsusers.append(lookupitemsuser)
                 insert_field['lookupitemsuser']=lookupitemsusers
+                defaultvalue=self.userid
             if field['fieldtypeid'] == 'Memo':
                 fieldtype='Memo'
 
