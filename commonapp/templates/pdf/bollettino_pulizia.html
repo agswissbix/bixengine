@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Bollettino di Lavoro</title>
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 0;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            width: 250mm;
+            height: 360mm;
+            font-size: 11pt;
+        }
+        .container {
+            border: 1px solid black;
+            width: 100%;
+            height: 100%;
+        }
+        .main-table {
+            width: 100%;
+            height: 100%;
+            border-collapse: collapse;
+        }
+        .main-table td {
+            padding: 0;
+            vertical-align: top;
+        }
+        .header-row {
+            height: 25mm;
+        }
+        .header-left {
+            width: 30mm;
+            border-right: 1px solid black;
+            text-align: center;
+            vertical-align: middle;
+        }
+        .header-right {
+            padding: 5mm;
+        }
+        .title {
+            float: left;
+        }
+        .checkboxdiv {
+            height: 20px;
+            width: 20px;
+            border: 1px solid black;;
+        }
+        .checkboxdiv-mini {
+            height: 13px;
+            width: 13px;
+            border: 1px solid black;
+            display: inline-block;
+            margin-right: 2px;
+            margin-left: 10px;
+            border-radius: 2px;
+        }
+
+        .checkboxes {
+            float: right;
+            width: 60mm;
+        }
+        .checkbox-item {
+            margin-bottom: 2mm;
+        }
+        input[type="checkbox"] {
+            width: 4mm;
+            height: 4mm;
+            vertical-align: middle;
+        }
+        .picchetto-row {
+            height: 8mm;
+            text-align: center;
+            vertical-align: middle;
+            border-top: 1px solid black;
+            border-bottom: 1px solid black;
+        }
+        .work-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: -1px;
+        }
+        .work-table th, .work-table td {
+            border: 1px solid black;
+            padding: 2mm;
+            text-align: left;
+            height: 8mm;
+        }
+        .work-table th {
+            font-weight: bold;
+            font-size: 10pt;
+        }
+        .info-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .info-table td {
+            width: 100%;
+            padding: 3mm;
+            height: 40mm;
+            border: 1px solid black;
+            vertical-align: top;
+        }
+        .completion-row td {
+            height: 15mm;
+            border-top: 1px solid black;
+            border-bottom: 1px solid black;
+            padding: 3mm;
+        }
+        .completion-item {
+            margin-bottom: 2mm;
+        }
+        .signature-row td {
+            padding: 5mm;
+            height: 40mm;
+        }
+        .signature-line {
+            display: block;
+            margin-top: 2mm;
+            margin-bottom: 5mm;
+            border-bottom: 1px dotted black;
+        }
+        @media print {
+            body {
+                -webkit-print-color-adjust: exact;
+            }
+            .container {
+                margin: 10mm;
+                page-break-after: always;
+            }
+        }
+
+        table{
+            width: 100%;
+            border-collapse: collapse;
+        }
+        tr{
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <table>
+            <tr class="header-row" style="border-bottom: 1px solid black;">
+                <td class="header-left" style="border-bottom: 1px solid black;">
+                    <img style="width:95%"src="http://localhost:8000//static/images/logos/logo-pitservice-bn.jpg" alt="Pitservice Logo" >
+                </td>
+                <td style="width: 10%;padding: 10px;vertical-align: top;font-size: 20px;">
+                    Data
+                </td>
+                <td class="header-right" style="width:60%;border-bottom: 1px solid black;border-left: 1px solid black;padding: 10px;vertical-align: top;font-size: 40px;">
+                    <div class="title">
+                        <strong>BOLLETTINO DI LAVORO</strong>
+                    </div>
+                </td>
+                <td style="border-left: 1px solid black;padding: 10px;font-size: 40px;vertical-align: top;">
+                    {{nr}}
+                </td>
+                
+            </tr>
+        </table>
+        <table>
+            <tr class="picchetto-row" style="height: 150px;">
+                <td style="text-align: left;padding-left: 100px;" >{{nome_cliente}}<br/>{{indirizzo_cliente}}<br/>{{cap_cliente}}<br/>{{citta_cliente}}</td>
+                <td style="width: 40%;">
+
+                </td>
+                <td>{{riferimento}}<br/>{{informazioni}}</td>
+            </tr>
+        </table>
+        <table>
+          <tr class="picchetto-row" style="height: 50px;">
+              <td style="border-left:1px solid black; font-size: 30px;background-color: #dedede;font-weight: bold;" >
+                PULIZIA APPARTAMENTO
+              </td>
+              
+          </tr>
+        </table>
+        <table style="border-collapse: collapse;">
+                <tr style="border-bottom: 1px solid black">
+                    <th style="width: 12%">DATA</th>
+                    <th style="border-left: 1px solid black;width: 18%">COLLABORATORE</th>
+                    <th style="border-left: 1px solid black;width: 10%">ORE DI LAV.</th>
+                    <th style="border-left: 1px solid black;width: 10%">TRAS.</th>
+                    <th style="border-left: 1px solid black;">LAVORO ESEGUITO</th>
+                </tr>
+                <tr style="border-bottom: 1px solid black;height: 180px;">
+                    <td style="padding: 10px;vertical-align: top" >{{data}}</td>
+                    <td style="border-left: 1px solid black;padding: 10px;vertical-align: top;">{{dipendente}}</td>
+                    <td style="border-left: 1px solid black"></td>
+                    <td style="border-left: 1px solid black">&nbsp;</td>
+                    <td style="border-left: 1px solid black;vertical-align: top;">
+                        Cucina<br/>
+                        <br/>
+                        <div class="checkboxdiv-mini"></div>elettrodomestici<div class="checkboxdiv-mini"></div>mobili<div class="checkboxdiv-mini"></div>pavimenti <br/>
+                        <br/>
+                        <div class="checkboxdiv-mini"></div>finestre<div class="checkboxdiv-mini"></div>telai finestre<div class="checkboxdiv-mini"></div>tapparelle <br/>
+                        <br/>
+                        <div class="checkboxdiv-mini"></div>porte<div class="checkboxdiv-mini"></div>stipiti<div class="checkboxdiv-mini"></div>radiatori <br/>
+                        <br/>
+                        <div class="checkboxdiv-mini"></div>............................................<br/>
+                    </td>
+                </tr>
+                
+        </table>
+        <table>
+            <tr style="border-bottom: 1px solid black;height: 200px">
+              <td style="padding: 10px;vertical-align: top;width: 50%;">
+                  <strong>Prodotti utilizzati:</strong>
+                  <br/>
+                  ......................................................................................................<br/><br/><br/>
+                  ......................................................................................................<br/><br/><br/>
+                  ......................................................................................................<br/><br/><br/>
+              </td>
+              <td style="border-left: 1px solid black; padding: 10px;vertical-align: top;">
+                Bagno <div class="checkboxdiv-mini"></div>1<div class="checkboxdiv-mini"></div>2<div class="checkboxdiv-mini"></div>3<div class="checkboxdiv-mini"></div>4<br/>
+                <br/>
+                <div class="checkboxdiv-mini"></div>vasca<div class="checkboxdiv-mini"></div>piatto doccia<div class="checkboxdiv-mini"></div>lavabo<br/>
+                <br/>
+                <div class="checkboxdiv-mini"></div>bidet<div class="checkboxdiv-mini"></div>wc<div class="checkboxdiv-mini"></div>accessori<div class="checkboxdiv-mini"></div>rivestimenti<br/>
+                <br/>
+                <div class="checkboxdiv-mini"></div>porte<div class="checkboxdiv-mini"></div>stipiti<div class="checkboxdiv-mini"></div>radiatori<div class="checkboxdiv-mini"></div>pavimenti<br/>
+                <br/>
+                <div class="checkboxdiv-mini"></div>finestre<div class="checkboxdiv-mini"></div>telai finestre<div class="checkboxdiv-mini"></div>tapparelle<br/>
+                <br/>
+                <div class="checkboxdiv-mini"></div>...............................................................................<br/>
+              </td>
+          </tr>
+            <tr style="border-bottom: 1px solid black;height: 200px">
+                <td style="padding: 10px;vertical-align: top;">
+                    <strong>Materiale:</strong>
+                    <br/>
+                    ......................................................................................................<br/><br/><br/>
+                    ......................................................................................................<br/><br/><br/>
+                    ......................................................................................................<br/><br/><br/>
+                </td>
+                <td style="border-left: 1px solid black; padding: 10px;vertical-align: top;">
+                    Soggiorno e atrio<br/>
+                    <br/>
+                    <div class="checkboxdiv-mini"></div>finestre<div class="checkboxdiv-mini"></div>telai finestre<div class="checkboxdiv-mini"></div>tapparelle<br/>
+                    <br/>
+                    <div class="checkboxdiv-mini"></div>porte<div class="checkboxdiv-mini"></div>stipiti<div class="checkboxdiv-mini"></div>radiatori<div class="checkboxdiv-mini"></div>pavimenti<br/>
+                    <br/>
+                    <div class="checkboxdiv-mini"></div>terrazzo<div class="checkboxdiv-mini"></div>armadio a muro<br/>
+                    <br/>
+                    <div class="checkboxdiv-mini"></div>................................................................................<br/>
+                </td>
+            </tr>
+            <tr style="border-bottom: 1px solid black;height: 100px">
+                <td style="padding: 10px;vertical-align: top;">
+                    <strong>Osservazioni:</strong><br/><br/><br/>
+                    ......................................................................................................<br/><br/><br/>
+                </td>
+                <td style="border-left: 1px solid black; padding: 10px;vertical-align: top;">
+                    Camera da letto <div class="checkboxdiv-mini"></div>1<div class="checkboxdiv-mini"></div>2<div class="checkboxdiv-mini"></div>3<div class="checkboxdiv-mini"></div>4<br/>
+                    <br/>
+                    <div class="checkboxdiv-mini"></div>finestre<div class="checkboxdiv-mini"></div>telai finestre<div class="checkboxdiv-mini"></div>tapparelle<br/>
+                    <br/>
+                    <div class="checkboxdiv-mini"></div>porte<div class="checkboxdiv-mini"></div>stipiti<div class="checkboxdiv-mini"></div>radiatori<div class="checkboxdiv-mini"></div>pavimenti<br/>
+                    <br/>
+                    <div class="checkboxdiv-mini"></div>................................................................................................<br/>
+                </td>
+            </tr>
+        </table>
+        <table>
+            <tr >
+              <td style="width: 50%;vertical-align: top;">
+                <table>
+                    <tr>
+                        <td>Lavoro terminato </td>
+                        <td style="padding: 10px;vertical-align: top;"> 
+                            <div class="checkboxdiv">
+                            </div>
+            
+                          </td>
+                    </tr>
+                    <tr >
+                        <td style="padding: 10px;vertical-align: top;">
+                          Lavoro non terminato 
+                        </td>
+                        <td style="padding: 10px;vertical-align: top;"> 
+                          <div class="checkboxdiv">
+                          </div>
+          
+                        </td>
+                      </tr>
+                </table>
+              </td>
+              
+              <td>
+                Altro<br/>
+                <br/>
+                <div class="checkboxdiv-mini"></div>bucalettere<div class="checkboxdiv-mini"></div>cantina<div class="checkboxdiv-mini"></div>box/posto auto<br/>
+                <br/>
+                <div class="checkboxdiv-mini"></div>.........................................................................................<br/>
+              </td>
+            </tr>
+            
+        </table>
+        <table >
+            <tr style="border-top: 1px solid black;background-color: #dedede;height: 20px;">
+                <td style="height: 20px;" >
+                    
+                </td>
+            </tr>
+        </table>
+        <table>
+            <tr style="border-top: 1px solid black;">
+                <td>
+                    <br/>
+                    <strong>Pit Service Sagl</strong><br/>
+                    <br/><br/>
+                    Data: ........................................<br>
+                    <br/>
+                    Firma: .......................................
+                </td>
+                <td>
+                    <br/>
+                    <strong>Cliente</strong><br/>
+                    <br/><br/>
+                    Data: ........................................<br>
+                    <br/>
+                    Firma: .......................................
+                </td>
+            </tr>
+        </table>
+    </div>
+</body>
+</html>
