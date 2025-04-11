@@ -32,7 +32,7 @@ bixdata_server = os.environ.get('BIXDATA_SERVER')
 class UserRecord:
 
     context=""
-    def __init__(self, tableid, recordid=None, userid=1):
+    def __init__(self, tableid, recordid=None, userid=1, master_tableid=None, master_recordid=None):    
         self.tableid=tableid
         self.recordid=recordid
         self.userid=userid
