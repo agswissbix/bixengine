@@ -835,3 +835,9 @@ def send_emails(request):
     return HttpResponse("Email inviate con successo!")
 
 
+
+@csrf_exempt
+def save_belotti_form_data(request):
+    data = json.loads(request.body)
+    print(data)
+    return JsonResponse({"success": True})
