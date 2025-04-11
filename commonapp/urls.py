@@ -31,7 +31,8 @@ urlpatterns = [
     path('stampa_bollettini/', stampa_bollettini, name='stampa_bollettini'),
     path('stampa_bollettini_test/', stampa_bollettini_test, name='stampa_bollettini_test'),
     path('send_emails/', send_emails, name='send_emails'),
-    
+    path('get_form_data/', get_form_data, name='get_form_data'),
+    path('export_excel/', export_excel, name='export_excel'),
     
     
 ]

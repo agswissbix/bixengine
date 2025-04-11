@@ -30,6 +30,8 @@ from typing import List
 import pandas as pd
 import pdfkit
 from django.http import HttpResponseForbidden
+import os
+import mimetypes
 
 
 
@@ -838,12 +840,48 @@ def send_emails(request):
             emails_to_send.append(email)
     
     for email in emails_to_send:
-        file_path = os.path.join(settings.MEDIA_ROOT, attachment['file'])
+        attachment_data = None
+        if email['attachment']:
+            try:
+                # Costruisci il percorso corretto del file
+                file_path = os.path.join(settings.MEDIA_ROOT, email['attachment'])
+                
+                # Verifica che il file esista
+                if os.path.exists(file_path):
+                    with open(file_path, 'rb') as fh:
+                        file_data = fh.read()
+                        file_name = os.path.basename(file_path)
+                        file_content_type = mimetypes.guess_type(file_name)[0]
+                        file_data = base64.b64encode(file_data).decode('utf-8')
+                        attachment_data = f"data:{file_content_type};base64,{file_data}"
+                else:
+                    print(f"File non trovato: {file_path}")
+                    attachment_data = None
+            except Exception as e:
+                print(f"Errore durante la lettura del file: {str(e)}")
+                attachment_data = None
 
-        HelpderDB.send_email(email['recipients'], email['subject'], email['mailbody'], '', email['cc'], email['ccn'], email['recordid_'])
-
+        # Invia l'email con o senza allegato
+        HelpderDB.send_email(
+            email['recipients'], 
+            email['subject'], 
+            email['mailbody'], 
+            '', 
+            email['cc'], 
+            email['ccn'], 
+            email['recordid_'], 
+            attachment_data
+        )
 
     return HttpResponse("Email inviate con successo!")
+
+
+@csrf_exempt
+def get_form_data(request):
+    data = json.loads(request.body)
+    form_type = data.get('formType')
+    print(form_type)
+    return JsonResponse({"success": True})
 
 
 
@@ -852,3 +890,31 @@ def save_belotti_form_data(request):
     data = json.loads(request.body)
     print(data)
     return JsonResponse({"success": True})
+
+
+def export_excel(request):
+    if request.method == 'POST':
+        tableid = request.POST.get('tableid')
+        master_tableid = request.POST.get('master_tableid')
+        master_recordid = request.POST.get('master_recordid')
+        searchTerm = request.POST.get('searchTerm')
+        viewid = request.POST.get('viewid')
+        order_field = request.POST.get('order_field')
+        order = request.POST.get('order')
+        currentpage = 0
+        table_type = request.POST.get('tableType')
+
+       
+
+        csv_file = f"{tableid}-{uuid.uuid4().hex}.csv"
+
+
+
+        with open(csv_file, 'rb') as file:
+            response = HttpResponse(file.read(), content_type='text/csv')
+            response['Content-Disposition'] = 'attachment'
+            response['filename'] = csv_file
+
+        os.remove(csv_file)
+
+        return response

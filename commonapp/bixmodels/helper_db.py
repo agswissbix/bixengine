@@ -63,7 +63,7 @@ class HelpderDB:
         ]
     
     @classmethod
-    def send_email(request=None, emails=None, subject=None, message=None, html_message=None, cc=None, bcc=None, recordid=None):
+    def send_email(request=None, emails=None, subject=None, message=None, html_message=None, cc=None, bcc=None, recordid=None, attachment=None):
         # Inizializza CC e BCC solo se non sono forniti
         if cc is None:
             cc = []
@@ -79,6 +79,7 @@ class HelpderDB:
         email_fields['recipients'] = emails if isinstance(emails, (list, tuple)) else emails.split(';')
         email_fields['cc'] = cc
         email_fields['bcc'] = bcc
+        email_fields['attachment'] = attachment
 
         email = EmailMessage(
             subject,
@@ -87,8 +88,11 @@ class HelpderDB:
             email_fields['recipients'],  # Ensure this is a list or tuple
             bcc=bcc,
             cc=cc,
+            attachments=attachment
         )
         email.content_subtype = "html"
+        if attachment:
+            email.attach_file(attachment)
         send_return = email.send(fail_silently=False)
 
         with connections['default'].cursor() as cursor:
