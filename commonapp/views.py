@@ -804,7 +804,16 @@ def stampa_bollettini_test(request):
     filename_with_path = os.path.dirname(os.path.abspath(__file__))
     filename_with_path = filename_with_path.rsplit('views', 1)[0]
     filename_with_path = filename_with_path + '\\static\\pdf\\' + filename
-    pdfkit.from_string(content, filename_with_path, configuration=config, options={"enable-local-file-access": ""})
+    pdfkit.from_string(
+    content,
+    filename_with_path,
+    configuration=config,
+    options={
+        "enable-local-file-access": "",
+        # "quiet": ""  # <-- rimuovilo!
+    }
+)
+
 
     #return HttpResponse(content)
 
