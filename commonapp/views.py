@@ -660,8 +660,10 @@ def get_record_card_fields(request):
     data = json.loads(request.body)
     tableid= data.get("tableid")
     recordid= data.get("recordid")
+    master_tableid= data.get("masterTableid")
+    master_recordid= data.get("masterRecordid")
 
-    record=UserRecord(tableid,recordid,Helper.get_userid(request))
+    record=UserRecord(tableid,recordid,Helper.get_userid(request),master_tableid,master_recordid)
     card_fields=record.get_record_card_fields()
     response={ "fields": card_fields, "recordid": recordid}
     return JsonResponse(response)
