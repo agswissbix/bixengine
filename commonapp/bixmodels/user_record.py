@@ -32,12 +32,12 @@ bixdata_server = os.environ.get('BIXDATA_SERVER')
 class UserRecord:
 
     context=""
-    def __init__(self, tableid, recordid=None, userid=1, master_tableid=None, master_recordid=None):    
+    def __init__(self, tableid, recordid=None, userid=1, master_tableid="", master_recordid=""):    
         self.tableid=tableid
         self.recordid=recordid
         self.userid=userid
-        self.master_tableid=""
-        self.master_recordid=""
+        self.master_tableid=master_tableid
+        self.master_recordid=master_recordid
         self.values=dict()
         self.fields=dict()
         self.context='insert_fields'
@@ -215,6 +215,7 @@ class UserRecord:
         fields=HelpderDB.sql_query(sql)
         insert_fields=[]
         for field in fields:
+            defaultcode=''
             defaultvalue=''
             insert_field={}
             fieldid=field['fieldid']
@@ -245,18 +246,23 @@ class UserRecord:
             fieldtype='Parola'
             if not Helper.isempty(field['keyfieldlink']):
                 fieldtype='linkedmaster'
-                sql=f"SELECT {field['keyfieldlink']} FROM user_{field['tablelink']} where recordid_='{value}' "
-                value2=HelpderDB.sql_query_value(sql,field['keyfieldlink'])
-                insert_field['value']={"code": value2, "value": value2}
+                if(field['tablelink']==self.master_tableid):
+                    sql=f"SELECT recordid_,{field['keyfieldlink']} FROM user_{field['tablelink']} where recordid_='{self.master_recordid}' "
+                    linked_recordid=HelpderDB.sql_query_value(sql,'recordid_')
+                    linked_key=HelpderDB.sql_query_value(sql,field['keyfieldlink'])
+                    defaultcode=linked_recordid
+                    defaultvalue=linked_key
 
             if field['fieldtypeid'] == 'Data':
                 fieldtype='Data'
                 defaultvalue=self.fields[fieldid]['defaultvalue']
                 if defaultvalue == '$today$':
+                    defaultcode='2025-04-10'
                     defaultvalue='2025-04-10'
                     
 
             if self.tableid == 'telefonate' and fieldid == 'ora_inizio':
+                defaultcode = datetime.datetime.now().strftime("%H:%M")
                 defaultvalue = datetime.datetime.now().strftime("%H:%M")
 
             if field['fieldtypeid'] == 'Utente':
@@ -273,6 +279,7 @@ class UserRecord:
                     lookupitemsuser['linkedvalue']=''
                     lookupitemsusers.append(lookupitemsuser)
                 insert_field['lookupitemsuser']=lookupitemsusers
+                defaultcode=self.userid
                 defaultvalue=self.userid
             if field['fieldtypeid'] == 'Memo':
                 fieldtype='Memo'
@@ -283,7 +290,7 @@ class UserRecord:
             insert_field['fieldtype']=fieldtype
 
             if self.recordid=='' and value=='':
-                insert_field['value']={"code": defaultvalue, "value": defaultvalue}
+                insert_field['value']={"code": defaultcode, "value": defaultvalue}
 
             insert_fields.append(insert_field)
 
