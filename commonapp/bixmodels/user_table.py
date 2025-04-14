@@ -79,6 +79,16 @@ class UserTable:
         for condition in conditions_list:
             conditions=conditions+f" AND {condition}"   
 
+        #searchterm
+        if searchTerm:
+            searchTerm_conditions=''
+            for field in fields:
+                if searchTerm_conditions!='':
+                    searchTerm_conditions=searchTerm_conditions + " OR "
+                searchTerm_conditions=searchTerm_conditions+f"{field} like '%{searchTerm}%' " 
+            if searchTerm_conditions!='':
+                conditions=conditions+f" AND ({searchTerm_conditions}) "   
+        
         sql=f"SELECT {select_fields} from user_{self.tableid} where {conditions}  ORDER BY {orderby} LIMIT 20 "
         records = HelpderDB.sql_query(sql)
         return records
