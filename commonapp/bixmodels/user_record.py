@@ -252,6 +252,12 @@ class UserRecord:
                     linked_key=HelpderDB.sql_query_value(sql,field['keyfieldlink'])
                     defaultcode=linked_recordid
                     defaultvalue=linked_key
+                
+                if(value!=""):
+                    sql=f"SELECT recordid_,{field['keyfieldlink']} FROM user_{field['tablelink']} where recordid_='{value}' "
+                    linked_recordid=HelpderDB.sql_query_value(sql,'recordid_')
+                    linked_key=HelpderDB.sql_query_value(sql,field['keyfieldlink'])
+                    insert_field['value']={"code": linked_recordid, "value": linked_key}
 
             if field['fieldtypeid'] == 'Data':
                 fieldtype='Data'
