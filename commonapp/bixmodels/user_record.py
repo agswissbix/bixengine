@@ -54,12 +54,18 @@ class UserRecord:
         if recordid:
             self.values=HelpderDB.sql_query_row(f"SELECT * FROM user_{self.tableid} WHERE recordid_='{self.recordid}'")
             for fieldid,value in self.values.items():
-                if value is None:
-                    self.values[fieldid]=""
                 if fieldid != "recordid_" and fieldid in self.fields:
+                    if value is None:
+                        value=""
                     self.fields[fieldid]['value'] = value
                     self.fields[fieldid]['convertedvalue'] = 'converted' + str(value)
-                
+
+        # Aggiunta del controllo per master_tableid e master_recordid
+        if master_tableid and master_recordid:
+            master_fieldid = f"recordid_{master_tableid}_"
+            if master_fieldid in self.fields:
+                self.fields[master_fieldid]['value'] = master_recordid   
+                self.fields[master_fieldid]['convertedvalue'] = master_recordid  
 
 
     def get_record_badge_fields(self):

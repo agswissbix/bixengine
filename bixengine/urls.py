@@ -10,6 +10,7 @@ urlpatterns = [
     path('commonapp/', include('commonapp.urls')),
     path('customapp_telefonoamico/', include('customapp_telefonoamico.urls')),
     path('customapp_winteler/', include('customapp_winteler.urls')),
+    path('customapp_pitservice/', include('customapp_pitservice.urls')),
   
     
     

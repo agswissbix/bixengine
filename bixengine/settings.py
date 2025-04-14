@@ -52,6 +52,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'commonapp',
     'customapp_telefonoamico',
+    'customapp_winteler',
+    'customapp_pitservice',
     'corsheaders',
 ]
 

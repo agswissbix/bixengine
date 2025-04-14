@@ -28,7 +28,6 @@ urlpatterns = [
     path('prepara_email/', prepara_email, name='prepara_email'),
     path('save_email/', save_email, name='save_email'),
     path('get_input_linked/', get_input_linked, name='get_input_linked'),
-    path('stampa_bollettini/', stampa_bollettini, name='stampa_bollettini'),
     path('stampa_bollettini_test/', stampa_bollettini_test, name='stampa_bollettini_test'),
     path('send_emails/', send_emails, name='send_emails'),
     path('get_form_data/', get_form_data, name='get_form_data'),

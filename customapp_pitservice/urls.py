@@ -1,7 +1,8 @@
 from django.contrib import admin
 from django.urls import path
-from commonapp.views import *
+from customapp_pitservice.views import *
 
 urlpatterns = [
-    path('examplepost/', get_examplepost, name='examplepost'),
+    path('stampa_bollettini/', stampa_bollettini, name='stampa_bollettini'),
+    
 ]
