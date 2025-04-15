@@ -68,6 +68,9 @@ def stampa_bollettino(request):
     filename_with_path = os.path.dirname(os.path.abspath(__file__))
     filename_with_path = filename_with_path.rsplit('views', 1)[0]
     filename_with_path = filename_with_path + '\\static\\pdf\\' + filename
+    print(filename_with_path)
+    #filename_with_path2 = os.path.join(settings.BASE_DIR, 'static', 'pdf', filename)
+    #print(filename_with_path2)
     pdfkit.from_string(
     content,
     filename_with_path,
