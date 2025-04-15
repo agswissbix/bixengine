@@ -13,38 +13,68 @@ from commonapp.bixmodels.user_table import *
 from commonapp.helper import *
 
 
-        
-@csrf_exempt
+@csrf_exempt      
 def stampa_bollettino(request):
     post_data = json.loads(request.body)
-    data={}
-    filename='bollettino.pdf'
-    
+    data = {}
+    filename = 'bollettino.pdf'
+
     recordid_bollettino = ''
     if request.method == 'POST':
-        recordid_bollettino = post_data.get('recordid')
-    record_bollettino = UserRecord('bollettini',recordid_bollettino)
-    recordid_stabile=record_bollettino.get_field('recordidstabile_')['value']
-    record_stabile=UserRecord('stabile',recordid_stabile)
-    recordid_dipendente=record_bollettino.get_field('recordiddipendente_')['value']
-    record_dipendente=UserRecord('dipendente',recordid_dipendente)
-    recordid_cliente=record_bollettino.get_field('recordidcliente_')['value']
-    record_cliente=UserRecord('cliente',recordid_cliente)
-    data['nome_cliente']=record_cliente.get_field('nome_cliente')['value']
-    data['indirizzo_cliente']=record_cliente.get_field('indirizzo')['value']
-    data['cap_cliente']=record_cliente.get_field('cap')['value']
-    data['citta_cliente']=record_cliente.get_field('citta')['value']
-    data['riferimento']=record_stabile.get_field('riferimento')['value']
-    data['data']=record_bollettino.get_field('data')['value']
-    data['dipendente']=record_dipendente.get_field('nome')['value']+' '+record_dipendente.get_field('cognome')['value']
-    data['informazioni']=record_bollettino.get_field('informazioni')['value']
-    data['contattatoda']=record_bollettino.get_field('contattatoda')['value']
-    data['causa']=record_bollettino.get_field('causa')['value']
-    data['interventorichiesto']=record_bollettino.get_field('interventorichiesto')['value']
-    data['id']=record_bollettino.get_field('id')['value']
-    data['nr']=record_bollettino.get_field('nr')['value']
-    data['sostituzionedal']=record_bollettino.get_field('sostituzionedal')['value']
-    data['sostituzioneal']=record_bollettino.get_field('sostituzioneal')['value']
+        recordid_bollettino = post_data.get('recordid', '')
+
+    record_bollettino = UserRecord('bollettini', recordid_bollettino)
+
+    # Estrazione sicura degli ID
+    recordid_stabile = record_bollettino.get_field('recordidstabile_').get('value', '') or ''
+    recordid_dipendente = record_bollettino.get_field('recordiddipendente_').get('value', '') or ''
+    recordid_cliente = record_bollettino.get_field('recordidcliente_').get('value', '') or ''
+
+    # Creazione sicura dei record
+    try:
+        record_stabile = UserRecord('stabile', recordid_stabile) if recordid_stabile.strip() else None
+        if record_stabile and record_stabile.values is None:
+            record_stabile = None
+    except:
+        record_stabile = None
+
+    try:
+        record_dipendente = UserRecord('dipendente', recordid_dipendente) if recordid_dipendente.strip() else None
+        if record_dipendente and record_dipendente.values is None:
+            record_dipendente = None
+    except:
+        record_dipendente = None
+
+    try:
+        record_cliente = UserRecord('cliente', recordid_cliente) if recordid_cliente.strip() else None
+        if record_cliente and record_cliente.values is None:
+            record_cliente = None
+    except:
+        record_cliente = None
+
+    # Safe access ai campi
+    def get_value_safe(record, fieldname):
+        try:
+            return record.get_field(fieldname).get('value', '') if record else ''
+        except:
+            return ''
+
+    data['nome_cliente'] = get_value_safe(record_cliente, 'nome_cliente')
+    data['indirizzo_cliente'] = get_value_safe(record_cliente, 'indirizzo')
+    data['cap_cliente'] = get_value_safe(record_cliente, 'cap')
+    data['citta_cliente'] = get_value_safe(record_cliente, 'citta')
+    data['riferimento'] = get_value_safe(record_stabile, 'riferimento')
+    data['data'] = get_value_safe(record_bollettino, 'data')
+    data['dipendente'] = f"{get_value_safe(record_dipendente, 'nome')} {get_value_safe(record_dipendente, 'cognome')}".strip()
+    data['informazioni'] = get_value_safe(record_bollettino, 'informazioni')
+    data['contattatoda'] = get_value_safe(record_bollettino, 'contattatoda')
+    data['causa'] = get_value_safe(record_bollettino, 'causa')
+    data['interventorichiesto'] = get_value_safe(record_bollettino, 'interventorichiesto')
+    data['id'] = get_value_safe(record_bollettino, 'id')
+    data['nr'] = get_value_safe(record_bollettino, 'nr')
+    data['sostituzionedal'] = get_value_safe(record_bollettino, 'sostituzionedal')
+    data['sostituzioneal'] = get_value_safe(record_bollettino, 'sostituzioneal')
+
     script_dir = os.path.dirname(os.path.abspath(__file__))
     wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
     config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
