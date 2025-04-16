@@ -685,6 +685,7 @@ def prepara_email(request):
     data = json.loads(request.body)
     tableid= data.get("tableid")
     recordid= data.get("recordid")
+    print(tableid,recordid)
     email_fields = {
         "to": "to backend",
         "cc": "cc backend",
@@ -700,7 +701,9 @@ def prepara_email(request):
 def save_email(request):
     data = json.loads(request.body)
     email_data = data.get('emailData')
-    print(email_data)
+    tableid = data.get('tableid')
+    recordid = data.get('recordid')
+    print(tableid, recordid)
     return JsonResponse({"success": True})
 
 @csrf_exempt
