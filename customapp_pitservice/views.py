@@ -13,7 +13,7 @@ from commonapp.bixmodels.user_table import *
 from commonapp.helper import *
 
 
-@csrf_exempt      
+@csrf_exempt
 def stampa_bollettino(request):
     post_data = json.loads(request.body)
     data = {}

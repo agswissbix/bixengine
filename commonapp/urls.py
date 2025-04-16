@@ -32,8 +32,7 @@ urlpatterns = [
     path('send_emails/', send_emails, name='send_emails'),
     path('get_form_data/', get_form_data, name='get_form_data'),
     path('export_excel/', export_excel, name='export_excel'),
-    path('get_record_attachments/', get_record_attachments, name='get_record_attachments'),
-    
+    path('get_record_attachments/', get_record_attachments, name='get_record_attachments'),    
     
 ]
 
