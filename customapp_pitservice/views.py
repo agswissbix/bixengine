@@ -128,32 +128,26 @@ def stampa_bollettino(request):
 @csrf_exempt
 def stampa_bollettino_test(request):
     data={}
-    filename='bollettino.pdf'
+    filename='test.pdf'
     
-    recordid_bollettino = ''
-    data = json.loads(request.body)
-    recordid_bollettino = data.get('recordid')
-    
+
+    content = render_to_string('pdf/bollettino_test.html', data)
+
     script_dir = os.path.dirname(os.path.abspath(__file__))
     wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
     config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
-    
-    content = render_to_string('pdf/bollettino_test.html', data)
-
     filename_with_path = os.path.dirname(os.path.abspath(__file__))
     filename_with_path = filename_with_path.rsplit('views', 1)[0]
     filename_with_path = filename_with_path + '\\static\\pdf\\' + filename
     pdfkit.from_string(
-    content,
-    filename_with_path,
-    configuration=config,
-    options={
-        "enable-local-file-access": "",
-        # "quiet": ""  # <-- rimuovilo!
-    }
-)
-
-
+        content,
+        filename_with_path,
+        configuration=config,
+        options={
+            "enable-local-file-access": "",
+            # "quiet": ""  # <-- rimuovilo!
+        }
+    )
 
     try:
         with open(filename_with_path, 'rb') as fh:
@@ -168,21 +162,19 @@ def stampa_bollettino_test(request):
 @csrf_exempt
 def stampa_gasoli(request):
     data={}
-    filename=''
+    filename='report gasolio'
     recordid_stabile = ''
     data = json.loads(request.body)
     if request.method == 'POST':
         recordid_stabile = data.get('recordid')
-        date = data.get('date')
-        checkLetture=data.get('checkLetture')
-        meseLettura=data.get('meseLettura')
+        meseLettura=data.get('date')
         anno, mese = meseLettura.split('-')
     script_dir = os.path.dirname(os.path.abspath(__file__))
     wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
     config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
     
     record_stabile=UserRecord('stabile',recordid_stabile)
-    data['stabile']=record_stabile.fields
+    data['stabile']=record_stabile.values
     sql=f"""
     SELECT t.recordid_,t.anno,t.mese,t.datalettura,t.lettura, i.riferimento, i.livellominimo, i.capienzacisterna
     FROM user_letturagasolio t
@@ -201,22 +193,24 @@ def stampa_gasoli(request):
             """
     ultimeletturegasolio = HelpderDB.sql_query(sql)
     data['ultimeletturegasolio']=ultimeletturegasolio
+    
     content = render_to_string('pdf/gasolio.html', data)
 
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
+    config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
     filename_with_path = os.path.dirname(os.path.abspath(__file__))
     filename_with_path = filename_with_path.rsplit('views', 1)[0]
     filename_with_path = filename_with_path + '\\static\\pdf\\' + filename
     pdfkit.from_string(
-    content,
-    filename_with_path,
-    configuration=config,
-    options={
-        "enable-local-file-access": "",
-        # "quiet": ""  # <-- rimuovilo!
-    }
+        content,
+        filename_with_path,
+        configuration=config,
+        options={
+            "enable-local-file-access": "",
+            # "quiet": ""  # <-- rimuovilo!
+        }
     )
-
-
 
     try:
         with open(filename_with_path, 'rb') as fh:
