@@ -173,6 +173,7 @@ def stampa_gasoli(request):
     data = json.loads(request.body)
     if request.method == 'POST':
         recordid_stabile = data.get('recordid')
+        date = data.get('date')
         checkLetture=data.get('checkLetture')
         meseLettura=data.get('meseLettura')
         anno, mese = meseLettura.split('-')

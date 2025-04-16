@@ -864,6 +864,7 @@ def get_record_attachments(request):
     data = json.loads(request.body)
     tableid = data.get('tableid')
     recordid = data.get('recordid')
+
     
     attachments=HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordid{tableid}_='{recordid}'")
     attachment_list=[]
