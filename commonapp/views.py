@@ -630,6 +630,8 @@ def save_record_fields(request):
 
         # Salva il percorso relativo o assoluto, a seconda delle esigenze
         record.values[clean_key] = record_path
+
+    record.values['stato']='Ricevuto'
     record.save()
 
     return JsonResponse({"success": True, "detail": "Campi del record salvati con successo"})
