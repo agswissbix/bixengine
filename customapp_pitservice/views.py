@@ -40,7 +40,7 @@ def stampa_bollettino(request):
 
     try:
         record_dipendente = UserRecord('dipendente', recordid_dipendente) if recordid_dipendente.strip() else None
-        if record_dipendente and record_dipendente.values is None:
+        if record_dipendente and record_dipendente.values is None: 
             record_dipendente = None
     except:
         record_dipendente = None
@@ -139,6 +139,47 @@ def stampa_bollettino_test(request):
     config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
     
     content = render_to_string('pdf/bollettino_test.html', data)
+
+    filename_with_path = os.path.dirname(os.path.abspath(__file__))
+    filename_with_path = filename_with_path.rsplit('views', 1)[0]
+    filename_with_path = filename_with_path + '\\static\\pdf\\' + filename
+    pdfkit.from_string(
+    content,
+    filename_with_path,
+    configuration=config,
+    options={
+        "enable-local-file-access": "",
+        # "quiet": ""  # <-- rimuovilo!
+    }
+)
+
+
+    #return HttpResponse(content)
+
+    try:
+        with open(filename_with_path, 'rb') as fh:
+            response = HttpResponse(fh.read(), content_type="application/pdf")
+            response['Content-Disposition'] = f'inline; filename={filename}'
+            return response
+        return response
+
+    finally:
+        os.remove(filename_with_path)
+
+@csrf_exempt
+def stampa_gasoli(request):
+    data={}
+    filename='gasolio.pdf'
+    
+    recordid_bollettino = ''
+    data = json.loads(request.body)
+    recordid_bollettino = data.get('recordid')
+    
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
+    config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
+    
+    content = render_to_string('pdf/report_gasolio_test.html', data)
 
     filename_with_path = os.path.dirname(os.path.abspath(__file__))
     filename_with_path = filename_with_path.rsplit('views', 1)[0]

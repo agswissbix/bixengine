@@ -872,3 +872,4 @@ def get_record_attachments(request):
     response={ "attachments": attachment_list}
     print(response)
     return JsonResponse(response)
+
