@@ -929,7 +929,8 @@ def get_record_attachments(request):
         recordid=attachment['recordid_']
         file=attachment['file']
         type=attachment['type']
-        attachment_list.append({'recordid':recordid,'file':file,'type':type})
+        note=attachment['note']
+        attachment_list.append({'recordid':recordid,'file':file,'type':type, 'note':note})
         
     response={ "attachments": attachment_list}
     print(response)
