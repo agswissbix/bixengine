@@ -12,6 +12,7 @@ from django import template
 from bs4 import BeautifulSoup
 from django.db.models import OuterRef, Subquery
 from django.core.mail import send_mail, BadHeaderError, EmailMessage
+import os
 
 
 class HelpderDB:
@@ -91,8 +92,9 @@ class HelpderDB:
             attachments=attachment
         )
         email.content_subtype = "html"
-        if attachment:
+        if attachment and os.path.exists(attachment):
             email.attach_file(attachment)
+      
         send_return = email.send(fail_silently=False)
 
         with connections['default'].cursor() as cursor:

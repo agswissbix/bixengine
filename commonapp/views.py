@@ -686,13 +686,57 @@ def prepara_email(request):
     tableid= data.get("tableid")
     recordid= data.get("recordid")
     print(tableid,recordid)
+
+
+    rendiconto_recordid=recordid
+    rendiconto_record=UserRecord('rendicontolavanderia',rendiconto_recordid)
+    allegato_name=rendiconto_record.fields['allegato']
+    mese=rendiconto_record.values['mese'][3:]
+    anno=rendiconto_record.values['anno']
+    stabile_recordid=rendiconto_record.values['recordidstabile_']
+    stabile_record=UserRecord('stabile',stabile_recordid)
+    stabile_riferimento=stabile_record.values['riferimento']
+    stabile_indirizzo=stabile_record.values['indirizzo']
+    stabile_citta=stabile_record.values['citta']
+    sql=f"SELECT * FROM user_contattostabile WHERE deleted_='N' AND recordidstabile_='{stabile_recordid}'"
+    row=HelpderDB.sql_query_row(sql)
+    contatto_emai=''
+    if row:
+        contatto_recordid=row['recordidcontatti_']
+        contatto_record=UserRecord('contatti',contatto_recordid)
+        if contatto_record:
+            contatto_emai=contatto_record.fields['email']
+
+    # Definisci il nome e il percorso del file PDF sul server
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if not allegato_name:
+        allegato_name='dummy.pdf'
+    pdf_path = os.path.join(base_dir, f"attachments\\{allegato_name}")
+
+    subject=f"Resoconto ricariche tessere lavanderia - {stabile_riferimento} - {mese} {anno}"
+
+    body=f"""
+                Egregi Signori,<br/>
+                <br/>
+                <br/>
+                <br/>
+                con la presente in allegato trasmettiamo il resoconto delle lavanderie dello stabile in {stabile_indirizzo} a {stabile_citta}.<br/>
+                <br/>
+                <br/>
+                <br/>
+                Restiamo volentieri a disposizione e porgiamo cordiali saluti.<br/>
+                <br/>
+                <br/>
+                <br/>
+        """
+
     email_fields = {
-        "to": "to backend",
-        "cc": "cc backend",
-        "bcc": "bcc backend",	
-        "subject": f"subject backend {recordid}",
-        "text": "text backend",
-        "attachment": "allegato backend"
+        "to": contatto_emai,
+        "cc": "segreteria@swissbix.ch",
+        "bcc": "",	
+        "subject": subject,
+        "text": 'test',
+        "attachment": "allegato"
     }
     return JsonResponse({"success": True, "emailFields": email_fields})
 
@@ -793,7 +837,12 @@ def send_emails(request):
                 file_path = os.path.join(settings.MEDIA_ROOT, email['attachment'])
                 
                 # Verifica che il file esista
-                if os.path.exists(file_path):
+                if default_storage.exists(file_path):
+                    full_path = default_storage.path(file_path)
+                else:
+                    full_path = os.path.join(settings.MEDIA_ROOT, file_path)
+                if os.path.exists(full_path):
+                    attachment_path = full_path
                     with open(file_path, 'rb') as fh:
                         file_data = fh.read()
                         file_name = os.path.basename(file_path)
@@ -816,7 +865,7 @@ def send_emails(request):
             email['cc'], 
             email['ccn'], 
             email['recordid_'], 
-            attachment_data
+            attachment_path
         )
 
     return HttpResponse("Email inviate con successo!")
