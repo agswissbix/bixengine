@@ -697,7 +697,9 @@ def prepara_email(request):
 
 @csrf_exempt
 def save_email(request):
-    print('save_email')
+    data = json.loads(request.body)
+    email_data = data.get('emailData')
+    print(email_data)
     return JsonResponse({"success": True})
 
 @csrf_exempt
