@@ -686,11 +686,12 @@ def prepara_email(request):
     tableid= data.get("tableid")
     recordid= data.get("recordid")
     email_fields = {
-        "cc": "to backend",
+        "to": "to backend",
         "cc": "cc backend",
         "bcc": "bcc backend",	
         "subject": f"subject backend {recordid}",
         "text": "text backend",
+        "attachment": "allegato backend"
     }
     return JsonResponse({"success": True, "emailFields": email_fields})
 
