@@ -154,7 +154,6 @@ def stampa_bollettino_test(request):
 )
 
 
-    #return HttpResponse(content)
 
     try:
         with open(filename_with_path, 'rb') as fh:
@@ -169,17 +168,39 @@ def stampa_bollettino_test(request):
 @csrf_exempt
 def stampa_gasoli(request):
     data={}
-    filename='gasolio.pdf'
-    
-    recordid_bollettino = ''
+    filename=''
+    recordid_stabile = ''
     data = json.loads(request.body)
-    recordid_bollettino = data.get('recordid')
-    
+    if request.method == 'POST':
+        recordid_stabile = data.get('recordid')
+        checkLetture=data.get('checkLetture')
+        meseLettura=data.get('meseLettura')
+        anno, mese = meseLettura.split('-')
     script_dir = os.path.dirname(os.path.abspath(__file__))
     wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
     config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
     
-    content = render_to_string('pdf/report_gasolio_test.html', data)
+    record_stabile=UserRecord('stabile',recordid_stabile)
+    data['stabile']=record_stabile.fields
+    sql=f"""
+    SELECT t.recordid_,t.anno,t.mese,t.datalettura,t.lettura, i.riferimento, i.livellominimo, i.capienzacisterna
+    FROM user_letturagasolio t
+    INNER JOIN (
+        SELECT recordidinformazionigasolio_, MAX(datalettura) AS max_datalettura
+        FROM user_letturagasolio
+        WHERE anno='{anno}' AND mese like '%{mese}%' AND deleted_='N' AND recordidstabile_ = '{recordid_stabile}'
+        GROUP BY recordidinformazionigasolio_
+        
+    ) subquery
+    ON t.recordidinformazionigasolio_ = subquery.recordidinformazionigasolio_ 
+    AND t.datalettura = subquery.max_datalettura
+    INNER JOIN user_informazionigasolio i
+    ON t.recordidinformazionigasolio_ = i.recordid_
+    WHERE t.recordidstabile_ = '{recordid_stabile}' AND t.deleted_ = 'N' 
+            """
+    ultimeletturegasolio = HelpderDB.sql_query(sql)
+    data['ultimeletturegasolio']=ultimeletturegasolio
+    content = render_to_string('pdf/gasolio.html', data)
 
     filename_with_path = os.path.dirname(os.path.abspath(__file__))
     filename_with_path = filename_with_path.rsplit('views', 1)[0]
@@ -192,10 +213,9 @@ def stampa_gasoli(request):
         "enable-local-file-access": "",
         # "quiet": ""  # <-- rimuovilo!
     }
-)
+    )
 
 
-    #return HttpResponse(content)
 
     try:
         with open(filename_with_path, 'rb') as fh:
@@ -206,3 +226,4 @@ def stampa_gasoli(request):
 
     finally:
         os.remove(filename_with_path)
+
