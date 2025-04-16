@@ -682,11 +682,15 @@ def get_record_linked_tables(request):
 
 @csrf_exempt
 def prepara_email(request):
+    data = json.loads(request.body)
+    tableid= data.get("tableid")
+    recordid= data.get("recordid")
     email_fields = {
-        "cc": "cc",
-        "bcc": "bcc",	
-        "subject": "subject",
-        "text": "email text",
+        "cc": "to backend",
+        "cc": "cc backend",
+        "bcc": "bcc backend",	
+        "subject": f"subject backend {recordid}",
+        "text": "text backend",
     }
     return JsonResponse({"success": True, "emailFields": email_fields})
 
