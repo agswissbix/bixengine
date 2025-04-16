@@ -293,6 +293,11 @@ class UserRecord:
             if field['fieldtypewebid'] == 'file':
                 fieldtype='Attachment'
 
+            if not Helper.isempty(field['lookuptableid']):
+                fieldtype='Categoria' 
+                items=HelpderDB.sql_query(f"SELECT * FROM sys_lookup_table_item WHERE lookuptableid='{field['lookuptableid']}'")
+                insert_field['lookupitems']=items
+
             insert_field['fieldtype']=fieldtype
 
             if self.recordid=='' and value=='':
