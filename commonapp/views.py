@@ -604,6 +604,10 @@ def save_record_fields(request):
     for saved_fieldid, saved_value in saved_fields_dict.items():
         record.values[saved_fieldid]=saved_value
     
+    
+
+    record.save()
+    recordid=record.recordid
     for file_key, uploaded_file in request.FILES.items():
         # Estrai il nome pulito dal campo
         if file_key.startswith('files[') and file_key.endswith(']'):
@@ -629,7 +633,6 @@ def save_record_fields(request):
 
         # Salva il percorso relativo o assoluto, a seconda delle esigenze
         record.values[clean_key] = record_path
-
     record.save()
 
     if tableid=='bollettini':
