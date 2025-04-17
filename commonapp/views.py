@@ -631,6 +631,14 @@ def save_record_fields(request):
         # Salva il percorso relativo o assoluto, a seconda delle esigenze
         record.values[clean_key] = record_path
     record.save()
+    
+    if tableid=='bollettini':
+        recordid_stabile=record.values['recordidstabile_']
+        if recordid_stabile:
+            record_stabile=UserRecord('stabile',recordid_stabile)
+            recordid_cliente=record_stabile.values['recordidcliente_']
+            record.values['recordidcliente_']=recordid_cliente
+            record.save()
 
     return JsonResponse({"success": True, "detail": "Campi del record salvati con successo"})
 
