@@ -927,7 +927,7 @@ def get_record_attachments(request):
     tableid = data.get('tableid')
     recordid = data.get('recordid')
 
-    if tableid == 'stabile':
+    if tableid == 'bollettinitrasporto':
         attachments=HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordid{tableid}_='{recordid}'")
         attachment_list=[]
         for attachment in attachments:
