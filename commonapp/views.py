@@ -632,6 +632,13 @@ def save_record_fields(request):
 
     record.save()
 
+    if tableid=='bollettini':
+        recordid_stabile=record.values['recordidstabile_']
+        if recordid_stabile:
+            record_stabile=UserRecord('stabile',recordid_stabile)
+            recordid_cliente=record_stabile.values['recordidcliente_']
+            record.values['recordidcliente_']=recordid_cliente
+            record.save()
     return JsonResponse({"success": True, "detail": "Campi del record salvati con successo"})
 
     
