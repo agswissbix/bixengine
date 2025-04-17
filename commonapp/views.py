@@ -1031,5 +1031,16 @@ def get_record_attachments(request):
         response={ "attachments": attachment_list}
         print(response)
         return JsonResponse(response)
+    
+@csrf_exempt
+def get_card_active_tab(request):
+    data = json.loads(request.body)
+    tableid = data.get('tableid')
+
+    sql=f"SELECT * FROM sys_user_table_settings WHERE tableid='{tableid}' AND settingid='scheda_active_tab'"
+    query_result=HelpderDB.sql_query_row(sql)
+    active_tab=query_result['value']
+    response={ "activeTab": active_tab}
+    return JsonResponse(response)
 
 

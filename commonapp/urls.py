@@ -33,6 +33,7 @@ urlpatterns = [
     path('get_form_data/', get_form_data, name='get_form_data'),
     path('export_excel/', export_excel, name='export_excel'),
     path('get_record_attachments/', get_record_attachments, name='get_record_attachments'),    
+    path('get_card_active_tab/', get_card_active_tab, name='get_card_active_tab'),
     
 ]
 
