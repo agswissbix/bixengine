@@ -337,10 +337,27 @@ def get_active_server(request):
     active_server = HelpderDB.sql_query_row("SELECT value FROM sys_settings WHERE setting='cliente_id'")
     return JsonResponse({"activeServer": active_server['value']})
 
-
 @csrf_exempt
 def delete_record(request):
-    return JsonResponse({"success": True, "detail": "Record eliminato con successo"})
+    try:
+        data = json.loads(request.body)
+        recordid = data.get("recordid")
+        tableid = data.get("tableid")
+
+        if not recordid or not tableid:
+            return JsonResponse({"success": False, "detail": "recordid o tableid mancante"}, status=400)
+
+        # Esegui l'UPDATE marcando il record come cancellato
+        sql = f"UPDATE user_{tableid} SET deleted_='Y' WHERE recordid_={recordid}"
+        HelpderDB.sql_execute(sql)  # usa i parametri per evitare SQL injection
+
+        return JsonResponse({"success": True, "detail": "Record eliminato con successo"})
+    
+    except json.JSONDecodeError:
+        return JsonResponse({"success": False, "detail": "JSON non valido"}, status=400)
+    
+    except Exception as e:
+        return JsonResponse({"success": False, "detail": f"Errore interno: {str(e)}"}, status=500)
 
 
 def get_table_records(request):
@@ -604,7 +621,10 @@ def save_record_fields(request):
     for saved_fieldid, saved_value in saved_fields_dict.items():
         record.values[saved_fieldid]=saved_value
     
+    
 
+    record.save()
+    recordid=record.recordid
     for file_key, uploaded_file in request.FILES.items():
         # Estrai il nome pulito dal campo
         if file_key.startswith('files[') and file_key.endswith(']'):
@@ -639,6 +659,85 @@ def save_record_fields(request):
             recordid_cliente=record_stabile.values['recordidcliente_']
             record.values['recordidcliente_']=recordid_cliente
             record.save()
+
+    if tableid=='bollettini':
+        recordid_stabile=record.values['recordidstabile_']
+        if recordid_stabile:
+            record_stabile=UserRecord('stabile',recordid_stabile)
+            recordid_cliente=record_stabile.values['recordidcliente_']
+            record.values['recordidcliente_']=recordid_cliente
+            record.save()
+    
+    if tableid == 'stabile':
+        stabile_record = UserRecord('stabile', recordid)
+        if Helper.isempty(stabile_record.values['titolo_stabile']):
+            stabile_record.values['titolo_stabile']=""
+        riferimento=stabile_record.values['titolo_stabile']+" "+stabile_record.values['indirizzo']
+        stabile_record.values['riferimento']=riferimento
+        stabile_record.save()
+        sql_riferimentocompleto=f"""
+            UPDATE user_stabile AS stabile
+            JOIN user_cliente AS cliente
+            ON stabile.recordidcliente_ = cliente.recordid_
+            SET stabile.riferimentocompleto = CONCAT(cliente.nome_cliente, ' ', stabile.riferimento);
+        """
+        HelpderDB.sql_execute(sql_riferimentocompleto)
+
+    if tableid == 'contatti':
+        contatto_record = UserRecord('contatti', recordid)
+        if Helper.isempty(contatto_record.values['nome']):
+            contatto_record.values['nome']=""
+        if Helper.isempty(contatto_record.values['cognome']):
+            contatto_record.values['cognome']=""
+        riferimento=contatto_record.values['nome']+" "+contatto_record.values['cognome']
+        contatto_record.values['riferimento']=riferimento
+        contatto_record.save()
+
+    if tableid == 'contattostabile':
+        contattostabile_record = UserRecord('contattostabile', recordid)
+        contatto_record=UserRecord('contatti',contattostabile_record.values['recordidcontatti_'])
+        contattostabile_record.values['nome']=contatto_record.values['nome']   
+        contattostabile_record.values['cognome']=contatto_record.values['cognome']
+        contattostabile_record.values['email']=contatto_record.values['email']
+        contattostabile_record.values['telefono']=contatto_record.values['telefono']
+        contattostabile_record.values['ruolo']=contatto_record.values['ruolo']
+        contattostabile_record.save()
+
+
+    # ---BOLLETTINI---
+    if tableid == 'bollettini':
+        bollettino_record = UserRecord('bollettini', recordid)
+        tipo_bollettino=bollettino_record.values['tipo_bollettino']
+        nr=bollettino_record.values['nr']   
+        if not tipo_bollettino:
+            tipo_bollettino=''
+        sql="SELECT * FROM user_bollettini WHERE tipo_bollettino='"+tipo_bollettino+"' AND deleted_='n' ORDER BY nr desc LIMIT 1"
+        bollettino_recorddict = HelpderDB.sql_query_row(sql)
+        if nr is None:
+            if bollettino_recorddict['nr'] is None:
+                nr=1
+            else:
+                nr = int(bollettino_recorddict['nr']) + 1
+            bollettino_record.values['nr']=nr
+            
+        allegato=bollettino_record.values['allegato']
+        if allegato:
+            bollettino_record.values['allegatocaricato']='Si'
+        else:
+            bollettino_record.values['allegatocaricato']='No'
+
+        stabile_record = UserRecord('stabile', bollettino_record.values['recordidstabile_'])
+        cliente_recordid=stabile_record.values['recordidcliente_']
+        bollettino_record.values['recordidcliente_']=cliente_recordid
+        bollettino_record.save()
+
+
+    
+   
+
+
+
+
 
     return JsonResponse({"success": True, "detail": "Campi del record salvati con successo"})
 
@@ -744,8 +843,7 @@ def prepara_email(request):
         "bcc": "",	
         "subject": subject,
         "text": 'test',
-        "attachment": "allegato"
-    }
+        "attachment": "allegato"}
     return JsonResponse({"success": True, "emailFields": email_fields})
 
 
@@ -928,16 +1026,18 @@ def get_record_attachments(request):
     tableid = data.get('tableid')
     recordid = data.get('recordid')
 
-    
-    attachments=HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordid{tableid}_='{recordid}'")
-    attachment_list=[]
-    for attachment in attachments:
-        recordid=attachment['recordid_']
-        file=attachment['file']
-        type=attachment['type']
-        attachment_list.append({'recordid':recordid,'file':file,'type':type})
-        
-    response={ "attachments": attachment_list}
-    print(response)
-    return JsonResponse(response)
+    if tableid == 'bollettinitrasporto' or tableid == 'stabile':
+        attachments=HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordid{tableid}_='{recordid}'")
+        attachment_list=[]
+        for attachment in attachments:
+            recordid=attachment['recordid_']
+            file=attachment['file']
+            type=attachment['type']
+            note=attachment['note']
+            attachment_list.append({'recordid':recordid,'file':file,'type':type, 'note':note})
+            
+        response={ "attachments": attachment_list}
+        print(response)
+        return JsonResponse(response)
+
 
