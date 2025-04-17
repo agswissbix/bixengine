@@ -652,13 +652,6 @@ def save_record_fields(request):
         record.values[clean_key] = record_path
     record.save()
 
-    if tableid=='bollettini':
-        recordid_stabile=record.values['recordidstabile_']
-        if recordid_stabile:
-            record_stabile=UserRecord('stabile',recordid_stabile)
-            recordid_cliente=record_stabile.values['recordidcliente_']
-            record.values['recordidcliente_']=recordid_cliente
-            record.save()
     
     if tableid == 'stabile':
         stabile_record = UserRecord('stabile', recordid)
@@ -703,14 +696,13 @@ def save_record_fields(request):
         nr=bollettino_record.values['nr']   
         if not tipo_bollettino:
             tipo_bollettino=''
-        sql="SELECT * FROM user_bollettini WHERE tipo_bollettino='"+tipo_bollettino+"' AND deleted_='n' ORDER BY nr desc LIMIT 1"
+        sql="SELECT * FROM user_bollettini WHERE tipo_bollettino='"+tipo_bollettino+"' AND deleted_='N' ORDER BY nr desc LIMIT 1"
         bollettino_recorddict = HelpderDB.sql_query_row(sql)
-        if nr is None:
-            if bollettino_recorddict['nr'] is None:
-                nr=1
-            else:
-                nr = int(bollettino_recorddict['nr']) + 1
-            bollettino_record.values['nr']=nr
+        if bollettino_recorddict['nr'] is None:
+            nr=1
+        else:
+            nr = int(bollettino_recorddict['nr']) + 1
+        bollettino_record.values['nr']=nr
             
         allegato=bollettino_record.values['allegato']
         if allegato:
