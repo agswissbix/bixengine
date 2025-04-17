@@ -659,6 +659,78 @@ def save_record_fields(request):
             recordid_cliente=record_stabile.values['recordidcliente_']
             record.values['recordidcliente_']=recordid_cliente
             record.save()
+    
+    if tableid == 'stabile':
+        stabile_record = UserRecord('stabile', recordid)
+        if Helper.isempty(stabile_record.values['titolo_stabile']):
+            stabile_record.values['titolo_stabile']=""
+        riferimento=stabile_record.values['titolo_stabile']+" "+stabile_record.values['indirizzo']
+        stabile_record.values['riferimento']=riferimento
+        stabile_record.save()
+        sql_riferimentocompleto=f"""
+            UPDATE user_stabile AS stabile
+            JOIN user_cliente AS cliente
+            ON stabile.recordidcliente_ = cliente.recordid_
+            SET stabile.riferimentocompleto = CONCAT(cliente.nome_cliente, ' ', stabile.riferimento);
+        """
+        HelpderDB.sql_execute(sql_riferimentocompleto)
+
+    if tableid == 'contatti':
+        contatto_record = UserRecord('contatti', recordid)
+        if Helper.isempty(contatto_record.values['nome']):
+            contatto_record.values['nome']=""
+        if Helper.isempty(contatto_record.values['cognome']):
+            contatto_record.values['cognome']=""
+        riferimento=contatto_record.values['nome']+" "+contatto_record.values['cognome']
+        contatto_record.values['riferimento']=riferimento
+        contatto_record.save()
+
+    if tableid == 'contattostabile':
+        contattostabile_record = UserRecord('contattostabile', recordid)
+        contatto_record=UserRecord('contatti',contattostabile_record.values['recordidcontatti_'])
+        contattostabile_record.values['nome']=contatto_record.values['nome']   
+        contattostabile_record.values['cognome']=contatto_record.values['cognome']
+        contattostabile_record.values['email']=contatto_record.values['email']
+        contattostabile_record.values['telefono']=contatto_record.values['telefono']
+        contattostabile_record.values['ruolo']=contatto_record.values['ruolo']
+        contattostabile_record.save()
+
+
+    # ---BOLLETTINI---
+    if tableid == 'bollettini':
+        bollettino_record = UserRecord('bollettini', recordid)
+        tipo_bollettino=bollettino_record.values['tipo_bollettino']
+        nr=bollettino_record.values['nr']   
+        if not tipo_bollettino:
+            tipo_bollettino=''
+        sql="SELECT * FROM user_bollettini WHERE tipo_bollettino='"+tipo_bollettino+"' AND deleted_='n' ORDER BY nr desc LIMIT 1"
+        bollettino_recorddict = HelpderDB.sql_query_row(sql)
+        if nr is None:
+            if bollettino_recorddict['nr'] is None:
+                nr=1
+            else:
+                nr = int(bollettino_recorddict['nr']) + 1
+            bollettino_record.values['nr']=nr
+            
+        allegato=bollettino_record.values['allegato']
+        if allegato:
+            bollettino_record.values['allegatocaricato']='Si'
+        else:
+            bollettino_record.values['allegatocaricato']='No'
+
+        stabile_record = UserRecord('stabile', bollettino_record.values['recordidstabile_'])
+        cliente_recordid=stabile_record.values['recordidcliente_']
+        bollettino_record.values['recordidcliente_']=cliente_recordid
+        bollettino_record.save()
+
+
+    
+   
+
+
+
+
+
     return JsonResponse({"success": True, "detail": "Campi del record salvati con successo"})
 
     
@@ -946,7 +1018,7 @@ def get_record_attachments(request):
     tableid = data.get('tableid')
     recordid = data.get('recordid')
 
-    if tableid == 'bollettinitrasporto' or tableid == 'stabili':
+    if tableid == 'bollettinitrasporto' or tableid == 'stabile':
         attachments=HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordid{tableid}_='{recordid}'")
         attachment_list=[]
         for attachment in attachments:
