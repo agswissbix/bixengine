@@ -763,8 +763,7 @@ def prepara_email(request):
         "bcc": "",	
         "subject": subject,
         "text": 'test',
-        "attachment": "allegato"
-    }
+        "attachment": "allegato"}
     return JsonResponse({"success": True, "emailFields": email_fields})
 
 
@@ -947,7 +946,7 @@ def get_record_attachments(request):
     tableid = data.get('tableid')
     recordid = data.get('recordid')
 
-    if tableid == 'bollettinitrasporto':
+    if tableid == 'bollettinitrasporto' or tableid == 'stabili':
         attachments=HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordid{tableid}_='{recordid}'")
         attachment_list=[]
         for attachment in attachments:
