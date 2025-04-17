@@ -935,3 +935,4 @@ def get_record_attachments(request):
     print(response)
     return JsonResponse(response)
 
+
