@@ -930,18 +930,18 @@ def get_record_attachments(request):
     tableid = data.get('tableid')
     recordid = data.get('recordid')
 
-    
-    attachments=HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordid{tableid}_='{recordid}'")
-    attachment_list=[]
-    for attachment in attachments:
-        recordid=attachment['recordid_']
-        file=attachment['file']
-        type=attachment['type']
-        note=attachment['note']
-        attachment_list.append({'recordid':recordid,'file':file,'type':type, 'note':note})
-        
-    response={ "attachments": attachment_list}
-    print(response)
-    return JsonResponse(response)
+    if tableid == 'stabile':
+        attachments=HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordid{tableid}_='{recordid}'")
+        attachment_list=[]
+        for attachment in attachments:
+            recordid=attachment['recordid_']
+            file=attachment['file']
+            type=attachment['type']
+            note=attachment['note']
+            attachment_list.append({'recordid':recordid,'file':file,'type':type, 'note':note})
+            
+        response={ "attachments": attachment_list}
+        print(response)
+        return JsonResponse(response)
 
 
