@@ -698,12 +698,11 @@ def save_record_fields(request):
             tipo_bollettino=''
         sql="SELECT * FROM user_bollettini WHERE tipo_bollettino='"+tipo_bollettino+"' AND deleted_='n' ORDER BY nr desc LIMIT 1"
         bollettino_recorddict = HelpderDB.sql_query_row(sql)
-        if nr is None:
-            if bollettino_recorddict['nr'] is None:
-                nr=1
-            else:
-                nr = int(bollettino_recorddict['nr']) + 1
-            bollettino_record.values['nr']=nr
+        if bollettino_recorddict['nr'] is None:
+            nr=1
+        else:
+            nr = int(bollettino_recorddict['nr']) + 1
+        bollettino_record.values['nr']=nr
             
         allegato=bollettino_record.values['allegato']
         if allegato:
