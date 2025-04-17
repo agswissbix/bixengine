@@ -337,10 +337,27 @@ def get_active_server(request):
     active_server = HelpderDB.sql_query_row("SELECT value FROM sys_settings WHERE setting='cliente_id'")
     return JsonResponse({"activeServer": active_server['value']})
 
-
 @csrf_exempt
 def delete_record(request):
-    return JsonResponse({"success": True, "detail": "Record eliminato con successo"})
+    try:
+        data = json.loads(request.body)
+        recordid = data.get("recordid")
+        tableid = data.get("tableid")
+
+        if not recordid or not tableid:
+            return JsonResponse({"success": False, "detail": "recordid o tableid mancante"}, status=400)
+
+        # Esegui l'UPDATE marcando il record come cancellato
+        sql = f"UPDATE user_{tableid} SET deleted_='Y' WHERE recordid_={recordid}"
+        HelpderDB.sql_execute(sql)  # usa i parametri per evitare SQL injection
+
+        return JsonResponse({"success": True, "detail": "Record eliminato con successo"})
+    
+    except json.JSONDecodeError:
+        return JsonResponse({"success": False, "detail": "JSON non valido"}, status=400)
+    
+    except Exception as e:
+        return JsonResponse({"success": False, "detail": f"Errore interno: {str(e)}"}, status=500)
 
 
 def get_table_records(request):
