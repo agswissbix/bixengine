@@ -74,6 +74,7 @@ def stampa_bollettino(request):
     data['nr'] = get_value_safe(record_bollettino, 'nr')
     data['sostituzionedal'] = get_value_safe(record_bollettino, 'sostituzionedal')
     data['sostituzioneal'] = get_value_safe(record_bollettino, 'sostituzioneal')
+    data['notelavoro'] = get_value_safe(record_bollettino, 'notelavoro')
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
