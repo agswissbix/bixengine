@@ -64,7 +64,7 @@ def stampa_bollettino(request):
     data['cap_cliente'] = get_value_safe(record_cliente, 'cap')
     data['citta_cliente'] = get_value_safe(record_cliente, 'citta')
     data['riferimento'] = get_value_safe(record_stabile, 'riferimento')
-    data['data'] = get_value_safe(record_bollettino, 'data')
+    data['data'] = datetime.datetime.strptime(get_value_safe(record_bollettino, 'data'), "%Y-%m-%d").strftime("%d.%m.%Y")
     data['dipendente'] = f"{get_value_safe(record_dipendente, 'nome')} {get_value_safe(record_dipendente, 'cognome')}".strip()
     data['informazioni'] = get_value_safe(record_bollettino, 'informazioni')
     data['contattatoda'] = get_value_safe(record_bollettino, 'contattatoda')
@@ -74,6 +74,7 @@ def stampa_bollettino(request):
     data['nr'] = get_value_safe(record_bollettino, 'nr')
     data['sostituzionedal'] = get_value_safe(record_bollettino, 'sostituzionedal')
     data['sostituzioneal'] = get_value_safe(record_bollettino, 'sostituzioneal')
+    data['notelavoro'] = get_value_safe(record_bollettino, 'notelavoro')
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
