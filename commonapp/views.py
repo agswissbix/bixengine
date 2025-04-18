@@ -1029,10 +1029,111 @@ def get_card_active_tab(request):
     data = json.loads(request.body)
     tableid = data.get('tableid')
 
+    sql=f"SELECT * FROM sys_user_table_settings WHERE tableid='{tableid}' AND settingid='card_tabs'"
+    query_result=HelpderDB.sql_query_row(sql)
+    if not query_result:
+        card_tabs = ['Campi','Collegati']
+    else:
+        card_tabs=query_result['value']
+        card_tabs=card_tabs.split(',')
+
+
+    
+
     sql=f"SELECT * FROM sys_user_table_settings WHERE tableid='{tableid}' AND settingid='scheda_active_tab'"
     query_result=HelpderDB.sql_query_row(sql)
-    active_tab=query_result['value']
-    response={ "activeTab": active_tab}
+
+    if not query_result:
+        active_tab = ''
+    else:
+        active_tab=query_result['value']
+
+    if active_tab not in card_tabs:
+        active_tab=card_tabs[0]
+
+    response = {
+        "cardTabs": card_tabs,
+        "activeTab": active_tab
+    }
     return JsonResponse(response)
+
+
+def get_favorite_tables(request):
+    data = json.loads(request.body)
+    sys_user_id = Helper.get_userid(request)
+    context = dict()
+    
+    query = "SELECT tableid FROM sys_user_table_order WHERE userid = '{}'".format(sys_user_id)
+    with connection.cursor() as cursor:
+        cursor.execute(
+            query
+        )
+        tables = HelpderDB.dictfetchall(cursor)
+
+    if not tables:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT tableid FROM sys_user_table_order WHERE userid = 1"
+            )
+            tables = HelpderDB.dictfetchall(cursor)
+
+    query = f"SELECT tableid FROM sys_user_favorite_tables WHERE sys_user_id = {sys_user_id}"
+    with connection.cursor() as cursor:
+        cursor.execute(
+            query
+        )
+        favorite_tables = HelpderDB.dictfetchall(cursor)
+
+    i = 0
+    for table in tables:
+        if i < len(favorite_tables) and table['tableid'] == favorite_tables[i]['tableid']:
+            table['favorite'] = True
+            i += 1
+        else:
+            table['favorite'] = False
+
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT * FROM sys_table")
+        all_tables = HelpderDB.dictfetchall(cursor)
+
+    for a, table in enumerate(all_tables):
+        for b, t in enumerate(tables):
+            if t['tableid'] == table['id']:
+                tables[b]['description'] = table['description']
+
+    context['tables'] = [
+    {
+        "itemcode": str(table["tableid"]),
+        "itemdesc": table.get("description", ""),
+        "favorite": table.get("favorite", False)
+    }
+    for table in tables
+]
+
+
+    return JsonResponse({"tables": context['tables']})
+
+def save_favorite_tables(request):
+    fav_tables = request.POST.get('tables')
+    fav_tables = json.loads(fav_tables)
+    sys_user_id = Helper.get_userid(request.user.id)
+
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "DELETE FROM sys_user_favorite_tables where sys_user_id = %s",
+            [sys_user_id]
+        )
+
+    with connection.cursor() as cursor:
+        for table in fav_tables:
+            cursor.execute(
+                "INSERT INTO sys_user_favorite_tables(sys_user_id, tableid) VALUES (%s, %s)",
+                [sys_user_id, table]
+            )
+
+    return JsonResponse({'success': True})
+
+
 
 
