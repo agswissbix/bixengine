@@ -64,7 +64,7 @@ def stampa_bollettino(request):
     data['cap_cliente'] = get_value_safe(record_cliente, 'cap')
     data['citta_cliente'] = get_value_safe(record_cliente, 'citta')
     data['riferimento'] = get_value_safe(record_stabile, 'riferimento')
-    data['data'] = get_value_safe(record_bollettino, 'data')
+    data['data'] = datetime.datetime.strptime(get_value_safe(record_bollettino, 'data'), "%Y-%m-%d").strftime("%d.%m.%Y")
     data['dipendente'] = f"{get_value_safe(record_dipendente, 'nome')} {get_value_safe(record_dipendente, 'cognome')}".strip()
     data['informazioni'] = get_value_safe(record_bollettino, 'informazioni')
     data['contattatoda'] = get_value_safe(record_bollettino, 'contattatoda')
