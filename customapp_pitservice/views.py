@@ -17,7 +17,7 @@ from commonapp.helper import *
 def stampa_bollettino(request):
     post_data = json.loads(request.body)
     data = {}
-    filename = 'bollettino.pdf'
+    
 
     recordid_bollettino = ''
     if request.method == 'POST':
@@ -95,7 +95,7 @@ def stampa_bollettino(request):
     if tipo_bollettino=='Giardino':
         content = render_to_string('pdf/bollettino_giardino.html', data)
 
-
+    filename = f"bollettino Nr.{data['nr']}.pdf"
     filename_with_path = os.path.dirname(os.path.abspath(__file__))
     filename_with_path = filename_with_path.rsplit('views', 1)[0]
     filename_with_path = filename_with_path + '\\static\\pdf\\' + filename

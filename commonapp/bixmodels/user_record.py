@@ -26,6 +26,7 @@ from commonapp.bixmodels.helper_db import *
 from commonapp.bixmodels.helper_sys import *
 from commonapp.helper import *
 from commonapp.bixmodels.sys_field import SysField  # Import SysField if it exists in this module
+from datetime import date
 
 bixdata_server = os.environ.get('BIXDATA_SERVER')
 
@@ -263,8 +264,8 @@ class UserRecord:
                 fieldtype='Data'
                 defaultvalue=self.fields[fieldid]['defaultvalue']
                 if defaultvalue == '$today$':
-                    defaultcode='2025-04-10'
-                    defaultvalue='2025-04-10'
+                    defaultcode=date.today().strftime('%Y-%m-%d')
+                    defaultvalue=date.today().strftime('%Y-%m-%d')
                     
 
             if self.tableid == 'telefonate' and fieldid == 'ora_inizio':
