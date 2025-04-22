@@ -737,6 +737,49 @@ def get_pitservice_pivot_lavanderia(request):
 
         ]
 
+    if tableid == 'dipendente':
+        sql="SELECT * FROM user_dipendente  WHERE  deleted_='N' ORDER BY ruolo"
+        query_result=HelpderDB.sql_query(sql)
+
+        gruppi_per_ruolo = defaultdict(list)
+        for record in query_result:
+            ruolo = record['ruolo']
+            gruppi_per_ruolo[ruolo].append(record)
+        
+        
+        
+        for ruolo, records in gruppi_per_ruolo.items():
+            group = {}
+            
+           
+            group['groupKey']=ruolo
+            group['level']=ruolo
+            group_fields = [{"fieldid": "ruolo", "value": ruolo, "css": ""}]
+            group["fields"] = group_fields
+            group['subGroups']=[]
+            group["rows"] = []
+            # Costruiamo le righe: in questo esempio una sola riga per cliente
+            # Per ogni mese verifichiamo se esiste un record per quel mese
+            for record in records:
+                row = {"recordid": record['recordid_'], "css": "#", "fields": []}
+                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": record['cognome']})
+                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": record['nome']})
+                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": record['email']})
+                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": record['telefono']})
+                group["rows"].append(row)
+            
+            
+            response_data["groups"].append(group)
+
+
+        response_data["columns"] = [
+            {"fieldtypeid": "Parola", "desc": ""},
+            {"fieldtypeid": "Parola", "desc": "Cognome"},
+            {"fieldtypeid": "Parola", "desc": "Nome"},
+            {"fieldtypeid": "Parola", "desc": "Email"},
+            {"fieldtypeid": "Parola", "desc": "Telefono"}
+
+        ]
     
 
     return JsonResponse(response_data)
@@ -947,7 +990,7 @@ def prepara_email(request):
 
     email_fields = {
         "to": contatto_emai,
-        "cc": "alessandro.galli@swissbix.ch",
+        "cc": "contabilita@swissbix.ch",
         "bcc": "",	
         "subject": subject,
         "text": body,

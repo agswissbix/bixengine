@@ -86,7 +86,7 @@ class HelpderDB:
         msg = EmailMultiAlternatives(
             subject      = subject,
             body         = text_message,          # plain‑text
-            from_email   = "bixdata@sender.swissbix.ch",
+            from_email   = "pitservice-bixdata@sender.swissbix.ch",
             to           = to_list,
             cc           = cc,
             bcc          = bcc,
