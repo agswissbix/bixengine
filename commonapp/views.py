@@ -402,6 +402,127 @@ def get_table_records(request):
     return JsonResponse(response_data)
 
 
+def get_pitservice_pivot_lavanderiaDEV(request):
+    # response_data_dev.py  – dati di esempio
+    response_data_dev = {
+        "groups": [
+            {   # Livello 0: Cliente A
+                "groupKey": "ClienteA",
+                "level": 0,
+                "fields": [
+                    {"value": "Marvel Gestioni e Immobili Sagl", "css": ""},
+                    {"value": "Totale Cliente A", "css": "font-semibold"},
+                    {"value": "", "css": ""},
+                    {"value": "", "css": ""},
+                    {"value": "5000", "css": "font-bold"},
+                ],
+                "subGroups": [
+                    {   # Livello 1: Indirizzo 1
+                        "groupKey": "ClienteA-Indirizzo1",
+                        "level": 1,
+                        "fields": [
+                            {"value": "Progetto Casa Sirio", "css": ""},
+                            {"value": "Totale Indirizzo 1", "css": "italic"},
+                            {"value": "1000", "css": ""},
+                            {"value": "1025", "css": ""},
+                            {"value": "2025", "css": "font-semibold"},
+                        ],
+                        "rows": [
+                            {
+                                "recordid": "1",
+                                "css": "",
+                                "fields": [
+                                    {"value": "Casa Sirio Via Giuseppe Stabile 3", "css": "text-xs"},
+                                    {"value": "1000", "css": ""},
+                                    {"value": "500", "css": ""},
+                                    {"value": "525", "css": ""},
+                                    {"value": "1025", "css": ""},
+                                ],
+                            },
+                            {
+                                "recordid": "1b",
+                                "css": "",
+                                "fields": [
+                                    {"value": "Casa Sirio - Interno B", "css": "text-xs"},
+                                    {"value": "1000", "css": ""},
+                                    {"value": "500", "css": ""},
+                                    {"value": "500", "css": ""},
+                                    {"value": "1000", "css": ""},
+                                ],
+                            },
+                        ],
+                    },
+                    {   # Livello 1: Indirizzo 2
+                        "groupKey": "ClienteA-Indirizzo2",
+                        "level": 1,
+                        "fields": [
+                            {"value": "Progetto San Giorgio", "css": ""},
+                            {"value": "Totale Indirizzo 2", "css": "italic"},
+                            {"value": "1500", "css": ""},
+                            {"value": "1475", "css": ""},
+                            {"value": "2975", "css": "font-semibold"},
+                        ],
+                        "rows": [
+                            {
+                                "recordid": "2",
+                                "css": "",
+                                "fields": [
+                                    {"value": "Condominio San Giorgio", "css": "text-xs"},
+                                    {"value": "1500", "css": ""},
+                                    {"value": "700", "css": ""},
+                                    {"value": "775", "css": ""},
+                                    {"value": "1475", "css": ""},
+                                ],
+                            }
+                        ],
+                    },
+                ],
+            },
+            {   # Livello 0: Cliente B
+                "groupKey": "ClienteB",
+                "level": 0,
+                "fields": [
+                    {"value": "Agenzia Immobiliare Ceresio SA", "css": ""},
+                    {"value": "Totale Cliente B", "css": "font-semibold"},
+                    {"value": "", "css": ""},
+                    {"value": "", "css": ""},
+                    {"value": "6075", "css": "font-bold"},
+                ],
+                "rows": [
+                    {
+                        "recordid": "3",
+                        "css": "",
+                        "fields": [
+                            {"value": "Ufficio Agenzia Ceresio", "css": "text-xs"},
+                            {"value": "2025", "css": ""},
+                            {"value": "1000", "css": ""},
+                            {"value": "1025", "css": ""},
+                            {"value": "2025", "css": ""},
+                        ],
+                    },
+                    {
+                        "recordid": "4",
+                        "css": "",
+                        "fields": [
+                            {"value": "Residenza Salice Via Frontini 8", "css": "text-xs"},
+                            {"value": "4050", "css": ""},
+                            {"value": "2000", "css": ""},
+                            {"value": "2050", "css": ""},
+                            {"value": "4050", "css": ""},
+                        ],
+                    },
+                ],
+            },
+        ],
+        "columns": [
+            {"fieldtypeid": "Parola", "desc": "Nome / Descrizione"},
+            {"fieldtypeid": "Numero", "desc": "Totale Riga/Gruppo"},
+            {"fieldtypeid": "Numero", "desc": "Gennaio"},
+            {"fieldtypeid": "Numero", "desc": "Febbraio"},
+            {"fieldtypeid": "Numero", "desc": "Totale Complessivo"},
+        ],
+    }
+    return JsonResponse(response_data_dev, safe=False)
 
 def get_pitservice_pivot_lavanderia(request):
     # Costruisci la struttura di risposta
@@ -440,10 +561,15 @@ def get_pitservice_pivot_lavanderia(request):
             if recordid_cliente != 'None':
                 record_cliente=UserRecord('cliente',recordid_cliente)
                 nome_cliente = record_cliente.values.get('nome_cliente', '')
+                cliente_recordid=record_cliente.values.get('recordid_', '')
             else:
                 nome_cliente = 'Cliente non definito'
+                cliente_recordid=''
+            group['groupKey']=cliente_recordid
+            group['level']=cliente_recordid
             group_fields = [{"fieldid": "cliente", "value": nome_cliente, "css": ""}]
             group["fields"] = group_fields
+            group['subGroups']=[]
             group["rows"] = []
             # Costruiamo le righe: in questo esempio una sola riga per cliente
             # Per ogni mese verifichiamo se esiste un record per quel mese
@@ -525,10 +651,15 @@ def get_pitservice_pivot_lavanderia(request):
             if recordid_cliente != 'None':
                 record_cliente=UserRecord('cliente',recordid_cliente)
                 nome_cliente = record_cliente.values.get('nome_cliente', '')
+                cliente_recordid=record_cliente.values.get('recordid_', '')
             else:
                 nome_cliente = 'Cliente non definito'
+                cliente_recordid=''
+            group['groupKey']=cliente_recordid
+            group['level']=cliente_recordid
             group_fields = [{"fieldid": "cliente", "value": nome_cliente, "css": ""}]
             group["fields"] = group_fields
+            group['subGroups']=[]
             group["rows"] = []
             # Costruiamo le righe: in questo esempio una sola riga per cliente
             # Per ogni mese verifichiamo se esiste un record per quel mese
@@ -914,37 +1045,29 @@ def stampa_bollettini_test(request):
 @csrf_exempt
 def send_emails(request):
     emails_to_send=[]
-    emails = HelpderDB.sql_query("SELECT * FROM user_email")
-    for email in emails:
-        if email['status'] == 'Da inviare':
-            emails_to_send.append(email)
+    emails = HelpderDB.sql_query("SELECT * FROM user_email WHERE status='Da inviare'")
     
-    for email in emails_to_send:
-        attachment_data = None
+    for email in emails:
+        full_path_attachment = None
         if email['attachment']:
             try:
                 # Costruisci il percorso corretto del file
-                file_path = os.path.join(settings.MEDIA_ROOT, email['attachment'])
+                file_path = os.path.join(settings.UPLOADS_ROOT, email['attachment'])
                 
                 # Verifica che il file esista
                 if default_storage.exists(file_path):
                     full_path = default_storage.path(file_path)
                 else:
-                    full_path = os.path.join(settings.MEDIA_ROOT, file_path)
+                    full_path = os.path.join(settings.UPLOADS_ROOT, file_path)
                 if os.path.exists(full_path):
-                    attachment_path = full_path
-                    with open(file_path, 'rb') as fh:
-                        file_data = fh.read()
-                        file_name = os.path.basename(file_path)
-                        file_content_type = mimetypes.guess_type(file_name)[0]
-                        file_data = base64.b64encode(file_data).decode('utf-8')
-                        attachment_data = f"data:{file_content_type};base64,{file_data}"
+                    full_path_attachment=full_path
+                    
                 else:
                     print(f"File non trovato: {file_path}")
-                    attachment_data = None
+                    full_path_attachment = None
             except Exception as e:
                 print(f"Errore durante la lettura del file: {str(e)}")
-                attachment_data = None
+                full_path_attachment = None
 
         # Invia l'email con o senza allegato
         HelpderDB.send_email(
@@ -955,7 +1078,7 @@ def send_emails(request):
             email['cc'], 
             email['ccn'], 
             email['recordid_'], 
-            attachment_path
+            full_path_attachment
         )
 
     return HttpResponse("Email inviate con successo!")

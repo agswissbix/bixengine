@@ -11,8 +11,14 @@ from django_user_agents.utils import get_user_agent
 from django import template
 from bs4 import BeautifulSoup
 from django.db.models import OuterRef, Subquery
-from django.core.mail import send_mail, BadHeaderError, EmailMessage
+from django.core.mail import send_mail, BadHeaderError
+import mimetypes
 import os
+from pathlib import Path
+from django.core.mail import EmailMessage as DjangoEmailMessage
+from email.mime.image import MIMEImage  # IMPORT NECESSARIO
+
+
 
 
 class HelpderDB:
@@ -64,7 +70,7 @@ class HelpderDB:
         ]
     
     @classmethod
-    def send_email(request=None, emails=None, subject=None, message=None, html_message=None, cc=None, bcc=None, recordid=None, attachment=None):
+    def send_email(request=None, emails=None, subject=None, message=None, html_message='Default', cc=None, bcc=None, recordid=None, attachment=None):
         # Inizializza CC e BCC solo se non sono forniti
         if cc is None:
             cc = []
@@ -82,19 +88,38 @@ class HelpderDB:
         email_fields['bcc'] = bcc
         email_fields['attachment'] = attachment
 
-        email = EmailMessage(
+        email = DjangoEmailMessage(
             subject,
             html_message,
             'bixdata@sender.swissbix.ch',
             email_fields['recipients'],  # Ensure this is a list or tuple
             bcc=bcc,
             cc=cc,
-            attachments=attachment
         )
         email.content_subtype = "html"
         if attachment and os.path.exists(attachment):
-            email.attach_file(attachment)
+             # MIME type (fallback esplicito a application/pdf)
+            mime, _ = mimetypes.guess_type(attachment)
+            mime = mime or "application/pdf"
+            email.attach_file(attachment, mimetype=mime)
+
+        #firma
+        cid = "signature_logo"           # scegli un id qualsiasi (senza <>)
+        image_path="D:\BixProjects\BixData\bixengine\customapp_pitservice\static\images\logos\logo_small_pitservice.jpg"
+        mimetype, _ = mimetypes.guess_type(image_path)
+        if os.path.isfile(image_path):
+            with open(image_path, "rb") as img:
+                image_data = img.read()
+                mime_image = MIMEImage(image_data, _subtype=mimetype.split("/")[1] if mimetype else "jpeg")
+                mime_image.add_header("Content-ID", f"<{cid}>")  # 🔐 deve avere <>
+                mime_image.add_header("Content-Disposition", "inline", filename=os.path.basename(image_path))
+                email.attach(mime_image)
       
+        email.body = (
+            html_message
+            + f'<br><img src="cid:{cid}" alt="logo" style="height:60px;" />'
+        )
+            
         send_return = email.send(fail_silently=False)
 
         with connections['default'].cursor() as cursor:
