@@ -89,7 +89,7 @@ class UserTable:
             if searchTerm_conditions!='':
                 conditions=conditions+f" AND ({searchTerm_conditions}) "   
         
-        sql=f"SELECT {select_fields} from user_{self.tableid} where {conditions}  ORDER BY {orderby} LIMIT 20 "
+        sql=f"SELECT {select_fields} from user_{self.tableid} where {conditions}  ORDER BY {orderby} LIMIT 50 "
         records = HelpderDB.sql_query(sql)
         return records
     
