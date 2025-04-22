@@ -11,11 +11,12 @@ from django_user_agents.utils import get_user_agent
 from django import template
 from bs4 import BeautifulSoup
 from django.db.models import OuterRef, Subquery
-from django.core.mail import send_mail, BadHeaderError, EmailMessage
+from django.core.mail import send_mail, BadHeaderError, EmailMessage, EmailMultiAlternatives
 import mimetypes
 import os
 from django.conf import settings
 from django.core.files.storage import default_storage
+from pathlib import Path
 
 
 class HelpderDB:
@@ -67,34 +68,43 @@ class HelpderDB:
         ]
     
     @classmethod
-    def send_email(cls, emails=None, subject=None, message=None, html_message='Default', cc=None, bcc=None, recordid=None, attachment=None):
-        # Inizializza CC e BCC solo se non sono forniti
-        if cc is None:
-            cc = []
-        if bcc is None:
-            bcc = []
+    @classmethod
+    def send_email(
+        cls, emails, subject,
+        html_message=None,
+        cc=None, bcc=None,
+        recordid=None,
+        attachment=None
+    ):
+        cc       = cls.ensure_list(cc or [])
+        bcc      = cls.ensure_list(bcc or [])
+        to_list  = cls.ensure_list(emails)
 
-        # Ensure emails is a list
-        recipients = cls.ensure_list(emails)
-        bcc = cls.ensure_list(bcc)
-        cc = cls.ensure_list(cc)
+        # 1. corpo testuale minimo
+        text_message = ""
 
-        email = EmailMessage(
-            subject,
-            html_message,
-            'bixdata@sender.swissbix.ch',
-            recipients,  # Ensure this is a list or tuple
-            bcc=bcc,
-            cc=cc,
+        msg = EmailMultiAlternatives(
+            subject      = subject,
+            body         = text_message,          # plain‑text
+            from_email   = "bixdata@sender.swissbix.ch",
+            to           = to_list,
+            cc           = cc,
+            bcc          = bcc,
         )
-        email.content_subtype = "html"
-        if attachment and os.path.exists(attachment):
-             # MIME type (fallback esplicito a application/pdf)
+
+        # 2. versione HTML
+        if html_message:
+            msg.attach_alternative(html_message, "text/html")   # :contentReference[oaicite:0]{index=0}
+
+        # 3. allegato
+        if attachment and Path(attachment).exists():
             mime, _ = mimetypes.guess_type(attachment)
             mime = mime or "application/pdf"
-            email.attach_file(attachment, mimetype=mime)
-      
-        send_return = email.send(fail_silently=False)
+            with open(attachment, "rb") as f:
+                msg.attach(Path(attachment).name, f.read(), mime)
+
+        msg.send(fail_silently=False)
+
 
         with connections['default'].cursor() as cursor:
             cursor.execute("UPDATE user_email SET status = 'Inviata' WHERE recordid_ = %s", [recordid])

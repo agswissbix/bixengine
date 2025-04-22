@@ -545,6 +545,7 @@ def get_pitservice_pivot_lavanderia(request):
                                 aggfunc='sum')
         pivot_df = pivot_df.sort_index(axis=1)
         pivot_array = pivot_df.reset_index().values.tolist()
+        nested_array = Helper.pivot_to_nested_array(pivot_df, include_key_in_leaf=True)
         for row in pivot_array:
             print(row)
         # Raggruppa i record per cliente
@@ -937,15 +938,11 @@ def prepara_email(request):
                 Egregi Signori,<br/>
                 <br/>
                 <br/>
-                <br/>
-                con la presente in allegato trasmettiamo il resoconto delle lavanderie dello stabile in {stabile_indirizzo} a {stabile_citta}.<br/>
-                <br/>
-                <br/>
+                Con la presente in allegato trasmettiamo il resoconto delle lavanderie dello stabile in {stabile_indirizzo} a {stabile_citta}.<br/>
                 <br/>
                 Restiamo volentieri a disposizione e porgiamo cordiali saluti.<br/>
                 <br/>
-                <br/>
-                <br/>
+                <img src="https://pitservice.ch/wp-content/uploads/2023/06/logo-400x157.png"></img>
         """
 
     email_fields = {
@@ -1092,7 +1089,6 @@ def send_emails(request):
             email['recipients'], 
             email['subject'], 
             email['mailbody'], 
-            '', 
             email['cc'], 
             email['ccn'], 
             email['recordid_'], 
