@@ -32,6 +32,7 @@ import pdfkit
 from django.http import HttpResponseForbidden
 import os
 import mimetypes
+import shutil
 
 
 
@@ -912,7 +913,6 @@ def prepara_email(request):
 
     rendiconto_recordid=recordid
     rendiconto_record=UserRecord('rendicontolavanderia',rendiconto_recordid)
-    allegato_name=rendiconto_record.fields['allegato']
     mese=rendiconto_record.values['mese'][3:]
     anno=rendiconto_record.values['anno']
     stabile_recordid=rendiconto_record.values['recordidstabile_']
@@ -927,14 +927,10 @@ def prepara_email(request):
         contatto_recordid=row['recordidcontatti_']
         contatto_record=UserRecord('contatti',contatto_recordid)
         if contatto_record:
-            contatto_emai=contatto_record.fields['email']
+            contatto_emai=contatto_record.values['email']
 
-    # Definisci il nome e il percorso del file PDF sul server
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    if not allegato_name:
-        allegato_name='dummy.pdf'
-    pdf_path = os.path.join(base_dir, f"attachments\\{allegato_name}")
-
+    attachment_fullpath=HelpderDB.get_uploadedfile_fullpath('rendicontolavanderia',rendiconto_recordid,'allegato')
+    attachment_relativepath=HelpderDB.get_uploadedfile_relativepath('rendicontolavanderia',rendiconto_recordid,'allegato')
     subject=f"Resoconto ricariche tessere lavanderia - {stabile_riferimento} - {mese} {anno}"
 
     body=f"""
@@ -954,11 +950,13 @@ def prepara_email(request):
 
     email_fields = {
         "to": contatto_emai,
-        "cc": "segreteria@swissbix.ch",
+        "cc": "alessandro.galli@swissbix.ch",
         "bcc": "",	
         "subject": subject,
-        "text": 'test',
-        "attachment": "allegato"}
+        "text": body,
+        "attachment_fullpath": attachment_fullpath,
+        "attachment_relativepath": attachment_relativepath,
+        }
     return JsonResponse({"success": True, "emailFields": email_fields})
 
 
@@ -968,7 +966,27 @@ def save_email(request):
     email_data = data.get('emailData')
     tableid = data.get('tableid')
     recordid = data.get('recordid')
-    print(tableid, recordid)
+    record_email=UserRecord('email')
+    record_email.values['recipients']=email_data['to']
+    record_email.values['subject']=email_data['subject']    
+    record_email.values['mailbody']=email_data['text']
+    record_email.values['cc']=email_data['cc']
+    record_email.values['ccn']=email_data['bcc']
+    record_email.values['status']="Da inviare"
+    
+    record_email.save()
+    fullpath_originale=HelpderDB.get_uploadedfile_fullpath(tableid,recordid,'allegato')
+    fullpath_email=HelpderDB.get_upload_fullpath('email',record_email.recordid,'attachment')
+    #  Assicurati che la cartella di destinazione esista
+    os.makedirs(os.path.dirname(fullpath_email), exist_ok=True)
+
+    # ------------------ copia dell’allegato -------------
+    if os.path.isfile(fullpath_originale):
+        shutil.copy2(fullpath_originale, fullpath_email)
+    
+    record_email.values['attachment']=f"email/{record_email.recordid}/attachment.pdf"
+    record_email.save()
+
     return JsonResponse({"success": True})
 
 @csrf_exempt

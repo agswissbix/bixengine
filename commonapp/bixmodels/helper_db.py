@@ -11,14 +11,11 @@ from django_user_agents.utils import get_user_agent
 from django import template
 from bs4 import BeautifulSoup
 from django.db.models import OuterRef, Subquery
-from django.core.mail import send_mail, BadHeaderError
+from django.core.mail import send_mail, BadHeaderError, EmailMessage
 import mimetypes
 import os
-from pathlib import Path
-from django.core.mail import EmailMessage as DjangoEmailMessage
-from email.mime.image import MIMEImage  # IMPORT NECESSARIO
-
-
+from django.conf import settings
+from django.core.files.storage import default_storage
 
 
 class HelpderDB:
@@ -70,29 +67,23 @@ class HelpderDB:
         ]
     
     @classmethod
-    def send_email(request=None, emails=None, subject=None, message=None, html_message='Default', cc=None, bcc=None, recordid=None, attachment=None):
+    def send_email(cls, emails=None, subject=None, message=None, html_message='Default', cc=None, bcc=None, recordid=None, attachment=None):
         # Inizializza CC e BCC solo se non sono forniti
         if cc is None:
             cc = []
         if bcc is None:
             bcc = []
 
-        email_fields = dict()
-        email_fields['subject'] = subject
-        email_fields['mailbody'] = message
-        email_fields['date'] = datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')
-        email_fields['timestamp'] = datetime.datetime.now().strftime('%H:%M:%S')
         # Ensure emails is a list
-        email_fields['recipients'] = emails if isinstance(emails, (list, tuple)) else emails.split(';')
-        email_fields['cc'] = cc
-        email_fields['bcc'] = bcc
-        email_fields['attachment'] = attachment
+        recipients = cls.ensure_list(emails)
+        bcc = cls.ensure_list(bcc)
+        cc = cls.ensure_list(cc)
 
-        email = DjangoEmailMessage(
+        email = EmailMessage(
             subject,
             html_message,
             'bixdata@sender.swissbix.ch',
-            email_fields['recipients'],  # Ensure this is a list or tuple
+            recipients,  # Ensure this is a list or tuple
             bcc=bcc,
             cc=cc,
         )
@@ -102,27 +93,59 @@ class HelpderDB:
             mime, _ = mimetypes.guess_type(attachment)
             mime = mime or "application/pdf"
             email.attach_file(attachment, mimetype=mime)
-
-        #firma
-        cid = "signature_logo"           # scegli un id qualsiasi (senza <>)
-        image_path="D:\BixProjects\BixData\bixengine\customapp_pitservice\static\images\logos\logo_small_pitservice.jpg"
-        mimetype, _ = mimetypes.guess_type(image_path)
-        if os.path.isfile(image_path):
-            with open(image_path, "rb") as img:
-                image_data = img.read()
-                mime_image = MIMEImage(image_data, _subtype=mimetype.split("/")[1] if mimetype else "jpeg")
-                mime_image.add_header("Content-ID", f"<{cid}>")  # 🔐 deve avere <>
-                mime_image.add_header("Content-Disposition", "inline", filename=os.path.basename(image_path))
-                email.attach(mime_image)
       
-        email.body = (
-            html_message
-            + f'<br><img src="cid:{cid}" alt="logo" style="height:60px;" />'
-        )
-            
         send_return = email.send(fail_silently=False)
 
         with connections['default'].cursor() as cursor:
             cursor.execute("UPDATE user_email SET status = 'Inviata' WHERE recordid_ = %s", [recordid])
 
         return True
+
+
+    @classmethod 
+    def get_upload_fullpath(cls,tableid,recordid,field):
+        # Costruisci il percorso corretto del file
+        #TODO gestire estensione del file dinamica
+        file_path = os.path.join(settings.UPLOADS_ROOT, f"{tableid}/{recordid}/{field}.pdf")
+        full_path = default_storage.path(file_path)
+        
+        return full_path    
+        
+    @classmethod 
+    def get_uploadedfile_fullpath(cls,tableid,recordid,field):
+        # Costruisci il percorso corretto del file
+        #TODO gestire estensione del file dinamica
+        file_path = os.path.join(settings.UPLOADS_ROOT, f"{tableid}/{recordid}/{field}.pdf")
+        
+        # Verifica che il file esista
+        full_path=""
+        if default_storage.exists(file_path):
+            full_path = default_storage.path(file_path)
+        if os.path.exists(full_path):
+            return full_path
+        else:
+            print(f"File non trovato: {file_path}")
+            return "File non trovato"
+    
+    
+    @classmethod 
+    def get_uploadedfile_relativepath(cls,tableid,recordid,field):
+        # Costruisci il percorso corretto del file
+        #TODO gestire estensione del file dinamica
+        file_path = f"{tableid}/{recordid}/{field}.pdf"
+        return file_path
+    
+    @classmethod
+    def ensure_list(cls,value):
+        """
+        Restituisce sempre una lista di stringhe:
+        • None  → []  
+        • list/tuple → list(value)  
+        • str (con o senza ';') → [..]  (split e strip)
+        """
+        if value is None:
+            return []
+        if isinstance(value, (list, tuple)):
+            return list(value)
+        # qualunque altro oggetto (tipicamente str)
+        return [v.strip() for v in str(value).split(';') if v.strip()]
