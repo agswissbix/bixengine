@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.urls import path
+from django.conf.urls.static import static
 from django.conf import settings
 from commonapp.views import *
 from django.views.static import serve
@@ -36,11 +37,7 @@ urlpatterns = [
     path('get_record_attachments/', get_record_attachments, name='get_record_attachments'),    
     path('get_card_active_tab/', get_card_active_tab, name='get_card_active_tab'),
     path('get_favorite_tables/', get_favorite_tables, name='get_favorite_tables'),
-
-    # Serve i file media senza cache
-    path(
-        'commonapp/media/<path:path>',
-        never_cache(serve),
-        {'document_root': settings.MEDIA_ROOT},
-    ),
+    
 ]
+
+urlpatterns += static(settings.UPLOADS_URL, document_root=settings.UPLOADS_ROOT)
