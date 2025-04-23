@@ -813,7 +813,11 @@ def save_record_fields(request):
 
         # Costruisci il percorso relativo
         file_path = f"uploads/{tableid}/{recordid}/{clean_key}{ext}"
-        record_path=f"{tableid}/{recordid}/{clean_key}{ext}"
+        record_path = f"{tableid}/{recordid}/{clean_key}{ext}"
+
+        # Se il file esiste già, rimuovilo
+        if default_storage.exists(file_path):
+            default_storage.delete(file_path)
 
         # Salva il file e ottieni il percorso relativo salvato
         saved_path = default_storage.save(file_path, uploaded_file)
@@ -1050,12 +1054,19 @@ def get_input_linked(request):
             kyefieldlink=HelpderDB.sql_query_value(sql,'keyfieldlink')
             additional_conditions = ''
             #TODO temp
+            if tableid == 'letturagasolio' and fieldid == 'recordidstabile_':
+                recordid_cliente=formValues['recordidcliente_']
+                if recordid_cliente:
+                    additional_conditions = " AND recordidcliente_ = '"+recordid_cliente+"'"
+
             if tableid == 'letturagasolio' and fieldid == 'recordidinformazionigasolio_':
                 recordid_stabile=formValues['recordidstabile_']
                 if recordid_stabile:
                     additional_conditions = " AND recordidstabile_ = '"+recordid_stabile+"'"
-
-            sql=f"SELECT recordid_ as recordid, {kyefieldlink} as name FROM user_{linkedmaster_tableid} where {kyefieldlink} like '%{searchTerm}%' {additional_conditions} AND deleted_='N' LIMIT 20"
+            if searchTerm:
+                sql=f"SELECT recordid_ as recordid, {kyefieldlink} as name FROM user_{linkedmaster_tableid} where {kyefieldlink} like '%{searchTerm}%' {additional_conditions} AND deleted_='N' LIMIT 20"
+            else:
+                sql=f"SELECT recordid_ as recordid, {kyefieldlink} as name FROM user_{linkedmaster_tableid} where deleted_='N' {additional_conditions} ORDER BY recordid_ desc LIMIT 20 "
 
             query_result=HelpderDB.sql_query(sql)
             items=query_result
