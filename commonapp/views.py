@@ -362,7 +362,7 @@ def delete_record(request):
 
 
 def get_table_records(request):
-    
+    print('Function: get_table_records')
     data = json.loads(request.body)
     tableid = data.get("tableid")
     viewid= data.get("view")
@@ -922,7 +922,11 @@ def get_record_badge(request):
 
     record=UserRecord(tableid,recordid)
     badgeItems=record.get_badge_fields()
-    response={ "badgeItems": badgeItems}
+    return_badgeItems={}
+    for badgeItem in badgeItems:    
+        return_badgeItems[badgeItem['fieldid']] = badgeItem['value']
+
+    response={ "badgeItems": return_badgeItems}
     return JsonResponse(response)
 
 def get_record_card_fields(request):
@@ -1039,11 +1043,19 @@ def get_input_linked(request):
             linkedmaster_tableid=linkedmaster_tableid_array[0]
             tableid=data.get('tableid')
             fieldid=data.get('fieldid')
+            formValues=data.get('formValues')
             # Qui dovresti sostituire i dati di esempio con la tua logica di database
             # o qualsiasi altra fonte di dati.
             sql=f"SELECT keyfieldlink FROM sys_field WHERE tableid='{tableid}' AND fieldid='{fieldid}'"
             kyefieldlink=HelpderDB.sql_query_value(sql,'keyfieldlink')
-            sql=f"SELECT recordid_ as recordid, {kyefieldlink} as name FROM user_{linkedmaster_tableid} where {kyefieldlink} like '%{searchTerm}%' AND deleted_='N' LIMIT 20"
+            additional_conditions = ''
+            #TODO temp
+            if tableid == 'letturagasolio' and fieldid == 'recordidinformazionigasolio_':
+                recordid_stabile=formValues['recordidstabile_']
+                if recordid_stabile:
+                    additional_conditions = " AND recordidstabile_ = '"+recordid_stabile+"'"
+
+            sql=f"SELECT recordid_ as recordid, {kyefieldlink} as name FROM user_{linkedmaster_tableid} where {kyefieldlink} like '%{searchTerm}%' {additional_conditions} AND deleted_='N' LIMIT 20"
 
             query_result=HelpderDB.sql_query(sql)
             items=query_result
