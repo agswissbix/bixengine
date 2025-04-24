@@ -1006,7 +1006,7 @@ def prepara_email(request):
 
     email_fields = {
         "to": contatto_emai,
-        "cc": "alessandro.galli@outlook.com,alessandro.galli@swissbix.ch",
+        "cc": "contabilita@pitservice.ch,segreteria@pitservice.ch",
         "bcc": "",	
         "subject": subject,
         "text": body,
