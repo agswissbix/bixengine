@@ -1006,7 +1006,6 @@ def prepara_email(request):
     body=f"""
                 Egregi Signori,<br/>
                 <br/>
-                <br/>
                 Con la presente in allegato trasmettiamo il resoconto delle lavanderie dello stabile in {stabile_indirizzo} a {stabile_citta}.<br/>
                 <br/>
                 Restiamo volentieri a disposizione e porgiamo cordiali saluti.<br/>
@@ -1183,7 +1182,8 @@ def send_emails(request):
                 cc=email['cc'],
                 bcc=email['ccn'],
                 recordid=email['recordid_'],
-                attachment=full_path_attachment
+                attachment=full_path_attachment,
+                attachment_name=email['attachment_name']
             )
             email_record=UserRecord('email',email['recordid_'])
             email_record.values['status']='Inviata'
