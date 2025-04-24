@@ -1022,6 +1022,7 @@ def prepara_email(request):
         "text": body,
         "attachment_fullpath": attachment_fullpath,
         "attachment_relativepath": attachment_relativepath,
+        "attachment_name": f"rendicontolavanderia_{mese}_{anno}.pdf",
         }
     return JsonResponse({"success": True, "emailFields": email_fields})
 
@@ -1042,6 +1043,7 @@ def save_email(request):
     record_email.values['mailbody']=email_data['text']
     record_email.values['cc']=email_data['cc']
     record_email.values['ccn']=email_data['bcc']
+    record_email.values['attachment_name']=email_data['attachment_name']
     record_email.values['status']="Da inviare"
     
     record_email.save()
@@ -1185,6 +1187,8 @@ def send_emails(request):
             )
             email_record=UserRecord('email',email['recordid_'])
             email_record.values['status']='Inviata'
+            email_record.values['date'] = datetime.datetime.now().strftime("%Y-%m-%d")  # formato aaaa-mm-gg
+            email_record.values['sent_timestamp'] = datetime.datetime.now().strftime("%H:%M:%S")
             email_record.save()
         except Exception as e:
             return HttpResponse(f"Errore invio: {str(e)}")
