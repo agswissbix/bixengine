@@ -42,7 +42,7 @@ class UserTable:
         fields=[]
         for column in columns:
             fields.append(column['fieldid'])
-        records = self.get_records(viewid,searchTerm,conditions_list,fields,offset,limit,orderby)
+        records = self.get_records(viewid,searchTerm,conditions_list,fields,offset,limit,orderby,columns)
         return records
     
     def get_table_records_obj(self,viewid='',searchTerm='', conditions_list=list(),fields=None,offset=0,limit=None,orderby='recordid_ desc',master_tableid=None,master_recordid=None):
@@ -57,7 +57,7 @@ class UserTable:
             records_obj.append(record_obj)
         return records_obj
     
-    def get_records(self,viewid='',searchTerm='', conditions_list=list(),fields=None,offset=0,limit=None,orderby='recordid_ desc'):
+    def get_records(self,viewid='',searchTerm='', conditions_list=list(),fields=None,offset=0,limit=None,orderby='recordid_ desc',columns=None):
         """Ottieni elenco record in base ai parametri di ricerca
 
         Args:
@@ -69,12 +69,15 @@ class UserTable:
             _type_: lista di dict dei risultati
         """ 
         select_fields='*'
+        fromsql=f"FROM user_{self.tableid}"
+
         if fields:
-            select_fields='recordid_'
+            select_fields='user_'+self.tableid+'.recordid_'
             for field in fields:
-                select_fields=select_fields+','+field
+                select_fields=select_fields+',user_'+self.tableid+'.'+field
+
                 
-        conditions="deleted_='N'"
+        conditions=f"user_{self.tableid}.deleted_='N'"
         #conditions=conditions+f" AND companyname like '%{searchTerm}%' " 
         for condition in conditions_list:
             conditions=conditions+f" AND {condition}"   
@@ -82,14 +85,23 @@ class UserTable:
         #searchterm
         if searchTerm:
             searchTerm_conditions=''
-            for field in fields:
+            for column in columns:
+                fieldid=column['fieldid']
                 if searchTerm_conditions!='':
                     searchTerm_conditions=searchTerm_conditions + " OR "
-                searchTerm_conditions=searchTerm_conditions+f"{field} like '%{searchTerm}%' " 
+
+                if fieldid.startswith("_recordid"):
+                    linkedtableid = fieldid[len("_recordid"):]
+                    fromsql=fromsql+f" LEFT JOIN user_{linkedtableid} ON user_{self.tableid}.recordid{linkedtableid}_=user_{linkedtableid}.recordid_ "
+                    searchTerm_conditions=searchTerm_conditions+f"user_{linkedtableid+'.'+column['keyfieldlink']} like '%{searchTerm}%' " 
+                else:
+                    searchTerm_conditions=searchTerm_conditions+f"user_{self.tableid}.{fieldid} like '%{searchTerm}%' "
+
+                
             if searchTerm_conditions!='':
                 conditions=conditions+f" AND ({searchTerm_conditions}) "   
         
-        sql=f"SELECT {select_fields} from user_{self.tableid} where {conditions}  ORDER BY {orderby} LIMIT 50 "
+        sql=f"SELECT {select_fields} {fromsql} where {conditions}  ORDER BY {orderby} LIMIT 50 "
         records = HelpderDB.sql_query(sql)
         return records
     

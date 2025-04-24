@@ -29,7 +29,8 @@ class EmailSender:
         html_message=None,
         cc=None, bcc=None,
         recordid=None,
-        attachment=None
+        attachment=None,
+        attachment_name=None,
     ):
         cc      = cls.ensure_list(cc)
         bcc     = cls.ensure_list(bcc)
@@ -41,7 +42,7 @@ class EmailSender:
         msg = EmailMultiAlternatives(
             subject    = subject,
             body       = text_message,
-            from_email = "pitservice-bixdata@sender.swissbix.ch",
+            from_email = "segreteria@pitservice.ch",
             to         = to_list,
             cc         = cc,
             bcc        = bcc,
@@ -56,7 +57,8 @@ class EmailSender:
             mime, _ = mimetypes.guess_type(attachment)
             mime = mime or "application/pdf"
             with open(attachment, "rb") as f:
-                msg.attach(Path(attachment).name, f.read(), mime)
+                filename = attachment_name or Path(attachment).name
+                msg.attach(filename, f.read(), mime)
 
         msg.send(fail_silently=False)
 

@@ -1001,17 +1001,32 @@ def prepara_email(request):
 
     attachment_fullpath=HelpderDB.get_uploadedfile_fullpath('rendicontolavanderia',rendiconto_recordid,'allegato')
     attachment_relativepath=HelpderDB.get_uploadedfile_relativepath('rendicontolavanderia',rendiconto_recordid,'allegato')
-    subject=f"Resoconto ricariche tessere lavanderia - {stabile_riferimento} - {mese} {anno}"
+    subject=f"Resoconto lavanderia - {stabile_riferimento} - {mese} {anno}"
 
     body=f"""
-                Egregi Signori,<br/>
-                <br/>
-                <br/>
-                Con la presente in allegato trasmettiamo il resoconto delle lavanderie dello stabile in {stabile_indirizzo} a {stabile_citta}.<br/>
-                <br/>
-                Restiamo volentieri a disposizione e porgiamo cordiali saluti.<br/>
-                <br/>
-                <img src="https://pitservice.ch/wp-content/uploads/2023/06/logo-400x157.png"></img>
+
+<p>
+    Egregi Signori,<br/>
+    Con la presente in allegato trasmettiamo il resoconto delle lavanderie dello stabile in {stabile_indirizzo} a {stabile_citta}.<br/>
+    Restiamo volentieri a disposizione e porgiamo cordiali saluti.
+</p>
+
+<table style="border: none; border-collapse: collapse; margin-top: 20px;">
+    <tr>
+        <td style="vertical-align: top; padding-right: 10px;">
+            <img src="https://pitservice.ch/wp-content/uploads/2025/04/minilogo-e1745499609496.png" style="width: 20px; height: auto;" alt="Pit Service Logo">
+        </td>
+        <td style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5;">
+            <strong>Pit Service Sagl</strong><br/>
+            La cura del tuo immobile<br/><br/>
+            <strong>Phone:</strong> 091.993.03.92 <br/>
+            <strong>Email:</strong> info@pitservice.ch <br/>
+            Via San Gottardo 26 <br/>
+            6943 Vezia <br/>
+        </td>
+    </tr>
+</table>
+
         """
 
     email_fields = {
@@ -1022,6 +1037,7 @@ def prepara_email(request):
         "text": body,
         "attachment_fullpath": attachment_fullpath,
         "attachment_relativepath": attachment_relativepath,
+        "attachment_name": f"{stabile_riferimento} - Lavanderia - {mese} - {anno}.pdf",
         }
     return JsonResponse({"success": True, "emailFields": email_fields})
 
@@ -1042,6 +1058,7 @@ def save_email(request):
     record_email.values['mailbody']=email_data['text']
     record_email.values['cc']=email_data['cc']
     record_email.values['ccn']=email_data['bcc']
+    record_email.values['attachment_name']=email_data['attachment_name']
     record_email.values['status']="Da inviare"
     
     record_email.save()
@@ -1181,10 +1198,13 @@ def send_emails(request):
                 cc=email['cc'],
                 bcc=email['ccn'],
                 recordid=email['recordid_'],
-                attachment=full_path_attachment
+                attachment=full_path_attachment,
+                attachment_name=email['attachment_name']
             )
             email_record=UserRecord('email',email['recordid_'])
             email_record.values['status']='Inviata'
+            email_record.values['date'] = datetime.datetime.now().strftime("%Y-%m-%d")  # formato aaaa-mm-gg
+            email_record.values['sent_timestamp'] = datetime.datetime.now().strftime("%H:%M:%S")
             email_record.save()
         except Exception as e:
             return HttpResponse(f"Errore invio: {str(e)}")
