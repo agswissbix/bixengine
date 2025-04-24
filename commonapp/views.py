@@ -921,7 +921,7 @@ def save_record_fields(request):
 
 
 
-    return JsonResponse({"success": True, "detail": "Campi del record salvati con successo"})
+    return JsonResponse({"success": True, "detail": "Campi del record salvati con successo", "recordid": record.recordid})
 
     
 def get_table_views(request):
@@ -1365,6 +1365,26 @@ def save_favorite_tables(request):
             )
 
     return JsonResponse({'success': True})
+
+def send_email_from_record(request):
+    data = json.loads(request.body)
+    recordid = data.get('recordid')
+
+
+    email = HelpderDB.sql_query_row(f"SELECT * FROM user_email WHERE recordid_='{recordid}'")
+    if email:
+        HelpderDB.send_email(
+            emails=email['recipients'],
+            subject=email['subject'],
+            html_message=email['mailbody'],
+            cc=email['cc'],
+            bcc=email['ccn'],
+            recordid=email['recordid_'],
+            attachment=None
+        )
+
+    return JsonResponse({"success": True, "detail": "Email inviata con successo"})
+
 
 
 
