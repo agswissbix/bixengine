@@ -6,11 +6,12 @@ from rest_framework.renderers import JSONRenderer
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.csrf import csrf_exempt
-from commonapp.bixmodels.helper_db import *
 import pdfkit
 from commonapp.bixmodels.user_record import *
 from commonapp.bixmodels.user_table import *
+from commonapp.bixmodels.helper_db import *
 from commonapp.helper import *
+import locale
 
 
 @csrf_exempt
@@ -222,4 +223,65 @@ def stampa_gasoli(request):
 
     finally:
         os.remove(filename_with_path)
+
+
+
+def crea_lista_lavanderie(request):
+    # Extract any needed data from the request, if relevant
+    # mese = request.POST.get('mese')
+    # Ottieni la data attuale
+    # Imposta la localizzazione in italiano
+    post_data = json.loads(request.body)
+    meserichiesto=  post_data.get('mese')
+    locale.setlocale(locale.LC_TIME, "it_IT.utf8")
+
+    now = datetime.datetime.now()
+    current_year=now.year
+    current_month_num = now.month
+    
+    # Mese corrente
+    if meserichiesto == 'mesecorrente':
+        month = current_month_num # Formato numerico (es. 2)
+        year=current_year
+        month_2digit = f"{month:02d}"  # Due cifre (es. "02")
+        month_name = now.strftime("%B").capitalize()  # Nome esteso con prima lettera maiuscola (es. "Febbraio")
+    else:
+        # Mese successivo
+        month = current_month_num + 1 if current_month_num < 12 else 1  # Gestisce il passaggio da dicembre a gennaio
+        year = current_year  if current_month_num < 12 else current_year + 1
+        month_2digit = f"{month:02d}"  # Due cifre (es. "03")
+        month_name = datetime.date(now.year if month > 1 else now.year + 1, month, 1).strftime("%B").capitalize()
+
+    mese=month_2digit+'-'+month_name
+    sql=f"""
+            SELECT DISTINCT recordidstabile_
+            FROM user_informazionilavanderia
+            WHERE deleted_ = 'N'
+            AND recordidstabile_ NOT IN (
+                SELECT recordidstabile_
+                FROM user_rendicontolavanderia
+                WHERE anno = '{year}' 
+                AND mese = '{mese}'
+                AND deleted_ = 'N'
+            );
+
+
+    """
+    informazionilavanderia_records=HelpderDB.sql_query(sql)
+    counter=0
+    for informazionelavanderia in informazionilavanderia_records:
+        record_rendiconto=UserRecord('rendicontolavanderia')
+        record_rendiconto.values['recordidstabile_']=informazionelavanderia['recordidstabile_']
+        record_stabile=UserRecord('stabile',informazionelavanderia['recordidstabile_'])
+        record_rendiconto.values['recordidcliente_']=record_stabile.values['recordidcliente_']
+        record_rendiconto.values['mese']=mese
+        record_rendiconto.values['anno']=year
+        record_rendiconto.values['stato']="Da fare"
+        record_rendiconto.save()
+        counter=counter+1
+    # Return them in a JSON response (or use as needed)
+    return JsonResponse({
+        'success': True,
+        'counter': counter
+    })
 

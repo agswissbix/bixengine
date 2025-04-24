@@ -33,6 +33,7 @@ from django.http import HttpResponseForbidden
 import os
 import mimetypes
 import shutil
+from commonapp.utils.email_sender import EmailSender
 
 
 
@@ -895,6 +896,13 @@ def save_record_fields(request):
         bollettino_record.values['recordidcliente_']=cliente_recordid
         bollettino_record.save()
 
+    
+    if tableid == 'rendicontolavanderia':
+        rendiconto_record = UserRecord('rendicontolavanderia', recordid)
+        if rendiconto_record.values['stato']=='Da fare' and rendiconto_record.values['allegato']:   
+            rendiconto_record.values['stato']='Preparato'
+        rendiconto_record.save()
+
 
     
    
@@ -998,7 +1006,7 @@ def prepara_email(request):
 
     email_fields = {
         "to": contatto_emai,
-        "cc": "contabilita@swissbix.ch",
+        "cc": "alessandro.galli@outlook.com,alessandro.galli@swissbix.ch",
         "bcc": "",	
         "subject": subject,
         "text": body,
@@ -1014,6 +1022,10 @@ def save_email(request):
     email_data = data.get('emailData')
     tableid = data.get('tableid')
     recordid = data.get('recordid')
+    #TODO 
+    record_rendiconto=UserRecord('rendicontolavanderia',recordid)
+    record_rendiconto.values['stato']="Inviato"
+    record_rendiconto.save()
     record_email=UserRecord('email')
     record_email.values['recipients']=email_data['to']
     record_email.values['subject']=email_data['subject']    
@@ -1150,16 +1162,23 @@ def send_emails(request):
                 print(f"Errore durante la lettura del file: {str(e)}")
                 full_path_attachment = None
 
-        # Invia l'email con o senza allegato
-        HelpderDB.send_email(
-            email['recipients'], 
-            email['subject'], 
-            email['mailbody'], 
-            email['cc'], 
-            email['ccn'], 
-            email['recordid_'], 
-            full_path_attachment
-        )
+              
+        try:
+            result = EmailSender.send_email(
+                emails=email['recipients'],
+                subject=email['subject'],
+                html_message=email['mailbody'],
+                cc=email['cc'],
+                bcc=email['ccn'],
+                recordid=email['recordid_'],
+                attachment=full_path_attachment
+            )
+            email_record=UserRecord('email',email['recordid_'])
+            email_record.values['status']='Inviata'
+            email_record.save()
+        except Exception as e:
+            return HttpResponse(f"Errore invio: {str(e)}")
+
 
     return HttpResponse("Email inviate con successo!")
 

@@ -68,7 +68,6 @@ class HelpderDB:
         ]
     
     @classmethod
-    @classmethod
     def send_email(
         cls, emails, subject,
         html_message=None,
