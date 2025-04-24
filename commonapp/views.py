@@ -794,43 +794,53 @@ def save_record_fields(request):
         saved_fields_dict = json.loads(saved_fields)
     except json.JSONDecodeError:
         saved_fields_dict = {}
-    record=UserRecord(tableid,recordid)
+    record = UserRecord(tableid, recordid)
     for saved_fieldid, saved_value in saved_fields_dict.items():
-        record.values[saved_fieldid]=saved_value
-    
-    
+        record.values[saved_fieldid] = saved_value
 
     record.save()
-    recordid=record.recordid
+    recordid = record.recordid
+
     for file_key, uploaded_file in request.FILES.items():
         # Estrai il nome pulito dal campo
         if file_key.startswith('files[') and file_key.endswith(']'):
-            clean_key = file_key[6:-1]  # es: "fotostabile"
+            clean_key = file_key[6:-1]
         else:
             clean_key = file_key
 
-        # Ottieni l'estensione del file originale (es: '.jpg', '.pdf')
         _, ext = os.path.splitext(uploaded_file.name)
 
-        # Costruisci il percorso relativo
         file_path = f"uploads/{tableid}/{recordid}/{clean_key}{ext}"
         record_path = f"{tableid}/{recordid}/{clean_key}{ext}"
 
-        # Se il file esiste già, rimuovilo
+        # Salvataggio backup prima di salvare il file originale
+        backup_folder = "C:/bixdata/backup/attachments"
+        os.makedirs(backup_folder, exist_ok=True)
+        backup_filename = f"{tableid}_{recordid}_{clean_key}{ext}"
+        backup_path = os.path.join(backup_folder, backup_filename)
+
+        # Backup prima del salvataggio
+        with open(backup_path, 'wb+') as destination:
+            for chunk in uploaded_file.chunks():
+                destination.write(chunk)
+
+        # 🔁 Riavvolgi il file per riutilizzarlo
+        uploaded_file.seek(0)
+
+        # Ora salva nel percorso principale
         if default_storage.exists(file_path):
             default_storage.delete(file_path)
 
-        # Salva il file e ottieni il percorso relativo salvato
         saved_path = default_storage.save(file_path, uploaded_file)
 
-        # Ottieni il percorso assoluto (solo se default_storage è FileSystemStorage)
+
         if default_storage.exists(saved_path):
             full_path = default_storage.path(saved_path)
         else:
             full_path = os.path.join(settings.MEDIA_ROOT, saved_path)
 
-        # Salva il percorso relativo o assoluto, a seconda delle esigenze
         record.values[clean_key] = record_path
+
     record.save()
 
     
