@@ -37,7 +37,6 @@ urlpatterns = [
     path('get_record_attachments/', get_record_attachments, name='get_record_attachments'),    
     path('get_card_active_tab/', get_card_active_tab, name='get_card_active_tab'),
     path('get_favorite_tables/', get_favorite_tables, name='get_favorite_tables'),
-    path('send_email_from_record/', send_email_from_record, name='send_email_from_record'),
     path('export_excel/', export_excel, name='export_excel'),
     
 ]

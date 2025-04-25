@@ -1164,8 +1164,13 @@ def stampa_bollettini_test(request):
 
 @csrf_exempt
 def send_emails(request):
-    emails_to_send=[]
-    emails = HelpderDB.sql_query("SELECT * FROM user_email WHERE status='Da inviare'")
+    data = json.loads(request.body)
+    recordid = data.get('recordid')
+    if recordid:
+        emails = HelpderDB.sql_query(f"SELECT * FROM user_email WHERE recordid_='{recordid}'")
+    else:
+        emails_to_send=[]
+        emails = HelpderDB.sql_query("SELECT * FROM user_email WHERE status='Da inviare'")
     
     for email in emails:
         full_path_attachment = None
@@ -1385,25 +1390,6 @@ def save_favorite_tables(request):
             )
 
     return JsonResponse({'success': True})
-
-def send_email_from_record(request):
-    data = json.loads(request.body)
-    recordid = data.get('recordid')
-
-
-    email = HelpderDB.sql_query_row(f"SELECT * FROM user_email WHERE recordid_='{recordid}'")
-    if email:
-        HelpderDB.send_email(
-            emails=email['recipients'],
-            subject=email['subject'],
-            html_message=email['mailbody'],
-            cc=email['cc'],
-            bcc=email['ccn'],
-            recordid=email['recordid_'],
-            attachment=None
-        )
-
-    return JsonResponse({"success": True, "detail": "Email inviata con successo"})
 
 
 def export_excel(request):
