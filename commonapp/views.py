@@ -1406,6 +1406,12 @@ def send_email_from_record(request):
     return JsonResponse({"success": True, "detail": "Email inviata con successo"})
 
 
+def export_excel(request):
+    data= json.loads(request.body)
+    tableid = data.get('tableid')
+    return JsonResponse({"success": True, "detail": "Excel esportato con successo"})
+
+
 
 
 
