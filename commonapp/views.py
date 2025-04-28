@@ -978,68 +978,170 @@ def prepara_email(request):
     data = json.loads(request.body)
     tableid= data.get("tableid")
     recordid= data.get("recordid")
+    type= data.get("type")
     print(tableid,recordid)
 
-
-    rendiconto_recordid=recordid
-    rendiconto_record=UserRecord('rendicontolavanderia',rendiconto_recordid)
-    mese=rendiconto_record.values['mese'][3:]
-    anno=rendiconto_record.values['anno']
-    stabile_recordid=rendiconto_record.values['recordidstabile_']
-    stabile_record=UserRecord('stabile',stabile_recordid)
-    stabile_riferimento=stabile_record.values['riferimento']
-    stabile_indirizzo=stabile_record.values['indirizzo']
-    stabile_citta=stabile_record.values['citta']
-    sql=f"SELECT * FROM user_contattostabile WHERE deleted_='N' AND recordidstabile_='{stabile_recordid}'"
-    row=HelpderDB.sql_query_row(sql)
-    contatto_emai=''
-    if row:
-        contatto_recordid=row['recordidcontatti_']
-        contatto_record=UserRecord('contatti',contatto_recordid)
-        if contatto_record:
-            contatto_emai=contatto_record.values['email']
-
-    attachment_fullpath=HelpderDB.get_uploadedfile_fullpath('rendicontolavanderia',rendiconto_recordid,'allegato')
-    attachment_relativepath=HelpderDB.get_uploadedfile_relativepath('rendicontolavanderia',rendiconto_recordid,'allegato')
-    subject=f"Resoconto lavanderia - {stabile_riferimento} - {mese} {anno}"
-
-    body=f"""
-
-<p>
-    Egregi Signori,<br/>
-    Con la presente in allegato trasmettiamo il resoconto delle lavanderie dello stabile in {stabile_indirizzo} a {stabile_citta}.<br/>
-    Restiamo volentieri a disposizione e porgiamo cordiali saluti.
-</p>
-
-<table style="border: none; border-collapse: collapse; margin-top: 20px;">
-    <tr>
-        <td style="vertical-align: top; padding-right: 10px;">
-            <img src="https://pitservice.ch/wp-content/uploads/2025/04/minilogo-e1745499609496.png" style="width: 20px; height: auto;" alt="Pit Service Logo">
-        </td>
-        <td style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5;">
-            <strong>Pit Service Sagl</strong><br/>
-            La cura del tuo immobile<br/><br/>
-            <strong>Phone:</strong> 091.993.03.92 <br/>
-            <strong>Email:</strong> info@pitservice.ch <br/>
-            Via San Gottardo 26 <br/>
-            6943 Vezia <br/>
-        </td>
-    </tr>
-</table>
-
-        """
-
     email_fields = {
-        "to": contatto_emai,
-        "cc": "contabilita@pitservice.ch,segreteria@pitservice.ch",
-        "bcc": "",	
-        "subject": subject,
-        "text": body,
-        "attachment_fullpath": attachment_fullpath,
-        "attachment_relativepath": attachment_relativepath,
-        "attachment_name": f"{stabile_riferimento} - Lavanderia - {mese} - {anno}.pdf",
-        }
+            "to": "",
+            "cc": "",
+            "bcc": "",	
+            "subject": "",
+            "text": "",
+            "attachment_fullpath": "",
+            "attachment_relativepath": "",
+            "attachment_name": "",
+            }
+    
+    if type == 'emailLavanderia':
+        rendiconto_recordid=recordid
+        rendiconto_record=UserRecord('rendicontolavanderia',rendiconto_recordid)
+        mese=rendiconto_record.values['mese'][3:]
+        anno=rendiconto_record.values['anno']
+        stabile_recordid=rendiconto_record.values['recordidstabile_']
+        stabile_record=UserRecord('stabile',stabile_recordid)
+        stabile_riferimento=stabile_record.values['riferimento']
+        stabile_indirizzo=stabile_record.values['indirizzo']
+        stabile_citta=stabile_record.values['citta']
+        sql=f"SELECT * FROM user_contattostabile WHERE deleted_='N' AND recordidstabile_='{stabile_recordid}'"
+        row=HelpderDB.sql_query_row(sql)
+        contatto_emai=''
+        if row:
+            contatto_recordid=row['recordidcontatti_']
+            contatto_record=UserRecord('contatti',contatto_recordid)
+            if contatto_record:
+                contatto_emai=contatto_record.values['email']
+
+        attachment_fullpath=HelpderDB.get_uploadedfile_fullpath('rendicontolavanderia',rendiconto_recordid,'allegato')
+        attachment_relativepath=HelpderDB.get_uploadedfile_relativepath('rendicontolavanderia',rendiconto_recordid,'allegato')
+        subject=f"Resoconto lavanderia - {stabile_riferimento} - {mese} {anno}"
+
+        body=f"""
+
+            <p>
+                Egregi Signori,<br/>
+                Con la presente in allegato trasmettiamo il resoconto delle lavanderie dello stabile in {stabile_indirizzo} a {stabile_citta}.<br/>
+                Restiamo volentieri a disposizione e porgiamo cordiali saluti.
+            </p>
+
+            <table style="border: none; border-collapse: collapse; margin-top: 20px;">
+                <tr>
+                    <td style="vertical-align: top; padding-right: 10px;">
+                        <img src="https://pitservice.ch/wp-content/uploads/2025/04/minilogo-e1745499609496.png" style="width: 20px; height: auto;" alt="Pit Service Logo">
+                    </td>
+                    <td style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5;">
+                        <strong>Pit Service Sagl</strong><br/>
+                        La cura del tuo immobile<br/><br/>
+                        <strong>Phone:</strong> 091.993.03.92 <br/>
+                        <strong>Email:</strong> info@pitservice.ch <br/>
+                        Via San Gottardo 26 <br/>
+                        6943 Vezia <br/>
+                    </td>
+                </tr>
+            </table>
+
+            """
+
+        email_fields = {
+            "to": contatto_emai,
+            "cc": "contabilita@pitservice.ch,segreteria@pitservice.ch",
+            "bcc": "",	
+            "subject": subject,
+            "text": body,
+            "attachment_fullpath": attachment_fullpath,
+            "attachment_relativepath": attachment_relativepath,
+            "attachment_name": f"{stabile_riferimento} - Lavanderia - {mese} - {anno}.pdf",
+            }
+    
+    if type == 'emailGasolio':
+        stabile_recordid=recordid
+        stabile_record=UserRecord('stabile',stabile_recordid)
+        meseLettura='2025-04'
+        anno, mese = meseLettura.split('-')
+        attachment_relativepath=stampa_gasoli(request,recordid_stabile=stabile_recordid,meseLettura=meseLettura)
+        riferimento=stabile_record.values.get('riferimento', '')
+        subject=f"Livello Gasolio - {mese} {anno} - {riferimento}",
+        body=f"""
+        Egregi Signori,<br/>
+                <br/>
+                <br/>
+                <br/>
+                con la presente in allegato trasmettiamo la lettura gasolio dello stabile in {stabile_record.fields['indirizzo']}<br/>
+                <br/>
+                <br/>
+                <br/>
+                Restiamo volentieri a disposizione e porgiamo cordiali saluti.<br/>
+                <br/>
+                <br/>
+                <br/>
+                """
+        
+        email_fields = {
+            "to": "",
+            "cc": "contabilita@pitservice.ch,segreteria@pitservice.ch",
+            "bcc": "",	
+            "subject": subject,
+            "text": body,
+            "attachment_fullpath": "",
+            "attachment_relativepath": attachment_relativepath,
+            "attachment_name": f"Lettura_Gasolio_{mese}-{anno}-{riferimento}.pdf",
+            }
+
     return JsonResponse({"success": True, "emailFields": email_fields})
+
+@csrf_exempt
+def stampa_gasoli(request,recordid_stabile,meseLettura):
+    data={}
+    filename='gasolio.pdf'
+    recordid_stabile = ''
+    if request.method == 'POST':
+        recordid_stabile = data.get('recordid')
+        meseLettura=meseLettura
+        anno, mese = meseLettura.split('-')
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
+    config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
+    
+    record_stabile=UserRecord('stabile',recordid_stabile)
+    data['stabile']=record_stabile.values
+    sql=f"""
+    SELECT t.recordid_,t.anno,t.mese,t.datalettura,t.lettura, i.riferimento, i.livellominimo, i.capienzacisterna
+    FROM user_letturagasolio t
+    INNER JOIN (
+        SELECT recordidinformazionigasolio_, MAX(datalettura) AS max_datalettura
+        FROM user_letturagasolio
+        WHERE anno='{anno}' AND mese like '%{mese}%' AND deleted_='N' AND recordidstabile_ = '{recordid_stabile}'
+        GROUP BY recordidinformazionigasolio_
+        
+    ) subquery
+    ON t.recordidinformazionigasolio_ = subquery.recordidinformazionigasolio_ 
+    AND t.datalettura = subquery.max_datalettura
+    INNER JOIN user_informazionigasolio i
+    ON t.recordidinformazionigasolio_ = i.recordid_
+    WHERE t.recordidstabile_ = '{recordid_stabile}' AND t.deleted_ = 'N' 
+            """
+    ultimeletturegasolio = HelpderDB.sql_query(sql)
+    data['ultimeletturegasolio']=ultimeletturegasolio
+    
+    content = render_to_string('pdf/gasolio.html', data)
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
+    config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
+    filename_with_path = os.path.dirname(os.path.abspath(__file__))
+    filename_with_path = filename_with_path.rsplit('views', 1)[0]
+    filename_with_path = filename_with_path + '\\static\\pdf\\' + filename
+    pdfkit.from_string(
+        content,
+        filename_with_path,
+        configuration=config,
+        options={
+            "enable-local-file-access": "",
+            # "quiet": ""  # <-- rimuovilo!
+        }
+    )
+
+    return 'commonapp/static/pdf/' + filename
+    
 
 
 @csrf_exempt
@@ -1060,9 +1162,16 @@ def save_email(request):
     record_email.values['ccn']=email_data['bcc']
     record_email.values['attachment_name']=email_data['attachment_name']
     record_email.values['status']="Da inviare"
-    
     record_email.save()
-    fullpath_originale=HelpderDB.get_uploadedfile_fullpath(tableid,recordid,'allegato')
+
+    attachment_relativepath=email_data['attachment_relativepath']
+    if attachment_relativepath.startswith("commonapp/static"):
+        base_dir=settings.BASE_DIR
+        file_path = os.path.join(settings.BASE_DIR, attachment_relativepath)
+        fullpath_originale = default_storage.path(file_path)
+    else:
+        fullpath_originale=HelpderDB.get_uploadedfile_fullpath(tableid,recordid,'allegato')
+    
     fullpath_email=HelpderDB.get_upload_fullpath('email',record_email.recordid,'attachment')
     #  Assicurati che la cartella di destinazione esista
     os.makedirs(os.path.dirname(fullpath_email), exist_ok=True)

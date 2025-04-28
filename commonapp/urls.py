@@ -42,3 +42,4 @@ urlpatterns = [
 ]
 
 urlpatterns += static(settings.UPLOADS_URL, document_root=settings.UPLOADS_ROOT)
+urlpatterns += static(settings.TEMPFILE_URL, document_root=settings.TEMPFILE_ROOT)
