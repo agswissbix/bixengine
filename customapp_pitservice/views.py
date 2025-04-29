@@ -169,8 +169,9 @@ def stampa_gasoli(request):
     data = json.loads(request.body)
     if request.method == 'POST':
         recordid_stabile = data.get('recordid')
-        meseLettura=data.get('date')
-        anno, mese = meseLettura.split('-')
+        #meseLettura=data.get('date')
+        meseLettura="2025 04-Aprile"
+        anno, mese = meseLettura.split(' ')
     script_dir = os.path.dirname(os.path.abspath(__file__))
     wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
     config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)

@@ -1059,20 +1059,14 @@ def prepara_email(request):
         anno, mese = meseLettura.split('-')
         attachment_relativepath=stampa_gasoli(request,recordid_stabile=stabile_recordid,meseLettura=meseLettura)
         riferimento=stabile_record.values.get('riferimento', '')
-        subject=f"Livello Gasolio - {mese} {anno} - {riferimento}",
+        subject=f"Livello Gasolio - {mese} {anno} - {riferimento}"
         body=f"""
         Egregi Signori,<br/>
                 <br/>
-                <br/>
-                <br/>
-                con la presente in allegato trasmettiamo la lettura gasolio dello stabile in {stabile_record.fields['indirizzo']}<br/>
-                <br/>
+                con la presente in allegato trasmettiamo la lettura gasolio dello stabile in {stabile_record.values['indirizzo']}<br/>
                 <br/>
                 <br/>
                 Restiamo volentieri a disposizione e porgiamo cordiali saluti.<br/>
-                <br/>
-                <br/>
-                <br/>
                 """
         
         email_fields = {
@@ -1092,11 +1086,9 @@ def prepara_email(request):
 def stampa_gasoli(request,recordid_stabile,meseLettura):
     data={}
     filename='gasolio.pdf'
-    recordid_stabile = ''
-    if request.method == 'POST':
-        recordid_stabile = data.get('recordid')
-        meseLettura=meseLettura
-        anno, mese = meseLettura.split('-')
+    meseLettura="2025 04-Aprile"
+    anno, mese = meseLettura.split(' ')
+        
     script_dir = os.path.dirname(os.path.abspath(__file__))
     wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
     config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
