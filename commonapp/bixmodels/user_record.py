@@ -207,6 +207,16 @@ class UserRecord:
         return badge_fields
     
     def get_record_card_fields(self):
+
+        #TODO
+        if self.tableid=='pitticket' and self.master_tableid=='telefonate' and self.recordid=='':
+            record_telefonate=UserRecord('telefonate',self.master_recordid)
+            self.values['assegnatoda']=self.userid
+            self.values['recordidstabile_']=record_telefonate.values.get('recordidstabile_','')
+            self.values['titolorichiesta']="ticket da telefonata - "+ record_telefonate.values.get('chi','')
+            self.values['personariferimento']=record_telefonate.values.get('chi','')+" "+record_telefonate.values.get('telefono','')
+            self.values['richiesta']=record_telefonate.values.get('motivo_chiamata','')
+            
         sql=f"""
             SELECT f.*
             FROM sys_user_field_order AS fo LEFT JOIN sys_field AS f ON fo.tableid=f.tableid AND fo.fieldid=f.id
@@ -222,12 +232,14 @@ class UserRecord:
             fieldid=field['fieldid']
             if fieldid.startswith("_"):
                 fieldid= fieldid[1:] + "_"
-            if self.recordid=='':
-                value=""
-            else:
-                value=self.values[fieldid]
-                if not value:
-                    value=""
+            value=self.values.get(fieldid, '')
+            
+            #if self.recordid=='':
+             #   value=""
+            #else:
+             #   value=self.values[fieldid]
+              #  if not value:
+               #     value=""
             insert_field['tableid']="1"
             insert_field['fieldid']=fieldid
             insert_field['fieldorder']="1"

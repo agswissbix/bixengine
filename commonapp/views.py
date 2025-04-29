@@ -1068,6 +1068,21 @@ def prepara_email(request):
                 <br/>
                 <br/>
                 Restiamo volentieri a disposizione e porgiamo cordiali saluti.<br/>
+                <table style="border: none; border-collapse: collapse; margin-top: 20px;">
+                <tr>
+                    <td style="vertical-align: top; padding-right: 10px;">
+                        <img src="https://pitservice.ch/wp-content/uploads/2025/04/minilogo-e1745499609496.png" style="width: 20px; height: auto;" alt="Pit Service Logo">
+                    </td>
+                    <td style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5;">
+                        <strong>Pit Service Sagl</strong><br/>
+                        La cura del tuo immobile<br/><br/>
+                        <strong>Phone:</strong> 091.993.03.92 <br/>
+                        <strong>Email:</strong> info@pitservice.ch <br/>
+                        Via San Gottardo 26 <br/>
+                        6943 Vezia <br/>
+                    </td>
+                </tr>
+            </table>
                 """
         
         email_fields = {
