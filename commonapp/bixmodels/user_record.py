@@ -95,6 +95,21 @@ class UserRecord:
                 newvalue=HelpderDB.sql_query_value(sql,field['keyfieldlink'])
                 value=newvalue
             
+            if field['fieldtypeid']=='Utente':
+                if value:
+                    sql=f"SELECT firstname,lastname FROM sys_user WHERE id='{value}' "
+                    user=HelpderDB.sql_query_row(sql)
+                    newvalue=user['firstname']
+                    value=newvalue
+
+            if field['fieldtypeid']=='Data':
+                if value:
+                    if isinstance(value, str):
+                        newvalue = datetime.datetime.strptime(value, '%Y-%m-%d').strftime('%d/%m/%Y')
+                    else:
+                        newvalue = value.strftime('%d/%m/%Y')
+                    value=newvalue
+            
             return_field={}
             return_field['type']='standard'
             return_field['fieldid']=fieldid
