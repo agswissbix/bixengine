@@ -1025,20 +1025,22 @@ def prepara_email(request):
             </p>
 
             <table style="border: none; border-collapse: collapse; margin-top: 20px;">
-                <tr>
-                    <td style="vertical-align: top; padding-right: 10px;">
-                        <img src="https://pitservice.ch/wp-content/uploads/2025/04/minilogo-e1745499609496.png" style="width: 20px; height: auto;" alt="Pit Service Logo">
-                    </td>
-                    <td style="font-family: Arial, sans-serif; font-size: 14px; ">
-                        <b>Pit Service Sagl</b><br/>
-                        La cura del tuo immobile<br/>
-                        <b>Phone:</b> 091.993.03.92 <br/>
-                        <b>Email:</b> info@pitservice.ch <br/>
-                        Via San Gottardo 26 <br/>
-                        6943 Vezia <br/>
-                    </td>
-                </tr>
-            </table>
+                    <tr>
+                        <td style="vertical-align: top; padding-right: 10px;">
+                            <img src="https://pitservice.ch/wp-content/uploads/2025/04/minilogo-e1745499609496.png" style="width: 20px; height: auto;" alt="Pit Service Logo">
+                        </td>
+                        <td style="font-family: Arial, sans-serif; font-size: 14px; ">
+                            <p>
+                                <b>Pit Service Sagl</b><br/>
+                                La cura del tuo immobile<br/>
+                                <b>Phone:</b> 091.993.03.92 <br/>
+                                <b>Email:</b> info@pitservice.ch <br/>
+                                Via San Gottardo 26 <br/>
+                                6943 Vezia <br/>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
 
             """
 
@@ -1062,24 +1064,29 @@ def prepara_email(request):
         riferimento=stabile_record.values.get('riferimento', '')
         subject=f"Livello Gasolio - {mese} {anno} - {riferimento}"
         body=f"""
-        Egregi Signori,<br/>
-        con la presente in allegato trasmettiamo la lettura gasolio dello stabile in {stabile_record.values['indirizzo']}<br/>
+         <p>
+                Egregi Signori,<br/>
+                con la presente in allegato trasmettiamo la lettura gasolio dello stabile in {stabile_record.values['indirizzo']}<br/>
                 Restiamo volentieri a disposizione e porgiamo cordiali saluti.<br/>
+        </p>
+
                 <table style="border: none; border-collapse: collapse; margin-top: 20px;">
-                <tr>
-                    <td style="vertical-align: top; padding-right: 10px;">
-                        <img src="https://pitservice.ch/wp-content/uploads/2025/04/minilogo-e1745499609496.png" style="width: 20px; height: auto;" alt="Pit Service Logo">
-                    </td>
-                    <td style="font-family: Arial, sans-serif; font-size: 14px; ">
-                        <b>Pit Service Sagl</b><br/>
-                        La cura del tuo immobile<br/>
-                        <b>Phone:</b> 091.993.03.92 <br/>
-                        <b>Email:</b> info@pitservice.ch <br/>
-                        Via San Gottardo 26 <br/>
-                        6943 Vezia <br/>
-                    </td>
-                </tr>
-            </table>
+                    <tr>
+                        <td style="vertical-align: top; padding-right: 10px;">
+                            <img src="https://pitservice.ch/wp-content/uploads/2025/04/minilogo-e1745499609496.png" style="width: 20px; height: auto;" alt="Pit Service Logo">
+                        </td>
+                        <td style="font-family: Arial, sans-serif; font-size: 14px; ">
+                            <p>
+                                <b>Pit Service Sagl</b><br/>
+                                La cura del tuo immobile<br/>
+                                <b>Phone:</b> 091.993.03.92 <br/>
+                                <b>Email:</b> info@pitservice.ch <br/>
+                                Via San Gottardo 26 <br/>
+                                6943 Vezia <br/>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
                 """
         
         email_fields = {
