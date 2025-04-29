@@ -1144,9 +1144,10 @@ def save_email(request):
     tableid = data.get('tableid')
     recordid = data.get('recordid')
     #TODO 
-    record_rendiconto=UserRecord('rendicontolavanderia',recordid)
-    record_rendiconto.values['stato']="Inviato"
-    record_rendiconto.save()
+    if tableid == 'rendicontolavanderia':
+        record_rendiconto=UserRecord('rendicontolavanderia',recordid)
+        record_rendiconto.values['stato']="Inviato"
+        record_rendiconto.save()
     record_email=UserRecord('email')
     record_email.values['recipients']=email_data['to']
     record_email.values['subject']=email_data['subject']    
