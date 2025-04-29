@@ -12,6 +12,7 @@ from commonapp.bixmodels.user_table import *
 from commonapp.bixmodels.helper_db import *
 from commonapp.helper import *
 import locale
+import re
 
 
 @csrf_exempt
@@ -99,7 +100,10 @@ def stampa_bollettino(request):
     if tipo_bollettino=='Giardino':
         content = render_to_string('pdf/bollettino_giardino.html', data)
 
-    filename = f"bollettino Nr.{data['nr']}.pdf"
+    filename = f"Nr.{data['nr']} {record_stabile.values['indirizzo']} {tipo_bollettino} .pdf"
+    if tipo_bollettino=='Sostituzione':
+        filename = f"Nr.{data['nr']} {record_stabile.values['indirizzo']} Sostituzione Dal {data['sostituzionedal']} Al {data['sostituzioneal']}.pdf"
+    filename = re.sub(r'[\\/*?:"<>|]', "", filename)
     filename_with_path = os.path.dirname(os.path.abspath(__file__))
     filename_with_path = filename_with_path.rsplit('views', 1)[0]
     filename_with_path = filename_with_path + '\\static\\pdf\\' + filename
