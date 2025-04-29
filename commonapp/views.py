@@ -1265,13 +1265,23 @@ def stampa_bollettini_test(request):
 
 @csrf_exempt
 def send_emails(request):
-    data = json.loads(request.body)
+    data = {}
+    
+    if request.method == 'POST' and request.content_type == 'application/json':
+        try:
+            body_unicode = request.body.decode('utf-8')
+            if body_unicode:  # controlla che non sia vuoto
+                data = json.loads(body_unicode)
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    
     recordid = data.get('recordid')
+
     if recordid:
         emails = HelpderDB.sql_query(f"SELECT * FROM user_email WHERE recordid_='{recordid}'")
     else:
         emails_to_send=[]
-        emails = HelpderDB.sql_query("SELECT * FROM user_email WHERE status='Da inviare'")
+        emails = HelpderDB.sql_query("SELECT * FROM user_email WHERE status='Da inviare' LIMIT 5")
     
     for email in emails:
         full_path_attachment = None
