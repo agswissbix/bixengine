@@ -885,15 +885,16 @@ def save_record_fields(request):
         bollettino_record = UserRecord('bollettini', recordid)
         tipo_bollettino=bollettino_record.values['tipo_bollettino']
         nr=bollettino_record.values['nr']   
-        if not tipo_bollettino:
-            tipo_bollettino=''
-        sql="SELECT * FROM user_bollettini WHERE tipo_bollettino='"+tipo_bollettino+"' AND deleted_='N' ORDER BY nr desc LIMIT 1"
-        bollettino_recorddict = HelpderDB.sql_query_row(sql)
-        if bollettino_recorddict['nr'] is None:
-            nr=1
-        else:
-            nr = int(bollettino_recorddict['nr']) + 1
-        bollettino_record.values['nr']=nr
+        if not nr:
+            if not tipo_bollettino:
+                tipo_bollettino=''
+            sql="SELECT * FROM user_bollettini WHERE tipo_bollettino='"+tipo_bollettino+"' AND deleted_='N' ORDER BY nr desc LIMIT 1"
+            bollettino_recorddict = HelpderDB.sql_query_row(sql)
+            if bollettino_recorddict['nr'] is None:
+                nr=1
+            else:
+                nr = int(bollettino_recorddict['nr']) + 1
+            bollettino_record.values['nr']=nr
             
         allegato=bollettino_record.values['allegato']
         if allegato:
@@ -1225,7 +1226,7 @@ def get_input_linked(request):
 @csrf_exempt
 def stampa_bollettini_test(request):
     data={}
-    filename='bollettino.pdf'
+    filename='bollettinotest.pdf'
     
     recordid_bollettino = ''
     data = json.loads(request.body)
