@@ -1313,6 +1313,7 @@ def send_emails(request):
             email_record.values['sent_timestamp'] = datetime.datetime.now().strftime("%H:%M:%S")
             email_record.save()
         except Exception as e:
+            print(str(e))
             return HttpResponse(f"Errore invio: {str(e)}")
 
 
