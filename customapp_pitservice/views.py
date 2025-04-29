@@ -171,7 +171,7 @@ def stampa_bollettino_test(request):
 @csrf_exempt
 def stampa_gasoli(request):
     data={}
-    filename='report gasolio'
+    filename='report gasolio.pdf'
     recordid_stabile = ''
     data = json.loads(request.body)
     if request.method == 'POST':
@@ -209,6 +209,10 @@ def stampa_gasoli(request):
     script_dir = os.path.dirname(os.path.abspath(__file__))
     wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
     config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
+    
+    filename = f"Lettura Gasolio {mese} {anno}  {record_stabile.values['indirizzo']}.pdf"
+    filename = re.sub(r'[\\/*?:"<>|]', "", filename)
+
     filename_with_path = os.path.dirname(os.path.abspath(__file__))
     filename_with_path = filename_with_path.rsplit('views', 1)[0]
     filename_with_path = filename_with_path + '\\static\\pdf\\' + filename
