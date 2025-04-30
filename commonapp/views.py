@@ -1033,7 +1033,7 @@ def prepara_email(request):
                             <p>
                                 <b>Pit Service Sagl</b><br/>
                                 La cura del tuo immobile<br/>
-                                <b>Phone:</b> 091.993.03.92 <br/>
+                                Phone: 091.993.03.92 <br/>
                                 Via San Gottardo 26 <br/>
                                 6943 Vezia <br/>
                             </p>
@@ -1078,7 +1078,7 @@ def prepara_email(request):
                             <p>
                                 <b>Pit Service Sagl</b><br/>
                                 La cura del tuo immobile<br/>
-                                <b>Phone:</b> 091.993.03.92 <br/>
+                                Phone: 091.993.03.92 <br/>
                                 Via San Gottardo 26 <br/>
                                 6943 Vezia <br/>
                             </p>
