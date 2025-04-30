@@ -1023,18 +1023,17 @@ def prepara_email(request):
                 Con la presente in allegato trasmettiamo il resoconto delle lavanderie dello stabile in {stabile_indirizzo} a {stabile_citta}.<br/>
                 Restiamo volentieri a disposizione e porgiamo cordiali saluti.
             </p>
-
+            <br/>
             <table style="border: none; border-collapse: collapse; margin-top: 20px;">
                     <tr>
                         <td style="vertical-align: top; padding-right: 10px;">
-                            <img src="https://pitservice.ch/wp-content/uploads/2025/04/minilogo-e1745499609496.png" style="width: 20px; height: auto;" alt="Pit Service Logo">
+                            <img src="https://pitservice.ch/wp-content/uploads/2025/04/miniminilogo.png" alt="Pit Service Logo">
                         </td>
-                        <td style="font-family: Arial, sans-serif; font-size: 14px; ">
+                        <td style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.0">
                             <p>
                                 <b>Pit Service Sagl</b><br/>
                                 La cura del tuo immobile<br/>
                                 <b>Phone:</b> 091.993.03.92 <br/>
-                                <b>Email:</b> info@pitservice.ch <br/>
                                 Via San Gottardo 26 <br/>
                                 6943 Vezia <br/>
                             </p>
@@ -1073,14 +1072,13 @@ def prepara_email(request):
                 <table style="border: none; border-collapse: collapse; margin-top: 20px;">
                     <tr>
                         <td style="vertical-align: top; padding-right: 10px;">
-                            <img src="https://pitservice.ch/wp-content/uploads/2025/04/minilogo-e1745499609496.png" style="width: 20px; height: auto;" alt="Pit Service Logo">
+                            <img src="https://pitservice.ch/wp-content/uploads/2025/04/miniminilogo.png"  alt="Pit Service Logo">
                         </td>
                         <td style="font-family: Arial, sans-serif; font-size: 14px; ">
                             <p>
                                 <b>Pit Service Sagl</b><br/>
                                 La cura del tuo immobile<br/>
                                 <b>Phone:</b> 091.993.03.92 <br/>
-                                <b>Email:</b> info@pitservice.ch <br/>
                                 Via San Gottardo 26 <br/>
                                 6943 Vezia <br/>
                             </p>
@@ -1169,8 +1167,11 @@ def save_email(request):
         record_rendiconto.save()
     record_email=UserRecord('email')
     record_email.values['recipients']=email_data['to']
-    record_email.values['subject']=email_data['subject']    
-    record_email.values['mailbody']=email_data['text']
+    record_email.values['subject']=email_data['subject']  
+    mail_body=email_data['text']
+    if mail_body:
+        mail_body=mail_body.replace('<p>','<p style="margin:0 0 4px 0;">')  
+    record_email.values['mailbody']=mail_body
     record_email.values['cc']=email_data['cc']
     record_email.values['ccn']=email_data['bcc']
     record_email.values['attachment_name']=email_data['attachment_name']
