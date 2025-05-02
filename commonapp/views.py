@@ -198,9 +198,37 @@ def get_sidebarmenu_items(request):
         if "subItems" not in workspaces_tables[workspace]:
             workspaces_tables[workspace]['subItems']=[]
         workspaces_tables[workspace]["subItems"].append(subitem)
+    
+    other_items = [
+        {
+            "id": "lifestyle",
+            "description": "Lifestyle"
+        },
+        {
+            "id": "liquidiLAC",
+            "description": "Liquidi LAC"
+        },
+        {
+            "id": "merceVaria",
+            "description": "Merce varia"
+        },
+        {
+            "id": "merceVariaBlitz",
+            "description": "Merce varia blitz"
+        },
+        {
+            "id": "merceVariaOakley",
+            "description": "Merce varia Oakley"
+        },
+        {
+            "id": "ordiniUdito",
+            "description": "Ordini udito"
+        }
+    ]
 
     response = {
-        "menuItems": workspaces_tables
+        "menuItems": workspaces_tables,
+        "otherItems": other_items
     }
     return JsonResponse(response, safe=False)
 
