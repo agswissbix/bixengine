@@ -359,10 +359,10 @@ class UserRecord:
         if self.tableid=='pitticket' and self.master_tableid=='telefonate' and self.recordid=='':
             record_telefonate=UserRecord('telefonate',self.master_recordid)
             self.values['assegnatoda']=self.userid
-            self.values['recordidstabile_']=record_telefonate.values.get('recordidstabile_','')
-            self.values['titolorichiesta']="ticket da telefonata - "+ record_telefonate.values.get('chi','')
-            self.values['personariferimento']=record_telefonate.values.get('chi','')+" "+record_telefonate.values.get('telefono','')
-            self.values['richiesta']=record_telefonate.values.get('motivo_chiamata','')
+            self.values['recordidstabile_']=(record_telefonate.values.get('recordidstabile_','') or '')
+            self.values['titolorichiesta']="ticket da telefonata - "+ (record_telefonate.values.get('chi','') or '')
+            self.values['personariferimento'] = (record_telefonate.values.get('chi') or '') + " " + (record_telefonate.values.get('telefono') or '')
+            self.values['richiesta']=(record_telefonate.values.get('motivo_chiamata','') or '')
             
         sql=f"""
             SELECT f.*

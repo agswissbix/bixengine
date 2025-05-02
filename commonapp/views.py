@@ -944,7 +944,7 @@ def save_record_fields(request):
 
     if tableid == 'richieste':
         richieste_record = UserRecord('richieste', recordid)
-        richieste_record.values['stato']='Merce ricevuta'
+        richieste_record.values['stato']='Merce spedita'
         richieste_record.save()
 
 
