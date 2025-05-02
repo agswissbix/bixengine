@@ -115,7 +115,7 @@ class UserTable:
         Returns:
             _type_: lista di dict dei risultati
         """ 
-        select_fields='*'
+        select_fields=f"user_{self.tableid}.*"
         fromsql=f"FROM user_{self.tableid}"
 
         if fields:
