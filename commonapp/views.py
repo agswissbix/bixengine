@@ -942,6 +942,11 @@ def save_record_fields(request):
             rendiconto_record.values['stato']='Preparato'
         rendiconto_record.save()
 
+    if tableid == 'richieste':
+        richieste_record = UserRecord('richieste', recordid)
+        richieste_record.values['stato']='Merce ricevuta'
+        richieste_record.save()
+
 
     
    
