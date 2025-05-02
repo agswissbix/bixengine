@@ -201,27 +201,27 @@ def get_sidebarmenu_items(request):
     
     other_items = [
         {
-            "id": "lifestyle",
+            "id": "formularioLifestyle",
             "description": "Lifestyle"
         },
         {
-            "id": "liquidiLAC",
+            "id": "formularioLiquidiLAC",
             "description": "Liquidi LAC"
         },
         {
-            "id": "merceVaria",
+            "id": "formularioMerceVaria",
             "description": "Merce varia"
         },
         {
-            "id": "merceVariaBlitz",
+            "id": "formularioMerceVariaBlitz",
             "description": "Merce varia blitz"
         },
         {
-            "id": "merceVariaOakley",
+            "id": "formularioMerceVariaOakley",
             "description": "Merce varia Oakley"
         },
         {
-            "id": "ordiniUdito",
+            "id": "formularioOrdiniUdito",
             "description": "Ordini udito"
         }
     ]
