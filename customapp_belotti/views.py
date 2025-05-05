@@ -60,6 +60,8 @@ def sync_utenti_adiutobixdata(request):
 
                 # Imposta i valori
                 record.values['utentebixdata'] = utente_bix  # Chiave logica
+                record.values['gruppo'] = row['F1050']
+                record.values['email'] = row['F1057']
                 record.values['nome'] = row['F1054']
                 # ... aggiungi altri campi se necessario
 
