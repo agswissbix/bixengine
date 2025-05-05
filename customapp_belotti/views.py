@@ -121,10 +121,10 @@ def sync_prodotti_adiutobixdata(request):
 
                 if existing:
                     # Se esiste, aggiorna
-                    record = UserRecord('user_sync_adiuto_prodotti', recordid=existing)
+                    record = UserRecord('sync_adiuto_prodotti', recordid=existing)
                 else:
                     # Altrimenti crea un nuovo record
-                    record = UserRecord('user_sync_adiuto_prodotti')
+                    record = UserRecord('sync_adiuto_prodotti')
 
                 # Imposta i valori
                 record.values['codice'] = codice  # Chiave logica
@@ -190,10 +190,10 @@ def sync_formularigruppo_adiutobixdata(request):
 
                 if existing:
                     # Se esiste, aggiorna
-                    record = UserRecord('user_sync_adiuto_prodotti', recordid=existing)
+                    record = UserRecord('sync_adiuto_formularigruppo', recordid=existing)
                 else:
                     # Altrimenti crea un nuovo record
-                    record = UserRecord('user_sync_adiuto_prodotti')
+                    record = UserRecord('sync_adiuto_formularigruppo')
 
                 # Imposta i valori
                 record.values['gruppo'] = gruppo  # Chiave logica
