@@ -4,10 +4,22 @@ from django.http import JsonResponse
 import pyodbc
 import environ
 from django.conf import settings
+from commonapp.bixmodels.user_record import *
+from commonapp.bixmodels.user_table import *
+from commonapp.bixmodels.helper_db import *
+from commonapp.helper import *
 
 # Initialize environment variables
 env = environ.Env()
 environ.Env.read_env()
+
+def dictfetchall(cursor):
+        "Return all rows from a cursor as a dict"
+        columns = [col[0] for col in cursor.description]
+        return [
+            dict(zip(columns, row))
+            for row in cursor.fetchall()
+        ]
 
 
 def sync_utenti_adiutobixdata(request):
@@ -29,12 +41,13 @@ def sync_utenti_adiutobixdata(request):
 
         data = []
         try:
-            cursor.execute("SELECT TOP 10 * FROM A1001")
-            columns = [column[0] for column in cursor.description]
-            rows = cursor.fetchall()
+            cursor.execute("SELECT  * FROM A1014")
+            rows = dictfetchall(cursor)
 
             for row in rows:
-                data.append(dict(zip(columns, row)))
+                record=UserRecord('sync_adiuto_utenti') 
+                record.values['nome'] = row['F1054']
+                record.save()
 
         except pyodbc.ProgrammingError as e:
             return JsonResponse({"success": False, "error": f"Errore nella query SQL: {str(e)}"})
@@ -56,4 +69,4 @@ def sync_utenti_adiutobixdata(request):
         except NameError:
             pass  # conn non definita se la connessione è fallita
 
-    return JsonResponse({"success": True, "rows": data})
+    return JsonResponse({"success": True, "rows": rows})
