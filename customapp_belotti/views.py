@@ -45,8 +45,24 @@ def sync_utenti_adiutobixdata(request):
             rows = dictfetchall(cursor)
 
             for row in rows:
-                record=UserRecord('sync_adiuto_utenti') 
+                utente_bix = row['F1053']
+                
+                # Verifica se il record esiste in base a utentebixdata
+                sql_check = f"SELECT recordid_ FROM user_sync_adiuto_utenti WHERE utentebixdata = '{utente_bix}'"
+                existing = HelpderDB.sql_query_value(sql_check, 'recordid_')
+
+                if existing:
+                    # Se esiste, aggiorna
+                    record = UserRecord('sync_adiuto_utenti', recordid=existing)
+                else:
+                    # Altrimenti crea un nuovo record
+                    record = UserRecord('sync_adiuto_utenti')
+
+                # Imposta i valori
+                record.values['utentebixdata'] = utente_bix  # Chiave logica
                 record.values['nome'] = row['F1054']
+                # ... aggiungi altri campi se necessario
+
                 record.save()
 
         except pyodbc.ProgrammingError as e:
