@@ -288,7 +288,57 @@ def sync_fatture_sirioadiuto(request):
 
         count = 0
         for row in rows:
-            
+            merge_sql = f"""
+            MERGE dbo.T_SIRIO_FATTUREFORNITORE AS T
+            USING (SELECT '{row.barcode_adiuto}' AS barcode_adiuto, '{row.id_sirio}' AS id_sirio, 
+                          '{row.numero_fattura}' AS numero_fattura, '{row.titolo}' AS titolo,
+                          '{row.data_fattura}' AS data_fattura, '{row.data_scadenza}' AS data_scadenza, 
+                          '{row.importo}' AS importo, '{row.sigla_valuta}' AS sigla_valuta,
+                          '{row.tipo_documento}' AS tipo_documento, '{row.id_fornitore}' AS id_fornitore, 
+                          '{row.nome_fornitore}' AS nome_fornitore, '{row.indirizzo_fornitore}' AS indirizzo_fornitore,
+                          '{row.altro_indirizzo_fornitore}' AS altro_indirizzo_fornitore, '{row.via_fornitore}' AS via_fornitore,
+                          '{row.npa_fornitore}' AS npa_fornitore, '{row.luogo_fornitore}' AS luogo_fornitore,
+                          '{row.telefono_fornitore}' AS telefono_fornitore, '{row.altro_telefono_fornitore}' AS altro_telefono_fornitore,
+                          '{row.email_fornitore}' AS email_fornitore) AS S
+            ON T.id_sirio = S.id_sirio AND T.numero_fattura = S.numero_fattura
+
+            WHEN MATCHED THEN
+                UPDATE SET
+                    barcode_adiuto = S.barcode_adiuto,
+                    titolo = S.titolo,
+                    data_fattura = S.data_fattura,
+                    data_scadenza = S.data_scadenza,
+                    importo = S.importo,
+                    sigla_valuta = S.sigla_valuta,
+                    tipo_documento = S.tipo_documento,
+                    id_fornitore = S.id_fornitore,
+                    nome_fornitore = S.nome_fornitore,
+                    indirizzo_fornitore = S.indirizzo_fornitore,
+                    altro_indirizzo_fornitore = S.altro_indirizzo_fornitore,
+                    via_fornitore = S.via_fornitore,
+                    npa_fornitore = S.npa_fornitore,
+                    luogo_fornitore = S.luogo_fornitore,
+                    telefono_fornitore = S.telefono_fornitore,
+                    altro_telefono_fornitore = S.altro_telefono_fornitore,
+                    email_fornitore = S.email_fornitore
+
+            WHEN NOT MATCHED THEN
+                INSERT (barcode_adiuto, id_sirio, numero_fattura, titolo, data_fattura,
+                        data_scadenza, importo, sigla_valuta, tipo_documento, id_fornitore,
+                        nome_fornitore, indirizzo_fornitore, altro_indirizzo_fornitore,
+                        via_fornitore, npa_fornitore, luogo_fornitore, telefono_fornitore,
+                        altro_telefono_fornitore, email_fornitore)
+                VALUES (S.barcode_adiuto, S.id_sirio, S.numero_fattura, S.titolo,
+                        S.data_fattura, S.data_scadenza, S.importo, S.sigla_valuta,
+                        S.tipo_documento, S.id_fornitore, S.nome_fornitore,
+                        S.indirizzo_fornitore, S.altro_indirizzo_fornitore,
+                        S.via_fornitore, S.npa_fornitore, S.luogo_fornitore,
+                        S.telefono_fornitore, S.altro_telefono_fornitore,
+                        S.email_fornitore);
+            """
+
+            # Esegui il merge
+            tgt_cursor.execute(merge_sql)
             count += 1
 
         tgt_conn.commit()
