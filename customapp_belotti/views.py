@@ -11,6 +11,7 @@ from commonapp.bixmodels.helper_db import *
 from commonapp.helper import *
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view
+from datetime import datetime, date
 
 # Initialize environment variables
 env = environ.Env()
@@ -366,13 +367,17 @@ def sync_fatture_sirioadiuto(request):
             pass
 
 
+
+
 def sql_safe(value):
     if value is None:
         return "NULL"
+    elif isinstance(value, (datetime, date)):
+        return f"'{value.strftime('%y%m%d')}'"
     elif isinstance(value, str):
-        return f"""'{value.replace("'", "''")}'"""
+        return f"'{value.replace("'", "''")}'"
     elif isinstance(value, (int, float)):
         return str(value)
     else:
-        return f"""'{str(value).replace("'", "''")}'"""
+        return f"'{str(value).replace("'", "''")}'"
 
