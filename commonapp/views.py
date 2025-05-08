@@ -199,10 +199,24 @@ def get_sidebarmenu_items(request):
             workspaces_tables[workspace]['subItems']=[]
         workspaces_tables[workspace]["subItems"].append(subitem)
     
-    other_items = [
+    username =Helper.get_username(request)
+    other_items=[]
+    gruppo=HelpderDB.sql_query_value(f"SELECT gruppo FROM user_sync_adiuto_utenti WHERE utentebixdata='{username}'","gruppo")
+    if gruppo:
+        formularigruppo=HelpderDB.sql_query(f"SELECT formulari FROM user_sync_adiuto_formularigruppo WHERE gruppo='{gruppo}'")
+        if formularigruppo:
+            formulari=formularigruppo[0]['formulari']
+            lista_formulari_list = formulari.split(",")
+            for formulario in lista_formulari_list:
+                other_items.append({
+                    "id": formulario,
+                    "description": formulario
+                })
+
+    other_items2 = [
         {
-            "id": "formularioLifestyle",
-            "description": "Lifestyle"
+            "id": username,
+            "description": username
         },
         {
             "id": "formularioLiquidiLAC",
@@ -1389,8 +1403,94 @@ def send_emails(request):
 def get_form_data(request):
     data = json.loads(request.body)
     form_type = data.get('formType')
-    print(form_type)
-    return JsonResponse({"success": True})
+    formName = f"FORMULARIO ORDINE {form_type} 2025"
+    raw_products  = HelpderDB.sql_query(f"SELECT * FROM user_sync_adiuto_prodotti WHERE deleted_='N' AND gruppo='{form_type}'")
+        # Riorganizza per categoria
+    categories_dict = defaultdict(list)
+    for prod in raw_products:
+        categoria = prod["categoria"] or "Senza Categoria"
+        categories_dict[categoria].append({
+            "id": prod["codice"],
+            "name": prod["descrizione"]
+        })
+
+    # Convertilo in una lista nel formato atteso
+    categories = [{"title": k, "products": v} for k, v in categories_dict.items()]
+
+    categories2 = [
+                {
+                    "title": "Small Cases",
+                    "products": [
+                        {"id": "20.1069", "name": "Pink"},
+                        {"id": "17.0070", "name": "Electro"},
+                        {"id": "13.0469", "name": "Purple"},
+                        {"id": "23.2442", "name": "Brown"},
+                        {"id": "13.0467", "name": "Green"},
+                    ],
+                },
+                {
+                    "title": "Large Cases",
+                    "products": [
+                        {"id": "20.1070", "name": "Pink"},
+                        {"id": "17.0071", "name": "Electro"},
+                        {"id": "14.0067", "name": "Purple"},
+                        {"id": "23.2443", "name": "Brown"},
+                        {"id": "14.0065", "name": "Green"},
+                    ],
+                },
+                {
+                    "title": "Spray / Microfibers",
+                    "products": [
+                        {"id": "24.4657", "name": "Amsterdam"},
+                        {"id": "24.4658", "name": "Cannes"},
+                        {"id": "24.4659", "name": "Varenna"},
+                    ],
+                },
+                {
+                    "title": "Microfibers",
+                    "products": [
+                        {"id": "24.4653", "name": "Amsterdam"},
+                        {"id": "24.4654", "name": "Cannes"},
+                        {"id": "24.4655", "name": "Varenna"},
+                    ],
+                },
+                {
+                    "title": "Ambient",
+                    "products": [
+                        {"id": "23.3208", "name": "Ambient diffuser 200ml"},
+                        {"id": "23.3209", "name": "Ambient spray 250ml"},
+                        {"id": "21.1299", "name": "Belotti Candles"},
+                    ],
+                },
+                {
+                    "title": "Tatto",
+                    "products": [
+                        {"id": "19.0780", "name": "Asphalt clutch"},
+                        {"id": "19.0778", "name": "Electro clutch"},
+                        {"id": "19.0779", "name": "Nude clutch"},
+                        {"id": "19.0783", "name": "Asphalt wallet"},
+                        {"id": "19.0781", "name": "Electro wallet"},
+                        {"id": "19.0782", "name": "Nude wallet"},
+                        {"id": "15.0021", "name": "Black card holder"},
+                        {"id": "15.0016", "name": "Black keychain"},
+                    ],
+                },
+                {
+                    "title": "Stationery",
+                    "products": [
+                        {"id": "23.2457", "name": "Transparent tape"},
+                        {"id": "23.2456", "name": "Packing tape"},
+                        {"id": "23.3599", "name": "Green highlighter"},
+                        {"id": "23.2459", "name": "Yellow highlighter"},
+                        {"id": "23.2460", "name": "Stapler refill"},
+                        {"id": "15.557", "name": "Zeiss pen"},
+                        {"id": "15.0528", "name": "Zeiss centering marker"},
+                    ],
+                },
+            ]
+        
+
+    return JsonResponse({"success": True, "formName": formName, "categories": categories})
 
 
 

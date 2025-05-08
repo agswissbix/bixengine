@@ -63,6 +63,17 @@ class Helper:
                 userid = row[0]
         return userid
     
+    @classmethod
+    def get_username(cls,request):
+        django_userid=request.user.id
+        userid = 0
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT username FROM sys_user WHERE bixid = %s", [django_userid])
+            row = cursor.fetchone()
+            if row:
+                userid = row[0]
+        return userid
+    
 
     @classmethod
     def pivot_to_nested_array(cls,

@@ -1,5 +1,6 @@
 from django.shortcuts import render
 from rest_framework.response import Response
+from rest_framework import status
 from django.http import JsonResponse
 import pyodbc
 import environ
@@ -8,6 +9,8 @@ from commonapp.bixmodels.user_record import *
 from commonapp.bixmodels.user_table import *
 from commonapp.bixmodels.helper_db import *
 from commonapp.helper import *
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework.decorators import api_view
 
 # Initialize environment variables
 env = environ.Env()
@@ -223,3 +226,82 @@ def sync_formularigruppo_adiutobixdata(request):
             pass  # conn non definita se la connessione è fallita
 
     return JsonResponse({"success": True, "rows": rows})
+
+
+
+@csrf_exempt
+@api_view(['POST'])
+def belotti_salva_formulario(request):
+    """
+    Esempio di funzione che riceve un barcode lotto (barcodeLotto)
+    e una lista di barcode wip (barcodeWipList).
+    """
+    # Estraggo i dati dal body della richiesta
+    username = Helper.get_username(request)
+    completeOrder = request.data.get('completeOrder', [])
+    for order_row in completeOrder:
+        categoria=order_row.get('title', None)
+        products=order_row.get('products', [])
+        for product in products:
+            codice=product.get('id', None)
+            descrizione=product.get('name', None)
+            quantita=product.get('quantity', None)
+            if not Helper.isempty(quantita):
+                if quantita > 0:
+                   
+                    print(product)
+                else:
+                    print("Vuoto")
+
+    return Response(
+        {
+            "message": "Dati salvati!",
+        },
+        status=status.HTTP_200_OK
+    )
+
+
+def sync_fatture_sirioadiuto(request):
+    source_conn_str = (
+        'DRIVER={Pervasive ODBC Unicode Interface};'
+        'ServerName=SIRIO;'
+        'DBQ=OTTICABELOTTI;'
+        'UID=Sirio;'
+    )
+
+    target_conn_str = (
+        'DRIVER={ODBC Driver 17 for SQL Server};'
+        'SERVER=BGCASVM-ADI01;'
+        'DATABASE=belotti_data;'
+        'UID=sa;'
+        'PWD=Belotti,.-23;'
+    )
+
+    try:
+        src_conn = pyodbc.connect(source_conn_str, timeout=5)
+        tgt_conn = pyodbc.connect(target_conn_str, timeout=5)
+        src_cursor = src_conn.cursor()
+        tgt_cursor = tgt_conn.cursor()
+
+        src_cursor.execute("SELECT TOP 1000 * FROM Documenti ORDER BY id_sirio DESC")
+        rows = src_cursor.fetchall()
+
+        count = 0
+        for row in rows:
+            
+            count += 1
+
+        tgt_conn.commit()
+        return JsonResponse({'status': 'success', 'imported_rows': count})
+
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})
+
+    finally:
+        try:
+            src_cursor.close()
+            src_conn.close()
+            tgt_cursor.close()
+            tgt_conn.close()
+        except:
+            pass
