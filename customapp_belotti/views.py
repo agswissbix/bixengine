@@ -373,7 +373,7 @@ def sql_safe(value):
     if value is None:
         return "NULL"
     elif isinstance(value, (datetime, date)):
-        return f"'{value.strftime('%y%m%d')}'"
+        return f"'{value.strftime('%Y%m%d')}'"
     elif isinstance(value, str):
         return f"'{value.replace("'", "''")}'"
     elif isinstance(value, (int, float)):
