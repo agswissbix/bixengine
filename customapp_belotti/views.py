@@ -290,16 +290,25 @@ def sync_fatture_sirioadiuto(request):
         for row in rows:
             merge_sql = f"""
             MERGE dbo.T_SIRIO_FATTUREFORNITORE AS T
-            USING (SELECT '{row.barcode_adiuto}' AS barcode_adiuto, '{row.id_sirio}' AS id_sirio, 
-                          '{row.numero_fattura}' AS numero_fattura, '{row.titolo}' AS titolo,
-                          '{row.data_fattura}' AS data_fattura, '{row.data_scadenza}' AS data_scadenza, 
-                          '{row.importo}' AS importo, '{row.sigla_valuta}' AS sigla_valuta,
-                          '{row.tipo_documento}' AS tipo_documento, '{row.id_fornitore}' AS id_fornitore, 
-                          '{row.nome_fornitore}' AS nome_fornitore, '{row.indirizzo_fornitore}' AS indirizzo_fornitore,
-                          '{row.altro_indirizzo_fornitore}' AS altro_indirizzo_fornitore, '{row.via_fornitore}' AS via_fornitore,
-                          '{row.npa_fornitore}' AS npa_fornitore, '{row.luogo_fornitore}' AS luogo_fornitore,
-                          '{row.telefono_fornitore}' AS telefono_fornitore, '{row.altro_telefono_fornitore}' AS altro_telefono_fornitore,
-                          '{row.email_fornitore}' AS email_fornitore) AS S
+            USING (SELECT {sql_safe(row.barcode_adiuto)} AS barcode_adiuto,
+              {sql_safe(row.id_sirio)} AS id_sirio,
+              {sql_safe(row.numero_fattura)} AS numero_fattura,
+              {sql_safe(row.titolo)} AS titolo,
+              {sql_safe(row.data_fattura)} AS data_fattura,
+              {sql_safe(row.data_scadenza)} AS data_scadenza,
+              {sql_safe(row.importo)} AS importo,
+              {sql_safe(row.sigla_valuta)} AS sigla_valuta,
+              {sql_safe(row.tipo_documento)} AS tipo_documento,
+              {sql_safe(row.id_fornitore)} AS id_fornitore,
+              {sql_safe(row.nome_fornitore)} AS nome_fornitore,
+              {sql_safe(row.indirizzo_fornitore)} AS indirizzo_fornitore,
+              {sql_safe(row.altro_indirizzo_fornitore)} AS altro_indirizzo_fornitore,
+              {sql_safe(row.via_fornitore)} AS via_fornitore,
+              {sql_safe(row.npa_fornitore)} AS npa_fornitore,
+              {sql_safe(row.luogo_fornitore)} AS luogo_fornitore,
+              {sql_safe(row.telefono_fornitore)} AS telefono_fornitore,
+              {sql_safe(row.altro_telefono_fornitore)} AS altro_telefono_fornitore,
+              {sql_safe(row.email_fornitore)} AS email_fornitore) AS S
             ON T.id_sirio = S.id_sirio AND T.numero_fattura = S.numero_fattura
 
             WHEN MATCHED THEN
@@ -355,3 +364,15 @@ def sync_fatture_sirioadiuto(request):
             tgt_conn.close()
         except:
             pass
+
+
+def sql_safe(value):
+    if value is None:
+        return "NULL"
+    elif isinstance(value, str):
+        return f"""'{value.replace("'", "''")}'"""
+    elif isinstance(value, (int, float)):
+        return str(value)
+    else:
+        return f"""'{str(value).replace("'", "''")}'"""
+
