@@ -75,6 +75,12 @@ class Helper:
         return userid
     
 
+    
+    @classmethod
+    def get_activeserver(cls,request):
+        activeServer = HelpderDB.sql_query_row("SELECT value FROM sys_settings WHERE setting='cliente_id'")
+        return activeServer
+    
     @classmethod
     def pivot_to_nested_array(cls,
         pivot_df: pd.DataFrame,

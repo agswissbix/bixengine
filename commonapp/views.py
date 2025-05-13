@@ -201,44 +201,20 @@ def get_sidebarmenu_items(request):
     
     username =Helper.get_username(request)
     other_items=[]
-    gruppo=HelpderDB.sql_query_value(f"SELECT gruppo FROM user_sync_adiuto_utenti WHERE utentebixdata='{username}'","gruppo")
-    if gruppo:
-        formularigruppo=HelpderDB.sql_query(f"SELECT formulari FROM user_sync_adiuto_formularigruppo WHERE gruppo='{gruppo}'")
-        if formularigruppo:
-            formulari=formularigruppo[0]['formulari']
-            lista_formulari_list = formulari.split(",")
-            for formulario in lista_formulari_list:
-                other_items.append({
-                    "id": formulario,
-                    "description": formulario
-                })
 
-    other_items2 = [
-        {
-            "id": username,
-            "description": username
-        },
-        {
-            "id": "formularioLiquidiLAC",
-            "description": "Liquidi LAC"
-        },
-        {
-            "id": "formularioMerceVaria",
-            "description": "Merce varia"
-        },
-        {
-            "id": "formularioMerceVariaBlitz",
-            "description": "Merce varia blitz"
-        },
-        {
-            "id": "formularioMerceVariaOakley",
-            "description": "Merce varia Oakley"
-        },
-        {
-            "id": "formularioOrdiniUdito",
-            "description": "Ordini udito"
-        }
-    ]
+    if Helper.get_activeserver == 'belotti':
+        gruppo=HelpderDB.sql_query_value(f"SELECT gruppo FROM user_sync_adiuto_utenti WHERE utentebixdata='{username}'","gruppo")
+        if gruppo:
+            formularigruppo=HelpderDB.sql_query(f"SELECT formulari FROM user_sync_adiuto_formularigruppo WHERE gruppo='{gruppo}'")
+            if formularigruppo:
+                formulari=formularigruppo[0]['formulari']
+                lista_formulari_list = formulari.split(",")
+                for formulario in lista_formulari_list:
+                    other_items.append({
+                        "id": formulario,
+                        "description": formulario
+                    })
+
 
     response = {
         "menuItems": workspaces_tables,

@@ -421,12 +421,14 @@ class UserRecord:
 
             if field['fieldtypeid'] == 'Data':
                 fieldtype='Data'
-                defaultvalue=self.fields[fieldid]['defaultvalue']
-                if defaultvalue == '$today$':
+                #defaultvalue=self.fields[fieldid]['defaultvalue']
+                #if defaultvalue == '$today$':
+                #TODO RENDERE DINAMICO CON I SETTINGS
+                if self.tableid == 'telefonate' and fieldid == 'data': 
                     defaultcode=date.today().strftime('%Y-%m-%d')
                     defaultvalue=date.today().strftime('%Y-%m-%d')
                     
-
+            #TODO RENDERE DINAMICO CON I SETTINGS
             if self.tableid == 'telefonate' and fieldid == 'ora_inizio':
                 defaultcode = datetime.datetime.now().strftime("%H:%M")
                 defaultvalue = datetime.datetime.now().strftime("%H:%M")

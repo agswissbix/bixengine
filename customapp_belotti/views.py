@@ -372,12 +372,16 @@ def sync_fatture_sirioadiuto(request):
 def sql_safe(value):
     if value is None:
         return "NULL"
-    elif isinstance(value, (datetime, date)):
+
+    if isinstance(value, (datetime, date)):
         return f"'{value.strftime('%Y%m%d')}'"
-    elif isinstance(value, str):
-        return f"'{value.replace("'", "''")}'"
-    elif isinstance(value, (int, float)):
+
+    if isinstance(value, (int, float)):
         return str(value)
-    else:
-        return f"'{str(value).replace("'", "''")}'"
+
+    # qualunque altro tipo → cast a str, escape singoli apici
+    cleaned = str(value).replace("'", "''")
+    return f"'{cleaned}'"
+
+
 
