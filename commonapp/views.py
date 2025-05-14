@@ -551,210 +551,221 @@ def get_pitservice_pivot_lavanderia(request):
     data = json.loads(request.body)
     tableid = data.get("tableid")
     table=UserTable(tableid)
-    if tableid == 'rendicontolavanderia':
-        sql="SELECT * FROM user_rendicontolavanderia  WHERE  deleted_='N' ORDER BY recordidcliente_"
-        query_result=HelpderDB.sql_query(sql)
-        df = pd.DataFrame(query_result)
-        mesi = ['01.Gennaio', '02.Febbraio', '03.Marzo', '04.Aprile', '05.Maggio', '06.Giugno', '07.Luglio', '08.Agosto', '09.Settembre', '10.Ottobre', '11.Novembre', '12.Dicembre']
-        
-        pivot_df = pd.pivot_table(df,
-                                index=['recordidcliente_', 'recordidstabile_'],
-                                columns='mese',
-                                values='anno',
-                                aggfunc='sum')
-        pivot_df = pivot_df.sort_index(axis=1)
-        pivot_array = pivot_df.reset_index().values.tolist()
-        nested_array = Helper.pivot_to_nested_array(pivot_df, include_key_in_leaf=True)
-        for row in pivot_array:
-            print(row)
-        # Raggruppa i record per cliente
-        gruppi_per_cliente = defaultdict(list)
-        for record in pivot_array:
-            recordid_cliente = record[0]
-            gruppi_per_cliente[recordid_cliente].append(record)
-        
-        
-        
-        for recordid_cliente, records in gruppi_per_cliente.items():
-            group = {}
-            
-            # Campi del gruppo: ad esempio potresti voler inserire il nome del cliente o altre info
-            if recordid_cliente != 'None':
-                record_cliente=UserRecord('cliente',recordid_cliente)
-                nome_cliente = record_cliente.values.get('nome_cliente', '')
-                cliente_recordid=record_cliente.values.get('recordid_', '')
-            else:
-                nome_cliente = 'Cliente non definito'
-                cliente_recordid=''
-            group['groupKey']=cliente_recordid
-            group['level']=cliente_recordid
-            group_fields = [{"fieldid": "cliente", "value": nome_cliente, "css": ""}]
-            group["fields"] = group_fields
-            group['subGroups']=[]
-            group["rows"] = []
-            # Costruiamo le righe: in questo esempio una sola riga per cliente
-            # Per ogni mese verifichiamo se esiste un record per quel mese
-            for record in records:
-                row = {"recordid": record[0], "css": "#", "fields": []}
-                recordid_stabile=record[1]
-                if recordid_stabile != 'None':
-                    record_stabile=UserRecord('stabile',recordid_stabile)
-                    titolo_stabile = record_stabile.values.get('titolo_stabile', '')
-                    citta = record_stabile.values.get('citta', '')
-                else:
-                    titolo_stabile = 'Stabile non definito'
-                    citta=''
-                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": titolo_stabile})
-                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": citta})
+    if tableid == "rendicontolavanderia":
+        # 1. Lettura (1 sola query) + filtro anno opzionale ─────────────────────
+        anno_filter = globals().get("anno_filter")  # es. "2025" se serve
 
-                for elemento in record[2:]:
-                    if pd.isnull(elemento):
-                        value = ''
-                    else:
-                        value = 'X'
-                    row["fields"].append({
-                        "recordid": "",
-                        "css": '',
-                        "type": "standard",
-                        "value": value
-                    })
-                group["rows"].append(row)
-            
-            
-            response_data["groups"].append(group)
+        base_sql = """
+                SELECT *
+                FROM user_rendicontolavanderia
+                WHERE deleted_ = 'N'
+            """
+        if anno_filter:
+            base_sql += f" AND anno = '{anno_filter}'"
 
+        df = pd.DataFrame(HelpderDB.sql_query(base_sql))
 
-        response_data["columns"] = [
-            {"fieldtypeid": "Parola", "desc": ""},
-            {"fieldtypeid": "Parola", "desc": "Città"},
-            {"fieldtypeid": "Parola", "desc": "Gennaio"},
-            {"fieldtypeid": "Parola", "desc": "Febbraio"},
-            {"fieldtypeid": "Parola", "desc": "Marzo"},
-            {"fieldtypeid": "Parola", "desc": "Aprile"},
-            {"fieldtypeid": "Parola", "desc": "Maggio"},
-            {"fieldtypeid": "Parola", "desc": "Giugno"},
-            {"fieldtypeid": "Parola", "desc": "Luglio"},
-            {"fieldtypeid": "Parola", "desc": "Agosto"},
-            {"fieldtypeid": "Parola", "desc": "Settembre"},
-            {"fieldtypeid": "Parola", "desc": "Ottobre"},
-            {"fieldtypeid": "Parola", "desc": "Novembre"},
-            {"fieldtypeid": "Parola", "desc": "Dicembre"},
-
+        # 2. Costruzione lista mesi nello stesso formato del DB (es. "04-Aprile")
+        mesi = [
+            f"{str(i).zfill(2)}-{m}"
+            for i, m in enumerate(
+                [
+                    "Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
+                    "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre",
+                ],
+                1,
+            )
         ]
+
+        # 3. Pivot: conta righe per (cliente, stabile, mese)  ───────────────────
+        #   • senza colonna `values` (aggfunc='size') otteniamo direttamente il
+        #     numero di record per cella
+        #   • fill_value=0 sostituisce automaticamente i NaN assenti con 0
+        pivot_df = pd.pivot_table(
+            df,
+            index=["recordidcliente_", "recordidstabile_"],
+            columns="mese",
+            aggfunc="size",
+            fill_value=0,
+        ).reindex(columns=mesi, fill_value=0)  # colonne mancanti completate a 0
+
+        pivot_array = pivot_df.reset_index().values.tolist()
+
+        # 4. Batch‑fetch anagrafiche (una query per tabella) ────────────────────
+        cli_ids = {r[0] for r in pivot_array}
+        sta_ids = {r[1] for r in pivot_array}
+
+        cli_map = {}
+        if cli_ids:
+            in_list = ",".join(f"'{x}'" for x in cli_ids)
+            rows = HelpderDB.sql_query(
+                f"""
+                    SELECT recordid_, nome_cliente
+                    FROM user_cliente
+                    WHERE recordid_ IN ({in_list})
+                """
+            )
+            cli_map = {r["recordid_"]: r["nome_cliente"] for r in rows}
+
+        sta_map = {}
+        if sta_ids:
+            in_list = ",".join(f"'{x}'" for x in sta_ids)
+            rows = HelpderDB.sql_query(
+                f"""
+                    SELECT recordid_, titolo_stabile, citta
+                    FROM user_stabile
+                    WHERE recordid_ IN ({in_list})
+                """
+            )
+            sta_map = {r["recordid_"]: (r["titolo_stabile"], r["citta"]) for r in rows}
+
+        # 5. Riclassifica: cliente ▶ stabili (con valori mesi) ──────────────────
+        data = defaultdict(list)  # {id_cli: [(id_sta, vals), ...]}
+        for id_cli, id_sta, *val_mesi in pivot_array:
+            data[id_cli].append((id_sta, val_mesi))
+
+        # 6. Costruisci `response_data`  ─────────────────────────────────────────
+        response_data = {
+            "columns": [
+                {"fieldtypeid": "Parola", "desc": ""},
+                {"fieldtypeid": "Parola", "desc": "Città"},
+                *[{"fieldtypeid": "Parola", "desc": m.split("-", 1)[1]} for m in mesi],
+            ],
+            "groups": [],
+        }
+
+        for id_cli, stabili in data.items():  # livello 0: cliente
+            grp_cli = {
+                "groupKey": id_cli,
+                "level": 0,
+                "fields": [
+                    {"value": cli_map.get(id_cli, "Cliente non definito"), "css": "font-semibold"},
+                    {"value": "", "css": ""},  # città non applicabile a livello cliente
+                ],
+                "rows": [],
+            }
+
+            for id_sta, vals in stabili:  # livello riga: stabile
+                nome_sta, citta = sta_map.get(id_sta, ("Stabile non definito", ""))
+                row_fields = [
+                    {"value": nome_sta, "css": ""},
+                    {"value": citta, "css": ""},
+                ]
+
+                # Valori mese → "X" se count ≥1, altrimenti "" (vuoto)
+                for v in vals:
+                    row_fields.append({"value": "X" if v >= 1 else "", "css": ""})
+
+                grp_cli["rows"].append({"recordid": id_sta, "css": "", "fields": row_fields})
+
+            response_data["groups"].append(grp_cli)
+
+        
     
-    if tableid == 'letturagasolio':
-        sql="SELECT * FROM user_letturagasolio  WHERE anno='2025' and  deleted_='N' ORDER BY recordidcliente_"
-        query_result=HelpderDB.sql_query(sql)
-        df = pd.DataFrame(query_result)
-        mesi = ['01.Gennaio', '02.Febbraio', '03.Marzo', '04.Aprile', '05.Maggio', '06.Giugno', '07.Luglio', '08.Agosto', '09.Settembre', '10.Ottobre', '11.Novembre', '12.Dicembre']
-        
-        pivot_df = pd.pivot_table(df,
-                                index=['recordidcliente_', 'recordidstabile_','recordidinformazionigasolio_'],
-                                columns='mese',
-                                values='lettura',
-                                aggfunc='sum')
-        pivot_df = pivot_df.sort_index(axis=1)
+
+    if tableid=='letturagasolio':
+        # 1. Recupero letture e pivot  ───────────────────────────────────────────────
+        df = pd.DataFrame(HelpderDB.sql_query("""
+            SELECT *
+            FROM user_letturagasolio
+            WHERE anno = '2025'
+                AND deleted_ = 'N'
+        """))
+
+        mesi = [f"{str(i).zfill(2)}-{m}" for i, m in enumerate([
+            "Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno",
+            "Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"
+        ], 1)]
+
+        pivot_df = (
+            pd.pivot_table(
+                df,
+                index=["recordidcliente_", "recordidstabile_", "recordidinformazionigasolio_"],
+                columns="mese",
+                values="lettura",
+                aggfunc="sum"
+            ).reindex(columns=mesi)           # <- mantiene l’ordine
+        ).fillna("")
+
         pivot_array = pivot_df.reset_index().values.tolist()
-        for row in pivot_array:
-            print(row)
-        # Raggruppa i record per cliente
-        gruppi_per_cliente = defaultdict(list)
-        for record in pivot_array:
-            recordid_cliente = record[0]
-            gruppi_per_cliente[recordid_cliente].append(record)
-        
-        
-        
-        for recordid_cliente, records in gruppi_per_cliente.items():
-            group = {}
+
+        # 2. Batch‑fetch anagrafiche  ────────────────────────────────────────────────
+        cli_ids   = {r[0] for r in pivot_array}
+        sta_ids   = {r[1] for r in pivot_array}
+        cis_ids   = {r[2] for r in pivot_array}
+
+        def fetch_map(table, id_set, fields):
+            if not id_set:
+                return {}
+            in_list = ",".join(f"'{x}'" for x in id_set)
+            cols    = ",".join(fields)
+            rows    = HelpderDB.sql_query(f"""
+                SELECT recordid_, {cols}
+                FROM user_{table}
+                WHERE recordid_ IN ({in_list})
+            """)
+            return {r["recordid_"]: {k: r[k] for k in fields} for r in rows}
+
+        cli_map = fetch_map("cliente",            cli_ids, ["nome_cliente"])
+        sta_map = fetch_map("stabile",            sta_ids, ["riferimento", "citta"])
+        cis_map = fetch_map("informazionigasolio", cis_ids, ["riferimento", "capienzacisterna", "livellominimo"])
+
+        # 3. Riclassifica: cliente ▶ stabile ▸ lista (cisterna, valori) ─────────────
+        data = defaultdict(lambda: defaultdict(list))
+        for id_cli, id_sta, id_cis, *val_mesi in pivot_array:
+            data[id_cli][id_sta].append((id_cis, val_mesi))
+
+        # 4. Costruisci response_data  (solo Python‑dict, 0 query extra) ────────────
+        response_data = {
+            "columns": (
+                [{"fieldtypeid": "Parola", "desc": ""}, {"fieldtypeid": "Parola", "desc": "Città"}] +
+                [{"fieldtypeid": "Parola", "desc": m.split("-", 1)[1]} for m in mesi] +
+                [{"fieldtypeid": "Parola", "desc": "Capienza"},
+                {"fieldtypeid": "Parola", "desc": "Livello minimo"}]
+            ),
+            "groups": []
+        }
+
+        for id_cli, stabili in data.items():                     # livello 0
+            grp_cli = {
+                "groupKey": id_cli,
+                "level": 0,
+                "fields": [
+                    {"value": cli_map.get(id_cli, {}).get("nome_cliente", ""), "css": "font-semibold"},
+                    {"value": "", "css": ""}
+                ],
+                "subGroups": []
+            }
+
+            for id_sta, cis_rows in stabili.items():             # livello 1
+                sta_info = sta_map.get(id_sta, {})
+                grp_sta = {
+                    "groupKey": f"{id_cli}-{id_sta}",
+                    "level": 1,
+                    "fields": [
+                        {"value": sta_info.get("riferimento", ""), "css": ""},
+                        {"value": sta_info.get("citta", ""), "css": ""}
+                    ],
+                    "rows": []
+                }
+
+                for id_cis, vals in cis_rows:                    # riga (cisterna)
+                    cis_info = cis_map.get(id_cis, {})
+                    row_fields = [
+                        {"value": cis_info.get("riferimento", ""), "css": "text-xs"},
+                        {"value": "", "css": ""}
+                    ] + [{"value": v, "css": ""} for v in vals] + [
+                        {"value": cis_info.get("capienzacisterna", ""), "css": ""},
+                        {"value": cis_info.get("livellominimo", ""),  "css": ""}
+                    ]
+                    grp_sta["rows"].append({"recordid": id_cis, "css": "", "fields": row_fields})
+
+                grp_cli["subGroups"].append(grp_sta)
+
+            response_data["groups"].append(grp_cli)            
             
-            # Campi del gruppo: ad esempio potresti voler inserire il nome del cliente o altre info
-            if recordid_cliente != 'None':
-                record_cliente=UserRecord('cliente',recordid_cliente)
-                nome_cliente = record_cliente.values.get('nome_cliente', '')
-                cliente_recordid=record_cliente.values.get('recordid_', '')
-            else:
-                nome_cliente = 'Cliente non definito'
-                cliente_recordid=''
-            group['groupKey']=cliente_recordid
-            group['level']=cliente_recordid
-            group_fields = [{"fieldid": "cliente", "value": nome_cliente, "css": ""}]
-            group["fields"] = group_fields
-            group['subGroups']=[]
-            group["rows"] = []
-            # Costruiamo le righe: in questo esempio una sola riga per cliente
-            # Per ogni mese verifichiamo se esiste un record per quel mese
-            for record in records:
-                row = {"recordid": record[0], "css": "#", "fields": []}
-                recordid_stabile=record[1]
-                if recordid_stabile != 'None':
-                    record_stabile=UserRecord('stabile',recordid_stabile)
-                    titolo_stabile = record_stabile.values.get('titolo_stabile', '')
-                    citta = record_stabile.values.get('citta', '')
-                else:
-                    titolo_stabile = 'Stabile non definito'
-                    citta=''
-                
-                
-                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": titolo_stabile})
-                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": citta})
-
-                for elemento in record[3:]:
-                    if pd.isnull(elemento):
-                        value = ''
-                    else:
-                        value = elemento
-                    row["fields"].append({
-                        "recordid": "",
-                        "css": '',
-                        "type": "standard",
-                        "value": value
-                    })
-                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": ''})
-                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": ''})
-                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": ''})
-                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": ''})
-                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": ''})
-                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": ''})
-                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": ''})
-                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": ''})
-                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": ''})
-
-                recordid_cisterna=record[2]
-                if recordid_cisterna != 'None':
-                    record_cisterna=UserRecord('informazionigasolio',recordid_cisterna)
-                    capienzacisterna = record_cisterna.values.get('capienzacisterna', '')
-                    livellominimo = record_cisterna.values.get('livellominimo', '')
-                else:
-                    capienzacisterna = 'Cisterna non definita'
-                    livellominimo='Cisterna non definita'
-                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": capienzacisterna})
-                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": livellominimo})
-                group["rows"].append(row)
-            
-            
-            response_data["groups"].append(group)
 
 
-        response_data["columns"] = [
-            {"fieldtypeid": "Parola", "desc": ""},
-            {"fieldtypeid": "Parola", "desc": "Città"},
-            {"fieldtypeid": "Parola", "desc": "Gennaio"},
-            {"fieldtypeid": "Parola", "desc": "Febbraio"},
-            {"fieldtypeid": "Parola", "desc": "Marzo"},
-            {"fieldtypeid": "Parola", "desc": "Aprile"},
-            {"fieldtypeid": "Parola", "desc": "Maggio"},
-            {"fieldtypeid": "Parola", "desc": "Giugno"},
-            {"fieldtypeid": "Parola", "desc": "Luglio"},
-            {"fieldtypeid": "Parola", "desc": "Agosto"},
-            {"fieldtypeid": "Parola", "desc": "Settembre"},
-            {"fieldtypeid": "Parola", "desc": "Ottobre"},
-            {"fieldtypeid": "Parola", "desc": "Novembre"},
-            {"fieldtypeid": "Parola", "desc": "Dicembre"},
-            {"fieldtypeid": "Parola", "desc": "Capienza"},
-            {"fieldtypeid": "Parola", "desc": "Livello minimo"},
-
-        ]
 
     if tableid == 'dipendente':
         sql="SELECT * FROM user_dipendente  WHERE  deleted_='N' ORDER BY ruolo"
