@@ -1,0 +1,13 @@
+beautifulsoup4==4.13.4
+Django==5.0.9
+django_environ==0.10.0
+django_user_agents==0.4.0
+djangorestframework==3.15.2
+pandas==2.2.3
+pdfkit==1.0.0
+pyodbc==5.0.1
+pyotp==2.9.0
+python_environ==0.4.54
+qrcode==7.4.2
+Requests==2.32.3
+waitress==3.0.2
