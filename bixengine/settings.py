@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     'customapp_telefonoamico',
     'customapp_winteler',
     'customapp_pitservice',
+    'customapp_belotti',
     'corsheaders',
 ]
 
