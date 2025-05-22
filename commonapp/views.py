@@ -913,10 +913,25 @@ def save_record_fields(request):
         letturagasolio_record = UserRecord('letturagasolio', recordid)
         stabile_record = UserRecord('stabile', letturagasolio_record.values['recordidstabile_'])
         informazionigasolio_record=UserRecord('informazionigasolio',letturagasolio_record.values['recordidinformazionigasolio_'])
+        
+        capienzacisterna=informazionigasolio_record.values['capienzacisterna']
+        letturacm=letturagasolio_record.values['letturacm']
+        
+        if capienzacisterna:
+            if capienzacisterna == 1500:
+                if letturacm:
+                    letturagasolio_record.values['letturalitri']=letturacm*10
+            if capienzacisterna == 2000:
+                if letturacm:
+                    letturagasolio_record.values['letturalitri']=letturacm*13
+        
+        
+            letturagasolio_record.values['letturalitri']=float(letturacm)
+
         #TODO anno dinamico
         letturagasolio_record.values['anno']='2025'
         letturagasolio_record.values['recordidcliente_']=stabile_record.values['recordidcliente_']
-        letturagasolio_record.values['capienzacisterna']=informazionigasolio_record.values['capienzacisterna']
+        letturagasolio_record.values['capienzacisterna']=capienzacisterna
         letturagasolio_record.values['livellominimo']=informazionigasolio_record.values['livellominimo']
         letturagasolio_record.save()
 
