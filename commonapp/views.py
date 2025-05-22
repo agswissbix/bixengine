@@ -916,7 +916,7 @@ def save_record_fields(request):
         
         capienzacisterna=informazionigasolio_record.values['capienzacisterna']
         letturacm=letturagasolio_record.values['letturacm']
-        
+
         if capienzacisterna:
             if capienzacisterna == 1500:
                 if letturacm:
@@ -926,7 +926,6 @@ def save_record_fields(request):
                     letturagasolio_record.values['letturalitri']=letturacm*13
         
         
-            letturagasolio_record.values['letturalitri']=float(letturacm)
 
         #TODO anno dinamico
         letturagasolio_record.values['anno']='2025'
