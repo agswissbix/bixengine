@@ -914,8 +914,8 @@ def save_record_fields(request):
         stabile_record = UserRecord('stabile', letturagasolio_record.values['recordidstabile_'])
         informazionigasolio_record=UserRecord('informazionigasolio',letturagasolio_record.values['recordidinformazionigasolio_'])
         
-        capienzacisterna=informazionigasolio_record.values['capienzacisterna']
-        letturacm=letturagasolio_record.values['letturacm']
+        capienzacisterna=Helper.safe_float(informazionigasolio_record.values['capienzacisterna'])
+        letturacm=Helper.safe_float(letturagasolio_record.values['letturacm'])
 
         if capienzacisterna:
             if capienzacisterna == 1500:

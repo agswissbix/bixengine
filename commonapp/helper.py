@@ -141,3 +141,10 @@ class Helper:
 
         return _recurse(pivot_df, 0)
     
+
+    @classmethod
+    def safe_float(cls,value):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
