@@ -908,6 +908,18 @@ def save_record_fields(request):
         contattostabile_record.values['ruolo']=contatto_record.values['ruolo']
         contattostabile_record.save()
 
+    # ---LETTURE GASOLIO---
+    if tableid == 'letturagasolio':
+        letturagasolio_record = UserRecord('letturagasolio', recordid)
+        stabile_record = UserRecord('stabile', letturagasolio_record.values['recordidstabile_'])
+        informazionigasolio_record=UserRecord('informazionigasolio',letturagasolio_record.values['recordidinformazionigasolio_'])
+        #TODO anno dinamico
+        letturagasolio_record.values['anno']='2025'
+        letturagasolio_record.values['recordidcliente_']=stabile_record.values['recordidcliente_']
+        letturagasolio_record.values['capienzacisterna']=informazionigasolio_record.values['capienzacisterna']
+        letturagasolio_record.values['livellominimo']=informazionigasolio_record.values['livellominimo']
+        letturagasolio_record.save()
+
 
     # ---BOLLETTINI---
     if tableid == 'bollettini':
@@ -1048,7 +1060,7 @@ def prepara_email(request):
 
         attachment_fullpath=HelpderDB.get_uploadedfile_fullpath('rendicontolavanderia',rendiconto_recordid,'allegato')
         attachment_relativepath=HelpderDB.get_uploadedfile_relativepath('rendicontolavanderia',rendiconto_recordid,'allegato')
-        subject=f"Resoconto lavanderia - {stabile_riferimento} - {mese} {anno}"
+        subject=f"Resoconto lavanderia - {stabile_riferimento} {stabile_citta} - {mese} {anno}"
 
         body=f"""
 
@@ -1085,7 +1097,7 @@ def prepara_email(request):
             "text": body,
             "attachment_fullpath": attachment_fullpath,
             "attachment_relativepath": attachment_relativepath,
-            "attachment_name": f"{stabile_riferimento} - Lavanderia - {mese} - {anno}.pdf",
+            "attachment_name": f"{stabile_riferimento} {stabile_citta} - Lavanderia - {mese} - {anno}.pdf",
             }
     
     if type == 'emailGasolio':
@@ -1105,7 +1117,8 @@ def prepara_email(request):
 
         attachment_relativepath=stampa_gasoli(request,recordid_stabile=stabile_recordid,meseLettura=meseLettura)
         riferimento=stabile_record.values.get('riferimento', '')
-        subject=f"Livello Gasolio - 05 {anno} - {riferimento}"
+        stabile_citta=stabile_record.values['citta']
+        subject=f"Livello Gasolio - 05 {anno} - {riferimento} {stabile_citta}"
         body=f"""
          <p>
                 Egregi Signori,<br/>
@@ -1139,7 +1152,7 @@ def prepara_email(request):
             "text": body,
             "attachment_fullpath": "",
             "attachment_relativepath": attachment_relativepath,
-            "attachment_name": f"Lettura_Gasolio_05-{anno}-{riferimento}.pdf",
+            "attachment_name": f"Lettura_Gasolio_05-{anno}-{riferimento}-{stabile_citta}.pdf",
             }
 
     return JsonResponse({"success": True, "emailFields": email_fields})
@@ -1148,7 +1161,8 @@ def prepara_email(request):
 def stampa_gasoli(request,recordid_stabile,meseLettura):
     data={}
     filename='gasolio.pdf'
-    meseLettura="2025 04-Aprile"
+    #TODO dinamico
+    meseLettura="2025 05-Maggio"
     anno, mese = meseLettura.split(' ')
         
     script_dir = os.path.dirname(os.path.abspath(__file__))
