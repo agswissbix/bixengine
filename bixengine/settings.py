@@ -181,6 +181,7 @@ CORS_ALLOWED_ORIGINS = [
     'http://10.30.6.69',
     'http://pc-pitgestional:3000',
     'http://pc-pitgestional',
+    'http://10.0.0.108:3000',
     env('BIXENGINE_SERVER'),
     env('BIXPORTAL_SERVER'),
 ]
@@ -189,6 +190,7 @@ CORS_ALLOW_CREDENTIALS = True
 
 CSRF_COOKIE_NAME = "csrftoken"
 SESSION_COOKIE_AGE = 1209600  # 2 settimane, ad esempio
+
 
 
 # 2. Se usi Django >= 4.0, devi aggiungere l'origin di frontend qui:
