@@ -178,7 +178,7 @@ def stampa_gasoli(request):
     if request.method == 'POST':
         recordid_stabile = data.get('recordid')
         #meseLettura=data.get('date')
-        meseLettura="2025 04-Aprile"
+        meseLettura="2025 05-Maggio"
         anno, mese = meseLettura.split(' ')
     script_dir = os.path.dirname(os.path.abspath(__file__))
     wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
