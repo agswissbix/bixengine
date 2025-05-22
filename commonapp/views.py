@@ -1095,7 +1095,7 @@ def prepara_email(request):
         anno, mese = meseLettura.split('-')
         attachment_relativepath=stampa_gasoli(request,recordid_stabile=stabile_recordid,meseLettura=meseLettura)
         riferimento=stabile_record.values.get('riferimento', '')
-        subject=f"Livello Gasolio - {mese} {anno} - {riferimento}"
+        subject=f"Livello Gasolio - 05 {anno} - {riferimento}"
         body=f"""
          <p>
                 Egregi Signori,<br/>
@@ -1129,7 +1129,7 @@ def prepara_email(request):
             "text": body,
             "attachment_fullpath": "",
             "attachment_relativepath": attachment_relativepath,
-            "attachment_name": f"Lettura_Gasolio_{mese}-{anno}-{riferimento}.pdf",
+            "attachment_name": f"Lettura_Gasolio_05-{anno}-{riferimento}.pdf",
             }
 
     return JsonResponse({"success": True, "emailFields": email_fields})
