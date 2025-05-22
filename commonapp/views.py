@@ -1093,6 +1093,16 @@ def prepara_email(request):
         stabile_record=UserRecord('stabile',stabile_recordid)
         meseLettura='2025-04'
         anno, mese = meseLettura.split('-')
+
+        sql=f"SELECT * FROM user_contattostabile WHERE deleted_='N' AND recordidstabile_='{stabile_recordid}'"
+        row=HelpderDB.sql_query_row(sql)
+        contatto_email=''
+        if row:
+            contatto_recordid=row['recordidcontatti_']
+            contatto_record=UserRecord('contatti',contatto_recordid)
+            if contatto_record:
+                contatto_email=contatto_record.values['email']
+
         attachment_relativepath=stampa_gasoli(request,recordid_stabile=stabile_recordid,meseLettura=meseLettura)
         riferimento=stabile_record.values.get('riferimento', '')
         subject=f"Livello Gasolio - 05 {anno} - {riferimento}"
@@ -1122,7 +1132,7 @@ def prepara_email(request):
                 """
         
         email_fields = {
-            "to": "",
+            "to": contatto_email,
             "cc": "contabilita@pitservice.ch,segreteria@pitservice.ch",
             "bcc": "",	
             "subject": subject,
