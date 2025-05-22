@@ -93,7 +93,10 @@
                             <th>Cisterna</th>
                             <th>Capienza</th>
                             <th>Data Lettura</th>
-                            <th>Livello lettura</th>
+                            {% if show_letturacm %}
+                                <th>Lettura cm</th>
+                            {% endif %}
+                            <th>Lettura litri</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -102,7 +105,13 @@
                                 <td>{{ lettura.riferimento }}</td>
                                 <td>{{ lettura.capienzacisterna }}</td>
                                 <td>{{ lettura.datalettura|date:"d/m/Y" }}</td>
-                                <td>{{ lettura.lettura }}</td>
+                                {% if lettura.letturacm %}
+                                    <td>
+                                        {{ lettura.letturacm }}
+                                    </td>
+                                    
+                                {% endif %}
+                                <td>{{ lettura.letturalitri }}</td>
                             </tr>
                         {% endfor %}
 

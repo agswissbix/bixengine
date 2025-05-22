@@ -178,6 +178,7 @@ def stampa_gasoli(request):
     if request.method == 'POST':
         recordid_stabile = data.get('recordid')
         #meseLettura=data.get('date')
+        #TODO sistemare dinamico
         meseLettura="2025 05-Maggio"
         anno, mese = meseLettura.split(' ')
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -187,7 +188,7 @@ def stampa_gasoli(request):
     record_stabile=UserRecord('stabile',recordid_stabile)
     data['stabile']=record_stabile.values
     sql=f"""
-    SELECT t.recordid_,t.anno,t.mese,t.datalettura,t.lettura, i.riferimento, i.livellominimo, i.capienzacisterna
+    SELECT t.recordid_,t.anno,t.mese,t.datalettura,t.letturacm,t.letturalitri, i.riferimento, i.livellominimo, i.capienzacisterna
     FROM user_letturagasolio t
     INNER JOIN (
         SELECT recordidinformazionigasolio_, MAX(datalettura) AS max_datalettura
@@ -204,7 +205,8 @@ def stampa_gasoli(request):
             """
     ultimeletturegasolio = HelpderDB.sql_query(sql)
     data['ultimeletturegasolio']=ultimeletturegasolio
-    
+    data["show_letturacm"] = any(l.get('letturacm') for l in ultimeletturegasolio)
+
     content = render_to_string('pdf/gasolio.html', data)
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
