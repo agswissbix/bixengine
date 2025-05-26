@@ -27,6 +27,7 @@ from commonapp.models import UserProfile
 from commonapp import helper
 import time
 from typing import List
+import re
 import pandas as pd
 import pdfkit
 from django.http import HttpResponseForbidden
@@ -1129,7 +1130,7 @@ def prepara_email(request):
             if contatto_record:
                 contatto_email=contatto_record.values['email']
 
-        attachment_relativepath=stampa_gasoli(request,recordid_stabile=stabile_recordid,meseLettura=meseLettura)
+        attachment_relativepath=stampa_gasoli(request)
         riferimento=stabile_record.values.get('riferimento', '')
         stabile_citta=stabile_record.values['citta']
         subject=f"Livello Gasolio - 05 {anno} - {riferimento} {stabile_citta}"
@@ -1172,13 +1173,17 @@ def prepara_email(request):
     return JsonResponse({"success": True, "emailFields": email_fields})
 
 @csrf_exempt
-def stampa_gasoli(request,recordid_stabile,meseLettura):
+def stampa_gasoli(request):
     data={}
-    filename='gasolio.pdf'
-    #TODO dinamico
-    meseLettura="2025 05-Maggio"
-    anno, mese = meseLettura.split(' ')
-        
+    filename='report gasolio.pdf'
+    recordid_stabile = ''
+    data = json.loads(request.body)
+    if request.method == 'POST':
+        recordid_stabile = data.get('recordid')
+        #meseLettura=data.get('date')
+        #TODO sistemare dinamico
+        meseLettura="2025 05-Maggio"
+        anno, mese = meseLettura.split(' ')
     script_dir = os.path.dirname(os.path.abspath(__file__))
     wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
     config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
@@ -1186,7 +1191,7 @@ def stampa_gasoli(request,recordid_stabile,meseLettura):
     record_stabile=UserRecord('stabile',recordid_stabile)
     data['stabile']=record_stabile.values
     sql=f"""
-    SELECT t.recordid_,t.anno,t.mese,t.datalettura,t.lettura, i.riferimento, i.livellominimo, i.capienzacisterna
+    SELECT t.recordid_,t.anno,t.mese,t.datalettura,t.letturacm,t.letturalitri, i.riferimento, i.livellominimo, i.capienzacisterna
     FROM user_letturagasolio t
     INNER JOIN (
         SELECT recordidinformazionigasolio_, MAX(datalettura) AS max_datalettura
@@ -1203,12 +1208,18 @@ def stampa_gasoli(request,recordid_stabile,meseLettura):
             """
     ultimeletturegasolio = HelpderDB.sql_query(sql)
     data['ultimeletturegasolio']=ultimeletturegasolio
-    
+    data["show_letturacm"] = any(l.get('letturacm') for l in ultimeletturegasolio)
+
     content = render_to_string('pdf/gasolio.html', data)
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
     config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
+    
+    filename = f"Lettura Gasolio {mese} {anno}  {record_stabile.values['indirizzo']}.pdf"
+    filename = re.sub(r'[\\/*?:"<>|]', "", filename)
+    #filename='gasolio.pdf'
+
     filename_with_path = os.path.dirname(os.path.abspath(__file__))
     filename_with_path = filename_with_path.rsplit('views', 1)[0]
     filename_with_path = filename_with_path + '\\static\\pdf\\' + filename
@@ -1222,7 +1233,18 @@ def stampa_gasoli(request,recordid_stabile,meseLettura):
         }
     )
 
-    return 'commonapp/static/pdf/' + filename
+    if True:
+        return 'commonapp/static/pdf/' + filename
+    else:
+        try:
+            with open(filename_with_path, 'rb') as fh:
+                response = HttpResponse(fh.read(), content_type="application/pdf")
+                response['Content-Disposition'] = f'inline; filename={filename}'
+                return response
+            return response
+
+        finally:
+            os.remove(filename_with_path)
     
 
 

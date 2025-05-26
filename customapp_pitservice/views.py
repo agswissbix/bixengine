@@ -169,6 +169,145 @@ def stampa_bollettino_test(request):
     finally:
         os.remove(filename_with_path)
 
+
+
+@csrf_exempt
+def prepara_email(request):
+    data = json.loads(request.body)
+    tableid= data.get("tableid")
+    recordid= data.get("recordid")
+    type= data.get("type")
+    print(tableid,recordid)
+
+    email_fields = {
+            "to": "",
+            "cc": "",
+            "bcc": "",	
+            "subject": "",
+            "text": "",
+            "attachment_fullpath": "",
+            "attachment_relativepath": "",
+            "attachment_name": "",
+            }
+    
+    if type == 'emailLavanderia':
+        rendiconto_recordid=recordid
+        rendiconto_record=UserRecord('rendicontolavanderia',rendiconto_recordid)
+        mese=rendiconto_record.values['mese'][3:]
+        anno=rendiconto_record.values['anno']
+        stabile_recordid=rendiconto_record.values['recordidstabile_']
+        stabile_record=UserRecord('stabile',stabile_recordid)
+        stabile_riferimento=stabile_record.values['riferimento']
+        stabile_indirizzo=stabile_record.values['indirizzo']
+        stabile_citta=stabile_record.values['citta']
+        sql=f"SELECT * FROM user_contattostabile WHERE deleted_='N' AND recordidstabile_='{stabile_recordid}'"
+        row=HelpderDB.sql_query_row(sql)
+        contatto_emai=''
+        if row:
+            contatto_recordid=row['recordidcontatti_']
+            contatto_record=UserRecord('contatti',contatto_recordid)
+            if contatto_record:
+                contatto_emai=contatto_record.values['email']
+
+        attachment_fullpath=HelpderDB.get_uploadedfile_fullpath('rendicontolavanderia',rendiconto_recordid,'allegato')
+        attachment_relativepath=HelpderDB.get_uploadedfile_relativepath('rendicontolavanderia',rendiconto_recordid,'allegato')
+        subject=f"Resoconto lavanderia - {stabile_riferimento} {stabile_citta} - {mese} {anno}"
+
+        body=f"""
+
+            <p>
+                Egregi Signori,<br/>
+                Con la presente in allegato trasmettiamo il resoconto delle lavanderie dello stabile in {stabile_indirizzo} a {stabile_citta}.<br/>
+                Restiamo volentieri a disposizione e porgiamo cordiali saluti.
+            </p>
+            <br/>
+            <table style="border: none; border-collapse: collapse; margin-top: 20px;">
+                    <tr>
+                        <td style="vertical-align: top; padding-right: 10px;">
+                            <img src="https://pitservice.ch/wp-content/uploads/2025/04/miniminilogo.png" alt="Pit Service Logo">
+                        </td>
+                        <td style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.0">
+                            <p>
+                                <b>Pit Service Sagl</b><br/>
+                                La cura del tuo immobile<br/>
+                                Phone: 091.993.03.92 <br/>
+                                Via San Gottardo 26 <br/>
+                                6943 Vezia <br/>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+
+            """
+
+        email_fields = {
+            "to": contatto_emai,
+            "cc": "contabilita@pitservice.ch,segreteria@pitservice.ch",
+            "bcc": "",	
+            "subject": subject,
+            "text": body,
+            "attachment_fullpath": attachment_fullpath,
+            "attachment_relativepath": attachment_relativepath,
+            "attachment_name": f"{stabile_riferimento} {stabile_citta} - Lavanderia - {mese} - {anno}.pdf",
+            }
+    
+    if type == 'emailGasolio':
+        stabile_recordid=recordid
+        stabile_record=UserRecord('stabile',stabile_recordid)
+        meseLettura='2025-04'
+        anno, mese = meseLettura.split('-')
+
+        sql=f"SELECT * FROM user_contattostabile WHERE deleted_='N' AND recordidstabile_='{stabile_recordid}'"
+        row=HelpderDB.sql_query_row(sql)
+        contatto_email=''
+        if row:
+            contatto_recordid=row['recordidcontatti_']
+            contatto_record=UserRecord('contatti',contatto_recordid)
+            if contatto_record:
+                contatto_email=contatto_record.values['email']
+
+        attachment_relativepath=stampa_gasoli(request)
+        riferimento=stabile_record.values.get('riferimento', '')
+        stabile_citta=stabile_record.values['citta']
+        subject=f"Livello Gasolio - 05 {anno} - {riferimento} {stabile_citta}"
+        body=f"""
+         <p>
+                Egregi Signori,<br/>
+                con la presente in allegato trasmettiamo la lettura gasolio dello stabile in {stabile_record.values['indirizzo']}<br/>
+                Restiamo volentieri a disposizione e porgiamo cordiali saluti.<br/>
+        </p>
+
+                <table style="border: none; border-collapse: collapse; margin-top: 20px;">
+                    <tr>
+                        <td style="vertical-align: top; padding-right: 10px;">
+                            <img src="https://pitservice.ch/wp-content/uploads/2025/04/miniminilogo.png"  alt="Pit Service Logo">
+                        </td>
+                        <td style="font-family: Arial, sans-serif; font-size: 14px; ">
+                            <p>
+                                <b>Pit Service Sagl</b><br/>
+                                La cura del tuo immobile<br/>
+                                Phone: 091.993.03.92 <br/>
+                                Via San Gottardo 26 <br/>
+                                6943 Vezia <br/>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+                """
+        
+        email_fields = {
+            "to": contatto_email,
+            "cc": "contabilita@pitservice.ch,segreteria@pitservice.ch",
+            "bcc": "",	
+            "subject": subject,
+            "text": body,
+            "attachment_fullpath": "",
+            "attachment_relativepath": attachment_relativepath,
+            "attachment_name": f"Lettura_Gasolio_05-{anno}-{riferimento}-{stabile_citta}.pdf",
+            }
+
+    return JsonResponse({"success": True, "emailFields": email_fields})
+
 @csrf_exempt
 def stampa_gasoli(request):
     data={}
@@ -215,6 +354,7 @@ def stampa_gasoli(request):
     
     filename = f"Lettura Gasolio {mese} {anno}  {record_stabile.values['indirizzo']}.pdf"
     filename = re.sub(r'[\\/*?:"<>|]', "", filename)
+    #filename='gasolio.pdf'
 
     filename_with_path = os.path.dirname(os.path.abspath(__file__))
     filename_with_path = filename_with_path.rsplit('views', 1)[0]
@@ -229,15 +369,18 @@ def stampa_gasoli(request):
         }
     )
 
-    try:
-        with open(filename_with_path, 'rb') as fh:
-            response = HttpResponse(fh.read(), content_type="application/pdf")
-            response['Content-Disposition'] = f'inline; filename={filename}'
+    if False:
+        return 'customapp_pitservice/static/pdf/' + filename
+    else:
+        try:
+            with open(filename_with_path, 'rb') as fh:
+                response = HttpResponse(fh.read(), content_type="application/pdf")
+                response['Content-Disposition'] = f'inline; filename={filename}'
+                return response
             return response
-        return response
 
-    finally:
-        os.remove(filename_with_path)
+        finally:
+            os.remove(filename_with_path)
 
 
 
