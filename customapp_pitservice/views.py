@@ -327,7 +327,7 @@ def stampa_gasoli(request):
     record_stabile=UserRecord('stabile',recordid_stabile)
     data['stabile']=record_stabile.values
     sql=f"""
-    SELECT t.recordid_,t.anno,t.mese,t.datalettura,t.letturacm,t.letturalitri, i.riferimento, i.livellominimo, i.capienzacisterna
+    SELECT t.recordid_,t.anno,t.mese,t.datalettura,t.letturacm,t.letturalitri, i.riferimento, i.livellominimo, i.capienzacisterna, i.note
     FROM user_letturagasolio t
     INNER JOIN (
         SELECT recordidinformazionigasolio_, MAX(datalettura) AS max_datalettura
@@ -345,6 +345,7 @@ def stampa_gasoli(request):
     ultimeletturegasolio = HelpderDB.sql_query(sql)
     data['ultimeletturegasolio']=ultimeletturegasolio
     data["show_letturacm"] = any(l.get('letturacm') for l in ultimeletturegasolio)
+    data["show_note"] = any(l.get('note') for l in ultimeletturegasolio)
 
     content = render_to_string('pdf/gasolio.html', data)
 
