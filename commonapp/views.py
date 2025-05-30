@@ -1059,6 +1059,7 @@ def prepara_email(request):
         rendiconto_record=UserRecord('rendicontolavanderia',rendiconto_recordid)
         mese=rendiconto_record.values['mese'][3:]
         anno=rendiconto_record.values['anno']
+        stato=rendiconto_record.values['stato']
         stabile_recordid=rendiconto_record.values['recordidstabile_']
         stabile_record=UserRecord('stabile',stabile_recordid)
         stabile_riferimento=stabile_record.values['riferimento']
@@ -1077,15 +1078,56 @@ def prepara_email(request):
         attachment_relativepath=HelpderDB.get_uploadedfile_relativepath('rendicontolavanderia',rendiconto_recordid,'allegato')
         subject=f"Resoconto lavanderia - {stabile_riferimento} {stabile_citta} - {mese} {anno}"
 
-        body=f"""
+        body = ""
+        if stato=='Da fare':
+            body = "Rendiconto da fare"
 
-            <p>
-                Egregi Signori,<br/>
-                Con la presente in allegato trasmettiamo il resoconto delle lavanderie dello stabile in {stabile_indirizzo} a {stabile_citta}.<br/>
-                Restiamo volentieri a disposizione e porgiamo cordiali saluti.
-            </p>
-            <br/>
-            <table style="border: none; border-collapse: collapse; margin-top: 20px;">
+        if stato=='Inviato':
+            body = "Rendiconto già inviato"
+
+        if stato=='Preparato':
+            attachment_name=f"{stabile_riferimento} {stabile_citta} - Lavanderia - {mese} - {anno}.pdf"
+            body=f"""
+
+                <p>
+                    Egregi Signori,<br/>
+                    Con la presente in allegato trasmettiamo il resoconto delle lavanderie dello stabile in {stabile_indirizzo} a {stabile_citta}.<br/>
+                    Restiamo volentieri a disposizione e porgiamo cordiali saluti.
+                </p>
+                <br/>
+                <table style="border: none; border-collapse: collapse; margin-top: 20px;">
+                        <tr>
+                            <td style="vertical-align: top; padding-right: 10px;">
+                                <img src="https://pitservice.ch/wp-content/uploads/2025/04/miniminilogo.png" alt="Pit Service Logo">
+                            </td>
+                            <td style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.0">
+                                <p>
+                                    <b>Pit Service Sagl</b><br/>
+                                    La cura del tuo immobile<br/>
+                                    Phone: 091.993.03.92 <br/>
+                                    Via San Gottardo 26 <br/>
+                                    6943 Vezia <br/>
+                                </p>
+                            </td>
+                        </tr>
+                    </table>
+
+                """
+        
+        if stato=='Nessuna ricarica':
+            attachment_fullpath=''
+            attachment_relativepath=''
+            attachment_name=''
+            body=f"""
+<p>
+Egregi Signori,<br/>
+
+con la presente per informarvi che durante il mese corrente non abbiamo eseguito ricariche tessere lavanderia presso lo stabile in {stabile_indirizzo} a {stabile_citta}.<br/>
+
+Cordiali saluti
+</p>
+<br/>
+<table style="border: none; border-collapse: collapse; margin-top: 20px;">
                     <tr>
                         <td style="vertical-align: top; padding-right: 10px;">
                             <img src="https://pitservice.ch/wp-content/uploads/2025/04/miniminilogo.png" alt="Pit Service Logo">
@@ -1101,7 +1143,6 @@ def prepara_email(request):
                         </td>
                     </tr>
                 </table>
-
             """
 
         email_fields = {
@@ -1112,7 +1153,7 @@ def prepara_email(request):
             "text": body,
             "attachment_fullpath": attachment_fullpath,
             "attachment_relativepath": attachment_relativepath,
-            "attachment_name": f"{stabile_riferimento} {stabile_citta} - Lavanderia - {mese} - {anno}.pdf",
+            "attachment_name": attachment_name,
             }
     
     if type == 'emailGasolio':
@@ -1269,27 +1310,30 @@ def save_email(request):
     record_email.values['mailbody']=mail_body
     record_email.values['cc']=email_data['cc']
     record_email.values['ccn']=email_data['bcc']
-    record_email.values['attachment_name']=email_data['attachment_name']
+    
     record_email.values['status']="Da inviare"
     record_email.save()
 
     attachment_relativepath=email_data['attachment_relativepath']
-    if attachment_relativepath.startswith("commonapp/static"):
-        base_dir=settings.BASE_DIR
-        file_path = os.path.join(settings.BASE_DIR, attachment_relativepath)
-        fullpath_originale = default_storage.path(file_path)
-    else:
-        fullpath_originale=HelpderDB.get_uploadedfile_fullpath(tableid,recordid,'allegato')
-    
-    fullpath_email=HelpderDB.get_upload_fullpath('email',record_email.recordid,'attachment')
-    #  Assicurati che la cartella di destinazione esista
-    os.makedirs(os.path.dirname(fullpath_email), exist_ok=True)
+    if attachment_relativepath != '':   
+        record_email.values['attachment_name']=email_data['attachment_name'] 
+        if attachment_relativepath.startswith("commonapp/static"):
+            base_dir=settings.BASE_DIR
+            file_path = os.path.join(settings.BASE_DIR, attachment_relativepath)
+            fullpath_originale = default_storage.path(file_path)
+        else:
+                fullpath_originale=HelpderDB.get_uploadedfile_fullpath(tableid,recordid,'allegato')
+        
+        fullpath_email=HelpderDB.get_upload_fullpath('email',record_email.recordid,'attachment')
+        #  Assicurati che la cartella di destinazione esista
+        os.makedirs(os.path.dirname(fullpath_email), exist_ok=True)
 
-    # ------------------ copia dell’allegato -------------
-    if os.path.isfile(fullpath_originale):
-        shutil.copy2(fullpath_originale, fullpath_email)
-    
-    record_email.values['attachment']=f"email/{record_email.recordid}/attachment.pdf"
+        # ------------------ copia dell’allegato -------------
+        if os.path.isfile(fullpath_originale):
+            shutil.copy2(fullpath_originale, fullpath_email)
+        
+        record_email.values['attachment']=f"email/{record_email.recordid}/attachment.pdf"
+
     record_email.save()
 
     return JsonResponse({"success": True})

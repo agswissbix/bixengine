@@ -195,6 +195,7 @@ def prepara_email(request):
         rendiconto_record=UserRecord('rendicontolavanderia',rendiconto_recordid)
         mese=rendiconto_record.values['mese'][3:]
         anno=rendiconto_record.values['anno']
+        stato=rendiconto_record.values['stato']
         stabile_recordid=rendiconto_record.values['recordidstabile_']
         stabile_record=UserRecord('stabile',stabile_recordid)
         stabile_riferimento=stabile_record.values['riferimento']
@@ -213,15 +214,52 @@ def prepara_email(request):
         attachment_relativepath=HelpderDB.get_uploadedfile_relativepath('rendicontolavanderia',rendiconto_recordid,'allegato')
         subject=f"Resoconto lavanderia - {stabile_riferimento} {stabile_citta} - {mese} {anno}"
 
-        body=f"""
+        body = ""
+        if stato=='Da fare':
+            body = "Rendiconto da fare"
 
-            <p>
-                Egregi Signori,<br/>
-                Con la presente in allegato trasmettiamo il resoconto delle lavanderie dello stabile in {stabile_indirizzo} a {stabile_citta}.<br/>
-                Restiamo volentieri a disposizione e porgiamo cordiali saluti.
-            </p>
-            <br/>
-            <table style="border: none; border-collapse: collapse; margin-top: 20px;">
+        if stato=='Inviato':
+            body = "Rendiconto già inviato"
+
+        if stato=='Preparato':
+            body=f"""
+
+                <p>
+                    Egregi Signori,<br/>
+                    Con la presente in allegato trasmettiamo il resoconto delle lavanderie dello stabile in {stabile_indirizzo} a {stabile_citta}.<br/>
+                    Restiamo volentieri a disposizione e porgiamo cordiali saluti.
+                </p>
+                <br/>
+                <table style="border: none; border-collapse: collapse; margin-top: 20px;">
+                        <tr>
+                            <td style="vertical-align: top; padding-right: 10px;">
+                                <img src="https://pitservice.ch/wp-content/uploads/2025/04/miniminilogo.png" alt="Pit Service Logo">
+                            </td>
+                            <td style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.0">
+                                <p>
+                                    <b>Pit Service Sagl</b><br/>
+                                    La cura del tuo immobile<br/>
+                                    Phone: 091.993.03.92 <br/>
+                                    Via San Gottardo 26 <br/>
+                                    6943 Vezia <br/>
+                                </p>
+                            </td>
+                        </tr>
+                    </table>
+
+                """
+        
+        if stato=='Nessuna ricarica':
+            body=f"""
+<p>
+Egregi Signori,
+
+con la presente per informarvi che durante il mese corrente non abbiamo eseguito ricariche tessere lavanderia presso lo stabile in {stabile_indirizzo} a {stabile_citta}.
+
+Cordiali saluti
+</p>
+<br/>
+<table style="border: none; border-collapse: collapse; margin-top: 20px;">
                     <tr>
                         <td style="vertical-align: top; padding-right: 10px;">
                             <img src="https://pitservice.ch/wp-content/uploads/2025/04/miniminilogo.png" alt="Pit Service Logo">
@@ -237,7 +275,6 @@ def prepara_email(request):
                         </td>
                     </tr>
                 </table>
-
             """
 
         email_fields = {
