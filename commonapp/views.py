@@ -1299,7 +1299,10 @@ def save_email(request):
     #TODO 
     if tableid == 'rendicontolavanderia':
         record_rendiconto=UserRecord('rendicontolavanderia',recordid)
-        record_rendiconto.values['stato']="Inviato"
+        if record_rendiconto.values['stato']=='Nessuna ricerica':
+            record_rendiconto.values['stato']="Inviato - Nessuna ricarica"
+        else:
+            record_rendiconto.values['stato']="Inviato"
         record_rendiconto.save()
     record_email=UserRecord('email')
     record_email.values['recipients']=email_data['to']
