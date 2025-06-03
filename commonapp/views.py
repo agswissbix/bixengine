@@ -683,7 +683,7 @@ def get_pitservice_pivot_lavanderia(request):
                 df,
                 index=["recordidcliente_", "recordidstabile_", "recordidinformazionigasolio_"],
                 columns="mese",
-                values="lettura",
+                values="letturalitri",
                 aggfunc="sum"
             ).reindex(columns=mesi)           # <- mantiene l’ordine
         ).fillna("")
