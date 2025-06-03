@@ -1,3 +1,4 @@
+import uuid
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.http import JsonResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -1598,29 +1599,48 @@ def save_belotti_form_data(request):
 
 def export_excel(request):
     if request.method == 'POST':
-        tableid = request.POST.get('tableid')
-        master_tableid = request.POST.get('master_tableid')
-        master_recordid = request.POST.get('master_recordid')
-        searchTerm = request.POST.get('searchTerm')
-        viewid = request.POST.get('viewid')
-        order_field = request.POST.get('order_field')
-        order = request.POST.get('order')
-        currentpage = 0
-        table_type = request.POST.get('tableType')
-
-       
-
-        csv_file = f"{tableid}-{uuid.uuid4().hex}.csv"
-
-
-
-        with open(csv_file, 'rb') as file:
-            response = HttpResponse(file.read(), content_type='text/csv')
-            response['Content-Disposition'] = 'attachment'
-            response['filename'] = csv_file
-
-        os.remove(csv_file)
-
+        data = json.loads(request.body)
+        tableid = data.get('tableid')
+        searchTerm = data.get('searchTerm')
+        viewid = data.get('viewid')
+        
+        # Qui dovresti recuperare i dati effettivi dalla tua tabella
+        # Questo è un esempio generico
+        
+        # Opzione 1: Utilizzare pandas per creare un Excel direttamente
+        import pandas as pd
+        import io
+        
+        # Recupero dati (sostituisci con la tua logica di query)
+        # Esempio:
+        # records = YourModel.objects.filter(...).values(...)
+        
+        # Per test, creiamo dati fittizi
+        records = [
+            {'id': 1, 'nome': 'Test 1', 'valore': 100},
+            {'id': 2, 'nome': 'Test 2', 'valore': 200},
+        ]
+        
+        # Crea DataFrame pandas
+        df = pd.DataFrame(records)
+        
+        # Crea buffer in memoria
+        buffer = io.BytesIO()
+        
+        # Scrivi Excel nel buffer
+        with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+            df.to_excel(writer, sheet_name='Sheet1', index=False)
+        
+        # Prepara la risposta
+        buffer.seek(0)
+        
+        # Crea risposta HTTP con il file Excel
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{tableid}.xlsx"'
+        
         return response
 
 @csrf_exempt
@@ -1752,12 +1772,6 @@ def save_favorite_tables(request):
             )
 
     return JsonResponse({'success': True})
-
-
-def export_excel(request):
-    data= json.loads(request.body)
-    tableid = data.get('tableid')
-    return JsonResponse({"success": True, "detail": "Excel esportato con successo"})
 
 
 
