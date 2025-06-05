@@ -39,7 +39,8 @@ urlpatterns = [
     path('get_favorite_tables/', get_favorite_tables, name='get_favorite_tables'),
     path('script_test/', script_test, name='script_test'),
     path('script_update_serviceandasset_domains_info/', script_update_serviceandasset_domains_info, name='script_update_serviceandasset_domains_info'),
-    
+    path('script_update_serviceandasset_domains_info/<str:dominio>/', script_update_serviceandasset_domains_info, name='script_update_serviceandasset_domains_info_dominio'),
+
 ]
 
 urlpatterns += static(settings.UPLOADS_URL, document_root=settings.UPLOADS_ROOT)

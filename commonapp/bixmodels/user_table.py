@@ -38,6 +38,10 @@ class UserTable:
         self.context=''
         self._fields_definitions = None
         self._results_columns = None # Cache per le colonne dei risultati
+        self._total_records_count = None
+
+    def get_total_records_count(self):
+        return self._total_records_count
 
     def get_table_records(self,viewid='',searchTerm='', conditions_list=list(),fields=None,offset=0,limit=None,orderby='recordid_ desc'):
         columns = self.get_results_columns()
@@ -148,6 +152,12 @@ class UserTable:
             if searchTerm_conditions!='':
                 conditions=conditions+f" AND ({searchTerm_conditions}) "   
         orderby='user_'+self.tableid+'.'+orderby
+
+        # → Calcola e salva il numero totale dei record
+        count_sql = f"SELECT COUNT(*) as total_count {fromsql} WHERE {conditions}"
+        count_result = HelpderDB.sql_query(count_sql)
+        self._total_records_count = count_result[0]['total_count'] if count_result else 0
+
         sql=f"SELECT {select_fields} {fromsql} where {conditions}  ORDER BY {orderby} LIMIT 50 "
         records = HelpderDB.sql_query(sql)
         return records
