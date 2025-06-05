@@ -36,6 +36,9 @@ import os
 import mimetypes
 import shutil
 from commonapp.utils.email_sender import EmailSender
+from typing import Callable, Dict, List, Sequence, Union, Any
+import whois
+import dns.resolver
 
 
 
@@ -407,7 +410,21 @@ def get_table_records(request):
         row['fields']=[]
         fields=record.get_record_results_fields()
         for field in fields:
-                row['fields'].append({'recordid':'','css':'','type':field['type'],'value':field['value'],'fieldid':field['fieldid']})
+                #TODO
+                cssClass=''
+                if tableid=='serviceandasset':
+                    if field['fieldid'] == 'status' and field['value'] == 'Active':
+                        cssClass='bg-emerald-50'
+                    if field['fieldid'] == 'status' and field['value'] == 'Closed':
+                        cssClass='bg-gray-50'
+                    if field['fieldid'] == 'status' and field['value'] == 'Disabled':
+                        cssClass='bg-yellow-50'
+                    if field['fieldid'] == 'status' and field['value'] == 'CHECK':
+                        cssClass='bg-red-100'
+                    if field['fieldid'] == 'status' and field['value'] == 'CHECK - DNS':
+                        cssClass='bg-yellow-100'
+                    
+                row['fields'].append({'recordid':'','css':cssClass,'type':field['type'],'value':field['value'],'fieldid':field['fieldid']})
         rows.append(row)
     
     columns=[]
@@ -812,9 +829,301 @@ def get_pitservice_pivot_lavanderia(request):
             {"fieldtypeid": "Parola", "desc": "Telefono"}
 
         ]
+
+    
+    if tableid=='serviceandasset':
+        # 1. Recupero dati ───────────────────────────────────────────────
+        df = pd.DataFrame(HelpderDB.sql_query("""
+            SELECT *
+                FROM user_serviceandasset
+                WHERE   deleted_='N'
+        """))
+
+        # Colonne dinamiche basate su tutti i "type"
+        all_types = sorted(df["type"].dropna().unique().tolist())
+
+        # 2. Riclassifica: company ▶ righe dirette per ogni description
+        from collections import defaultdict
+
+        # Structure: company → list of rows {description, values[type]}
+        data = defaultdict(list)
+
+        for _, row in df.iterrows():
+            company_id = row["recordidcompany_"]
+            description = row["description"]
+            type_ = row["type"]
+            quantity = row["quantity"] or "X"
+
+            # Cerca se esiste già la riga con quella description
+            existing = next((r for r in data[company_id] if r["description"] == description), None)
+            if not existing:
+                existing = {
+                    "description": description,
+                    "type_values": {t: "" for t in all_types}
+                }
+                data[company_id].append(existing)
+
+            existing["type_values"][type_] = quantity
+
+        # 3. Fetch nome company ──────────────────────────────────────────
+        company_ids = set(data.keys())
+
+        def fetch_map(table, id_set, fields):
+            if not id_set:
+                return {}
+            in_list = ",".join(f"'{x}'" for x in id_set)
+            cols = ",".join(fields)
+            rows = HelpderDB.sql_query(f"""
+                SELECT recordid_, {cols}
+                FROM user_{table}
+                WHERE recordid_ IN ({in_list})
+            """)
+            return {r["recordid_"]: {k: r[k] for k in fields} for r in rows}
+
+        company_map = fetch_map("company", company_ids, ["companyname"])
+
+        # 4. Crea response_data ──────────────────────────────────────────
+        response_data = {
+            "columns": (
+                [{"fieldtypeid": "Parola", "desc": "CITTÀ"},
+                {"fieldtypeid": "Parola", "desc": "DOMAIN"}] +
+                [{"fieldtypeid": "Parola", "desc": t.upper()} for t in all_types]
+            ),
+            "groups": []
+        }
+
+        for company_id, rows in data.items():
+            company_name = company_map.get(company_id, {}).get("companyname", "")
+            group = {
+                "groupKey": company_id,
+                "level": 0,
+                "fields": [
+                    {"value": company_name, "css": "font-semibold"},
+                    {"value": "", "css": ""}  # placeholder per DOMAIN se servisse in intestazione gruppo
+                ],
+                "rows": []
+            }
+
+            for row in rows:
+                row_fields = (
+                    [{"value": "", "css": ""},  # CITTÀ se la vuoi
+                    {"value": row["description"], "css": ""}] +
+                    [{"value": row["type_values"].get(t, ""), "css": ""} for t in all_types]
+                )
+                group["rows"].append({
+                    "recordid": "",
+                    "css": "",
+                    "fields": row_fields
+                })
+
+            response_data["groups"].append(group)
     
 
-    return JsonResponse(response_data)
+
+
+
+
+
+        def fetch_map2(table, id_set, label_field: str):
+            """
+            Ritorna {recordid_: label_string}
+            """
+            if not id_set:
+                return {}
+            in_list = ",".join(f"'{x}'" for x in id_set)
+            rows = HelpderDB.sql_query(f"""
+                SELECT recordid_, {label_field}
+                FROM user_{table}
+                WHERE recordid_ IN ({in_list})
+            """)
+            return {r["recordid_"]: r[label_field] for r in rows}
+        
+        
+        company_map = fetch_map2("company", company_ids, "companyname")
+
+        pivot_data = build_pivot_response(
+            records = HelpderDB.sql_query("""
+                SELECT *
+                FROM user_serviceandasset
+                WHERE   deleted_='N'
+            """),
+            group_fields     = ["recordidcompany_", "description"],
+            num_group_levels = 1,                         # ← solo COMPANY come gruppo
+            group_headers    = ["AZIENDA", "DOMINIO"],       # ← titoli desiderati
+            column_field     = "type",
+            value_field      = "quantity",
+            aggfunc          = "sum",
+            predefined_columns = ["Domain", "Hosting", "DNS Zone"],
+            cell_format      = (lambda v: v or ""),
+            label_maps       = {"recordidcompany_": company_map},
+        )
+        
+    print("RISPOSTA 1")
+    print(response_data)
+    print("RISPOSTA 2")
+    print(pivot_data)
+    response_data=pivot_data
+    return JsonResponse(response_data) 
+
+
+
+import pandas as pd
+from collections import defaultdict
+from typing import Any, Callable, Dict, List, Sequence, Union
+
+
+import pandas as pd
+from collections import defaultdict
+from typing import Any, Callable, Dict, List, Sequence, Union
+
+
+def build_pivot_response(
+    records: List[Dict[str, Any]],
+    *,
+    group_fields: Sequence[str],
+    column_field: str,
+    value_field: str | None = None,
+    aggfunc: Union[str, Callable] = "size",
+    predefined_columns: Sequence[Any] | None = None,
+    label_maps: Dict[str, Dict[Any, str]] | None = None,
+    cell_format: Callable[[Any], Any] | None = None,
+    # --------------------------- NOVITÀ ---------------------------
+    group_headers: Sequence[str] | None = None,
+    # Quanti campi di `group_fields` devono formare la “gerarchia” di gruppi.
+    #     • di default = len(group_fields)  → tutti i campi diventano livelli
+    #     • se lo imposti a len(group_fields)-1  → l’ultimo campo finisce direttamente nelle righe
+    num_group_levels: int | None = None,
+) -> Dict[str, Any]:
+    """
+    Restituisce un dizionario già pronto per il front-end React.
+
+    Parametri nuovi:
+    ───────────────
+    group_headers     : intestazioni da mostrare per i campi di gruppo
+    num_group_levels  : quanti campi di `group_fields` devono diventare livelli
+                        di raggruppamento (≤ len(group_fields)).
+                        Se inferiore, i restanti campi compariranno come celle
+                        di riga (una colonna ciascuno).
+    """
+    # ---------------------------------------------------------------- record check
+    if not records:
+        return {"columns": [], "groups": []}
+
+    if num_group_levels is None:
+        num_group_levels = len(group_fields)
+    if not (0 < num_group_levels <= len(group_fields)):
+        raise ValueError("num_group_levels dev'essere compreso tra 1 e len(group_fields)")
+
+    df = pd.DataFrame(records)
+
+    # ---------------------------------------------------------------- pivot
+    if value_field is None:
+        pivot_df = pd.pivot_table(
+            df,
+            index=list(group_fields),
+            columns=column_field,
+            aggfunc="size",
+            fill_value=0,
+        )
+    else:
+        pivot_df = pd.pivot_table(
+            df,
+            index=list(group_fields),
+            columns=column_field,
+            values=value_field,
+            aggfunc=aggfunc,
+            fill_value=0 if aggfunc == "size" else "",
+        )
+
+    if predefined_columns is not None:
+        pivot_df = pivot_df.reindex(columns=predefined_columns, fill_value=0)
+
+    # ---------------------------------------------------------------- helpers
+    def readable(field: str, key: Any) -> Any:
+        """applica eventuale mapping id → label"""
+        if label_maps and field in label_maps:
+            mapped = label_maps[field].get(key, key)
+            # se per errore arriva un dict, prendi il primo valore o cast
+            if isinstance(mapped, dict):
+                return next(iter(mapped.values())) if len(mapped) == 1 else str(mapped)
+            return mapped
+        return key
+
+    def make_node(level: int, field: str, key: Any):
+        return {
+            "groupKey": key,
+            "level": level,
+            "fields": [
+                {"value": readable(field, key),
+                 "css": "font-semibold" if level == 0 else ""}
+            ],
+            "subGroups": [],
+            "rows": [],
+        }
+
+    root: Dict[Any, Any] = defaultdict(dict)
+
+    # ---------------------------------------------------------------- build tree
+    for row in pivot_df.reset_index().itertuples(index=False):
+        idx_keys = row[: len(group_fields)]
+        pivot_vals = row[len(group_fields) :]
+
+        grp_parent = root
+        # livelli di gruppo da creare (fino a num_group_levels-1)
+        for lvl in range(num_group_levels):
+            key = idx_keys[lvl]
+            field = group_fields[lvl]
+            if key not in grp_parent:
+                grp_parent[key] = make_node(lvl, field, key)
+            node = grp_parent[key]
+            grp_parent = node.setdefault("subGroups_map", {})
+
+        # ----------------- riga foglia
+        # celle indice: vuote per i livelli di gruppo, con etichetta per i restanti
+        row_index_cells = [
+            "" if i < num_group_levels else readable(group_fields[i], idx_keys[i])
+            for i in range(len(group_fields))
+        ]
+        formatted_vals = [
+            cell_format(v) if cell_format else v for v in pivot_vals
+        ]
+
+        node["rows"].append(
+            {
+                "recordid": idx_keys[-1],
+                "css": "",
+                "fields": (
+                    [{"value": c, "css": ""} for c in row_index_cells] +
+                    [{"value": v, "css": ""} for v in formatted_vals]
+                ),
+            }
+        )
+
+    # ---------------------------------------------------------------- collapse dict → list
+    def collapse(node_dict):
+        if isinstance(node_dict, dict) and "groupKey" in node_dict:
+            node_dict["subGroups"] = [
+                collapse(child) for child in node_dict.pop("subGroups_map", {}).values()
+            ]
+            return node_dict
+        else:
+            return [collapse(child) for child in node_dict.values()]
+
+    groups = [collapse(n) for n in root.values()]
+
+    # ---------------------------------------------------------------- header
+    if group_headers is None:
+        header_cols = [{"fieldtypeid": "Parola", "desc": ""} for _ in group_fields]
+    else:
+        if len(group_headers) != len(group_fields):
+            raise ValueError("group_headers deve avere la stessa lunghezza di group_fields")
+        header_cols = [{"fieldtypeid": "Parola", "desc": h} for h in group_headers]
+
+    header_cols += [{"fieldtypeid": "Parola", "desc": str(col)} for col in pivot_df.columns]
+
+    return {"columns": header_cols, "groups": groups}
+
+
 
 @csrf_exempt
 def save_record_fields(request):
@@ -1775,5 +2084,137 @@ def save_favorite_tables(request):
 
 
 
+def script_test(request):
+    domain = "off-horizon.ch"
+    domain_info=get_domain_info(domain)
+
+    return JsonResponse({'response': domain_info})
 
 
+def get_domain_info(domain):
+    allowed_tlds = (".com", ".it", ".net", ".ch")
+
+    result = {
+        "domain": domain,
+        "registrar": None,
+        "nameservers": [],
+        "a_records": []
+    }
+
+    if not domain.endswith(allowed_tlds):
+        return JsonResponse({'error': f"TLD non supportato. Consentiti: {', '.join(allowed_tlds)}"}, status=400)
+
+    # WHOIS lookup
+    try:
+        info = whois.whois(domain)
+
+        # Registrar - può essere una stringa o una lista
+        registrar = info.registrar
+        if isinstance(registrar, list):
+            result["registrar"] = registrar[0]
+        elif registrar:
+            result["registrar"] = str(registrar)
+        else:
+            result["registrar"] = "Not found"
+
+        # Nameservers
+        nameservers = info.name_servers
+        if isinstance(nameservers, (list, set)):
+            result["nameservers"] = sorted([ns.strip().lower() for ns in nameservers])
+        elif isinstance(nameservers, str):
+            result["nameservers"] = [nameservers.strip().lower()]
+        else:
+            result["nameservers"] = []
+
+    except Exception as e:
+        result["registrar"] = f"WHOIS Error: {str(e)}"
+        result["nameservers"] = [f"WHOIS Error: {str(e)}"]
+
+    # DNS A record
+    try:
+        answers = dns.resolver.resolve(domain, 'A')
+        result["a_records"] = [rdata.address for rdata in answers]
+    except Exception as e:
+        result["a_records"] = [f"DNS Error: {str(e)}"]
+
+    return result
+
+
+def script_update_serviceandasset_domains_info(request):
+    try:
+        records = HelpderDB.sql_query("""
+            SELECT * FROM user_serviceandasset 
+            WHERE type='Hosting' AND deleted_='N' 
+            AND description IS NOT NULL AND description != ''
+        """)
+
+        report_lines = []
+
+        for record in records:
+            recordid=record['recordid_']
+            domain = record['description'].strip()
+            if not domain:
+                continue
+
+            domain_info = get_domain_info(domain)
+
+            registrar = domain_info.get('registrar', 'N/A')
+            nameservers = domain_info.get('nameservers', [])
+            a_records = domain_info.get('a_records', [])
+
+            record_update = UserRecord('serviceandasset', recordid)
+            record_update.values['sector'] = 'Hosting'
+            record_update.values['quantity'] = '1'
+
+            # Inizializza status e provider
+            status = ''
+            provider = ''
+
+            #TODO
+            
+
+            # Controlla quale IP è presente e assegna il provider corrispondente
+            if '212.237.209.213' in a_records:
+                record_update.values['provider'] = 'Pleskn01'
+            elif '194.56.189.185' in a_records:
+                record_update.values['provider'] = 'Plesk03'
+            elif '82.220.34.22' in a_records:
+                record_update.values['provider'] = 'Plesk 330'
+
+
+            # IP da controllare
+            known_ips = ['212.237.209.213', '194.56.189.185', '82.220.34.22']
+
+            # Verifica se nessun nameserver contiene 'swissbix.com'
+            ns_ok = any('swissbix.com' in ns for ns in nameservers)
+
+            # Verifica se almeno uno degli IP è presente negli A record
+            ip_found = any(ip in a_records for ip in known_ips)
+
+            # Imposta lo status se i nameserver non sono swissbix ma l'IP è uno dei noti
+            if not ns_ok and ip_found:
+                record_update.values['status'] = 'CHECK - DNS'
+
+            # Controlla se nessuno dei tre IP è presente
+            if not any(ip in a_records for ip in ['212.237.209.213', '194.56.189.185', '82.220.34.22']):
+                record_update.values['status'] = 'CHECK'
+
+            autonote = f"""
+                <b>Registrar:</b> {registrar}<br>
+                <b>DNS Nameserver:</b> {', '.join(nameservers) if nameservers else 'N/A'}<br>
+                <b>Hosting (A Record):</b> {', '.join(a_records) if a_records else 'N/A'}<br>
+            """
+
+            
+            # Pulizia
+            autonote = autonote.replace("\n", "").replace("\t", "").strip()
+            record_update.values['autonote'] = autonote
+            record_update.save()
+
+            report_lines.append(f"<b>Dominio:</b> {domain}<br>"+autonote+" <br/><br/>")
+
+        final_report = "<html><body><h2>Report domini</h2>" + "\n".join(report_lines) + "</body></html>"
+        return HttpResponse(final_report)
+
+    except Exception as e:
+        return HttpResponse(f"Errore invio: {str(e)}")
