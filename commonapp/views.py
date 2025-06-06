@@ -405,6 +405,7 @@ def get_table_records(request):
     records: List[UserRecord]
     conditions_list=list()
     records=table.get_table_records_obj(viewid=viewid,searchTerm=searchTerm,conditions_list=conditions_list,master_tableid=master_tableid,master_recordid=master_recordid)
+    counter=table.get_total_records_count()
     table_columns=table.get_results_columns()
     rows=[]
     for record in records:
@@ -436,6 +437,7 @@ def get_table_records(request):
         columns.append({'fieldtypeid':table_column['fieldtypeid'],'desc':table_column['description']})
 
     response_data = {
+        "counter": counter,
         "rows": rows,
         "columns": columns
     }
@@ -574,24 +576,28 @@ def get_pitservice_pivot_lavanderia(request):
     data = json.loads(request.body)
     tableid = data.get("tableid")
     table=UserTable(tableid)
+
+    #TODO 
+    #CUSTOM           
+
+    #------ PITSERVICE - RENDICONTO LAVANDERIA --------------------------------
     if tableid == "rendicontolavanderia":
-        # 1. Lettura (1 sola query) + filtro anno opzionale ─────────────────────
-        anno_filter = globals().get("anno_filter")  # es. "2025" se serve
-
-        base_sql = """
-                SELECT *
-                FROM user_rendicontolavanderia
-                WHERE deleted_ = 'N'
-            """
+        # 1. Lettura (UNICA query) + filtro anno opzionale
+        anno_filter = globals().get("anno_filter")       # es. "2025"
+        sql = """
+            SELECT *
+            FROM user_rendicontolavanderia
+            WHERE deleted_ = 'N'
+        """
         if anno_filter:
-            base_sql += f" AND anno = '{anno_filter}'"
+            sql += f" AND anno = '{anno_filter}'"
 
-        df = pd.DataFrame(HelpderDB.sql_query(base_sql))
+        df = pd.DataFrame(HelpderDB.sql_query(sql))
 
-        # 2. Costruzione lista mesi nello stesso formato del DB (es. "04-Aprile")
+        # 2. Elenco mesi nel formato presente nel DB (es. "04-Aprile")
         mesi = [
-            f"{str(i).zfill(2)}-{m}"
-            for i, m in enumerate(
+            f"{str(i).zfill(2)}-{nome}"
+            for i, nome in enumerate(
                 [
                     "Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
                     "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre",
@@ -600,386 +606,274 @@ def get_pitservice_pivot_lavanderia(request):
             )
         ]
 
-        # 3. Pivot: conta righe per (cliente, stabile, mese)  ───────────────────
-        #   • senza colonna `values` (aggfunc='size') otteniamo direttamente il
-        #     numero di record per cella
-        #   • fill_value=0 sostituisce automaticamente i NaN assenti con 0
-        pivot_df = pd.pivot_table(
-            df,
-            index=["recordidcliente_", "recordidstabile_"],
-            columns="mese",
-            aggfunc="size",
-            fill_value=0,
-        ).reindex(columns=mesi, fill_value=0)  # colonne mancanti completate a 0
+        # 3. Label-map per CLIENTE e STABILE (+ città per colonna extra)
+        cli_ids = set(df["recordidcliente_"].dropna())
+        sta_ids = set(df["recordidstabile_"].dropna())
 
-        pivot_array = pivot_df.reset_index().values.tolist()
+        cliente_map = fetch_label_map("cliente", cli_ids,  "nome_cliente")
 
-        # 4. Batch‑fetch anagrafiche (una query per tabella) ────────────────────
-        cli_ids = {r[0] for r in pivot_array}
-        sta_ids = {r[1] for r in pivot_array}
-
-        cli_map = {}
-        if cli_ids:
-            in_list = ",".join(f"'{x}'" for x in cli_ids)
-            rows = HelpderDB.sql_query(
-                f"""
-                    SELECT recordid_, nome_cliente
-                    FROM user_cliente
-                    WHERE recordid_ IN ({in_list})
-                """
-            )
-            cli_map = {r["recordid_"]: r["nome_cliente"] for r in rows}
-
-        sta_map = {}
+        # per lo stabile servono sia nome sia città
+        stabili_rows = []
         if sta_ids:
             in_list = ",".join(f"'{x}'" for x in sta_ids)
-            rows = HelpderDB.sql_query(
-                f"""
-                    SELECT recordid_, titolo_stabile, citta
-                    FROM user_stabile
-                    WHERE recordid_ IN ({in_list})
-                """
-            )
-            sta_map = {r["recordid_"]: (r["titolo_stabile"], r["citta"]) for r in rows}
+            stabili_rows = HelpderDB.sql_query(f"""
+                SELECT recordid_, titolo_stabile, citta
+                FROM user_stabile
+                WHERE recordid_ IN ({in_list})
+            """)
+        stabile_nome_map = {r["recordid_"]: r["titolo_stabile"] for r in stabili_rows}
+        stabile_citta_map = {r["recordid_"]: r["citta"] for r in stabili_rows}
 
-        # 5. Riclassifica: cliente ▶ stabili (con valori mesi) ──────────────────
-        data = defaultdict(list)  # {id_cli: [(id_sta, vals), ...]}
-        for id_cli, id_sta, *val_mesi in pivot_array:
-            data[id_cli].append((id_sta, val_mesi))
+        # 4. Aggiunge la CITTÀ al dataframe (serve come 2ª colonna fissa)
+        df["citta"] = df["recordidstabile_"].map(stabile_citta_map)
 
-        # 6. Costruisci `response_data`  ─────────────────────────────────────────
-        response_data = {
-            "columns": [
-                {"fieldtypeid": "Parola", "desc": ""},
-                {"fieldtypeid": "Parola", "desc": "Città"},
-                *[{"fieldtypeid": "Parola", "desc": m.split("-", 1)[1]} for m in mesi],
-            ],
-            "groups": [],
-        }
+        # 5. Genera la risposta con la funzione genérica
+        pivot_data = build_pivot_response(
+            records            = df.to_dict("records"),             # no seconde query!
+            group_fields       = ["recordidcliente_", "recordidstabile_", "citta"],
+            num_group_levels   = 1,                                 # group ▶ cliente
+            group_headers      = ["CLIENTE", "IMMOBILE", "CITTÀ"],
+            column_field       = "mese",
+            value_field        = "stato",                              # conteggio righe
+            aggfunc            = "first",
+            predefined_columns = mesi,                              # mesi in ordine fisso
+            cell_format = lambda v, **_: (
+                v or "",
+                "bg-green-200  text-green-800  font-semibold"   # Inviato
+                if v and "Inviato"          in str(v) else
+                "bg-green-100  text-green-700  font-semibold"   # Nessuna ricarica
+                if v and "Nessuna ricarica" in str(v) else
+                "bg-yellow-200 text-yellow-800 font-semibold"   # Da preparare
+                if v and "Da fare"     in str(v) else
+                "bg-blue-200   text-blue-800 font-semibold"     # Preparato
+                if v and "Preparato"        in str(v) else
+                ""                                               # default: nessun colore
+            ),
+            label_maps         = {
+                "recordidcliente_":  cliente_map,
+                "recordidstabile_": stabile_nome_map,
+            },
+        )
 
-        for id_cli, stabili in data.items():  # livello 0: cliente
-            grp_cli = {
-                "groupKey": id_cli,
-                "level": 0,
-                "fields": [
-                    {"value": cli_map.get(id_cli, "Cliente non definito"), "css": "font-semibold"},
-                    {"value": "", "css": ""},  # città non applicabile a livello cliente
-                ],
-                "rows": [],
-            }
-
-            for id_sta, vals in stabili:  # livello riga: stabile
-                nome_sta, citta = sta_map.get(id_sta, ("Stabile non definito", ""))
-                row_fields = [
-                    {"value": nome_sta, "css": ""},
-                    {"value": citta, "css": ""},
-                ]
-
-                # Valori mese → "X" se count ≥1, altrimenti "" (vuoto)
-                for v in vals:
-                    row_fields.append({"value": "X" if v >= 1 else "", "css": ""})
-
-                grp_cli["rows"].append({"recordid": id_sta, "css": "", "fields": row_fields})
-
-            response_data["groups"].append(grp_cli)
-
+        # 6. Ritocca le intestazioni dei mesi (da "04-Aprile" → "Aprile")
+        for col in pivot_data["columns"][3:]:                       # prime 3 = gruppi
+            col["desc"] = col["desc"].split("-", 1)[1]
         
     
 
-    if tableid=='letturagasolio':
-        # 1. Recupero letture e pivot  ───────────────────────────────────────────────
+               
+            
+
+
+    #------ PITSERVICE - LETTURA GASOLIO --------------------------------
+    if tableid == "letturagasolio":
+        # 1. Letture gasolio (UNICA query sul DB) ────────────────────────────────────
         df = pd.DataFrame(HelpderDB.sql_query("""
             SELECT *
             FROM user_letturagasolio
-            WHERE anno = '2025'
-                AND deleted_ = 'N'
+            WHERE anno      = '2025'      -- se diventa variabile basta parametrizzare
+            AND deleted_  = 'N'
         """))
 
-        mesi = [f"{str(i).zfill(2)}-{m}" for i, m in enumerate([
-            "Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno",
-            "Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"
-        ], 1)]
-
-        pivot_df = (
-            pd.pivot_table(
-                df,
-                index=["recordidcliente_", "recordidstabile_", "recordidinformazionigasolio_"],
-                columns="mese",
-                values="letturalitri",
-                aggfunc="sum"
-            ).reindex(columns=mesi)           # <- mantiene l’ordine
-        ).fillna("")
-
-        pivot_array = pivot_df.reset_index().values.tolist()
-
-        # 2. Batch‑fetch anagrafiche  ────────────────────────────────────────────────
-        cli_ids   = {r[0] for r in pivot_array}
-        sta_ids   = {r[1] for r in pivot_array}
-        cis_ids   = {r[2] for r in pivot_array}
-
-        def fetch_map(table, id_set, fields):
-            if not id_set:
-                return {}
-            in_list = ",".join(f"'{x}'" for x in id_set)
-            cols    = ",".join(fields)
-            rows    = HelpderDB.sql_query(f"""
-                SELECT recordid_, {cols}
-                FROM user_{table}
-                WHERE recordid_ IN ({in_list})
-            """)
-            return {r["recordid_"]: {k: r[k] for k in fields} for r in rows}
-
-        cli_map = fetch_map("cliente",            cli_ids, ["nome_cliente"])
-        sta_map = fetch_map("stabile",            sta_ids, ["riferimento", "citta"])
-        cis_map = fetch_map("informazionigasolio", cis_ids, ["riferimento", "capienzacisterna", "livellominimo"])
-
-        # 3. Riclassifica: cliente ▶ stabile ▸ lista (cisterna, valori) ─────────────
-        data = defaultdict(lambda: defaultdict(list))
-        for id_cli, id_sta, id_cis, *val_mesi in pivot_array:
-            data[id_cli][id_sta].append((id_cis, val_mesi))
-
-        # 4. Costruisci response_data  (solo Python‑dict, 0 query extra) ────────────
-        response_data = {
-            "columns": (
-                [{"fieldtypeid": "Parola", "desc": ""}, {"fieldtypeid": "Parola", "desc": "Città"}] +
-                [{"fieldtypeid": "Parola", "desc": m.split("-", 1)[1]} for m in mesi] +
-                [{"fieldtypeid": "Parola", "desc": "Capienza"},
-                {"fieldtypeid": "Parola", "desc": "Livello minimo"}]
-            ),
-            "groups": []
-        }
-
-        for id_cli, stabili in data.items():                     # livello 0
-            grp_cli = {
-                "groupKey": id_cli,
-                "level": 0,
-                "fields": [
-                    {"value": cli_map.get(id_cli, {}).get("nome_cliente", ""), "css": "font-semibold"},
-                    {"value": "", "css": ""}
+        # 2. Elenco mesi nel formato del DB ("04-Aprile") + coda per reorder
+        mesi = [
+            f"{str(i).zfill(2)}-{nome}"
+            for i, nome in enumerate(
+                [
+                    "Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
+                    "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre",
                 ],
-                "subGroups": []
-            }
-
-            for id_sta, cis_rows in stabili.items():             # livello 1
-                sta_info = sta_map.get(id_sta, {})
-                grp_sta = {
-                    "groupKey": f"{id_cli}-{id_sta}",
-                    "level": 1,
-                    "fields": [
-                        {"value": sta_info.get("riferimento", ""), "css": ""},
-                        {"value": sta_info.get("citta", ""), "css": ""}
-                    ],
-                    "rows": []
-                }
-
-                for id_cis, vals in cis_rows:                    # riga (cisterna)
-                    cis_info = cis_map.get(id_cis, {})
-                    row_fields = [
-                        {"value": cis_info.get("riferimento", ""), "css": "text-xs"},
-                        {"value": "", "css": ""}
-                    ] + [{"value": v, "css": ""} for v in vals] + [
-                        {"value": cis_info.get("capienzacisterna", ""), "css": ""},
-                        {"value": cis_info.get("livellominimo", ""),  "css": ""}
-                    ]
-                    grp_sta["rows"].append({"recordid": id_cis, "css": "", "fields": row_fields})
-
-                grp_cli["subGroups"].append(grp_sta)
-
-            response_data["groups"].append(grp_cli)            
-            
-
-
-
-    if tableid == 'dipendente':
-        sql="SELECT * FROM user_dipendente  WHERE  deleted_='N' ORDER BY ruolo"
-        query_result=HelpderDB.sql_query(sql)
-
-        gruppi_per_ruolo = defaultdict(list)
-        for record in query_result:
-            ruolo = record['ruolo']
-            gruppi_per_ruolo[ruolo].append(record)
-        
-        
-        
-        for ruolo, records in gruppi_per_ruolo.items():
-            group = {}
-            
-           
-            group['groupKey']=ruolo
-            group['level']=ruolo
-            group_fields = [{"fieldid": "ruolo", "value": ruolo, "css": ""}]
-            group["fields"] = group_fields
-            group['subGroups']=[]
-            group["rows"] = []
-            # Costruiamo le righe: in questo esempio una sola riga per cliente
-            # Per ogni mese verifichiamo se esiste un record per quel mese
-            for record in records:
-                row = {"recordid": record['recordid_'], "css": "#", "fields": []}
-                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": record['cognome']})
-                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": record['nome']})
-                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": record['email']})
-                row["fields"].append({"recordid": "", "css": "", "type": "standard", "value": record['telefono']})
-                group["rows"].append(row)
-            
-            
-            response_data["groups"].append(group)
-
-
-        response_data["columns"] = [
-            {"fieldtypeid": "Parola", "desc": ""},
-            {"fieldtypeid": "Parola", "desc": "Cognome"},
-            {"fieldtypeid": "Parola", "desc": "Nome"},
-            {"fieldtypeid": "Parola", "desc": "Email"},
-            {"fieldtypeid": "Parola", "desc": "Telefono"}
-
+                1,
+            )
         ]
 
-    
-    if tableid=='serviceandasset':
-        # 1. Recupero dati ───────────────────────────────────────────────
-        df = pd.DataFrame(HelpderDB.sql_query("""
+        # 3. Batch-fetch anagrafiche (2 query) ──────────────────────────────────────
+        cli_ids = set(df["recordidcliente_"].dropna())
+        sta_ids = set(df["recordidstabile_"].dropna())
+        cis_ids = set(df["recordidinformazionigasolio_"].dropna())
+
+        cliente_map   = fetch_label_map("cliente",   cli_ids, "nome_cliente")
+        stabile_nome  = fetch_label_map("stabile",   sta_ids, "riferimento")
+        stabile_citta = fetch_label_map("stabile",   sta_ids, "citta")
+        cis_nome      = fetch_label_map("informazionigasolio", cis_ids, "riferimento")
+        cis_capienza  = fetch_label_map("informazionigasolio", cis_ids, "capienzacisterna")
+        cis_minimo    = fetch_label_map("informazionigasolio", cis_ids, "livellominimo")
+
+        # 4. Arricchisce il dataframe con la CITTÀ (serve come colonna indice fissa)
+        df["citta"] = df["recordidstabile_"].map(stabile_citta)
+
+        key_cols = ["recordidcliente_", "recordidstabile_", "citta",
+                "recordidinformazionigasolio_", "mese"]
+
+        stato_lookup: dict[tuple, set[str]] = (
+            df.groupby(key_cols)["stato"]
+            .agg(lambda s: set(s.dropna()))
+            .to_dict()
+        )
+
+        # 5. Funzione di formattazione celle --------------------------------------
+        def fmt_litri(val, *, col, idx, **_):
+            """
+            val → somma letturalitri   (value_field)
+            col → mese (colonna pivot)
+            idx → dict con le chiavi della riga (cliente, stabile, citta, cisterna)
+            """
+            key = (idx["recordidcliente_"],
+                idx["recordidstabile_"],
+                idx["citta"],
+                idx["recordidinformazionigasolio_"],
+                col)
+
+            css = ""
+            stati = stato_lookup.get(key, set())
+            css = (
+                "bg-green-200 text-green-800 font-semibold"
+                if "Inviato" in stati else ""
+            )
+            return (val, css) 
+            
+        
+        # 5. Pivot via funzione generica ───────────────────────────────────────────
+        pivot_data = build_pivot_response(
+            records            = df.to_dict("records"),
+            group_fields       = [
+                "recordidcliente_",              # livello 0  → CLIENTE
+                "recordidstabile_",              # livello 1  → STABILE
+                "citta",                         # ↓ righe
+                "recordidinformazionigasolio_",  # ↓
+            ],
+            num_group_levels   = 2,              # 0=cliente, 1=stabile
+            group_headers      = ["CLIENTE", "", "CITTÀ", "CISTERNA"],
+            column_field       = "mese",
+            value_field        = "letturalitri",
+            aggfunc            = "sum",
+            predefined_columns = mesi,
+            cell_format        = fmt_litri,
+            label_maps = {
+                "recordidcliente_"            : cliente_map,
+                "recordidstabile_"            : stabile_nome,
+                "recordidinformazionigasolio_": cis_nome,
+            },
+        )
+
+        # 6. Intestazioni mesi → solo nome breve ("Aprile") ------------------------
+        for col in pivot_data["columns"][4:]:          # prime 4 = header gruppi
+            col["desc"] = col["desc"].split("-", 1)[1]
+
+        # 7. Aggiunge colonne Capienza e Livello minimo + riempie le righe ----------
+        pivot_data["columns"].extend([
+            {"fieldtypeid": "Parola", "desc": "Capienza"},
+            {"fieldtypeid": "Parola", "desc": "Livello minimo"},
+        ])
+
+        def enrich(groups: list[dict]):
+            """appende capienza / minimo alle righe di foglia (cisterna)"""
+            for g in groups:
+                if g.get("subGroups"):
+                    enrich(g["subGroups"])
+                for row in g.get("rows", []):
+                    cid = row["recordid"]                     # id cisterna
+                    row["fields"].extend([
+                        {"value": cis_capienza.get(cid, ""), "css": ""},
+                        {"value": cis_minimo.get(cid,   ""), "css": ""},
+                    ])
+
+        enrich(pivot_data["groups"])
+
+
+    #------ PITSERVICE - DIPENDENTE --------------------------------
+    if tableid == "dipendente":
+        # 1. Query unica ----------------------------------------------------------
+        df_raw = pd.DataFrame(HelpderDB.sql_query("""
             SELECT *
-                FROM user_serviceandasset
-                WHERE   deleted_='N'
+            FROM user_dipendente
+            WHERE deleted_ = 'N'
+            ORDER BY ruolo
         """))
 
-        # Colonne dinamiche basate su tutti i "type"
-        all_types = sorted(df["type"].dropna().unique().tolist())
+        # 2. Trasforma i record in formato LONG  ----------------------------------
+        #    (un record per singola colonna logica che vuoi poi ricompattare a pivot)
+        long_rows   = []
+        dip_map     = {}          # id dipendente  → cognome  (etichetta riga)
+        COL_ORDER   = ["Cognome", "Nome", "Email", "Telefono"]
 
-        # 2. Riclassifica: company ▶ righe dirette per ogni description
-        from collections import defaultdict
+        for rec in df_raw.to_dict("records"):
+            dip_id = rec["recordid_"]
+            dip_map[dip_id] = rec["cognome"]         # servirà come label di riga
 
-        # Structure: company → list of rows {description, values[type]}
-        data = defaultdict(list)
+            long_rows.extend([
+                {"ruolo": rec["ruolo"], "dip_id": dip_id, "campo": "Cognome",  "valore": rec["cognome"]},
+                {"ruolo": rec["ruolo"], "dip_id": dip_id, "campo": "Nome",     "valore": rec["nome"]},
+                {"ruolo": rec["ruolo"], "dip_id": dip_id, "campo": "Email",    "valore": rec["email"]},
+                {"ruolo": rec["ruolo"], "dip_id": dip_id, "campo": "Telefono", "valore": rec["telefono"]},
+            ])
 
-        for _, row in df.iterrows():
-            company_id = row["recordidcompany_"]
-            description = row["description"]
-            type_ = row["type"]
-            quantity = row["quantity"] or "X"
-
-            # Cerca se esiste già la riga con quella description
-            existing = next((r for r in data[company_id] if r["description"] == description), None)
-            if not existing:
-                existing = {
-                    "description": description,
-                    "type_values": {t: "" for t in all_types}
-                }
-                data[company_id].append(existing)
-
-            existing["type_values"][type_] = quantity
-
-        # 3. Fetch nome company ──────────────────────────────────────────
-        company_ids = set(data.keys())
-
-        def fetch_map(table, id_set, fields):
-            if not id_set:
-                return {}
-            in_list = ",".join(f"'{x}'" for x in id_set)
-            cols = ",".join(fields)
-            rows = HelpderDB.sql_query(f"""
-                SELECT recordid_, {cols}
-                FROM user_{table}
-                WHERE recordid_ IN ({in_list})
-            """)
-            return {r["recordid_"]: {k: r[k] for k in fields} for r in rows}
-
-        company_map = fetch_map("company", company_ids, ["companyname"])
-
-        # 4. Crea response_data ──────────────────────────────────────────
-        response_data = {
-            "columns": (
-                [{"fieldtypeid": "Parola", "desc": "CITTÀ"},
-                {"fieldtypeid": "Parola", "desc": "DOMAIN"}] +
-                [{"fieldtypeid": "Parola", "desc": t.upper()} for t in all_types]
-            ),
-            "groups": []
-        }
-
-        for company_id, rows in data.items():
-            company_name = company_map.get(company_id, {}).get("companyname", "")
-            group = {
-                "groupKey": company_id,
-                "level": 0,
-                "fields": [
-                    {"value": company_name, "css": "font-semibold"},
-                    {"value": "", "css": ""}  # placeholder per DOMAIN se servisse in intestazione gruppo
-                ],
-                "rows": []
-            }
-
-            for row in rows:
-                row_fields = (
-                    [{"value": "", "css": ""},  # CITTÀ se la vuoi
-                    {"value": row["description"], "css": ""}] +
-                    [{"value": row["type_values"].get(t, ""), "css": ""} for t in all_types]
-                )
-                group["rows"].append({
-                    "recordid": "",
-                    "css": "",
-                    "fields": row_fields
-                })
-
-            response_data["groups"].append(group)
-    
-
-
-
-
-
-
-        def fetch_map2(table, id_set, label_field: str):
-            """
-            Ritorna {recordid_: label_string}
-            """
-            if not id_set:
-                return {}
-            in_list = ",".join(f"'{x}'" for x in id_set)
-            rows = HelpderDB.sql_query(f"""
-                SELECT recordid_, {label_field}
-                FROM user_{table}
-                WHERE recordid_ IN ({in_list})
-            """)
-            return {r["recordid_"]: r[label_field] for r in rows}
-        
-        
-        company_map = fetch_map2("company", company_ids, "companyname")
-
+        # 3. Pivot con funzione generica -----------------------------------------
         pivot_data = build_pivot_response(
-            records = HelpderDB.sql_query("""
-                SELECT *
-                FROM user_serviceandasset
-                WHERE   deleted_='N'
-            """),
-            group_fields     = ["recordidcompany_", "description"],
-            num_group_levels = 1,                         # ← solo COMPANY come gruppo
-            group_headers    = ["AZIENDA", "DOMINIO"],       # ← titoli desiderati
-            column_field     = "type",
-            value_field      = "quantity",
-            aggfunc          = "sum",
-            predefined_columns = ["Domain", "Hosting", "DNS Zone"],
-            cell_format      = (lambda v: v or ""),
-            label_maps       = {"recordidcompany_": company_map},
+            records            = long_rows,
+            group_fields       = ["ruolo", "dip_id"],   # livello 0 = RUOLO  ; righe = dipendente
+            num_group_levels   = 1,                     # solo RUOLO come gruppo
+            group_headers      = ["RUOLO", "DIPENDENTE"],
+            column_field       = "campo",
+            value_field        = "valore",
+            aggfunc            = "first",               # ciascuna coppia (dip, col) ha 1 valore
+            predefined_columns = COL_ORDER,
+            cell_format        = lambda v, **_: (v or "", ""),  # nessun colore speciale
+            label_maps         = {"dip_id": dip_map},   # mostra il cognome al posto dell’ID
+        )
+
+
+    
+    #------ SWISSBIX - SERVIZI --------------------------------
+    if tableid == "serviceandasset":
+        # 1. Estrazione dati (una sola query)
+        df = pd.DataFrame(HelpderDB.sql_query("""
+            SELECT *
+            FROM user_serviceandasset
+            WHERE deleted_ = 'N'
+        """))
+
+        # 2. Colonne pivot dinamiche ▶ tutti i valori distinti di `type`
+        all_types: list[str] = sorted(df["type"].dropna().unique().tolist())
+
+        # 3. Label-map per l’azienda (id ▶ nome)
+        company_ids = set(df["recordidcompany_"].dropna())
+        company_map = fetch_label_map("company", company_ids, "companyname")
+
+        # 4. Costruzione della response con la funzione generica
+        pivot_data = build_pivot_response(
+            records           = df.to_dict("records"),    # evita una seconda query
+            group_fields      = ["recordidcompany_", "description"],
+            num_group_levels  = 1,                         # solo COMPANY come gruppo
+            group_headers     = ["AZIENDA", "DOMINIO"],
+            column_field      = "type",
+            value_field       = "quantity",
+            aggfunc           = "sum",
+            predefined_columns= all_types,                # mantiene l’ordine alfabetico
+            cell_format       = lambda v: v or "",        # cast valori None → stringa vuota
+            label_maps        = {"recordidcompany_": company_map},
         )
         
-    print("RISPOSTA 1")
-    print(response_data)
-    print("RISPOSTA 2")
-    print(pivot_data)
-    response_data=pivot_data
-    return JsonResponse(response_data) 
+    
+    return JsonResponse(pivot_data) 
 
 
 
-import pandas as pd
-from collections import defaultdict
-from typing import Any, Callable, Dict, List, Sequence, Union
 
-
-import pandas as pd
-from collections import defaultdict
-from typing import Any, Callable, Dict, List, Sequence, Union
-
+def fetch_label_map(table: str, ids: set[str], label_field: str) -> dict[str, str]:
+    """
+    Ritorna {recordid_: label_string} per il campo indicato.
+    Se l'insieme è vuoto salta la query.
+    """
+    if not ids:
+        return {}
+    in_list = ",".join(f"'{x}'" for x in ids)
+    rows = HelpderDB.sql_query(f"""
+        SELECT recordid_, {label_field}
+          FROM user_{table}
+         WHERE recordid_ IN ({in_list})
+    """)
+    return {r["recordid_"]: r[label_field] for r in rows}
 
 def build_pivot_response(
     records: List[Dict[str, Any]],
@@ -990,25 +884,28 @@ def build_pivot_response(
     aggfunc: Union[str, Callable] = "size",
     predefined_columns: Sequence[Any] | None = None,
     label_maps: Dict[str, Dict[Any, str]] | None = None,
-    cell_format: Callable[[Any], Any] | None = None,
-    # --------------------------- NOVITÀ ---------------------------
+    # ------------------------------------------------------------------------- #
+    # NEW: la callback può accettare argomenti opzionali e restituire anche css
+    cell_format: Callable[..., Any] | None = None,
+    # ------------------------------------------------------------------------- #
     group_headers: Sequence[str] | None = None,
-    # Quanti campi di `group_fields` devono formare la “gerarchia” di gruppi.
-    #     • di default = len(group_fields)  → tutti i campi diventano livelli
-    #     • se lo imposti a len(group_fields)-1  → l’ultimo campo finisce direttamente nelle righe
     num_group_levels: int | None = None,
 ) -> Dict[str, Any]:
     """
     Restituisce un dizionario già pronto per il front-end React.
 
-    Parametri nuovi:
-    ───────────────
-    group_headers     : intestazioni da mostrare per i campi di gruppo
-    num_group_levels  : quanti campi di `group_fields` devono diventare livelli
-                        di raggruppamento (≤ len(group_fields)).
-                        Se inferiore, i restanti campi compariranno come celle
-                        di riga (una colonna ciascuno).
+    Parametri aggiuntivi:
+    ─────────────────────
+    cell_format : funzione opzionale che riceve il valore grezzo e (se lo vuole)
+                  anche i parametri keyword:
+                      • col  → nome colonna pivot
+                      • idx  → dict {field: key} dell’indice riga
+                  Può restituire:
+                      • solo il valore                → css  = ""
+                      • (valore, css)                 → tupla
+                      • {"value": v, "css": cls}      → dict
     """
+
     # ---------------------------------------------------------------- record check
     if not records:
         return {"columns": [], "groups": []}
@@ -1047,8 +944,7 @@ def build_pivot_response(
         """applica eventuale mapping id → label"""
         if label_maps and field in label_maps:
             mapped = label_maps[field].get(key, key)
-            # se per errore arriva un dict, prendi il primo valore o cast
-            if isinstance(mapped, dict):
+            if isinstance(mapped, dict):              # se arriva un dict (caso raro)
                 return next(iter(mapped.values())) if len(mapped) == 1 else str(mapped)
             return mapped
         return key
@@ -1058,8 +954,10 @@ def build_pivot_response(
             "groupKey": key,
             "level": level,
             "fields": [
-                {"value": readable(field, key),
-                 "css": "font-semibold" if level == 0 else ""}
+                {
+                    "value": readable(field, key),
+                    "css": "font-semibold" if level == 0 else "",
+                }
             ],
             "subGroups": [],
             "rows": [],
@@ -1069,28 +967,48 @@ def build_pivot_response(
 
     # ---------------------------------------------------------------- build tree
     for row in pivot_df.reset_index().itertuples(index=False):
-        idx_keys = row[: len(group_fields)]
-        pivot_vals = row[len(group_fields) :]
+        idx_keys   = row[: len(group_fields)]
+        pivot_vals = row[len(group_fields):]
 
-        grp_parent = root
-        # livelli di gruppo da creare (fino a num_group_levels-1)
-        for lvl in range(num_group_levels):
-            key = idx_keys[lvl]
+        grp_parent: Dict[Any, Any] = root
+        for lvl in range(num_group_levels):           # costruzione livelli gruppo
+            key   = idx_keys[lvl]
             field = group_fields[lvl]
             if key not in grp_parent:
                 grp_parent[key] = make_node(lvl, field, key)
             node = grp_parent[key]
             grp_parent = node.setdefault("subGroups_map", {})
 
-        # ----------------- riga foglia
-        # celle indice: vuote per i livelli di gruppo, con etichetta per i restanti
+        # --------------------------- riga foglia ------------------------------
         row_index_cells = [
             "" if i < num_group_levels else readable(group_fields[i], idx_keys[i])
             for i in range(len(group_fields))
         ]
-        formatted_vals = [
-            cell_format(v) if cell_format else v for v in pivot_vals
-        ]
+
+        formatted_cells: List[Dict[str, Any]] = []
+        for col_name, raw_val in zip(pivot_df.columns, pivot_vals):
+            css   = ""
+            value = raw_val
+
+            if cell_format is not None:
+                try:
+                    formatted = cell_format(
+                        raw_val,
+                        col=col_name,
+                        idx=dict(zip(group_fields, idx_keys)),
+                    )
+                except TypeError:                      # callback “vecchia firma”
+                    formatted = cell_format(raw_val)
+
+                if isinstance(formatted, tuple) and len(formatted) == 2:
+                    value, css = formatted
+                elif isinstance(formatted, dict):
+                    value = formatted.get("value", "")
+                    css   = formatted.get("css", "")
+                else:                                   # valore puro
+                    value = formatted
+
+            formatted_cells.append({"value": value, "css": css})
 
         node["rows"].append(
             {
@@ -1098,7 +1016,7 @@ def build_pivot_response(
                 "css": "",
                 "fields": (
                     [{"value": c, "css": ""} for c in row_index_cells] +
-                    [{"value": v, "css": ""} for v in formatted_vals]
+                    formatted_cells
                 ),
             }
         )
@@ -1107,11 +1025,11 @@ def build_pivot_response(
     def collapse(node_dict):
         if isinstance(node_dict, dict) and "groupKey" in node_dict:
             node_dict["subGroups"] = [
-                collapse(child) for child in node_dict.pop("subGroups_map", {}).values()
+                collapse(child)
+                for child in node_dict.pop("subGroups_map", {}).values()
             ]
             return node_dict
-        else:
-            return [collapse(child) for child in node_dict.values()]
+        return [collapse(child) for child in node_dict.values()]
 
     groups = [collapse(n) for n in root.values()]
 
@@ -1123,7 +1041,9 @@ def build_pivot_response(
             raise ValueError("group_headers deve avere la stessa lunghezza di group_fields")
         header_cols = [{"fieldtypeid": "Parola", "desc": h} for h in group_headers]
 
-    header_cols += [{"fieldtypeid": "Parola", "desc": str(col)} for col in pivot_df.columns]
+    header_cols += [
+        {"fieldtypeid": "Parola", "desc": str(col)} for col in pivot_df.columns
+    ]
 
     return {"columns": header_cols, "groups": groups}
 
@@ -2381,6 +2301,24 @@ def script_test(request):
 
     return JsonResponse({'response': domain_info})
 
+#TODO
+#CUSTOM
+#TEMP
+def script_winteler_load_t_wip(request):
+    records= HelpderDB.sql_query("SELECT * FROM t_wipbarcode WHERE dataautomatica IS NULL LIMIT 100")
+    for record in records:
+        record_bixdata= UserRecord('wipbarcode')
+        record_bixdata.values['wipbarcode'] = record['wipbarcode']
+        record_bixdata.values['lottobarcode'] = record['lottobarcode']
+        record_bixdata.values['datascansione'] = record['datascansione']
+        record_bixdata.values['statowip']='Caricato'
+        print('save:')
+        print( record_bixdata.values['wipbarcode'])
+        record_bixdata.save()
+        sql="UPDATE t_wipbarcode SET dataautomatica='2025-06-06 00:00:00' WHERE wipbarcode='"+record['wipbarcode']+"'"
+        HelpderDB.sql_execute(sql)
+
+    return JsonResponse({'response': 'ok'})
 
 def get_domain_info(domain):
     allowed_tlds = (".com", ".it", ".net", ".ch")
@@ -2431,13 +2369,19 @@ def get_domain_info(domain):
     return result
 
 
-def script_update_serviceandasset_domains_info(request):
+def script_update_serviceandasset_domains_info(request, dominio=None):
     try:
-        records = HelpderDB.sql_query("""
+        query = """
             SELECT * FROM user_serviceandasset 
             WHERE type='Hosting' AND deleted_='N' 
             AND description IS NOT NULL AND description != ''
-        """)
+        """
+
+        # Se viene passato un dominio, aggiungilo come filtro
+        if dominio:
+            query += f" AND description = '{dominio}'"
+
+        records = HelpderDB.sql_query(query)
 
         report_lines = []
 

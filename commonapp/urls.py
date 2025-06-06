@@ -39,10 +39,10 @@ urlpatterns = [
     path('get_favorite_tables/', get_favorite_tables, name='get_favorite_tables'),
     path('save_favorite_tables/', save_favorite_tables, name='save_favorite_tables'),
     path('script_test/', script_test, name='script_test'),
+    path('script_winteler_load_t_wip/', script_winteler_load_t_wip, name='script_winteler_load_t_wip'),
     path('script_update_serviceandasset_domains_info/', script_update_serviceandasset_domains_info, name='script_update_serviceandasset_domains_info'),
-    path('insert_domains_test/', insert_domains_test, name='insert_domains_test'),
-    path('insert_domains/', insert_domains, name='insert_domains'),
-    path('check_domains_presence/', check_domains_presence, name='check_domains_presence'),
+    path('script_update_serviceandasset_domains_info/<str:dominio>/', script_update_serviceandasset_domains_info, name='script_update_serviceandasset_domains_info_dominio'),
+
 ]
 
 urlpatterns += static(settings.UPLOADS_URL, document_root=settings.UPLOADS_ROOT)
