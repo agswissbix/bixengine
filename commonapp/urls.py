@@ -38,6 +38,7 @@ urlpatterns = [
     path('get_card_active_tab/', get_card_active_tab, name='get_card_active_tab'),
     path('get_favorite_tables/', get_favorite_tables, name='get_favorite_tables'),
     path('script_test/', script_test, name='script_test'),
+    path('script_winteler_load_t_wip/', script_winteler_load_t_wip, name='script_winteler_load_t_wip'),
     path('script_update_serviceandasset_domains_info/', script_update_serviceandasset_domains_info, name='script_update_serviceandasset_domains_info'),
     path('script_update_serviceandasset_domains_info/<str:dominio>/', script_update_serviceandasset_domains_info, name='script_update_serviceandasset_domains_info_dominio'),
 

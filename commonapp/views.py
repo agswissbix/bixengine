@@ -2010,6 +2010,24 @@ def script_test(request):
 
     return JsonResponse({'response': domain_info})
 
+#TODO
+#CUSTOM
+#TEMP
+def script_winteler_load_t_wip(request):
+    records= HelpderDB.sql_query("SELECT * FROM t_wipbarcode WHERE dataautomatica IS NULL LIMIT 10")
+    for record in records:
+        record_bixdata= UserRecord('wipbarcode')
+        record_bixdata.values['wipbarcode'] = record['wipbarcode']
+        record_bixdata.values['lottobarcode'] = record['lottobarcode']
+        record_bixdata.values['datascansione'] = record['datascansione']
+        record_bixdata.values['statowip']='Caricato'
+        print('save:')
+        print( record_bixdata.values['wipbarcode'])
+        record_bixdata.save()
+        sql="UPDATE t_wipbarcode SET dataautomatica='2025-06-06 00:00:00' WHERE wipbarcode='"+record['wipbarcode']+"'"
+        HelpderDB.sql_execute(sql)
+
+    return JsonResponse({'response': 'ok'})
 
 def get_domain_info(domain):
     allowed_tlds = (".com", ".it", ".net", ".ch")
