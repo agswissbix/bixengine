@@ -2118,51 +2118,73 @@ def save_belotti_form_data(request):
     return JsonResponse({"success": True})
 
 
+import json
+import pandas as pd
+import io
+import os
+from django.http import JsonResponse, HttpResponse
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+from django.conf import settings
+from django.views.decorators.csrf import csrf_exempt
+import uuid
+
+
+@csrf_exempt
 def export_excel(request):
     if request.method == 'POST':
-        data = json.loads(request.body)
-        tableid = data.get('tableid')
-        searchTerm = data.get('searchTerm')
-        viewid = data.get('viewid')
-        
-        # Qui dovresti recuperare i dati effettivi dalla tua tabella
-        # Questo è un esempio generico
-        
-        # Opzione 1: Utilizzare pandas per creare un Excel direttamente
-        import pandas as pd
-        import io
-        
-        # Recupero dati (sostituisci con la tua logica di query)
-        # Esempio:
-        # records = YourModel.objects.filter(...).values(...)
-        
-        # Per test, creiamo dati fittizi
-        records = [
-            {'id': 1, 'nome': 'Test 1', 'valore': 100},
-            {'id': 2, 'nome': 'Test 2', 'valore': 200},
-        ]
-        
-        # Crea DataFrame pandas
-        df = pd.DataFrame(records)
-        
-        # Crea buffer in memoria
-        buffer = io.BytesIO()
-        
-        # Scrivi Excel nel buffer
-        with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-            df.to_excel(writer, sheet_name='Sheet1', index=False)
-        
-        # Prepara la risposta
-        buffer.seek(0)
-        
-        # Crea risposta HTTP con il file Excel
-        response = HttpResponse(
-            buffer.getvalue(),
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-        response['Content-Disposition'] = f'attachment; filename="{tableid}.xlsx"'
-        
-        return response
+        try:
+            data = json.loads(request.body)
+            tableid = data.get('tableid', 'export')
+            searchTerm = data.get('searchTerm')
+            viewid = data.get('view')
+
+            # Simulazione dati
+            records = get_table_records(request)
+            if not records:
+                return JsonResponse({'error': 'Nessun record trovato'}, status=404)
+
+            df = pd.DataFrame(records)
+            buffer = io.BytesIO()
+
+            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Sheet1', index=False)
+       
+            buffer.seek(0)
+
+            # Genera filename e path completo
+            filename = f'{tableid}_{uuid.uuid4().hex}.xlsx'
+            
+            # Costruisci il path completo seguendo il pattern di stampa_bollettini
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            filename_with_path = script_dir.rsplit('views', 1)[0]
+            filename_with_path = filename_with_path + '\\static\\excel\\' + filename
+
+            # Crea la directory se non esiste
+            os.makedirs(os.path.dirname(filename_with_path), exist_ok=True)
+
+            # Salva il file Excel
+            with open(filename_with_path, 'wb') as f:
+                f.write(buffer.getvalue())
+
+            # Restituisci il file come response (usando lo stesso pattern di stampa_bollettini)
+            try:
+                with open(filename_with_path, 'rb') as fh:
+                    response = HttpResponse(fh.read(), content_type="application/pdf")
+                    response['Content-Disposition'] = f'inline; filename={filename}'
+                    return response
+
+            finally:
+                # Rimuovi il file temporaneo dopo aver inviato la response
+                if os.path.exists(filename_with_path):
+                    os.remove(filename_with_path)
+
+        except Exception as e:
+            print(f"Errore durante l'esportazione: {str(e)}")
+            return JsonResponse({'error': str(e)}, status=500)
+    else:
+        return JsonResponse({'error': 'Metodo non consentito'}, status=405)
+
 
 @csrf_exempt
 def get_record_attachments(request):
