@@ -188,6 +188,7 @@ def get_sidebarmenu_items(request):
     print("Function: get_sidebarmenu_items")
     tables=SysTable.get_user_tables(1)
     workspaces_tables=dict()
+    userid =Helper.get_userid(request)
     for table in tables:
         workspace = table["workspace"]
         
@@ -203,7 +204,9 @@ def get_sidebarmenu_items(request):
         if "subItems" not in workspaces_tables[workspace]:
             workspaces_tables[workspace]['subItems']=[]
         workspaces_tables[workspace]["subItems"].append(subitem)
-    
+
+    favorite_tables = HelpderDB.sql_query(f"SELECT * FROM sys_user_favorite_tables WHERE sys_user_id = {userid}")
+
     username =Helper.get_username(request)
     other_items=[]
 
@@ -223,7 +226,8 @@ def get_sidebarmenu_items(request):
 
     response = {
         "menuItems": workspaces_tables,
-        "otherItems": other_items
+        "otherItems": other_items,
+        "favoriteTables": favorite_tables
     }
     return JsonResponse(response, safe=False)
 
@@ -1043,6 +1047,294 @@ def build_pivot_response(
 
     return {"columns": header_cols, "groups": groups}
 
+
+import csv
+
+@csrf_exempt
+def insert_domains(request):
+    # Percorso del file CSV
+    csv_path = "./commonapp/pleskn01.csv"
+
+    def parse_domain(domain):
+        domain_lower = domain.lower()
+        if 'alias' in domain_lower:
+            clean_name = domain_lower.split('alias')[0].strip().strip('.-')
+            tipo = "Hosting - Alias"
+        elif 'forward' in domain_lower:
+            clean_name = domain_lower.split('forward')[0].strip().strip('.-')
+            tipo = "Hosting - Forward"
+        else:
+            clean_name = domain_lower.strip()
+            if ',' in clean_name:
+                clean_name = clean_name.split(',')[0].strip()
+            tipo = "Hosting"
+        return clean_name, tipo
+
+    inserted_count = 0
+    skipped_count = 0
+    results = []
+
+    try:
+        with open(csv_path, newline='', encoding='utf-8') as csvfile:
+            reader = csv.reader(csvfile)
+            for row_num, row in enumerate(reader, 1):
+                if not row:
+                    continue
+
+                domain = row[0].strip()
+                try:
+                    description, tipo = parse_domain(domain)
+                    safe_description = description.replace("'", "''")
+                    sql_check = f"SELECT 1 FROM user_serviceandasset WHERE description = '{safe_description}' LIMIT 1"
+                    exists = HelpderDB.sql_query_value(sql_check, '1')
+
+                    if not exists:
+                        record = UserRecord('serviceandasset')
+                        record.values['description'] = description
+                        record.values['type'] = tipo
+                        record.values['status'] = 'Active'
+                        record.save()
+
+                        inserted_count += 1
+                        results.append({
+                            'row': row_num,
+                            'domain': domain,
+                            'description': description,
+                            'type': tipo,
+                            'status': 'inserted'
+                        })
+                    else:
+                        skipped_count += 1
+                        results.append({
+                            'row': row_num,
+                            'domain': domain,
+                            'description': description,
+                            'type': tipo,
+                            'status': 'skipped',
+                            'reason': 'already_exists'
+                        })
+
+                except Exception as e:
+                    results.append({
+                        'row': row_num,
+                        'domain': domain,
+                        'status': 'error',
+                        'error': str(e)
+                    })
+                    break  # Interrompe l'importazione se c'è un errore
+
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': f"Errore nell'apertura del file: {str(e)}"
+        }, status=500)
+
+    return JsonResponse({
+        'status': 'partial_success' if any(r['status'] == 'error' for r in results) else 'success',
+        'summary': {
+            'total_processed': len(results),
+            'inserted': inserted_count,
+            'skipped': skipped_count,
+            'errors': len([r for r in results if r['status'] == 'error'])
+        },
+        'results': results,
+        'message': (
+            'IMPORTAZIONE INTERROTTA a causa di un errore.'
+            if any(r['status'] == 'error' for r in results)
+            else 'Tutti i domini sono stati inseriti correttamente o già esistevano.'
+        )
+    })
+
+
+@csrf_exempt
+def check_domains_presence(request):
+    # Percorso del file CSV
+    csv_path = "./commonapp/pleskn01.csv"
+
+    def parse_domain(domain):
+        domain_lower = domain.lower()
+        if 'alias' in domain_lower:
+            clean_name = domain_lower.split('alias')[0].strip().strip('.-')
+            tipo = "Hosting - Alias"
+        elif 'forward' in domain_lower:
+            clean_name = domain_lower.split('forward')[0].strip().strip('.-')
+            tipo = "Hosting - Forward"
+        else:
+            clean_name = domain_lower.strip()
+            if ',' in clean_name:
+                clean_name = clean_name.split(',')[0].strip()
+            tipo = "Hosting"
+        return clean_name, tipo
+
+    found = []
+    missing = []
+    errors = []
+
+    try:
+        with open(csv_path, newline='', encoding='utf-8') as csvfile:
+            reader = csv.reader(csvfile)
+            for row_num, row in enumerate(reader, 1):
+                if not row:
+                    continue
+
+                domain = row[0].strip()
+
+                try:
+                    description, tipo = parse_domain(domain)
+                    safe_description = description.replace("'", "''")
+                    sql_check = f"SELECT 1 FROM user_serviceandasset WHERE description = '{safe_description}' LIMIT 1"
+                    exists = HelpderDB.sql_query_value(sql_check, '1')
+
+                    if exists:
+                        found.append({
+                            'row': row_num,
+                            'domain': domain,
+                            'description': description,
+                            'type': tipo,
+                            'status': 'found'
+                        })
+                    else:
+                        missing.append({
+                            'row': row_num,
+                            'domain': domain,
+                            'description': description,
+                            'type': tipo,
+                            'status': 'missing'
+                        })
+
+                except Exception as e:
+                    errors.append({
+                        'row': row_num,
+                        'domain': domain,
+                        'status': 'error',
+                        'error': str(e)
+                    })
+
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': f"Errore nell'apertura del file: {str(e)}"
+        }, status=500)
+
+    return JsonResponse({
+        'status': 'completed',
+        'summary': {
+            'total_checked': len(found) + len(missing),
+            'found': len(found),
+            'missing': len(missing),
+            'errors': len(errors)
+        },
+        'results': {
+            'found': found,
+            'missing': missing,
+            'errors': errors
+        },
+        'message': 'Controllo completato. Verifica la lista dei domini mancanti per eventuale reinserimento.'
+    })
+
+
+
+
+@csrf_exempt
+def insert_domains_test(request):
+    """
+    Funzione per importare domini da un file CSV.
+    MODALITÀ PROVA: Non effettua inserimenti reali, solo simulazione.
+    Restituisce un report dettagliato di cosa verrebbe fatto.
+    """
+    
+    # Percorso del file CSV (aggiustare secondo la propria struttura di cartelle)
+    csv_path = "./commonapp/pleskn01.csv"
+
+    def parse_domain(domain):
+        """
+        Analizza il dominio per estrarre nome pulito e tipo
+        Gestisce i casi speciali 'alias' e 'forward'
+        Applica pulizia della descrizione per i casi standard
+        """
+        domain_lower = domain.lower()
+        if 'alias' in domain_lower:
+            clean_name = domain_lower.split('alias')[0].strip().strip('.-')
+            tipo = "Hosting - Alias"
+        elif 'forward' in domain_lower:
+            clean_name = domain_lower.split('forward')[0].strip().strip('.-')
+            tipo = "Hosting - Forward"
+        else:
+            clean_name = domain_lower.strip()
+            # Se c'è una virgola, si prende solo la prima parte come description
+            if ',' in clean_name:
+                clean_name = clean_name.split(',')[0].strip()
+            tipo = "Hosting"
+        return clean_name, tipo
+
+
+    # Liste per tenere traccia dei risultati
+    to_be_inserted = []
+    already_existing = []
+    errors = []
+
+    try:
+        with open(csv_path, newline='', encoding='utf-8') as csvfile:
+            reader = csv.reader(csvfile)
+            for row_num, row in enumerate(reader, 1):
+                if not row:
+                    continue
+                
+                try:
+                    domain = row[0].strip()
+                    description, tipo = parse_domain(domain)
+
+                    # Controlla se esiste già un record con questa description
+                    safe_description = description.replace("'", "''")
+                    sql_check = f"SELECT 1 FROM user_serviceandasset WHERE description = '{safe_description}' LIMIT 1"
+
+                    exists = HelpderDB.sql_query_value(sql_check, '1')
+
+                    if not exists:
+                        # In modalità prova, solo simulazione
+                        to_be_inserted.append({
+                            'domain': domain,
+                            'clean_description': description,
+                            'type': tipo,
+                            'status': 'Active',
+                            'action': 'would_be_inserted'
+                        })
+                    else:
+                        already_existing.append({
+                            'domain': domain,
+                            'clean_description': description,
+                            'type': tipo,
+                            'status': 'Active',
+                            'action': 'already_exists'
+                        })
+
+                except Exception as e:
+                    errors.append({
+                        'row': row_num,
+                        'domain': row[0] if row else 'empty_row',
+                        'error': str(e)
+                    })
+
+    except Exception as e:
+        errors.append({
+            'file_error': f"Errore nell'apertura/lettura del file: {str(e)}"
+        })
+
+    return JsonResponse({
+        'status': 'simulation_complete',
+        'summary': {
+            'total_processed': len(to_be_inserted) + len(already_existing),
+            'would_be_inserted': len(to_be_inserted),
+            'already_existing': len(already_existing),
+            'errors': len(errors)
+        },
+        'details': {
+            'to_be_inserted': to_be_inserted,
+            'already_existing': already_existing,
+            'errors': errors
+        },
+        'message': 'SIMULAZIONE COMPLETATA. Nessun dato è stato realmente inserito.'
+    })
 
 
 @csrf_exempt
@@ -1932,18 +2224,18 @@ def get_favorite_tables(request):
     context = dict()
     
     query = "SELECT tableid FROM sys_user_table_order WHERE userid = '{}'".format(sys_user_id)
-    with connection.cursor() as cursor:
+    with connection.cursor() as cursor: 
         cursor.execute(
             query
         )
-        tables = HelpderDB.dictfetchall(cursor)
+        user_tables = HelpderDB.dictfetchall(cursor)
 
-    if not tables:
+    if not user_tables:
         with connection.cursor() as cursor:
             cursor.execute(
                 "SELECT tableid FROM sys_user_table_order WHERE userid = 1"
             )
-            tables = HelpderDB.dictfetchall(cursor)
+            user_tables = HelpderDB.dictfetchall(cursor)
 
     query = f"SELECT tableid FROM sys_user_favorite_tables WHERE sys_user_id = {sys_user_id}"
     with connection.cursor() as cursor:
@@ -1952,39 +2244,39 @@ def get_favorite_tables(request):
         )
         favorite_tables = HelpderDB.dictfetchall(cursor)
 
-    i = 0
-    for table in tables:
-        if i < len(favorite_tables) and table['tableid'] == favorite_tables[i]['tableid']:
-            table['favorite'] = True
-            i += 1
-        else:
-            table['favorite'] = False
-
+    # Ottieni tutte le tabelle disponibili
     with connection.cursor() as cursor:
         cursor.execute("SELECT * FROM sys_table")
         all_tables = HelpderDB.dictfetchall(cursor)
 
-    for a, table in enumerate(all_tables):
-        for b, t in enumerate(tables):
-            if t['tableid'] == table['id']:
-                tables[b]['description'] = table['description']
+    # Crea un set degli ID delle tabelle favorite per un controllo più efficiente
+    favorite_table_ids = {fav['tableid'] for fav in favorite_tables}
+
+    # Usa tutte le tabelle invece di solo quelle in user_table_order
+    tables = []
+    for table in all_tables:
+        table_entry = {
+            'tableid': table['id'],
+            'description': table['description'],
+            'favorite': table['id'] in favorite_table_ids
+        }
+        tables.append(table_entry)
 
     context['tables'] = [
-    {
-        "itemcode": str(table["tableid"]),
-        "itemdesc": table.get("description", ""),
-        "favorite": table.get("favorite", False)
-    }
-    for table in tables
-]
-
+        {
+            "itemcode": str(table["tableid"]),
+            "itemdesc": table.get("description", ""),
+            "favorite": table.get("favorite", False)
+        }
+        for table in tables
+    ]
 
     return JsonResponse({"tables": context['tables']})
 
 def save_favorite_tables(request):
-    fav_tables = request.POST.get('tables')
-    fav_tables = json.loads(fav_tables)
-    sys_user_id = Helper.get_userid(request.user.id)
+    body = json.loads(request.body)
+    fav_tables = body.get('tables', [])
+    sys_user_id = Helper.get_userid(request)
 
 
     with connection.cursor() as cursor:
@@ -2001,7 +2293,6 @@ def save_favorite_tables(request):
             )
 
     return JsonResponse({'success': True})
-
 
 
 def script_test(request):
