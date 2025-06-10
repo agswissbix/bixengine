@@ -65,45 +65,38 @@ def winteler_wip_barcode_scan(request):
     )
 
 
-def sync_wipbarcode_bixdata_adiuto(request):
+import pyodbc
+from django.http import JsonResponse
 
-    target_conn_str = (
+def sync_wipbarcode_bixdata_adiuto(request):
+    conn_str = (
         'DRIVER={ODBC Driver 17 for SQL Server};'
-        'SERVER=WIBGSRV17;'
+        'SERVER=WIGBSRV17;'  # prova anche con: WIGBSRV17\\SQLEXPRESS
         'DATABASE=winteler_data;'
         'UID=sa;'
         'PWD=Winteler,.-21;'
+        # oppure: 'Trusted_Connection=yes;' se sei su Windows
     )
 
     try:
-        tgt_conn = pyodbc.connect(target_conn_str, timeout=5)
-        tgt_cursor = tgt_conn.cursor()
+        conn = pyodbc.connect(conn_str, timeout=5)
+        cursor = conn.cursor()
 
-        tgt_cursor.execute("SELECT TOP 10 * FROM t_wipbarcode")
-        rows = tgt_cursor.fetchall()
-        
-        count = 0
-        for row in rows:
-            insert_sql = f"""
-            INSERT INTO t_wipbarcode (wipbarcode, lottobarcode)
-            """
+        cursor.execute("SELECT TOP 10 * FROM t_wipbarcode")
+        rows = cursor.fetchall()
 
-            # Esegui il merge
-            #tgt_cursor.execute(insert_sql)
-            count += 1
-
-        tgt_cursor.commit()
-        return JsonResponse({'status': 'success', 'imported_rows': count})
+        return JsonResponse({'status': 'success', 'rows': [list(row) for row in rows]})
 
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)})
 
     finally:
         try:
-            tgt_cursor.close()
-            tgt_conn.close()
+            cursor.close()
+            conn.close()
         except:
             pass
+
 
 
 
