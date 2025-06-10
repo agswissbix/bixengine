@@ -10,6 +10,7 @@ from commonapp.bixmodels.helper_db import *
 from commonapp.bixmodels.user_record import *
 from commonapp.bixmodels.user_table import *
 from commonapp.helper import *
+import pyodbc
 
 # Create your views here.
 
@@ -62,3 +63,75 @@ def winteler_wip_barcode_scan(request):
         },
         status=status.HTTP_200_OK
     )
+
+
+import pyodbc
+from django.http import JsonResponse
+
+def sync_wipbarcode_bixdata_adiuto(request):
+    conn_str = (
+        'DRIVER={ODBC Driver 17 for SQL Server};'
+        'SERVER=WIGBSRV17;'  # prova anche con: WIGBSRV17\\SQLEXPRESS
+        'DATABASE=winteler_data;'
+        'UID=sa;'
+        'PWD=Winteler,.-21;'
+        # oppure: 'Trusted_Connection=yes;' se sei su Windows
+    )
+
+    try:
+        conn = pyodbc.connect(conn_str, timeout=5)
+        cursor = conn.cursor()
+
+        cursor.execute("DELETE FROM t_wipbarcode")
+        conn.commit()
+
+
+        rows=HelpderDB.sql_query("SELECT wipbarcode, lottobarcode, datascansione FROM user_wipbarcode where deleted_='N'")
+
+
+
+        count = 0
+        for row in rows:
+            wipbarcode=row['wipbarcode']
+            lottobarcode=row['lottobarcode']    
+            datascansione=row['datascansione']    
+            insert_sql = f"""
+            INSERT INTO t_wipbarcode (wipbarcode, lottobarcode, datascansione)
+            VALUES ('{wipbarcode}', '{lottobarcode}', '{datascansione}')
+            """
+
+            # Esegui il merge
+            cursor.execute(insert_sql)
+            count += 1
+
+        cursor.commit()
+
+        return JsonResponse({'status': 'success', 'rows': [list(row) for row in rows]})
+
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})
+
+    finally:
+        try:
+            cursor.close()
+            conn.close()
+        except:
+            pass
+
+
+
+
+
+def sql_safe(value):
+    if value is None:
+        return "NULL"
+
+    if isinstance(value, (datetime, date)):
+        return f"'{value.strftime('%Y%m%d')}'"
+
+    if isinstance(value, (int, float)):
+        return str(value)
+
+    # qualunque altro tipo → cast a str, escape singoli apici
+    cleaned = str(value).replace("'", "''")
+    return f"'{cleaned}'"

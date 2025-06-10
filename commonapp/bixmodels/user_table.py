@@ -158,7 +158,7 @@ class UserTable:
         count_result = HelpderDB.sql_query(count_sql)
         self._total_records_count = count_result[0]['total_count'] if count_result else 0
 
-        sql=f"SELECT {select_fields} {fromsql} where {conditions}  ORDER BY {orderby} LIMIT 50 "
+        sql=f"SELECT {select_fields} {fromsql} where {conditions}  ORDER BY {orderby} LIMIT 350 "
         records = HelpderDB.sql_query(sql)
         return records
     
