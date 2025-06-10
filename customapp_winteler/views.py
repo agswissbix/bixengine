@@ -92,12 +92,16 @@ def sync_wipbarcode_bixdata_adiuto(request):
 
         count = 0
         for row in rows:
+            wipbarcode=row['wipbarcode']
+            lottobarcode=row['lottobarcode']    
+            datascansione=row['datascansione']    
             insert_sql = f"""
-            INSERT INTO t_wipbarcode (wipbarcode, lottobarcode)
+            INSERT INTO t_wipbarcode (wipbarcode, lottobarcode, datascansione)
+            VALUES ('{wipbarcode}', '{lottobarcode}', '{datascansione}')
             """
 
             # Esegui il merge
-            #tgt_cursor.execute(insert_sql)
+            cursor.execute(insert_sql)
             count += 1
 
         cursor.commit()
