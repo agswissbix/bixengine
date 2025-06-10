@@ -85,6 +85,19 @@ def sync_wipbarcode_bixdata_adiuto(request):
         cursor.execute("SELECT TOP 10 * FROM t_wipbarcode")
         rows = cursor.fetchall()
 
+
+        count = 0
+        for row in rows:
+            insert_sql = f"""
+            INSERT INTO t_wipbarcode (wipbarcode, lottobarcode)
+            """
+
+            # Esegui il merge
+            #tgt_cursor.execute(insert_sql)
+            count += 1
+
+        cursor.commit()
+
         return JsonResponse({'status': 'success', 'rows': [list(row) for row in rows]})
 
     except Exception as e:
