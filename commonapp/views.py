@@ -2040,45 +2040,68 @@ def get_domain_info(domain):
     }
 
     if not domain.endswith(allowed_tlds):
-        return JsonResponse({'error': f"TLD non supportato. Consentiti: {', '.join(allowed_tlds)}"}, status=400)
+        return {
+            "registrar": "TLD non supportato",
+            "nameservers": [],
+            "a_records": []
+        }
 
-    # WHOIS lookup
+    # 1. DNS Lookup - A Record
     try:
-        info = whois.whois(domain)
-
-        # Registrar - può essere una stringa o una lista
-        registrar = info.registrar
-        if isinstance(registrar, list):
-            result["registrar"] = registrar[0]
-        elif registrar:
-            result["registrar"] = str(registrar)
-        else:
-            result["registrar"] = "Not found"
-
-        # Nameservers
-        nameservers = info.name_servers
-        if isinstance(nameservers, (list, set)):
-            result["nameservers"] = sorted([ns.strip().lower() for ns in nameservers])
-        elif isinstance(nameservers, str):
-            result["nameservers"] = [nameservers.strip().lower()]
-        else:
-            result["nameservers"] = []
-
-    except Exception as e:
-        result["registrar"] = f"WHOIS Error: {str(e)}"
-        result["nameservers"] = [f"WHOIS Error: {str(e)}"]
-
-    # DNS A record
-    try:
-        answers = dns.resolver.resolve(domain, 'A')
+        answers = dns.resolver.resolve(domain, 'A', lifetime=5)
         result["a_records"] = [rdata.address for rdata in answers]
     except Exception as e:
-        result["a_records"] = [f"DNS Error: {str(e)}"]
+        result["a_records"] = []
+
+    # 2. DNS Lookup - NS
+    try:
+        ns_answers = dns.resolver.resolve(domain, 'NS', lifetime=5)
+        result["nameservers"] = [ns.to_text().strip().lower() for ns in ns_answers]
+    except Exception as e:
+        result["nameservers"] = []
+
+    # 3. RDAP Lookup (registrar)
+    try:
+        rdap_url = f"https://rdap.org/domain/{domain}"
+        rdap_resp = requests.get(rdap_url, timeout=5)
+        if rdap_resp.status_code == 200:
+            rdap_data = rdap_resp.json()
+            registrar = rdap_data.get('registrar', {}).get('name')
+            if registrar:
+                result["registrar"] = registrar
+    except Exception as e:
+        result["registrar"] = None
+
+    # 4. WHOIS fallback se mancano info
+    if not result["registrar"] or not result["nameservers"]:
+        try:
+            time.sleep(1.2)  # throttle manuale
+            info = whois.whois(domain)
+
+            # Registrar
+            registrar = info.registrar
+            if isinstance(registrar, list):
+                result["registrar"] = registrar[0]
+            elif registrar:
+                result["registrar"] = str(registrar)
+
+            # Nameservers
+            nameservers = info.name_servers
+            if isinstance(nameservers, (list, set)):
+                result["nameservers"] = sorted([ns.strip().lower() for ns in nameservers])
+            elif isinstance(nameservers, str):
+                result["nameservers"] = [nameservers.strip().lower()]
+        except Exception as e:
+            if not result["registrar"]:
+                result["registrar"] = f"WHOIS Error: {str(e)}"
+            if not result["nameservers"]:
+                result["nameservers"] = [f"WHOIS Error: {str(e)}"]
 
     return result
 
 
 def script_update_serviceandasset_domains_info(request, dominio=None):
+    counter=0
     try:
         query = """
             SELECT * FROM user_serviceandasset 
@@ -2095,6 +2118,7 @@ def script_update_serviceandasset_domains_info(request, dominio=None):
         report_lines = []
 
         for record in records:
+            counter=counter+1
             recordid=record['recordid_']
             domain = record['description'].strip()
             if not domain:
@@ -2135,6 +2159,7 @@ def script_update_serviceandasset_domains_info(request, dominio=None):
             # Verifica se almeno uno degli IP è presente negli A record
             ip_found = any(ip in a_records for ip in known_ips)
 
+            record_update.values['status'] = 'Active'
             # Imposta lo status se i nameserver non sono swissbix ma l'IP è uno dei noti
             if not ns_ok and ip_found:
                 record_update.values['status'] = 'CHECK - DNS'
@@ -2153,6 +2178,8 @@ def script_update_serviceandasset_domains_info(request, dominio=None):
             # Pulizia
             autonote = autonote.replace("\n", "").replace("\t", "").strip()
             record_update.values['autonote'] = autonote
+            record_update.values['note'] = 'updated'
+            print(f"{counter} Save: {domain}")
             record_update.save()
 
             report_lines.append(f"<b>Dominio:</b> {domain}<br>"+autonote+" <br/><br/>")
