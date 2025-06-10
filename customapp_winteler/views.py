@@ -82,8 +82,12 @@ def sync_wipbarcode_bixdata_adiuto(request):
         conn = pyodbc.connect(conn_str, timeout=5)
         cursor = conn.cursor()
 
-        cursor.execute("SELECT TOP 10 * FROM t_wipbarcode")
-        rows = cursor.fetchall()
+        cursor.execute("DELETE FROM t_wipbarcode")
+        conn.commit()
+
+
+        rows=UserTable('wipbarcode').get_records()
+
 
 
         count = 0
