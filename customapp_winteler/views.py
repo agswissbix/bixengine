@@ -10,6 +10,7 @@ from commonapp.bixmodels.helper_db import *
 from commonapp.bixmodels.user_record import *
 from commonapp.bixmodels.user_table import *
 from commonapp.helper import *
+import pyodbc
 
 # Create your views here.
 
@@ -62,3 +63,61 @@ def winteler_wip_barcode_scan(request):
         },
         status=status.HTTP_200_OK
     )
+
+
+def sync_wipbarcode_bixdata_adiuto(request):
+
+    target_conn_str = (
+        'DRIVER={ODBC Driver 17 for SQL Server};'
+        'SERVER=WIBGSRV17;'
+        'DATABASE=winteler_data;'
+        'UID=sa;'
+        'PWD=Winteler,.-21;'
+    )
+
+    try:
+        tgt_conn = pyodbc.connect(target_conn_str, timeout=5)
+        tgt_cursor = tgt_conn.cursor()
+
+        tgt_cursor.execute("SELECT TOP 10 * FROM t_wipbarcode")
+        rows = tgt_cursor.fetchall()
+        
+        count = 0
+        for row in rows:
+            insert_sql = f"""
+            INSERT INTO t_wipbarcode (wipbarcode, lottobarcode)
+            """
+
+            # Esegui il merge
+            #tgt_cursor.execute(insert_sql)
+            count += 1
+
+        tgt_cursor.commit()
+        return JsonResponse({'status': 'success', 'imported_rows': count})
+
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})
+
+    finally:
+        try:
+            tgt_cursor.close()
+            tgt_conn.close()
+        except:
+            pass
+
+
+
+
+def sql_safe(value):
+    if value is None:
+        return "NULL"
+
+    if isinstance(value, (datetime, date)):
+        return f"'{value.strftime('%Y%m%d')}'"
+
+    if isinstance(value, (int, float)):
+        return str(value)
+
+    # qualunque altro tipo → cast a str, escape singoli apici
+    cleaned = str(value).replace("'", "''")
+    return f"'{cleaned}'"
