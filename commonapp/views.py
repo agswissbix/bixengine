@@ -1601,6 +1601,7 @@ def prepara_email(request):
         subject=f"Resoconto lavanderia - {stabile_riferimento} {stabile_citta} - {mese} {anno}"
 
         body = ""
+        attachment_name=""
         if stato=='Da fare':
             body = "Rendiconto da fare"
 
