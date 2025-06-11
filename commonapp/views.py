@@ -1602,6 +1602,8 @@ def prepara_email(request):
 
         body = ""
         attachment_name=""
+        attachment_relativepath= ""
+        attachment_fullpath= ""
         if stato=='Da fare':
             body = "Rendiconto da fare"
 
