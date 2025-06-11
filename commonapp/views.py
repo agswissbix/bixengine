@@ -2131,6 +2131,16 @@ from django.views.decorators.csrf import csrf_exempt
 import uuid
 
 
+def remove_html_tags(input_string):
+    soup = BeautifulSoup(input_string, "html.parser")
+    cleaned_text = soup.get_text(separator=" ")
+    splitted = cleaned_text.split("|:|")
+
+    if splitted:  # Check if the list is not empty
+        cleaned_text = splitted[0]
+
+    return cleaned_text
+
 @csrf_exempt
 def export_excel(request):
     if request.method == 'POST':
