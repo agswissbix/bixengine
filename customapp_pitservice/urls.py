@@ -8,6 +8,7 @@ urlpatterns = [
     path('stampa_gasoli/', stampa_gasoli, name='stampa_gasoli'),
     path('crea_lista_lavanderie/', crea_lista_lavanderie, name='crea_lista_lavanderie'),
     path('prepara_email/', prepara_email, name='prepara_email'),
-    
-    
+    path('download_offerta/', download_offerta, name='download_offerta'),
+
+
 ]

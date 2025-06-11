@@ -481,3 +481,16 @@ def crea_lista_lavanderie(request):
         'counter': counter
     })
 
+@csrf_exempt
+def download_offerta(request):
+    #download the file template.doc
+    filename = 'template.doc'
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(script_dir, 'static', 'template.doc')
+    if os.path.exists(file_path):
+        with open(file_path, 'rb') as fh:
+            response = HttpResponse(fh.read(), content_type="application/pdf")
+            response['Content-Disposition'] = f'inline; filename={filename}'
+            return response
+    else:
+        return JsonResponse({'error': 'File not found'}, status=404)
