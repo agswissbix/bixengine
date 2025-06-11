@@ -1592,9 +1592,10 @@ def prepara_email(request):
         contatto_emai=''
         if row:
             contatto_recordid=row['recordidcontatti_']
-            contatto_record=UserRecord('contatti',contatto_recordid)
-            if contatto_record:
-                contatto_emai=contatto_record.values['email']
+            if contatto_recordid != 'None':
+                contatto_record=UserRecord('contatti',contatto_recordid)
+                if contatto_record:
+                    contatto_emai=contatto_record.values['email']
 
         attachment_fullpath=HelpderDB.get_uploadedfile_fullpath('rendicontolavanderia',rendiconto_recordid,'allegato')
         attachment_relativepath=HelpderDB.get_uploadedfile_relativepath('rendicontolavanderia',rendiconto_recordid,'allegato')
