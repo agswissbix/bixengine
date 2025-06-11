@@ -13,6 +13,7 @@ from commonapp.bixmodels.helper_db import *
 from commonapp.helper import *
 import locale
 import re
+from docx import Document
 
 
 @csrf_exempt
@@ -481,16 +482,53 @@ def crea_lista_lavanderie(request):
         'counter': counter
     })
 
+
+def rimuovi_sezione(doc, inizio_marker, fine_marker):
+    start_index = end_index = None
+    for i, para in enumerate(doc.paragraphs):
+        if inizio_marker in para.text:
+            start_index = i
+        elif fine_marker in para.text and start_index is not None:
+            end_index = i
+            break
+
+    if start_index is not None and end_index is not None:
+        for i in range(end_index, start_index - 1, -1):
+            p = doc.paragraphs[i]
+            p._element.getparent().remove(p._element)
+
 @csrf_exempt
 def download_offerta(request):
     #download the file template.doc
-    filename = 'template.doc'
+    filename = 'template.docx'
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    file_path = os.path.join(script_dir, 'static', 'template.doc')
-    if os.path.exists(file_path):
-        with open(file_path, 'rb') as fh:
+    file_path = os.path.join(script_dir, 'static', 'template.docx')
+    doc = Document(file_path)
+
+    for p in doc.paragraphs:
+        if '{{valore}}' in p.text:
+            p.text = p.text.replace('{{valore}}', 'valore di esempio')
+
+    mostra_sezione = True  # cambia a True per mantenerla
+
+    if not mostra_sezione:
+        rimuovi_sezione(doc, '[SEZIONE_TEST_INIZIO]', '[SEZIONE_TEST_FINE]')
+
+    for p in doc.paragraphs:
+        if '[SEZIONE_TEST_INIZIO]' in p.text or '[SEZIONE_TEST_FINE]' in p.text:
+            p.text = p.text.replace('[SEZIONE_TEST_INIZIO]', '').replace('[SEZIONE_TEST_FINE]', '')
+
+    
+    #save the modified document
+    modified_file_path = os.path.join(script_dir, 'static', 'modified_template.docx')
+    doc.save(modified_file_path)
+
+
+    if os.path.exists(modified_file_path):
+        with open(modified_file_path, 'rb') as fh:
             response = HttpResponse(fh.read(), content_type="application/pdf")
             response['Content-Disposition'] = f'inline; filename={filename}'
+            #os.remove(modified_file_path)
             return response
     else:
         return JsonResponse({'error': 'File not found'}, status=404)

@@ -2151,12 +2151,31 @@ def export_excel(request):
             searchTerm = data.get('searchTerm')
             viewid = data.get('view')
 
-            # Simulazione dati
-            records = get_table_records(request)
-            if not records:
-                return JsonResponse({'error': 'Nessun record trovato'}, status=404)
+            table=UserTable(tableid)
+            records=table.get_table_records_obj(viewid=viewid,searchTerm=searchTerm)
+            table_columns=table.get_results_columns()
 
-            df = pd.DataFrame(records)
+
+
+
+
+            rows = records
+
+            # salva un array che contiene tutta la lista 'values' di ogni row
+
+            rows_values = [row.values for row in rows]
+
+
+
+            # Crea una lista di fieldid dalle colonne della tabella
+            field_ids = [col['fieldid'] for col in table_columns]
+
+
+            # Prepara i dati ristrutturati per il DataFrame
+
+
+            # Crea il DataFrame
+            df = pd.DataFrame(rows_values, columns=field_ids)
             buffer = io.BytesIO()
 
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
