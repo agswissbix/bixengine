@@ -239,9 +239,15 @@ def belotti_salva_formulario(request):
     """
     # Estraggo i dati dal body della richiesta
     username = Helper.get_username(request)
+    record_richiesta=UserRecord('richieste')
+    record_richiesta.values['tiporichiesta']=''
+    record_richiesta.values['data'] = datetime.now().strftime("%Y-%m-%d")
+    record_richiesta.values['stato'] = 'Richiesta inviata'
+    record_richiesta.save()
     completeOrder = request.data.get('completeOrder', [])
     for order_row in completeOrder:
         categoria=order_row.get('title', None)
+        
         products=order_row.get('products', [])
         for product in products:
             codice=product.get('id', None)
