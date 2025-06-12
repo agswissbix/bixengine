@@ -1366,6 +1366,8 @@ def save_record_fields(request):
         record_path = f"{tableid}/{recordid}/{clean_key}{ext}"
 
         # Salvataggio backup prima di salvare il file originale
+        #TODO
+        #TEMP
         backup_folder = "C:/bixdata/backup/attachments"
         os.makedirs(backup_folder, exist_ok=True)
         backup_filename = f"{tableid}_{recordid}_{clean_key}{ext}"
