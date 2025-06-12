@@ -2553,7 +2553,7 @@ def download_offerta(request):
     recordid = data.get('recordid')
 
     record = UserRecord('offerta', recordid)
-    templateofferta = record.values.get('templateofferta', '')
+    templateofferta = record.values.get('tipoofferta', '')
 
     filename = f"Offerta_{record.values.get('id', '')}.docx"
 
