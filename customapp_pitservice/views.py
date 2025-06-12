@@ -499,16 +499,52 @@ def rimuovi_sezione(doc, inizio_marker, fine_marker):
 
 @csrf_exempt
 def download_offerta(request):
-    #download the file template.doc
-    filename = 'template.docx'
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    file_path = os.path.join(script_dir, 'static', 'template.docx')
-    doc = Document(file_path)
 
-    for p in doc.paragraphs:
-        if '{{valore}}' in p.text:
-            p.text = p.text.replace('{{valore}}', 'valore di esempio')
+    data = json.loads(request.body)
+    recordid = data.get('recordid')
 
+    record = UserRecord('offerta', recordid)
+    templateofferta = record.values.get('templateofferta', '')
+
+    filename = f"Offerta_{record.values.get('id', '')}.docx"
+
+    
+    if templateofferta == 'Custodia':
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        file_path = os.path.join(script_dir, 'static', 'template_offerte', 'servizio_custodia.docx')
+        doc = Document(file_path)
+
+        id_offerta = record.values.get('id', '')
+
+        recordid_cliente = record.values.get('recordidcliente_', '')
+        record_cliente = UserRecord('cliente', recordid_cliente)
+        nome_cliente = record_cliente.values.get('nome_cliente', '')
+        indirizzo_cliente = record_cliente.values.get('indirizzo', '')
+        cap_cliente = record_cliente.values.get('cap', '')
+        citta_cliente = record_cliente.values.get('citta', '')
+
+        recordid_stabile = record.values.get('recordidstabile_', '')
+        record_stabile = UserRecord('stabile', recordid_stabile)
+        nome_stabile = record_stabile.values.get('titolo_stabile', '')
+        indirizzo_stabile = record_stabile.values.get('indirizzo', '')
+        citta_stabile = record_stabile.values.get('citta', '')
+
+        data = datetime.datetime.now().strftime("%d.%m.%Y")
+
+        for p in doc.paragraphs:
+            p.text = p.text.replace('{{nome_cliente}}', nome_cliente)
+            p.text = p.text.replace('{{indirizzo_cliente}}', indirizzo_cliente)
+            p.text = p.text.replace('{{cap_cliente}}', cap_cliente)
+            p.text = p.text.replace('{{citta_cliente}}', citta_cliente)
+            p.text = p.text.replace('{{data}}', data)
+
+            p.text = p.text.replace('{{id_offerta}}', str(id_offerta))
+
+            p.text = p.text.replace('{{nome_stabile}}', nome_stabile)
+            p.text = p.text.replace('{{indirizzo_stabile}}', indirizzo_stabile)
+            p.text = p.text.replace('{{citta_stabile}}', citta_stabile)
+
+    """
     mostra_sezione = True  # cambia a True per mantenerla
 
     if not mostra_sezione:
@@ -517,7 +553,7 @@ def download_offerta(request):
     for p in doc.paragraphs:
         if '[SEZIONE_TEST_INIZIO]' in p.text or '[SEZIONE_TEST_FINE]' in p.text:
             p.text = p.text.replace('[SEZIONE_TEST_INIZIO]', '').replace('[SEZIONE_TEST_FINE]', '')
-
+    """
     
     #save the modified document
     modified_file_path = os.path.join(script_dir, 'static', 'modified_template.docx')
