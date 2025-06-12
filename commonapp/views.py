@@ -39,6 +39,7 @@ from commonapp.utils.email_sender import EmailSender
 from typing import Callable, Dict, List, Sequence, Union, Any
 import whois
 import dns.resolver
+from docx import Document
 
 
 
@@ -2535,3 +2536,75 @@ def script_update_serviceandasset_domains_info(request, dominio=None):
 
     except Exception as e:
         return HttpResponse(f"Errore invio: {str(e)}")
+
+
+
+def replace_text_in_paragraph(paragraph, key, value):
+    """Sostituisce il testo mantenendo lo stile originale"""
+    if key in paragraph.text:
+        inline = paragraph.runs
+        for item in inline:
+            if key in item.text:
+                item.text = item.text.replace(key, value)
+
+def download_offerta(request):
+    print('download_offerta')
+    data = json.loads(request.body)
+    recordid = data.get('recordid')
+
+    record = UserRecord('offerta', recordid)
+    templateofferta = record.values.get('templateofferta', '')
+
+    filename = f"Offerta_{record.values.get('id', '')}.docx"
+
+    if templateofferta == 'Custodia':
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        print(script_dir)
+        file_path = os.path.join(script_dir, 'static', 'template_offerte', 'servizio_custodia.docx')
+        doc = Document(file_path)
+
+        id_offerta = record.values.get('id', '')
+
+        recordid_cliente = record.values.get('recordidcliente_', '')
+        record_cliente = UserRecord('cliente', recordid_cliente)
+        nome_cliente = record_cliente.values.get('nome_cliente', '')
+        indirizzo_cliente = record_cliente.values.get('indirizzo', '')
+        cap_cliente = record_cliente.values.get('cap', '')
+        citta_cliente = record_cliente.values.get('citta', '')
+
+        recordid_stabile = record.values.get('recordidstabile_', '')
+        record_stabile = UserRecord('stabile', recordid_stabile)
+        nome_stabile = record_stabile.values.get('titolo_stabile', '')
+        indirizzo_stabile = record_stabile.values.get('indirizzo', '')
+        citta_stabile = record_stabile.values.get('citta', '')
+
+        data = datetime.datetime.now().strftime("%d.%m.%Y")
+
+        replacements = {
+            '{{nome_cliente}}': nome_cliente,
+            '{{indirizzo_cliente}}': indirizzo_cliente,
+            '{{cap_cliente}}': cap_cliente,
+            '{{citta_cliente}}': citta_cliente,
+            '{{data}}': data,
+            '{{id_offerta}}': str(id_offerta),
+            '{{nome_stabile}}': nome_stabile,
+            '{{indirizzo_stabile}}': indirizzo_stabile,
+            '{{citta_stabile}}': citta_stabile
+        }
+
+        for p in doc.paragraphs:
+            for key, value in replacements.items():
+                replace_text_in_paragraph(p, key, value)
+
+    modified_file_path = os.path.join(script_dir, 'static', 'modified_template.docx')
+    doc.save(modified_file_path)
+
+
+    if os.path.exists(modified_file_path):
+        with open(modified_file_path, 'rb') as fh:
+            response = HttpResponse(fh.read(), content_type="application/pdf")
+            response['Content-Disposition'] = f'inline; filename={filename}'
+            #os.remove(modified_file_path)
+            return response
+    else:
+        return JsonResponse({'error': 'File not found'}, status=404)
