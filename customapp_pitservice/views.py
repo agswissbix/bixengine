@@ -508,6 +508,7 @@ def replace_text_in_paragraph(paragraph, key, value):
 
 
 def download_offerta(request):
+    print('download_offerta')
     data = json.loads(request.body)
     recordid = data.get('recordid')
 
@@ -518,6 +519,7 @@ def download_offerta(request):
 
     if templateofferta == 'Custodia':
         script_dir = os.path.dirname(os.path.abspath(__file__))
+        print(script_dir)
         file_path = os.path.join(script_dir, 'static', 'template_offerte', 'servizio_custodia.docx')
         doc = Document(file_path)
 
