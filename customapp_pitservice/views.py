@@ -497,9 +497,17 @@ def rimuovi_sezione(doc, inizio_marker, fine_marker):
             p = doc.paragraphs[i]
             p._element.getparent().remove(p._element)
 
-@csrf_exempt
-def download_offerta(request):
 
+def replace_text_in_paragraph(paragraph, key, value):
+    """Sostituisce il testo mantenendo lo stile originale"""
+    if key in paragraph.text:
+        inline = paragraph.runs
+        for item in inline:
+            if key in item.text:
+                item.text = item.text.replace(key, value)
+
+
+def download_offerta(request):
     data = json.loads(request.body)
     recordid = data.get('recordid')
 
@@ -508,7 +516,6 @@ def download_offerta(request):
 
     filename = f"Offerta_{record.values.get('id', '')}.docx"
 
-    
     if templateofferta == 'Custodia':
         script_dir = os.path.dirname(os.path.abspath(__file__))
         file_path = os.path.join(script_dir, 'static', 'template_offerte', 'servizio_custodia.docx')
@@ -531,31 +538,22 @@ def download_offerta(request):
 
         data = datetime.datetime.now().strftime("%d.%m.%Y")
 
+        replacements = {
+            '{{nome_cliente}}': nome_cliente,
+            '{{indirizzo_cliente}}': indirizzo_cliente,
+            '{{cap_cliente}}': cap_cliente,
+            '{{citta_cliente}}': citta_cliente,
+            '{{data}}': data,
+            '{{id_offerta}}': str(id_offerta),
+            '{{nome_stabile}}': nome_stabile,
+            '{{indirizzo_stabile}}': indirizzo_stabile,
+            '{{citta_stabile}}': citta_stabile
+        }
+
         for p in doc.paragraphs:
-            p.text = p.text.replace('{{nome_cliente}}', nome_cliente)
-            p.text = p.text.replace('{{indirizzo_cliente}}', indirizzo_cliente)
-            p.text = p.text.replace('{{cap_cliente}}', cap_cliente)
-            p.text = p.text.replace('{{citta_cliente}}', citta_cliente)
-            p.text = p.text.replace('{{data}}', data)
+            for key, value in replacements.items():
+                replace_text_in_paragraph(p, key, value)
 
-            p.text = p.text.replace('{{id_offerta}}', str(id_offerta))
-
-            p.text = p.text.replace('{{nome_stabile}}', nome_stabile)
-            p.text = p.text.replace('{{indirizzo_stabile}}', indirizzo_stabile)
-            p.text = p.text.replace('{{citta_stabile}}', citta_stabile)
-
-    """
-    mostra_sezione = True  # cambia a True per mantenerla
-
-    if not mostra_sezione:
-        rimuovi_sezione(doc, '[SEZIONE_TEST_INIZIO]', '[SEZIONE_TEST_FINE]')
-
-    for p in doc.paragraphs:
-        if '[SEZIONE_TEST_INIZIO]' in p.text or '[SEZIONE_TEST_FINE]' in p.text:
-            p.text = p.text.replace('[SEZIONE_TEST_INIZIO]', '').replace('[SEZIONE_TEST_FINE]', '')
-    """
-    
-    #save the modified document
     modified_file_path = os.path.join(script_dir, 'static', 'modified_template.docx')
     doc.save(modified_file_path)
 
