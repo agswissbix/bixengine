@@ -210,18 +210,18 @@ def get_sidebarmenu_items(request):
     username =Helper.get_username(request)
     other_items=[]
     active_server=Helper.get_activeserver(request)
-    #if active_server == 'belotti':
-    gruppo=HelpderDB.sql_query_value(f"SELECT gruppo FROM user_sync_adiuto_utenti WHERE utentebixdata='{username}'","gruppo")
-    if gruppo:
-        formularigruppo=HelpderDB.sql_query(f"SELECT formulari FROM user_sync_adiuto_formularigruppo WHERE gruppo='{gruppo}'")
-        if formularigruppo:
-            formulari=formularigruppo[0]['formulari']
-            lista_formulari_list = formulari.split(",")
-            for formulario in lista_formulari_list:
-                other_items.append({
-                    "id": formulario,
-                    "description": formulario
-                })
+    if active_server == 'belotti':
+        gruppo=HelpderDB.sql_query_value(f"SELECT gruppo FROM user_sync_adiuto_utenti WHERE utentebixdata='{username}'","gruppo")
+        if gruppo:
+            formularigruppo=HelpderDB.sql_query(f"SELECT formulari FROM user_sync_adiuto_formularigruppo WHERE gruppo='{gruppo}'")
+            if formularigruppo:
+                formulari=formularigruppo[0]['formulari']
+                lista_formulari_list = formulari.split(",")
+                for formulario in lista_formulari_list:
+                    other_items.append({
+                        "id": formulario,
+                        "description": formulario
+                    })
 
 
     response = {
