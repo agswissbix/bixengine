@@ -509,18 +509,18 @@ def replace_text_in_paragraph(paragraph, key, value):
 
 
 def download_offerta(request):
-    print('download_offerta')
     data = json.loads(request.body)
     recordid = data.get('recordid')
 
     record = UserRecord('offerta', recordid)
-    templateofferta = record.values.get('templateofferta', '')
+    templateofferta = record.values.get('tipoofferta', '')
 
     filename = f"Offerta_{record.values.get('id', '')}.docx"
+    
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
 
     if templateofferta == 'Custodia':
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        print(script_dir)
         file_path = os.path.join(script_dir, 'static', 'template_offerte', 'servizio_custodia.docx')
         doc = Document(file_path)
 
@@ -556,6 +556,11 @@ def download_offerta(request):
         for p in doc.paragraphs:
             for key, value in replacements.items():
                 replace_text_in_paragraph(p, key, value)
+    
+    elif templateofferta == 'Manutenzione giardino':
+        file_path = os.path.join(script_dir, 'static', 'template_offerte', 'servizio_custodia.docx')
+
+
 
     modified_file_path = os.path.join(script_dir, 'static', 'modified_template.docx')
     doc.save(modified_file_path)

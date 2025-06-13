@@ -42,7 +42,6 @@ urlpatterns = [
     path('script_winteler_load_t_wip/', script_winteler_load_t_wip, name='script_winteler_load_t_wip'),
     path('script_update_serviceandasset_domains_info/', script_update_serviceandasset_domains_info, name='script_update_serviceandasset_domains_info'),
     path('script_update_serviceandasset_domains_info/<str:dominio>/', script_update_serviceandasset_domains_info, name='script_update_serviceandasset_domains_info_dominio'),
-    path('download_offerta/', download_offerta, name='download_offerta'),
 ]
 
 urlpatterns += static(settings.UPLOADS_URL, document_root=settings.UPLOADS_ROOT)
