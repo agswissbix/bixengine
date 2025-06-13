@@ -483,20 +483,39 @@ def crea_lista_lavanderie(request):
         'counter': counter
     })
 
-
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 def rimuovi_sezione(doc, inizio_marker, fine_marker):
-    start_index = end_index = None
-    for i, para in enumerate(doc.paragraphs):
-        if inizio_marker in para.text:
-            start_index = i
-        elif fine_marker in para.text and start_index is not None:
-            end_index = i
-            break
+    body = doc.element.body
+    remove = False
+    elements_to_remove = []
 
-    if start_index is not None and end_index is not None:
-        for i in range(end_index, start_index - 1, -1):
-            p = doc.paragraphs[i]
-            p._element.getparent().remove(p._element)
+    for element in list(body):
+        text = ''
+        # Prova a leggere il testo del paragrafo
+        if element.tag == qn('w:p'):
+            text = ''.join(node.text or '' for node in element.iter() if node.tag == qn('w:t'))
+        # Prova a leggere il testo della tabella (nel caso il marker sia in una cella)
+        elif element.tag == qn('w:tbl'):
+            for row in element.iter():
+                if row.tag == qn('w:t'):
+                    text += row.text or ''
+
+        if inizio_marker in text:
+            remove = True
+            elements_to_remove.append(element)
+            continue
+
+        if remove:
+            elements_to_remove.append(element)
+
+        if fine_marker in text:
+            remove = False
+            continue
+
+    # Rimuovi tutti gli elementi trovati
+    for el in elements_to_remove:
+        body.remove(el)
 
 
 def replace_text_in_paragraph(paragraph, key, value):
@@ -540,6 +559,16 @@ def download_offerta(request):
         citta_stabile = record_stabile.values.get('citta', '')
 
         data = datetime.datetime.now().strftime("%d.%m.%Y")
+
+        sections = record.values.get('sezionitemplate', '')
+        sections = sections.split(';') if sections else []
+        if 'custodia' in sections:
+            rimuovi_sezione(doc, '{{inizio_custodia}}', '{{fine_custodia}}')
+        if 'piscina' in sections:
+            rimuovi_sezione(doc, '{{inizio_piscina}}', '{{fine_piscina}}')
+        if 'area_verde' in sections:
+            rimuovi_sezione(doc, '{{inizio_area_verde}}', '{{fine_area_verde}}')
+
 
         replacements = {
             '{{nome_cliente}}': nome_cliente,
