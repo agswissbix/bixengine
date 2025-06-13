@@ -556,11 +556,41 @@ def download_offerta(request):
         for p in doc.paragraphs:
             for key, value in replacements.items():
                 replace_text_in_paragraph(p, key, value)
-    
-    elif templateofferta == 'Manutenzione giardino':
-        file_path = os.path.join(script_dir, 'static', 'template_offerte', 'servizio_custodia.docx')
 
+    elif templateofferta == 'Giardino':
+        file_path = os.path.join(script_dir, 'static', 'template_offerte', 'manutenzione_giardino.docx')
+        doc = Document(file_path)
 
+        id_offerta = record.values.get('id', '')
+
+        recordid_cliente = record.values.get('recordidcliente_', '')
+        record_cliente = UserRecord('cliente', recordid_cliente)
+        nome_cliente = record_cliente.values.get('nome_cliente', '')
+        indirizzo_cliente = record_cliente.values.get('indirizzo', '')
+        cap_cliente = record_cliente.values.get('cap', '')
+        citta_cliente = record_cliente.values.get('citta', '')
+
+        recordid_stabile = record.values.get('recordidstabile_', '')
+        record_stabile = UserRecord('stabile', recordid_stabile)
+        indirizzo_stabile = record_stabile.values.get('indirizzo', '')
+        citta_stabile = record_stabile.values.get('citta', '')
+
+        data = datetime.datetime.now().strftime("%d.%m.%Y")
+
+        replacements = {
+            '{{nome_cliente}}': nome_cliente,
+            '{{indirizzo_cliente}}': indirizzo_cliente,
+            '{{cap_cliente}}': cap_cliente,
+            '{{citta_cliente}}': citta_cliente,
+            '{{id_offerta}}': str(id_offerta),
+            '{{indirizzo_stabile}}': indirizzo_stabile,
+            '{{citta_stabile}}': citta_stabile,
+            '{{data}}': data
+        }
+
+        for p in doc.paragraphs:
+            for key, value in replacements.items():
+                replace_text_in_paragraph(p, key, value)
 
     modified_file_path = os.path.join(script_dir, 'static', 'modified_template.docx')
     doc.save(modified_file_path)
@@ -570,7 +600,7 @@ def download_offerta(request):
         with open(modified_file_path, 'rb') as fh:
             response = HttpResponse(fh.read(), content_type="application/pdf")
             response['Content-Disposition'] = f'inline; filename={filename}'
-            #os.remove(modified_file_path)
-            return response
+        os.remove(modified_file_path)
+        return response
     else:
         return JsonResponse({'error': 'File not found'}, status=404)
