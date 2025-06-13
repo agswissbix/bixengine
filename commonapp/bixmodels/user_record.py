@@ -421,12 +421,14 @@ class UserRecord:
 
             if field['fieldtypeid'] == 'Data':
                 fieldtype='Data'
-                defaultvalue=self.fields[fieldid]['defaultvalue']
-                if defaultvalue == '$today$':
+                #defaultvalue=self.fields[fieldid]['defaultvalue']
+                #if defaultvalue == '$today$':
+                #TODO RENDERE DINAMICO CON I SETTINGS
+                if self.tableid == 'telefonate' and fieldid == 'data': 
                     defaultcode=date.today().strftime('%Y-%m-%d')
                     defaultvalue=date.today().strftime('%Y-%m-%d')
                     
-
+            #TODO RENDERE DINAMICO CON I SETTINGS
             if self.tableid == 'telefonate' and fieldid == 'ora_inizio':
                 defaultcode = datetime.datetime.now().strftime("%H:%M")
                 defaultvalue = datetime.datetime.now().strftime("%H:%M")
@@ -453,6 +455,8 @@ class UserRecord:
                 if field['fieldtypewebid'] == 'html':
                     fieldtype='LongText'
 
+            
+
             if field['fieldtypewebid'] == 'file':
                 fieldtype='Attachment'
 
@@ -460,8 +464,11 @@ class UserRecord:
                 fieldtype='Categoria' 
                 items=HelpderDB.sql_query(f"SELECT * FROM sys_lookup_table_item WHERE lookuptableid='{field['lookuptableid']}'")
                 insert_field['lookupitems']=items
+                if field['fieldtypewebid'] == 'multiselect':
+                    insert_field['fieldtypewebid']='multiselect'
 
             insert_field['fieldtype']=fieldtype
+            
 
             if self.recordid=='' and value=='':
                 insert_field['value']={"code": defaultcode, "value": defaultvalue}
