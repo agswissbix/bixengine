@@ -455,8 +455,7 @@ class UserRecord:
                 if field['fieldtypewebid'] == 'html':
                     fieldtype='LongText'
 
-            if field['fieldtypewebid'] == 'multiselect':
-                    fieldtype='multiselect'
+            
 
             if field['fieldtypewebid'] == 'file':
                 fieldtype='Attachment'
@@ -465,6 +464,8 @@ class UserRecord:
                 fieldtype='Categoria' 
                 items=HelpderDB.sql_query(f"SELECT * FROM sys_lookup_table_item WHERE lookuptableid='{field['lookuptableid']}'")
                 insert_field['lookupitems']=items
+                if field['fieldtypewebid'] == 'multiselect':
+                    fieldtype='multiselect'
 
             insert_field['fieldtype']=fieldtype
 
