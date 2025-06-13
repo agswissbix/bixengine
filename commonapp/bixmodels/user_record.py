@@ -455,6 +455,9 @@ class UserRecord:
                 if field['fieldtypewebid'] == 'html':
                     fieldtype='LongText'
 
+            if field['fieldtypewebid'] == 'multiselect':
+                    fieldtype='multiselect'
+
             if field['fieldtypewebid'] == 'file':
                 fieldtype='Attachment'
 
