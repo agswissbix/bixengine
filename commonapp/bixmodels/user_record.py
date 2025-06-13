@@ -465,9 +465,10 @@ class UserRecord:
                 items=HelpderDB.sql_query(f"SELECT * FROM sys_lookup_table_item WHERE lookuptableid='{field['lookuptableid']}'")
                 insert_field['lookupitems']=items
                 if field['fieldtypewebid'] == 'multiselect':
-                    fieldtype='multiselect'
+                    insert_field['fieldtypewebid']='multiselect'
 
             insert_field['fieldtype']=fieldtype
+            
 
             if self.recordid=='' and value=='':
                 insert_field['value']={"code": defaultcode, "value": defaultvalue}
