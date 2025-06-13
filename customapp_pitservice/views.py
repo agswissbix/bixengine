@@ -560,14 +560,22 @@ def download_offerta(request):
 
         data = datetime.datetime.now().strftime("%d.%m.%Y")
 
-        sections = record.values.get('sezionitemplate', '')
-        sections = sections.split(';') if sections else []
-        if 'custodia' in sections:
-            rimuovi_sezione(doc, '{{inizio_custodia}}', '{{fine_custodia}}')
-        if 'piscina' in sections:
-            rimuovi_sezione(doc, '{{inizio_piscina}}', '{{fine_piscina}}')
-        if 'area_verde' in sections:
-            rimuovi_sezione(doc, '{{inizio_area_verde}}', '{{fine_area_verde}}')
+        # Ottieni le sezioni da mostrare dal database
+        sections_to_show = record.values.get('sezionitemplate', '')
+        sections_to_show = sections_to_show.split(';') if sections_to_show else []
+
+        # Tutte le possibli sezioni nel template
+        all_sections = ['custodia_pulizia', 'piscina', 'area_verde']
+
+        # Rimuovi le sezioni che NON sono presenti in sections_to_show
+        for section in all_sections:
+            if section not in sections_to_show:
+                if section == 'custodia_pulizia':
+                    rimuovi_sezione(doc, '{{inizio_custodia}}', '{{fine_custodia}}')
+                elif section == 'piscina':
+                    rimuovi_sezione(doc, '{{inizio_piscina}}', '{{fine_piscina}}')
+                elif section == 'area_verde':
+                    rimuovi_sezione(doc, '{{inizio_area_verde}}', '{{fine_area_verde}}')
 
 
         replacements = {
@@ -579,14 +587,20 @@ def download_offerta(request):
             '{{id_offerta}}': str(id_offerta),
             '{{nome_stabile}}': nome_stabile,
             '{{indirizzo_stabile}}': indirizzo_stabile,
-            '{{citta_stabile}}': citta_stabile
+            '{{citta_stabile}}': citta_stabile,
+            '{{inizio_custodia}}': '',
+            '{{fine_custodia}}': '',
+            '{{inizio_piscina}}': '',
+            '{{fine_piscina}}': '',
+            '{{inizio_area_verde}}': '',
+            '{{fine_area_verde}}': ''
         }
 
         for p in doc.paragraphs:
             for key, value in replacements.items():
                 replace_text_in_paragraph(p, key, value)
 
-    elif templateofferta == 'Giardino':
+    elif templateofferta == 'Manutenzione giardino':
         file_path = os.path.join(script_dir, 'static', 'template_offerte', 'manutenzione_giardino.docx')
         doc = Document(file_path)
 
@@ -620,10 +634,84 @@ def download_offerta(request):
         for p in doc.paragraphs:
             for key, value in replacements.items():
                 replace_text_in_paragraph(p, key, value)
+    
+    elif templateofferta == 'Pulizia appartamento':
+        file_path = os.path.join(script_dir, 'static', 'template_offerte', 'pulizia_appartamento.docx')
+        doc = Document(file_path)
+
+        id_offerta = record.values.get('id', '')
+        importo = record.values.get('importo', '')
+
+        recordid_cliente = record.values.get('recordidcliente_', '')
+        record_cliente = UserRecord('cliente', recordid_cliente)
+        nome_cliente = record_cliente.values.get('nome_cliente', '')
+        indirizzo_cliente = record_cliente.values.get('indirizzo', '')
+        cap_cliente = record_cliente.values.get('cap', '')
+        citta_cliente = record_cliente.values.get('citta', '')
+
+        recordid_stabile = record.values.get('recordidstabile_', '')
+        record_stabile = UserRecord('stabile', recordid_stabile)
+        indirizzo_stabile = record_stabile.values.get('indirizzo', '')
+        citta_stabile = record_stabile.values.get('citta', '')
+
+        data = datetime.datetime.now().strftime("%d.%m.%Y")
+
+        replacements = {
+            '{{nome_cliente}}': nome_cliente,
+            '{{indirizzo_cliente}}': indirizzo_cliente,
+            '{{cap_cliente}}': cap_cliente,
+            '{{citta_cliente}}': citta_cliente,
+            '{{id_offerta}}': str(id_offerta),
+            '{{indirizzo_stabile}}': indirizzo_stabile,
+            '{{citta_stabile}}': citta_stabile,
+            '{{importo}}': importo,
+            '{{data}}': data
+        }
+
+        for p in doc.paragraphs:
+            for key, value in replacements.items():
+                replace_text_in_paragraph(p, key, value)
+
+
+    elif templateofferta == 'Tinteggio appartamento':
+        file_path = os.path.join(script_dir, 'static', 'template_offerte', 'tinteggio_appartamento.docx')
+        doc = Document(file_path)
+
+        id_offerta = record.values.get('id', '')
+        importo = record.values.get('importo', '')
+
+        recordid_cliente = record.values.get('recordidcliente_', '')
+        record_cliente = UserRecord('cliente', recordid_cliente)
+        nome_cliente = record_cliente.values.get('nome_cliente', '')
+        indirizzo_cliente = record_cliente.values.get('indirizzo', '')
+        cap_cliente = record_cliente.values.get('cap', '')
+        citta_cliente = record_cliente.values.get('citta', '')
+
+        recordid_stabile = record.values.get('recordidstabile_', '')
+        record_stabile = UserRecord('stabile', recordid_stabile)
+        indirizzo_stabile = record_stabile.values.get('indirizzo', '')
+        citta_stabile = record_stabile.values.get('citta', '')
+
+        data = datetime.datetime.now().strftime("%d.%m.%Y")
+
+        replacements = {
+            '{{nome_cliente}}': nome_cliente,
+            '{{indirizzo_cliente}}': indirizzo_cliente,
+            '{{cap_cliente}}': cap_cliente,
+            '{{citta_cliente}}': citta_cliente,
+            '{{id_offerta}}': str(id_offerta),
+            '{{indirizzo_stabile}}': indirizzo_stabile,
+            '{{citta_stabile}}': citta_stabile,
+            '{{importo}}': importo,
+            '{{data}}': data
+        }
+
+        for p in doc.paragraphs:
+            for key, value in replacements.items():
+                replace_text_in_paragraph(p, key, value)
 
     modified_file_path = os.path.join(script_dir, 'static', 'modified_template.docx')
     doc.save(modified_file_path)
-
 
     if os.path.exists(modified_file_path):
         with open(modified_file_path, 'rb') as fh:
