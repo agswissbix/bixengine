@@ -74,7 +74,7 @@ class UserRecord:
             self._fetch_field_definitions_from_db() # Metodo che contiene la logica originale per sys_field/settings
             if recordid:
                 self._fetch_record_values_from_db() # Metodo che contiene la SELECT * FROM user_table WHERE recordid_ = ...
-            self._populate_fields_with_values() # Metodo per popolare self.fields['value'] etc. dai self.values
+                self._populate_fields_with_values() # Metodo per popolare self.fields['value'] etc. dai self.values
 
             # Applica master_recordid SE è un nuovo record (recordid=None)
             # e stiamo usando la logica originale (non prefetched)
@@ -94,9 +94,8 @@ class UserRecord:
                 sql_settings = f"SELECT * FROM sys_user_field_settings WHERE fieldid='{field['fieldid']}' AND tableid='{self.tableid}' AND userid='{str(self.userid)}'" # Usa self.userid
                 field['settings'] = HelpderDB.sql_query(sql_settings)
                 sql_default = f"SELECT value FROM sys_user_field_settings WHERE settingid='default' AND fieldid='{field['fieldid']}' AND tableid='{self.tableid}' AND userid='{str(self.userid)}'" # Usa self.userid
-                field['value'] = HelpderDB.sql_query_value(sql_default, 'value')
+                field['defaultvalue'] = HelpderDB.sql_query_value(sql_default, 'value')
                 temp_fields[field['fieldid']] = field
-                self.values[field['fieldid']] = field['value'] # Inizializza self.values con i valori di default
             self.fields = temp_fields # Inizializza self.fields con le definizioni base
 
     def _fetch_record_values_from_db(self):
@@ -422,14 +421,12 @@ class UserRecord:
 
             if field['fieldtypeid'] == 'Data':
                 fieldtype='Data'
-                #defaultvalue=self.fields[fieldid]['defaultvalue']
-                #if defaultvalue == '$today$':
-                #TODO RENDERE DINAMICO CON I SETTINGS
-                if self.tableid == 'telefonate' and fieldid == 'data': 
+                defaultvalue=self.fields[fieldid]['defaultvalue']
+                if defaultvalue == '$today$':
                     defaultcode=date.today().strftime('%Y-%m-%d')
                     defaultvalue=date.today().strftime('%Y-%m-%d')
                     
-            #TODO RENDERE DINAMICO CON I SETTINGS
+
             if self.tableid == 'telefonate' and fieldid == 'ora_inizio':
                 defaultcode = datetime.datetime.now().strftime("%H:%M")
                 defaultvalue = datetime.datetime.now().strftime("%H:%M")
@@ -456,8 +453,6 @@ class UserRecord:
                 if field['fieldtypewebid'] == 'html':
                     fieldtype='LongText'
 
-            
-
             if field['fieldtypewebid'] == 'file':
                 fieldtype='Attachment'
 
@@ -465,11 +460,8 @@ class UserRecord:
                 fieldtype='Categoria' 
                 items=HelpderDB.sql_query(f"SELECT * FROM sys_lookup_table_item WHERE lookuptableid='{field['lookuptableid']}'")
                 insert_field['lookupitems']=items
-                if field['fieldtypewebid'] == 'multiselect':
-                    insert_field['fieldtypewebid']='multiselect'
 
             insert_field['fieldtype']=fieldtype
-            
 
             if self.recordid=='' and value=='':
                 insert_field['value']={"code": defaultcode, "value": defaultvalue}

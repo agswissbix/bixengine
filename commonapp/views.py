@@ -210,7 +210,7 @@ def get_sidebarmenu_items(request):
 
     username =Helper.get_username(request)
     other_items=[]
-    active_server=Helper.get_activeserver(request)
+    active_server=Helper.get_activeserver(request)['value']
     if active_server == 'belotti':
         gruppo=HelpderDB.sql_query_value(f"SELECT gruppo FROM user_sync_adiuto_utenti WHERE utentebixdata='{username}'","gruppo")
         if gruppo:
@@ -1500,7 +1500,12 @@ def save_record_fields(request):
         richieste_record.values['stato']='Merce spedita'
         richieste_record.save()
 
-
+    # ---OFFERTE---
+    if tableid == 'offerta':
+        offerta_record = UserRecord('offerta', recordid)
+        offerta_id=offerta_record.values['id']
+        offerta_record.values['nrofferta']=offerta_id
+        offerta_record.save()
     
    
 
