@@ -1355,7 +1355,6 @@ def save_record_fields(request):
     recordid = record.recordid
 
     for file_key, uploaded_file in request.FILES.items():
-        # Estrai il nome pulito dal campo
         if file_key.startswith('files[') and file_key.endswith(']'):
             clean_key = file_key[6:-1]
         else:
@@ -1363,38 +1362,24 @@ def save_record_fields(request):
 
         _, ext = os.path.splitext(uploaded_file.name)
 
-        file_path = f"uploads/{tableid}/{recordid}/{clean_key}{ext}"
         record_path = f"{tableid}/{recordid}/{clean_key}{ext}"
+        file_path = os.path.join(tableid, recordid, f"{clean_key}{ext}")
 
-        # Salvataggio backup prima di salvare il file originale
-        #TODO
-        #TEMP
-        backup_folder = "C:/bixdata/backup/attachments"
-        os.makedirs(backup_folder, exist_ok=True)
-        backup_filename = f"{tableid}_{recordid}_{clean_key}{ext}"
-        backup_path = os.path.join(backup_folder, backup_filename)
-
-        # Backup prima del salvataggio
-        with open(backup_path, 'wb+') as destination:
-            for chunk in uploaded_file.chunks():
-                destination.write(chunk)
-
-        # 🔁 Riavvolgi il file per riutilizzarlo
-        uploaded_file.seek(0)
-
-        # Ora salva nel percorso principale
         if default_storage.exists(file_path):
             default_storage.delete(file_path)
 
         saved_path = default_storage.save(file_path, uploaded_file)
 
-
-        if default_storage.exists(saved_path):
+        try:
             full_path = default_storage.path(saved_path)
-        else:
+        except NotImplementedError:
             full_path = os.path.join(settings.MEDIA_ROOT, saved_path)
-        print(f"File salvato in: {full_path}")
-        record.values[clean_key] = record_path
+
+        print(f"🧾 File salvato fisicamente in: {full_path}")
+
+    # Salva il percorso relativo nel record
+    record.values[clean_key] = record_path
+
 
     record.save()
 
@@ -1507,10 +1492,6 @@ def save_record_fields(request):
         offerta_record.values['nrofferta']=offerta_id
         offerta_record.save()
     
-   
-
-
-
 
 
     return JsonResponse({"success": True, "detail": "Campi del record salvati con successo", "recordid": record.recordid})
