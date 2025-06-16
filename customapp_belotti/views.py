@@ -64,6 +64,7 @@ def sync_utenti_adiutobixdata(request):
 
                 # Imposta i valori
                 record.values['utentebixdata'] = utente_bix  # Chiave logica
+                record.values['utenteadiuto'] = row['F1052']
                 record.values['gruppo'] = row['F1050']
                 record.values['email'] = row['F1017']
                 record.values['nome'] = row['F1054']
@@ -237,6 +238,7 @@ def belotti_salva_formulario(request):
     Esempio di funzione che riceve un barcode lotto (barcodeLotto)
     e una lista di barcode wip (barcodeWipList).
     """
+    print("Fun: belotti_salva_formulario")
     # Estraggo i dati dal body della richiesta
     username = Helper.get_username(request)
     record_richiesta=UserRecord('richieste')
@@ -255,7 +257,13 @@ def belotti_salva_formulario(request):
             quantita=product.get('quantity', None)
             if not Helper.isempty(quantita):
                 if quantita > 0:
-                   
+                    record_richieste_righedettaglio = UserRecord('richieste_righedettaglio')
+                    record_richieste_righedettaglio.values['recordidrichieste_'] = record_richiesta.recordid
+                    record_richieste_righedettaglio.values['codice'] =codice
+                    record_richieste_righedettaglio.values['prodotto'] = descrizione
+                    record_richieste_righedettaglio.values['quantita'] = quantita
+                    record_richieste_righedettaglio.values['gruppo'] = categoria
+                    record_richieste_righedettaglio.save()
                     print(product)
                 else:
                     print("Vuoto")
