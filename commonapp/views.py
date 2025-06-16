@@ -1364,10 +1364,16 @@ def save_record_fields(request):
         else:
             clean_key = file_key
 
-        _, ext = os.path.splitext(uploaded_file.name)
+        if tableid =='attachment':
+            original_filename = uploaded_file.name
+            record_path = f"{tableid}/{recordid}/{original_filename}"
+            file_path = os.path.join(tableid, recordid, original_filename)
 
-        record_path = f"{tableid}/{recordid}/{clean_key}{ext}"
-        file_path = os.path.join(tableid, recordid, f"{clean_key}{ext}")
+        else:
+            _, ext = os.path.splitext(uploaded_file.name)
+            record_path = f"{tableid}/{recordid}/{clean_key}{ext}"
+            file_path = os.path.join(tableid, recordid, f"{clean_key}{ext}")
+
 
         # Salvataggio tramite default_storage (usa MEDIA_ROOT)
         if default_storage.exists(file_path):
@@ -1380,9 +1386,13 @@ def save_record_fields(request):
             full_path = default_storage.path(saved_path)
 
             # Usa os.path.join per evitare errori di slash
-            backup_base = env('BACKUP_PATH')
-            backup_path = os.path.join(backup_base, file_path)
-            backup_dir = os.path.dirname(backup_path)
+            backup_base = env('BACKUP_DIR')
+            #crea la cartella con tableid e dentro recordid e salva il file con il fieldid come nel salvataggio normale, ma nella cartella di backup, presa dall'env
+            backup_path = os.path.join(backup_base, tableid, recordid, f"{clean_key}{ext}")
+
+            # Crea la cartella di backup se non esiste
+            os.makedirs(os.path.dirname(backup_path), exist_ok=True)
+            
 
             # Copia il file fisico nella cartella di backup
             if os.path.exists(full_path):
