@@ -1393,7 +1393,7 @@ def save_record_fields(request):
             full_path = default_storage.path(saved_path)
         else:
             full_path = os.path.join(settings.MEDIA_ROOT, saved_path)
-
+        print(f"File salvato in: {full_path}")
         record.values[clean_key] = record_path
 
     record.save()
