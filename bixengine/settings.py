@@ -21,6 +21,7 @@ environ.Env.read_env()
 BASE_DIR = Path(__file__).resolve().parent.parent
 UPLOADS_URL = '/uploads/'
 UPLOADS_ROOT = os.path.join(BASE_DIR, '..', 'uploads')
+MEDIA_ROOT = os.path.join(BASE_DIR, '..', 'uploads')
 
 TEMPFILE_URL = '/tempfile/'
 TEMPFILE_ROOT = BASE_DIR

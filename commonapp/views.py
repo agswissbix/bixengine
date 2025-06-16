@@ -40,8 +40,12 @@ from typing import Callable, Dict, List, Sequence, Union, Any
 import whois
 import dns.resolver
 from docx import Document
+import environ
 
 
+
+env = environ.Env()
+environ.Env.read_env()
 
 
 @csrf_exempt
@@ -1355,58 +1359,67 @@ def save_record_fields(request):
     recordid = record.recordid
 
     for file_key, uploaded_file in request.FILES.items():
-        # Estrai il nome pulito dal campo
         if file_key.startswith('files[') and file_key.endswith(']'):
             clean_key = file_key[6:-1]
         else:
             clean_key = file_key
 
-        _, ext = os.path.splitext(uploaded_file.name)
+        if tableid =='attachment':
+            original_filename = uploaded_file.name
+            record_path = f"{tableid}/{recordid}/{original_filename}"
+            file_path = os.path.join(tableid, recordid, original_filename)
 
-        file_path = f"uploads/{tableid}/{recordid}/{clean_key}{ext}"
-        record_path = f"{tableid}/{recordid}/{clean_key}{ext}"
+        else:
+            _, ext = os.path.splitext(uploaded_file.name)
+            record_path = f"{tableid}/{recordid}/{clean_key}{ext}"
+            file_path = os.path.join(tableid, recordid, f"{clean_key}{ext}")
 
-        # Salvataggio backup prima di salvare il file originale
-        #TODO
-        #TEMP
-        backup_folder = "C:/bixdata/backup/attachments"
-        os.makedirs(backup_folder, exist_ok=True)
-        backup_filename = f"{tableid}_{recordid}_{clean_key}{ext}"
-        backup_path = os.path.join(backup_folder, backup_filename)
 
-        # Backup prima del salvataggio
-        with open(backup_path, 'wb+') as destination:
-            for chunk in uploaded_file.chunks():
-                destination.write(chunk)
-
-        # 🔁 Riavvolgi il file per riutilizzarlo
-        uploaded_file.seek(0)
-
-        # Ora salva nel percorso principale
+        # Salvataggio tramite default_storage (usa MEDIA_ROOT)
         if default_storage.exists(file_path):
             default_storage.delete(file_path)
 
         saved_path = default_storage.save(file_path, uploaded_file)
 
-
-        if default_storage.exists(saved_path):
+        # Salva il file anche in una path di backup che viene presa dal file env
+        try:
             full_path = default_storage.path(saved_path)
-        else:
+
+            # Usa os.path.join per evitare errori di slash
+            backup_base = env('BACKUP_DIR')
+            #crea la cartella con tableid e dentro recordid e salva il file con il fieldid come nel salvataggio normale, ma nella cartella di backup, presa dall'env
+            backup_path = os.path.join(backup_base, tableid, recordid, f"{clean_key}{ext}")
+
+            # Crea la cartella di backup se non esiste
+            os.makedirs(os.path.dirname(backup_path), exist_ok=True)
+            
+
+            # Copia il file fisico nella cartella di backup
+            if os.path.exists(full_path):
+                shutil.copy2(full_path, backup_path)
+                print(f"🧾 Backup file salvato in: {backup_path}")
+            else:
+                print(f"File non trovato per backup: {full_path}")
+
+        except Exception as e:
+            print(f"Errore nel salvataggio backup: {str(e)}")
             full_path = os.path.join(settings.MEDIA_ROOT, saved_path)
-        print(f"File salvato in: {full_path}")
+
+        print(f"🧾 File salvato fisicamente in: {full_path}")
+
+        # Salva il percorso relativo nel record
         record.values[clean_key] = record_path
 
     record.save()
 
-    
     if tableid == 'stabile':
         stabile_record = UserRecord('stabile', recordid)
         if Helper.isempty(stabile_record.values['titolo_stabile']):
-            stabile_record.values['titolo_stabile']=""
-        riferimento=stabile_record.values['titolo_stabile']+" "+stabile_record.values['indirizzo']
-        stabile_record.values['riferimento']=riferimento
+            stabile_record.values['titolo_stabile'] = ""
+        riferimento = stabile_record.values['titolo_stabile'] + " " + stabile_record.values['indirizzo']
+        stabile_record.values['riferimento'] = riferimento
         stabile_record.save()
-        sql_riferimentocompleto=f"""
+        sql_riferimentocompleto = """
             UPDATE user_stabile AS stabile
             JOIN user_cliente AS cliente
             ON stabile.recordidcliente_ = cliente.recordid_
@@ -1417,101 +1430,91 @@ def save_record_fields(request):
     if tableid == 'contatti':
         contatto_record = UserRecord('contatti', recordid)
         if Helper.isempty(contatto_record.values['nome']):
-            contatto_record.values['nome']=""
+            contatto_record.values['nome'] = ""
         if Helper.isempty(contatto_record.values['cognome']):
-            contatto_record.values['cognome']=""
-        riferimento=contatto_record.values['nome']+" "+contatto_record.values['cognome']
-        contatto_record.values['riferimento']=riferimento
+            contatto_record.values['cognome'] = ""
+        riferimento = contatto_record.values['nome'] + " " + contatto_record.values['cognome']
+        contatto_record.values['riferimento'] = riferimento
         contatto_record.save()
 
     if tableid == 'contattostabile':
         contattostabile_record = UserRecord('contattostabile', recordid)
-        contatto_record=UserRecord('contatti',contattostabile_record.values['recordidcontatti_'])
-        contattostabile_record.values['nome']=contatto_record.values['nome']   
-        contattostabile_record.values['cognome']=contatto_record.values['cognome']
-        contattostabile_record.values['email']=contatto_record.values['email']
-        contattostabile_record.values['telefono']=contatto_record.values['telefono']
-        contattostabile_record.values['ruolo']=contatto_record.values['ruolo']
+        contatto_record = UserRecord('contatti', contattostabile_record.values['recordidcontatti_'])
+        contattostabile_record.values['nome'] = contatto_record.values['nome']
+        contattostabile_record.values['cognome'] = contatto_record.values['cognome']
+        contattostabile_record.values['email'] = contatto_record.values['email']
+        contattostabile_record.values['telefono'] = contatto_record.values['telefono']
+        contattostabile_record.values['ruolo'] = contatto_record.values['ruolo']
         contattostabile_record.save()
 
     # ---LETTURE GASOLIO---
     if tableid == 'letturagasolio':
         letturagasolio_record = UserRecord('letturagasolio', recordid)
         stabile_record = UserRecord('stabile', letturagasolio_record.values['recordidstabile_'])
-        informazionigasolio_record=UserRecord('informazionigasolio',letturagasolio_record.values['recordidinformazionigasolio_'])
-        
-        capienzacisterna=Helper.safe_float(informazionigasolio_record.values['capienzacisterna'])
-        letturacm=Helper.safe_float(letturagasolio_record.values['letturacm'])
+        informazionigasolio_record = UserRecord('informazionigasolio', letturagasolio_record.values['recordidinformazionigasolio_'])
+
+        capienzacisterna = Helper.safe_float(informazionigasolio_record.values['capienzacisterna'])
+        letturacm = Helper.safe_float(letturagasolio_record.values['letturacm'])
 
         if capienzacisterna:
             if capienzacisterna == 1500:
                 if letturacm:
-                    letturagasolio_record.values['letturalitri']=letturacm*10
+                    letturagasolio_record.values['letturalitri'] = letturacm * 10
             if capienzacisterna == 2000:
                 if letturacm:
-                    letturagasolio_record.values['letturalitri']=letturacm*13
-        
-        
+                    letturagasolio_record.values['letturalitri'] = letturacm * 13
 
         #TODO anno dinamico
         #letturagasolio_record.values['anno']='2025'
-        letturagasolio_record.values['recordidcliente_']=stabile_record.values['recordidcliente_']
-        letturagasolio_record.values['capienzacisterna']=capienzacisterna
-        letturagasolio_record.values['livellominimo']=informazionigasolio_record.values['livellominimo']
+        letturagasolio_record.values['recordidcliente_'] = stabile_record.values['recordidcliente_']
+        letturagasolio_record.values['capienzacisterna'] = capienzacisterna
+        letturagasolio_record.values['livellominimo'] = informazionigasolio_record.values['livellominimo']
         letturagasolio_record.save()
-
 
     # ---BOLLETTINI---
     if tableid == 'bollettini':
         bollettino_record = UserRecord('bollettini', recordid)
-        tipo_bollettino=bollettino_record.values['tipo_bollettino']
-        nr=bollettino_record.values['nr']   
+        tipo_bollettino = bollettino_record.values['tipo_bollettino']
+        nr = bollettino_record.values['nr']
         if not nr:
             if not tipo_bollettino:
-                tipo_bollettino=''
-            sql="SELECT * FROM user_bollettini WHERE tipo_bollettino='"+tipo_bollettino+"' AND deleted_='N' ORDER BY nr desc LIMIT 1"
+                tipo_bollettino = ''
+            sql = "SELECT * FROM user_bollettini WHERE tipo_bollettino='" + tipo_bollettino + "' AND deleted_='N' ORDER BY nr desc LIMIT 1"
             bollettino_recorddict = HelpderDB.sql_query_row(sql)
             if bollettino_recorddict['nr'] is None:
-                nr=1
+                nr = 1
             else:
                 nr = int(bollettino_recorddict['nr']) + 1
-            bollettino_record.values['nr']=nr
-            
-        allegato=bollettino_record.values['allegato']
+            bollettino_record.values['nr'] = nr
+
+        allegato = bollettino_record.values['allegato']
         if allegato:
-            bollettino_record.values['allegatocaricato']='Si'
+            bollettino_record.values['allegatocaricato'] = 'Si'
         else:
-            bollettino_record.values['allegatocaricato']='No'
+            bollettino_record.values['allegatocaricato'] = 'No'
 
         stabile_record = UserRecord('stabile', bollettino_record.values['recordidstabile_'])
-        cliente_recordid=stabile_record.values['recordidcliente_']
-        bollettino_record.values['recordidcliente_']=cliente_recordid
+        cliente_recordid = stabile_record.values['recordidcliente_']
+        bollettino_record.values['recordidcliente_'] = cliente_recordid
         bollettino_record.save()
 
-    
     if tableid == 'rendicontolavanderia':
         rendiconto_record = UserRecord('rendicontolavanderia', recordid)
-        if rendiconto_record.values['stato']=='Da fare' and rendiconto_record.values['allegato']:   
-            rendiconto_record.values['stato']='Preparato'
+        if rendiconto_record.values['stato'] == 'Da fare' and rendiconto_record.values['allegato']:
+            rendiconto_record.values['stato'] = 'Preparato'
         rendiconto_record.save()
 
     if tableid == 'richieste':
         richieste_record = UserRecord('richieste', recordid)
-        richieste_record.values['stato']='Merce spedita'
+        richieste_record.values['stato'] = 'Merce spedita'
         richieste_record.save()
 
     # ---OFFERTE---
     if tableid == 'offerta':
         offerta_record = UserRecord('offerta', recordid)
-        offerta_id=offerta_record.values['id']
-        offerta_record.values['nrofferta']=offerta_id
+        offerta_id = offerta_record.values['id']
+        offerta_record.values['nrofferta'] = offerta_id
         offerta_record.save()
-    
-   
-
-
-
-
 
     return JsonResponse({"success": True, "detail": "Campi del record salvati con successo", "recordid": record.recordid})
 
@@ -2158,32 +2161,59 @@ def export_excel(request):
             tableid = data.get('tableid', 'export')
             searchTerm = data.get('searchTerm')
             viewid = data.get('view')
+        
+            table = UserTable(tableid)
+            if viewid == '':
+                viewid=table.get_default_viewid()
 
-            table=UserTable(tableid)
-            records=table.get_table_records_obj(viewid=viewid,searchTerm=searchTerm)
+            records: List[UserRecord]
+            conditions_list=list()
+            records=table.get_table_records_obj(viewid=viewid,searchTerm=searchTerm, conditions_list=conditions_list)
+            counter=table.get_total_records_count()
             table_columns=table.get_results_columns()
+            rows=[]
+            for record in records:
+                row={}
+                row['recordid']=record.recordid
+                row['css']= "#"
+                row['fields']=[]
+                fields=record.get_record_results_fields()
+                for field in fields:
+                        #TODO
+                        cssClass=''
+                        if tableid=='serviceandasset':
+                            if field['fieldid'] == 'status' and field['value'] == 'Active':
+                                cssClass='bg-emerald-50'
+                            if field['fieldid'] == 'status' and field['value'] == 'Closed':
+                                cssClass='bg-gray-50'
+                            if field['fieldid'] == 'status' and field['value'] == 'Disabled':
+                                cssClass='bg-yellow-50'
+                            if field['fieldid'] == 'status' and field['value'] == 'CHECK':
+                                cssClass='bg-red-100'
+                            if field['fieldid'] == 'status' and field['value'] == 'CHECK - DNS':
+                                cssClass='bg-yellow-100'
+                            
+                        row['fields'].append({'recordid':'','css':cssClass,'type':field['type'],'value':field['value'],'fieldid':field['fieldid']})
+                rows.append(row)
+        
+                columns=[]
+                for table_column in table_columns:
+                    columns.append({'fieldtypeid':table_column['fieldtypeid'],'desc':table_column['description']})
 
 
 
 
 
-            rows = records
-
-            # salva un array che contiene tutta la lista 'values' di ogni row
-
-            rows_values = [row.values for row in rows]
-
-
-
-            # Crea una lista di fieldid dalle colonne della tabella
-            field_ids = [col['fieldid'] for col in table_columns]
 
 
             # Prepara i dati ristrutturati per il DataFrame
 
 
             # Crea il DataFrame
-            df = pd.DataFrame(rows_values, columns=field_ids)
+            df = pd.DataFrame({
+                'recordid': [row['recordid'] for row in rows],
+                **{f"{col['desc']}": [row['fields'][i]['value'] for row in rows] for i, col in enumerate(columns)}
+            }) 
             buffer = io.BytesIO()
 
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
