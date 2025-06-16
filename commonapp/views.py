@@ -1454,7 +1454,7 @@ def save_record_fields(request):
         
 
         #TODO anno dinamico
-        letturagasolio_record.values['anno']='2025'
+        #letturagasolio_record.values['anno']='2025'
         letturagasolio_record.values['recordidcliente_']=stabile_record.values['recordidcliente_']
         letturagasolio_record.values['capienzacisterna']=capienzacisterna
         letturagasolio_record.values['livellominimo']=informazionigasolio_record.values['livellominimo']
