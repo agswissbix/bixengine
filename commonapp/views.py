@@ -2158,32 +2158,59 @@ def export_excel(request):
             tableid = data.get('tableid', 'export')
             searchTerm = data.get('searchTerm')
             viewid = data.get('view')
+        
+            table = UserTable(tableid)
+            if viewid == '':
+                viewid=table.get_default_viewid()
 
-            table=UserTable(tableid)
-            records=table.get_table_records_obj(viewid=viewid,searchTerm=searchTerm)
+            records: List[UserRecord]
+            conditions_list=list()
+            records=table.get_table_records_obj(viewid=viewid,searchTerm=searchTerm, conditions_list=conditions_list)
+            counter=table.get_total_records_count()
             table_columns=table.get_results_columns()
+            rows=[]
+            for record in records:
+                row={}
+                row['recordid']=record.recordid
+                row['css']= "#"
+                row['fields']=[]
+                fields=record.get_record_results_fields()
+                for field in fields:
+                        #TODO
+                        cssClass=''
+                        if tableid=='serviceandasset':
+                            if field['fieldid'] == 'status' and field['value'] == 'Active':
+                                cssClass='bg-emerald-50'
+                            if field['fieldid'] == 'status' and field['value'] == 'Closed':
+                                cssClass='bg-gray-50'
+                            if field['fieldid'] == 'status' and field['value'] == 'Disabled':
+                                cssClass='bg-yellow-50'
+                            if field['fieldid'] == 'status' and field['value'] == 'CHECK':
+                                cssClass='bg-red-100'
+                            if field['fieldid'] == 'status' and field['value'] == 'CHECK - DNS':
+                                cssClass='bg-yellow-100'
+                            
+                        row['fields'].append({'recordid':'','css':cssClass,'type':field['type'],'value':field['value'],'fieldid':field['fieldid']})
+                rows.append(row)
+        
+                columns=[]
+                for table_column in table_columns:
+                    columns.append({'fieldtypeid':table_column['fieldtypeid'],'desc':table_column['description']})
 
 
 
 
 
-            rows = records
-
-            # salva un array che contiene tutta la lista 'values' di ogni row
-
-            rows_values = [row.values for row in rows]
-
-
-
-            # Crea una lista di fieldid dalle colonne della tabella
-            field_ids = [col['fieldid'] for col in table_columns]
 
 
             # Prepara i dati ristrutturati per il DataFrame
 
 
             # Crea il DataFrame
-            df = pd.DataFrame(rows_values, columns=field_ids)
+            df = pd.DataFrame({
+                'recordid': [row['recordid'] for row in rows],
+                **{f"{col['desc']}": [row['fields'][i]['value'] for row in rows] for i, col in enumerate(columns)}
+            }) 
             buffer = io.BytesIO()
 
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
