@@ -240,12 +240,21 @@ def belotti_salva_formulario(request):
     """
     print("Fun: belotti_salva_formulario")
     # Estraggo i dati dal body della richiesta
+    formType = request.data.get('formType', "")
     username = Helper.get_username(request)
+    userid = Helper.get_userid(request)
+    utenteadiuto=HelpderDB.sql_query_value(
+        f"SELECT utenteadiuto FROM user_sync_adiuto_utenti WHERE utentebixdata = '{userid}'",
+        'utenteadiuto'
+    )   
     record_richiesta=UserRecord('richieste')
-    record_richiesta.values['tiporichiesta']=''
+    record_richiesta.values['tiporichiesta']=formType
     record_richiesta.values['data'] = datetime.now().strftime("%Y-%m-%d")
     record_richiesta.values['stato'] = 'Richiesta inviata'
+    record_richiesta.values['utentebixdata'] = userid
+    record_richiesta.values['utenteadiuto'] = utenteadiuto
     record_richiesta.save()
+
     completeOrder = request.data.get('completeOrder', [])
     for order_row in completeOrder:
         categoria=order_row.get('title', None)
@@ -262,7 +271,7 @@ def belotti_salva_formulario(request):
                     record_richieste_righedettaglio.values['codice'] =codice
                     record_richieste_righedettaglio.values['prodotto'] = descrizione
                     record_richieste_righedettaglio.values['quantita'] = quantita
-                    record_richieste_righedettaglio.values['gruppo'] = categoria
+                    record_richieste_righedettaglio.values['categoria'] = categoria
                     record_richieste_righedettaglio.save()
                     print(product)
                 else:
