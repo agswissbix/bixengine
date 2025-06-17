@@ -425,7 +425,7 @@ def sync_richieste_bixdataadiuto(request):
 
         richieste_table = UserTable('richieste')
         rows = richieste_table.get_records(
-            filter={'stato': 'Richiesta inviata'},
+            conditions_list={"stato='Richiesta inviata'"},
         )
         count = 0
         for row in rows:
@@ -442,15 +442,15 @@ def sync_richieste_bixdataadiuto(request):
             tgt_cursor.execute(merge_sql)
             count += 1
             richieste_righedettaglio_table = UserTable('richieste_righedettaglio')
-            rows_righe = richieste_righedettaglio_table.get_records(
-                filter={'recordidrichieste_': row.recordid_}
+            rows_dettagli = richieste_righedettaglio_table.get_records(
+                conditions_list={f"recordidrichieste_={row['recordid_']}"}
             )
-            for row_riga in rows_righe:
+            for row_dettaglio in rows_dettagli:
                 merge_sql_righe = f"""
                     INSERT INTO dbo.T_BIXDATA_RICHIESTE_DETTAGLI (recordid_, recordidrichieste_, codice, prodotto, quantita, categoria)
-                    SELECT {sql_safe(row_riga.recordid_)}, {sql_safe(row_riga.recordidrichieste_)}, {sql_safe(row_riga.codice)}, {sql_safe(row_riga.prodotto)}, {sql_safe(row_riga.quantita)}, {sql_safe(row_riga.categoria)}
+                    SELECT {sql_safe(row_dettaglio.recordid_)}, {sql_safe(row_dettaglio.recordidrichieste_)}, {sql_safe(row_dettaglio.codice)}, {sql_safe(row_dettaglio.prodotto)}, {sql_safe(row_dettaglio.quantita)}, {sql_safe(row_dettaglio.categoria)}
                     WHERE NOT EXISTS (
-                        SELECT 1 FROM dbo.T_BIXDATA_RICHIESTE_DETTAGLI WHERE recordid_ = {sql_safe(row_riga.recordid_)}
+                        SELECT 1 FROM dbo.T_BIXDATA_RICHIESTE_DETTAGLI WHERE recordid_ = {sql_safe(row_dettaglio.recordid_)}
                     )
                 """
                 print(merge_sql_righe)
