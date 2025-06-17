@@ -416,7 +416,6 @@ def sync_richieste_bixdataadiuto(request):
         f"SERVER={os.environ.get('ADIUTO_DB_SERVER')};"
         f"DATABASE={os.environ.get('ADIUTO_DB_NAME')};"
         f"UID={os.environ.get('ADIUTO_DB_USER')};"
-        f"PWD={os.environ.get('ADIUTO_DB_PASSWORD')};"
     )
     print(target_conn_str)
 
