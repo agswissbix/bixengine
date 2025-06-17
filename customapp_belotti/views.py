@@ -435,7 +435,7 @@ def sync_richieste_bixdataadiuto(request):
                 INSERT INTO dbo.T_BIXDATA_RICHIESTE (recordid_, tiporichiesta, datarichiesta, stato, utentebixdata, utenteadiuto)
                 SELECT {sql_safe(row['recordid_'])}, {sql_safe(row['tiporichiesta'])}, {sql_safe(row['data'])}, {sql_safe(row['stato'])}, {sql_safe(row['utentebixdata'])}, {sql_safe(row['utenteadiuto'])}
                 WHERE NOT EXISTS (
-                    SELECT 1 FROM dbo.T_BIXDATA_RICHIESTE WHERE recordid_ = {sql_safe(row.recordid_)}
+                    SELECT 1 FROM dbo.T_BIXDATA_RICHIESTE WHERE recordid_ = {sql_safe(row['recordid_'])}
                 )
             """
             print(merge_sql)
@@ -451,7 +451,7 @@ def sync_richieste_bixdataadiuto(request):
                     INSERT INTO dbo.T_BIXDATA_RICHIESTE_DETTAGLI (recordid_, recordidrichieste_, codice, descrizione, quantita, categoria)
                     SELECT {sql_safe(row_dettaglio['recordid_'])}, {sql_safe(row_dettaglio['recordidrichieste_'])}, {sql_safe(row_dettaglio['codice'])}, {sql_safe(row_dettaglio['prodotto'])}, {sql_safe(row_dettaglio['quantita'])}, {sql_safe(row_dettaglio['categoria'])}
                     WHERE NOT EXISTS (
-                        SELECT 1 FROM dbo.T_BIXDATA_RICHIESTE_DETTAGLI WHERE recordid_ = {sql_safe(row_dettaglio.recordid_)}
+                        SELECT 1 FROM dbo.T_BIXDATA_RICHIESTE_DETTAGLI WHERE recordid_ = {sql_safe(row_dettaglio['recordid_'])}
                     )
                 """
                 print(merge_sql_righe)
