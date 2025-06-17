@@ -410,7 +410,7 @@ def sql_safe(value):
 
 
 def sync_richieste_bixdataadiuto(request):
-
+    print("Fun: sync_richieste_bixdataadiuto")
     target_conn_str = (
          f"DRIVER={{ODBC Driver 17 for SQL Server}};"
         f"SERVER={os.environ.get('ADIUTO_DB_SERVER')};"
@@ -418,6 +418,7 @@ def sync_richieste_bixdataadiuto(request):
         f"UID={os.environ.get('ADIUTO_DB_USER')};"
         f"PWD={os.environ.get('ADIUTO_DB_PASSWORD')};"
     )
+    print(target_conn_str)
 
     try:
         tgt_conn = pyodbc.connect(target_conn_str, timeout=5)
