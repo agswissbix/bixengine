@@ -465,8 +465,6 @@ def sync_richieste_bixdataadiuto(request):
 
     finally:
         try:
-            src_cursor.close()
-            src_conn.close()
             tgt_cursor.close()
             tgt_conn.close()
         except:
