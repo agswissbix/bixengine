@@ -240,12 +240,21 @@ def belotti_salva_formulario(request):
     """
     print("Fun: belotti_salva_formulario")
     # Estraggo i dati dal body della richiesta
+    formType = request.data.get('formType', "")
     username = Helper.get_username(request)
+    userid = Helper.get_userid(request)
+    utenteadiuto=HelpderDB.sql_query_value(
+        f"SELECT utenteadiuto FROM user_sync_adiuto_utenti WHERE utentebixdata = '{username}'",
+        'utenteadiuto'
+    )   
     record_richiesta=UserRecord('richieste')
-    record_richiesta.values['tiporichiesta']=''
+    record_richiesta.values['tiporichiesta']=formType
     record_richiesta.values['data'] = datetime.now().strftime("%Y-%m-%d")
     record_richiesta.values['stato'] = 'Richiesta inviata'
+    record_richiesta.values['utentebixdata'] = userid
+    record_richiesta.values['utenteadiuto'] = utenteadiuto
     record_richiesta.save()
+
     completeOrder = request.data.get('completeOrder', [])
     for order_row in completeOrder:
         categoria=order_row.get('title', None)
@@ -262,7 +271,7 @@ def belotti_salva_formulario(request):
                     record_richieste_righedettaglio.values['codice'] =codice
                     record_richieste_righedettaglio.values['prodotto'] = descrizione
                     record_richieste_righedettaglio.values['quantita'] = quantita
-                    record_richieste_righedettaglio.values['gruppo'] = categoria
+                    record_richieste_righedettaglio.values['categoria'] = categoria
                     record_richieste_righedettaglio.save()
                     print(product)
                 else:
@@ -278,18 +287,18 @@ def belotti_salva_formulario(request):
 
 def sync_fatture_sirioadiuto(request):
     source_conn_str = (
-        'DRIVER={Pervasive ODBC Unicode Interface};'
-        'ServerName=SIRIO;'
-        'DBQ=OTTICABELOTTI;'
-        'UID=Sirio;'
+        f"DRIVER={{Pervasive ODBC Unicode Interface}};"
+        f"ServerName={os.environ.get('SIRIO_DB_SERVER')};"
+        f"DBQ={os.environ.get('SIRIO_DB_NAME')};"
+        f"UID={os.environ.get('SIRIO_DB_USER')};"
     )
 
     target_conn_str = (
-        'DRIVER={ODBC Driver 17 for SQL Server};'
-        'SERVER=BGCASVM-ADI01;'
-        'DATABASE=belotti_data;'
-        'UID=sa;'
-        'PWD=Belotti,.-23;'
+        f"DRIVER={{ODBC Driver 17 for SQL Server}};"
+        f"SERVER={os.environ.get('ADIUTO_DB_SERVER')};"
+        f"DATABASE={os.environ.get('ADIUTO_DB_NAME')};"
+        f"UID={os.environ.get('ADIUTO_DB_USER')};"
+        f"PWD={os.environ.get('ADIUTO_DB_PASSWORD')};"
     )
 
     try:
@@ -398,4 +407,67 @@ def sql_safe(value):
     return f"'{cleaned}'"
 
 
+
+
+def sync_richieste_bixdataadiuto(request):
+    print("Fun: sync_richieste_bixdataadiuto")
+    target_conn_str = (
+        f"DRIVER={{ODBC Driver 17 for SQL Server}};"
+        f"SERVER={os.environ.get('ADIUTO_DB_SERVER')};"
+        f"DATABASE={os.environ.get('ADIUTO_DB_NAME')};"
+        f"UID={os.environ.get('ADIUTO_DB_USER')};"
+        f"PWD={os.environ.get('ADIUTO_DB_PASSWORD')};"
+    )
+    print(target_conn_str)
+
+    try:
+        tgt_conn = pyodbc.connect(target_conn_str, timeout=5)
+        tgt_cursor = tgt_conn.cursor()
+
+        richieste_table = UserTable('richieste')
+        rows = richieste_table.get_records(
+            conditions_list={"stato='Richiesta inviata'"},
+        )
+        count = 0
+        for row in rows:
+            
+            merge_sql = f"""
+                INSERT INTO dbo.T_BIXDATA_RICHIESTE (recordid_, tiporichiesta, datarichiesta, utentebixdata, utenteadiuto)
+                SELECT {sql_safe(row['recordid_'])}, {sql_safe(row['tiporichiesta'])}, {sql_safe(row['data'])}, {sql_safe(row['utentebixdata'])}, {sql_safe(row['utenteadiuto'])}
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM dbo.T_BIXDATA_RICHIESTE WHERE recordid_ = {sql_safe(row['recordid_'])}
+                )
+            """
+            print(merge_sql)
+            # Esegui il merge
+            tgt_cursor.execute(merge_sql)
+            count += 1
+            richieste_righedettaglio_table = UserTable('richieste_righedettaglio')
+            rows_dettagli = richieste_righedettaglio_table.get_records(
+                conditions_list={f"recordidrichieste_={row['recordid_']}"}
+            )
+            for row_dettaglio in rows_dettagli:
+                merge_sql_righe = f"""
+                    INSERT INTO dbo.T_BIXDATA_RICHIESTE_DETTAGLI (recordid_, recordidrichieste_, codice, descrizione, quantita, categoria)
+                    SELECT {sql_safe(row_dettaglio['recordid_'])}, {sql_safe(row_dettaglio['recordidrichieste_'])}, {sql_safe(row_dettaglio['codice'])}, {sql_safe(row_dettaglio['prodotto'])}, {sql_safe(row_dettaglio['quantita'])}, {sql_safe(row_dettaglio['categoria'])}
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM dbo.T_BIXDATA_RICHIESTE_DETTAGLI WHERE recordid_ = {sql_safe(row_dettaglio['recordid_'])}
+                    )
+                """
+                print(merge_sql_righe)
+                tgt_cursor.execute(merge_sql_righe)
+            
+
+        tgt_conn.commit()
+        return JsonResponse({'status': 'success', 'imported_rows': count})
+
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})
+
+    finally:
+        try:
+            tgt_cursor.close()
+            tgt_conn.close()
+        except:
+            pass
 
