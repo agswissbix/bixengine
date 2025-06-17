@@ -432,8 +432,8 @@ def sync_richieste_bixdataadiuto(request):
         for row in rows:
             
             merge_sql = f"""
-                INSERT INTO dbo.T_BIXDATA_RICHIESTE (recordid_, tiporichiesta, datarichiesta, stato, utentebixdata, utenteadiuto)
-                SELECT {sql_safe(row['recordid_'])}, {sql_safe(row['tiporichiesta'])}, {sql_safe(row['data'])}, {sql_safe(row['stato'])}, {sql_safe(row['utentebixdata'])}, {sql_safe(row['utenteadiuto'])}
+                INSERT INTO dbo.T_BIXDATA_RICHIESTE (recordid_, tiporichiesta, datarichiesta, utentebixdata, utenteadiuto)
+                SELECT {sql_safe(row['recordid_'])}, {sql_safe(row['tiporichiesta'])}, {sql_safe(row['data'])}, {sql_safe(row['utentebixdata'])}, {sql_safe(row['utenteadiuto'])}
                 WHERE NOT EXISTS (
                     SELECT 1 FROM dbo.T_BIXDATA_RICHIESTE WHERE recordid_ = {sql_safe(row['recordid_'])}
                 )
