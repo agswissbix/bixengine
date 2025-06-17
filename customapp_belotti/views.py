@@ -287,18 +287,18 @@ def belotti_salva_formulario(request):
 
 def sync_fatture_sirioadiuto(request):
     source_conn_str = (
-        'DRIVER={Pervasive ODBC Unicode Interface};'
-        'ServerName=SIRIO;'
-        'DBQ=OTTICABELOTTI;'
-        'UID=Sirio;'
+        f"DRIVER={{Pervasive ODBC Unicode Interface}};"
+        f"ServerName={os.environ.get('SIRIO_DB_SERVER')};"
+        f"DBQ={os.environ.get('SIRIO_DB_NAME')};"
+        f"UID={os.environ.get('SIRIO_DB_USER')};"
     )
 
     target_conn_str = (
-        'DRIVER={ODBC Driver 17 for SQL Server};'
-        'SERVER=BGCASVM-ADI01;'
-        'DATABASE=belotti_data;'
-        'UID=sa;'
-        'PWD=Belotti,.-23;'
+        f"DRIVER={{ODBC Driver 17 for SQL Server}};"
+        f"SERVER={os.environ.get('ADIUTO_DB_SERVER')};"
+        f"DATABASE={os.environ.get('ADIUTO_DB_NAME')};"
+        f"UID={os.environ.get('ADIUTO_DB_USER')};"
+        f"PWD={os.environ.get('ADIUTO_DB_PASSWORD')};"
     )
 
     try:
@@ -407,4 +407,68 @@ def sql_safe(value):
     return f"'{cleaned}'"
 
 
+
+
+def sync_richieste_bixdataadiuto(request):
+
+    target_conn_str = (
+         f"DRIVER={{ODBC Driver 17 for SQL Server}};"
+        f"SERVER={os.environ.get('ADIUTO_DB_SERVER')};"
+        f"DATABASE={os.environ.get('ADIUTO_DB_NAME')};"
+        f"UID={os.environ.get('ADIUTO_DB_USER')};"
+        f"PWD={os.environ.get('ADIUTO_DB_PASSWORD')};"
+    )
+
+    try:
+        tgt_conn = pyodbc.connect(target_conn_str, timeout=5)
+        tgt_cursor = tgt_conn.cursor()
+
+        richieste_table = UserTable('richieste')
+        rows = richieste_table.get_records(
+            filter={'stato': 'Richiesta inviata'},
+        )
+        count = 0
+        for row in rows:
+            
+            merge_sql = f"""
+                INSERT INTO dbo.T_BIXDATA_RICHIESTE (recordid_, tiporichiesta, datarichiesta, stato, utentebixdata, utenteadiuto)
+                SELECT {sql_safe(row.recordid_)}, {sql_safe(row.tiporichiesta)}, {sql_safe(row.data)}, {sql_safe(row.stato)}, {sql_safe(row.utentebixdata)}, {sql_safe(row.utenteadiuto)}
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM dbo.T_BIXDATA_RICHIESTE WHERE recordid_ = {sql_safe(row.recordid_)}
+                )
+            """
+            print(merge_sql)
+            # Esegui il merge
+            tgt_cursor.execute(merge_sql)
+            count += 1
+            richieste_righedettaglio_table = UserTable('richieste_righedettaglio')
+            rows_righe = richieste_righedettaglio_table.get_records(
+                filter={'recordidrichieste_': row.recordid_}
+            )
+            for row_riga in rows_righe:
+                merge_sql_righe = f"""
+                    INSERT INTO dbo.T_BIXDATA_RICHIESTE_DETTAGLI (recordid_, recordidrichieste_, codice, prodotto, quantita, categoria)
+                    SELECT {sql_safe(row_riga.recordid_)}, {sql_safe(row_riga.recordidrichieste_)}, {sql_safe(row_riga.codice)}, {sql_safe(row_riga.prodotto)}, {sql_safe(row_riga.quantita)}, {sql_safe(row_riga.categoria)}
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM dbo.T_BIXDATA_RICHIESTE_DETTAGLI WHERE recordid_ = {sql_safe(row_riga.recordid_)}
+                    )
+                """
+                print(merge_sql_righe)
+                tgt_cursor.execute(merge_sql_righe)
+            
+
+        tgt_conn.commit()
+        return JsonResponse({'status': 'success', 'imported_rows': count})
+
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})
+
+    finally:
+        try:
+            src_cursor.close()
+            src_conn.close()
+            tgt_cursor.close()
+            tgt_conn.close()
+        except:
+            pass
 
