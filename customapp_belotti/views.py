@@ -412,10 +412,11 @@ def sql_safe(value):
 def sync_richieste_bixdataadiuto(request):
     print("Fun: sync_richieste_bixdataadiuto")
     target_conn_str = (
-         f"DRIVER={{ODBC Driver 17 for SQL Server}};"
+        f"DRIVER={{ODBC Driver 17 for SQL Server}};"
         f"SERVER={os.environ.get('ADIUTO_DB_SERVER')};"
         f"DATABASE={os.environ.get('ADIUTO_DB_NAME')};"
         f"UID={os.environ.get('ADIUTO_DB_USER')};"
+        f"PWD={os.environ.get('ADIUTO_DB_PASSWORD')};"
     )
     print(target_conn_str)
 
