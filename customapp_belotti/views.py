@@ -244,7 +244,7 @@ def belotti_salva_formulario(request):
     username = Helper.get_username(request)
     userid = Helper.get_userid(request)
     utenteadiuto=HelpderDB.sql_query_value(
-        f"SELECT utenteadiuto FROM user_sync_adiuto_utenti WHERE utentebixdata = '{userid}'",
+        f"SELECT utenteadiuto FROM user_sync_adiuto_utenti WHERE utentebixdata = '{username}'",
         'utenteadiuto'
     )   
     record_richiesta=UserRecord('richieste')
