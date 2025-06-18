@@ -439,7 +439,7 @@ class UserRecord:
                 users=HelperSys.get_users()
                 for user in users:
                     lookupitemsuser={}
-                    lookupitemsuser['id']=user['id']
+                    lookupitemsuser['userid']=user['id']
                     lookupitemsuser['firstname']=user['firstname']
                     lookupitemsuser['lastname']=user['lastname']
                     lookupitemsuser['link']=''
