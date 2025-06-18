@@ -400,6 +400,8 @@ def get_table_records(request):
     tableid = data.get("tableid")
     viewid= data.get("view")
     searchTerm= data.get("searchTerm")
+    order=data.get("order")
+    page=data.get("currentPage")
     master_tableid= data.get("masterTableid")
     master_recordid= data.get("masterRecordid")
     table=UserTable(tableid)
@@ -2304,6 +2306,37 @@ def get_card_active_tab(request):
 
     response = {
         "cardTabs": card_tabs,
+        "activeTab": active_tab
+    }
+    return JsonResponse(response)
+
+
+@csrf_exempt
+def get_table_active_tab(request):
+    data = json.loads(request.body)
+    tableid = data.get('tableid')
+
+    sql=f"SELECT * FROM sys_user_table_settings WHERE tableid='{tableid}' AND settingid='table_tabs'"
+    query_result=HelpderDB.sql_query_row(sql)
+    if not query_result:
+        table_tabs = ['Tabella', 'Kanban', 'Pivot', 'Calendario', 'Gallery']
+    else:
+        table_tabs=query_result['value']
+        table_tabs=table_tabs.split(',')
+
+    sql=f"SELECT * FROM sys_user_table_settings WHERE tableid='{tableid}' AND settingid='table_active_tab'"
+    query_result=HelpderDB.sql_query_row(sql)
+
+    if not query_result:
+        active_tab = ''
+    else:
+        active_tab=query_result['value']
+
+    if active_tab not in table_tabs:
+        active_tab=table_tabs[0]
+
+    response = {
+        "tableTabs": table_tabs,
         "activeTab": active_tab
     }
     return JsonResponse(response)
