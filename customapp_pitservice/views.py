@@ -565,17 +565,23 @@ def download_offerta(request):
         sections_to_show = sections_to_show.split(';') if sections_to_show else []
 
         # Tutte le possibli sezioni nel template
-        all_sections = ['custodia_pulizia', 'piscina', 'area_verde']
+        all_sections = ['custodia_pulizia', 'piscina', 'area_verde', 'neve']
 
         # Rimuovi le sezioni che NON sono presenti in sections_to_show
         for section in all_sections:
             if section not in sections_to_show:
                 if section == 'custodia_pulizia':
                     rimuovi_sezione(doc, '{{inizio_custodia}}', '{{fine_custodia}}')
+                    rimuovi_sezione(doc, '{{inizio_prezzo_custodia}}', '{{fine_prezzo_custodia}}')
                 elif section == 'piscina':
                     rimuovi_sezione(doc, '{{inizio_piscina}}', '{{fine_piscina}}')
+                    rimuovi_sezione(doc, '{{inizio_prezzo_piscina}}', '{{fine_prezzo_piscina}}')
                 elif section == 'area_verde':
                     rimuovi_sezione(doc, '{{inizio_area_verde}}', '{{fine_area_verde}}')
+                    rimuovi_sezione(doc, '{{inizio_prezzo_area_verde}}', '{{fine_prezzo_area_verde}}')
+                elif section == 'neve':
+                    rimuovi_sezione(doc, '{{inizio_prezzo_neve}}', '{{fine_prezzo_neve}}')
+                    rimuovi_sezione(doc, '{{inizio_prezzo_neve}}', '{{fine_prezzo_neve}}')
 
 
         replacements = {
@@ -593,7 +599,15 @@ def download_offerta(request):
             '{{inizio_piscina}}': '',
             '{{fine_piscina}}': '',
             '{{inizio_area_verde}}': '',
-            '{{fine_area_verde}}': ''
+            '{{fine_area_verde}}': '',
+            '{{inizio_prezzo_custodia}}': '',
+            '{{fine_prezzo_custodia}}': '',
+            '{{inizio_prezzo_piscina}}': '',
+            '{{fine_prezzo_piscina}}': '',
+            '{{inizio_prezzo_area_verde}}': '',
+            '{{fine_prezzo_area_verde}}': '',
+            '{{inizio_prezzo_neve}}': '',
+            '{{fine_prezzo_neve}}': '',
         }
 
         for p in doc.paragraphs:
