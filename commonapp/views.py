@@ -2520,7 +2520,7 @@ def script_update_serviceandasset_domains_info(request, dominio=None):
     try:
         query = """
             SELECT * FROM user_serviceandasset 
-            WHERE type='Hosting' AND deleted_='N' 
+            WHERE (type='Hosting' OR type='Hosting - Alias' OR type='Hosting - Forward')  AND deleted_='N' 
             AND description IS NOT NULL AND description != ''
         """
 
@@ -2536,6 +2536,7 @@ def script_update_serviceandasset_domains_info(request, dominio=None):
             counter=counter+1
             recordid=record['recordid_']
             domain = record['description'].strip()
+            print(f"{counter} - {domain}")
             if not domain:
                 continue
 
