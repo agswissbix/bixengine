@@ -114,7 +114,7 @@ def sync_prodotti_adiutobixdata(request):
 
         data = []
         try:
-            cursor.execute("SELECT  * FROM A1009")
+            cursor.execute("SELECT  * FROM VA1009 WHERE FENA<>0")
             rows = dictfetchall(cursor)
 
             for row in rows:
