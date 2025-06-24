@@ -2741,14 +2741,45 @@ def extract_rows_xml(request):
 
 def check_invoice(request):
     bixdata_invoices = HelpderDB.sql_query("SELECT * FROM user_printinginvoice WHERE status='Creata'")
-    bixdata_invoicelines = HelpderDB.sql_query(f"SELECT * FROM user_printinginvoiceline WHERE recordidprintinginvoice_='{invoice['recordid_']}'")
 
     for invoice in bixdata_invoices:
         if invoice['status'] == 'Creata':
+
+
+            bixdata_invoicelines = HelpderDB.sql_query(f"SELECT * FROM user_printinginvoiceline WHERE recordidprintinginvoice_='{invoice['recordid_']}'")
+
+            invoiceliness = []
+
+            for invoiceline in bixdata_invoicelines:
+                bexio_invoiceline = {
+                    "tax_id": "39",
+                    "account_id": "$countid",
+                    "unit_id": 2,
+                    "amount": "$invoice_row['quantity']",
+                    "unit_price": "$invoice_row['unitprice']",
+                    "type": "KbPositionCustom",
+                }
+                invoiceliness.append(bexio_invoiceline)
+
             bexio_invoice = {
                 "title": invoice['title'],
-                "contact_id": ""
+                "contact_id": "$bexioid",
+                "user_id": 1,
+                "logopaper_id": 1,
+                "language_id": 3,
+                "currency_id": 1,
+                "payment_type_id": 1,
+                "header": "",
+                "footer": "Vi ringraziamo per la vostra fiducia, in caso di disaccordo, vi preghiamo di notificarcelo entro 7 giorni. <br/>Rimaniamo a vostra disposizione per qualsiasi domanda,<br/><br/>Con i nostri più cordiali saluti, Swissbix SA",
+                "mwst_type": 0,
+                "mwst_is_net": True,
+                "show_position_taxes": False,
+                "is_valid_from": "$datefrom",
+                "is_valid_to": "$dateto",
+                "postitions": invoiceliness,
             }
+    return JsonResponse({'status': 'success', 'message': 'Invoices checked successfully.'})
+
 
 
 def script_test(request):

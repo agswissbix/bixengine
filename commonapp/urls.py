@@ -44,6 +44,7 @@ urlpatterns = [
     path('script_update_serviceandasset_domains_info/', script_update_serviceandasset_domains_info, name='script_update_serviceandasset_domains_info'),
     path('script_update_serviceandasset_domains_info/<str:dominio>/', script_update_serviceandasset_domains_info, name='script_update_serviceandasset_domains_info_dominio'),
     path('extract_rows_xml/', extract_rows_xml, name='extract_rows_xml'),
+    path("check_invoice/", check_invoice, name="check_invoice"),
     path('script_test/', script_test, name='script_test'),
 ]
 
