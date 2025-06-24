@@ -43,10 +43,14 @@ urlpatterns = [
     path('script_winteler_load_t_wip/', script_winteler_load_t_wip, name='script_winteler_load_t_wip'),
     path('script_update_serviceandasset_domains_info/', script_update_serviceandasset_domains_info, name='script_update_serviceandasset_domains_info'),
     path('script_update_serviceandasset_domains_info/<str:dominio>/', script_update_serviceandasset_domains_info, name='script_update_serviceandasset_domains_info_dominio'),
+    path('get_dashboard_data/', get_dashboard_data, name='get_dashboard_data'),
+    path('script_add_golfclub/', script_add_golfclub, name='script_add_golfclub'),
+    
     path('extract_rows_xml/', extract_rows_xml, name='extract_rows_xml'),
     path("check_invoice/", check_invoice, name="check_invoice"),
     path('script_test/', script_test, name='script_test'),
 ]
+
 
 urlpatterns += static(settings.UPLOADS_URL, document_root=settings.UPLOADS_ROOT)
 urlpatterns += static(settings.TEMPFILE_URL, document_root=settings.TEMPFILE_ROOT)

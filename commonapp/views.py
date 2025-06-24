@@ -41,7 +41,12 @@ import whois
 import dns.resolver
 from docx import Document
 import environ
+<<<<<<< HEAD
+import random
+from faker import Faker
+=======
 import xml.etree.ElementTree as ET
+>>>>>>> 6539bb78c9c19858c9f2d1310e6790b32b65c07b
 
 
 env = environ.Env()
@@ -1884,8 +1889,9 @@ def get_input_linked(request):
         try:
             data = json.loads(request.body)
             searchTerm = data.get('searchTerm', '').lower()
-            linkedmaster_tableid_array = data.get('linkedmaster_tableid') # Puoi usare tableid se necessario
-            linkedmaster_tableid=linkedmaster_tableid_array[0]
+            #linkedmaster_tableid_array = data.get('linkedmaster_tableid') # Puoi usare tableid se necessario
+            #linkedmaster_tableid=linkedmaster_tableid_array[0]
+            linkedmaster_tableid=data.get('linkedmaster_tableid')
             tableid=data.get('tableid')
             fieldid=data.get('fieldid')
             formValues=data.get('formValues')
@@ -2679,6 +2685,319 @@ def download_offerta(request):
         return JsonResponse({'error': 'File not found'}, status=404)
 
 
+
+def get_dashboard_data(request):
+    print("Function: get_dashboard_data")
+
+    data = json.loads(request.body)
+    
+    RESPONSE_DATA_DEV = {
+        "2022": {
+            "SOCI_OSPITI": {
+                "Tassa_ammissione_fondo_perso": 1800,
+                "Nr_soci": 421,
+                "Junioren": 25,
+                "Nr_giri_soci": 11500,
+                "Nr_tornei_di_club": 18,
+                "Nr_tornei_sezione_senior": 4,
+                "Nr_tornei_sezione_femminile": 4,
+                "Nr_tornei_sezione_giovanile": 5,
+                "Nr_tornei_privati": 5,
+                "Nr_giri_ospiti": 5500,
+                "Cifra_d_affari_ospiti": 357500,
+                "Prezzo_GF_feriali_adulto": 60,
+                "Prezzo_GF_feriali_junior": 25,
+                "Prezzo_GF_festivi_adulto": 75,
+                "Prezzo_GF_festivi_junior": 35,
+                "Politiche_club": {
+                    "Raincheck": "no",
+                    "Online_payment": "no"
+                }
+            },
+            "CAMPO": {
+                "Nr_buche": 18,
+                "Area_gioco_corto": {"presente": "no", "nr_buche": 0},
+                "Superficie_totale_ha": 50,
+                "Superficie_tee_ha": 2,
+                "Superficie_fairway_ha": 25,
+                "Superficie_green_ha": 1.5,
+                "Budget_gestione_salari_esclusi": 210000,
+                "Valore_parco_macchine": 480000
+            },
+            "DRIVING_RANGE": {
+                "Nr_postazioni": 20,
+                "Nr_ingressi_annuali": 7500,
+                "Cifra_d_affari": 70000
+            },
+            "HR": {
+                "Dipendenti": {"Greenkeeper": 7, "Totale": 7},
+                "Contabilita": "interna"
+            },
+            "RISTORANTE": {
+                "Gestito_dal_club": "no",
+                "Nr_posti_interni": 60,
+                "Nr_posti_terrazza": 30,
+                "Affitto_annuo": 38000,
+                "Nr_collaboratori": 4,
+                "Cifra_d_affari": 320000
+            },
+            "PRO_SHOP": {
+                "Gestito_dal_club": "sì",
+                "Spazio_vendita_mq": 45,
+                "Affitto_annuo": 0,
+                "Nr_collaboratori": 1,
+                "Cifra_d_affari": 130000
+            }
+        },
+        "2023": {
+            "SOCI_OSPITI": {
+                "Tassa_ammissione_fondo_perso": 2000,
+                "Nr_soci": 450,
+                "Junioren": 30,
+                "Nr_giri_soci": 12000,
+                "Nr_tornei_di_club": 20,
+                "Nr_tornei_sezione_senior": 5,
+                "Nr_tornei_sezione_femminile": 5,
+                "Nr_tornei_sezione_giovanile": 5,
+                "Nr_tornei_privati": 5,
+                "Nr_giri_ospiti": 5800,
+                "Cifra_d_affari_ospiti": 406000,
+                "Prezzo_GF_feriali_adulto": 65,
+                "Prezzo_GF_feriali_junior": 30,
+                "Prezzo_GF_festivi_adulto": 80,
+                "Prezzo_GF_festivi_junior": 40,
+                "Politiche_club": {"Raincheck": "no", "Online_payment": "sì"}
+            },
+            "CAMPO": {
+                "Nr_buche": 18,
+                "Area_gioco_corto": {"presente": "no", "nr_buche": 0},
+                "Superficie_totale_ha": 50,
+                "Superficie_tee_ha": 2,
+                "Superficie_fairway_ha": 25,
+                "Superficie_green_ha": 1.5,
+                "Budget_gestione_salari_esclusi": 230000,
+                "Valore_parco_macchine": 500000
+            },
+            "DRIVING_RANGE": {
+                "Nr_postazioni": 20,
+                "Nr_ingressi_annuali": 8000,
+                "Cifra_d_affari": 80000
+            },
+            "HR": {
+                "Dipendenti": {"Greenkeeper": 8, "Totale": 8},
+                "Contabilita": "interna"
+            },
+            "RISTORANTE": {
+                "Gestito_dal_club": "no",
+                "Nr_posti_interni": 60,
+                "Nr_posti_terrazza": 40,
+                "Affitto_annuo": 40000,
+                "Nr_collaboratori": 5,
+                "Cifra_d_affari": 350000
+            },
+            "PRO_SHOP": {
+                "Gestito_dal_club": "sì",
+                "Spazio_vendita_mq": 50,
+                "Affitto_annuo": 0,
+                "Nr_collaboratori": 2,
+                "Cifra_d_affari": 150000
+            }
+        },
+        "2024": {
+            "SOCI_OSPITI": {
+                "Tassa_ammissione_fondo_perso": 2200,
+                "Nr_soci": 480,
+                "Junioren": 35,
+                "Nr_giri_soci": 12500,
+                "Nr_tornei_di_club": 22,
+                "Nr_tornei_sezione_senior": 6,
+                "Nr_tornei_sezione_femminile": 6,
+                "Nr_tornei_sezione_giovanile": 5,
+                "Nr_tornei_privati": 5,
+                "Nr_giri_ospiti": 6100,
+                "Cifra_d_affari_ospiti": 457500,
+                "Prezzo_GF_feriali_adulto": 70,
+                "Prezzo_GF_feriali_junior": 35,
+                "Prezzo_GF_festivi_adulto": 85,
+                "Prezzo_GF_festivi_junior": 45,
+                "Politiche_club": {"Raincheck": "no", "Online_payment": "sì"}
+            },
+            "CAMPO": {
+                "Nr_buche": 18,
+                "Area_gioco_corto": {"presente": "no", "nr_buche": 0},
+                "Superficie_totale_ha": 50,
+                "Superficie_tee_ha": 2,
+                "Superficie_fairway_ha": 25,
+                "Superficie_green_ha": 1.5,
+                "Budget_gestione_salari_esclusi": 250000,
+                "Valore_parco_macchine": 450000
+            },
+            "DRIVING_RANGE": {
+                "Nr_postazioni": 20,
+                "Nr_ingressi_annuali": 8500,
+                "Cifra_d_affari": 90000
+            },
+            "HR": {
+                "Dipendenti": {"Greenkeeper": 8, "Totale": 8},
+                "Contabilita": "interna"
+            },
+            "RISTORANTE": {
+                "Gestito_dal_club": "no",
+                "Nr_posti_interni": 60,
+                "Nr_posti_terrazza": 40,
+                "Affitto_annuo": 42000,
+                "Nr_collaboratori": 5,
+                "Cifra_d_affari": 380000
+            },
+            "PRO_SHOP": {
+                "Gestito_dal_club": "sì",
+                "Spazio_vendita_mq": 50,
+                "Affitto_annuo": 0,
+                "Nr_collaboratori": 2,
+                "Cifra_d_affari": 165000
+            }
+        },
+        "2025": {
+            "SOCI_OSPITI": {
+                "Tassa_ammissione_fondo_perso": 2300,
+                "Nr_soci": 502,
+                "Junioren": 40,
+                "Nr_giri_soci": 13000,
+                "Nr_tornei_di_club": 25,
+                "Nr_tornei_sezione_senior": 7,
+                "Nr_tornei_sezione_femminile": 7,
+                "Nr_tornei_sezione_giovanile": 6,
+                "Nr_tornei_privati": 5,
+                "Nr_giri_ospiti": 6500,
+                "Cifra_d_affari_ospiti": 520000,
+                "Prezzo_GF_feriali_adulto": 75,
+                "Prezzo_GF_feriali_junior": 40,
+                "Prezzo_GF_festivi_adulto": 90,
+                "Prezzo_GF_festivi_junior": 50,
+                "Politiche_club": {"Raincheck": "no", "Online_payment": "sì"}
+            },
+            "CAMPO": {
+                "Nr_buche": 21,
+                "Area_gioco_corto": {"presente": "no", "nr_buche": 0},
+                "Superficie_totale_ha": 50,
+                "Superficie_tee_ha": 2,
+                "Superficie_fairway_ha": 25,
+                "Superficie_green_ha": 1.5,
+                "Budget_gestione_salari_esclusi": 270000,
+                "Valore_parco_macchine": 600000
+            },
+            "DRIVING_RANGE": {
+                "Nr_postazioni": 25,
+                "Nr_ingressi_annuali": 9000,
+                "Cifra_d_affari": 100000
+            },
+            "HR": {
+                "Dipendenti": {"Greenkeeper": 9, "Totale": 9},
+                "Contabilita": "interna"
+            },
+            "RISTORANTE": {
+                "Gestito_dal_club": "no",
+                "Nr_posti_interni": 60,
+                "Nr_posti_terrazza": 50,
+                "Affitto_annuo": 45000,
+                "Nr_collaboratori": 6,
+                "Cifra_d_affari": 420000
+            },
+            "PRO_SHOP": {
+                "Gestito_dal_club": "sì",
+                "Spazio_vendita_mq": 50,
+                "Affitto_annuo": 0,
+                "Nr_collaboratori": 2,
+                "Cifra_d_affari": 180000
+            }
+        }
+    }
+    
+    dashboard_data = {
+            "records": RESPONSE_DATA_DEV
+        }
+
+    return JsonResponse(RESPONSE_DATA_DEV)
+
+
+
+def script_add_golfclub(request):
+    """
+    Genera dati casuali per 5 golf club e, per ognuno, le relative metriche 
+    annuali per gli anni 2025, 2024, 2023 e 2022.
+    """
+    
+    # Inizializza Faker per generare dati italiani
+    fake = Faker('it_IT')
+    
+    # Lista degli anni per cui generare le metriche
+    anni_da_generare = [2025, 2024, 2023, 2022]
+    
+    generated_data = []
+
+    # Ciclo principale per creare 5 golf club
+    for i in range(5):
+        # --- 1. Creazione del Golf Club ---
+        golfclub_record = UserRecord('golfclub')
+        
+        # Genera un nome di fantasia per il club
+        nome_club = f"Golf Club {fake.last_name()} {random.choice(['Hills', 'Valley', 'Lake', 'Meadows'])}"
+        
+        golfclub_record.values['nome_club'] = nome_club
+        golfclub_record.values['paese'] = fake.country()
+        golfclub_record.values['indirizzo'] = fake.street_address()
+        golfclub_record.values['email'] = f"info@{nome_club.lower().replace(' ', '').replace('-', '')}.com"
+        
+        golfclub_record.save()
+        golfclub_recordid = golfclub_record.recordid
+
+        club_info = {
+            'golf_club': golfclub_record.values,
+            'metriche_annuali': []
+        }
+
+        # Valori base per il primo anno (2022) che verranno poi variati
+        nr_soci_base = random.randint(150, 700)
+        cifra_affari_base = random.randint(400000, 2500000)
+
+        # --- 2. Creazione delle Metriche per ogni Anno ---
+        # Ciclo annidato per gli anni
+        for anno in sorted(anni_da_generare): # Ordino per simulare una progressione
+            metrica_annuale_record = UserRecord('metrica_annuale')
+            
+            # Applica una piccola variazione casuale rispetto ai valori base
+            # per simulare la crescita/decrescita nel tempo
+            variazione_soci = 1 + (anno - 2022) * random.uniform(-0.02, 0.05)
+            variazione_cifra_affari = 1 + (anno - 2022) * random.uniform(-0.03, 0.08)
+
+            nr_soci_attuali = int(nr_soci_base * variazione_soci)
+            uomini = int(nr_soci_attuali * random.uniform(0.55, 0.75))
+            donne = nr_soci_attuali - uomini
+            
+            metrica_annuale_record.values['recordidgolfclub_'] = golfclub_recordid
+            metrica_annuale_record.values['anno'] = anno
+            metrica_annuale_record.values['cifra_affari'] = int(cifra_affari_base * variazione_cifra_affari)
+            metrica_annuale_record.values['nr_soci'] = nr_soci_attuali
+            metrica_annuale_record.values['tassa_ammissione'] = random.randint(500, 2000)
+            metrica_annuale_record.values['tassa_annua'] = random.randint(1500, 5000)
+            metrica_annuale_record.values['uomini'] = uomini
+            metrica_annuale_record.values['donne'] = donne
+            metrica_annuale_record.values['prezzo_cart'] = random.randint(25, 60)
+            metrica_annuale_record.values['nr_tornei_club'] = random.randint(10, 40)
+            metrica_annuale_record.values['prezzo_ingresso_adulto'] = random.randint(50, 150)
+            metrica_annuale_record.values['prezzo_ingresso_junior'] = random.randint(25, 75)
+            metrica_annuale_record.values['prezzo_ingresso_lezione'] = random.randint(30, 80)
+            
+            metrica_annuale_record.save()
+            
+            club_info['metriche_annuali'].append(metrica_annuale_record.values)
+
+        generated_data.append(club_info)
+
+    return JsonResponse({
+        'response': 'Generati 5 golf club, ciascuno con metriche per 4 anni (2022-2025).',
+        'data': generated_data
+    })
 def extract_rows_xml(request):
     folder_path = 'D:\\bixdata\\xml'
     for filename in os.listdir(folder_path):
