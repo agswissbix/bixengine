@@ -41,8 +41,12 @@ import whois
 import dns.resolver
 from docx import Document
 import environ
+<<<<<<< HEAD
 import random
 from faker import Faker
+=======
+import xml.etree.ElementTree as ET
+>>>>>>> 6539bb78c9c19858c9f2d1310e6790b32b65c07b
 
 
 env = environ.Env()
@@ -2994,3 +2998,78 @@ def script_add_golfclub(request):
         'response': 'Generati 5 golf club, ciascuno con metriche per 4 anni (2022-2025).',
         'data': generated_data
     })
+def extract_rows_xml(request):
+    folder_path = 'D:\\bixdata\\xml'
+    for filename in os.listdir(folder_path):
+        if filename.endswith('.xml'):
+            file_path = os.path.join(folder_path, filename)
+            try:
+                tree = ET.parse(file_path)
+                root = tree.getroot()
+
+                invoice_rows = []
+                # Cerca i nodi invoiceRow sotto invoiceRows
+                invoice_rows_container = root.find('InvoiceRows')
+                if invoice_rows_container is not None:
+                    invoice_rows = invoice_rows_container.findall('InvoiceRow')
+                
+                company_name = root.find('RecipientDescription').text 
+                company = HelpderDB.sql_query_row(f"SELECT * FROM user_company WHERE companyname='{company_name}'")
+                if not company:
+                    recordidcompany = '00000000000000000000000000000394'
+                else:
+                    recordidcompany = company['recordid_']
+
+                printing_invoice = UserRecord('printinginvoice')
+                printing_invoice.values['recordidcompany_'] = recordidcompany
+                printing_invoice.values['title'] = company_name
+                printing_invoice.values['totalnet'] = root.find('Total').text
+                printing_invoice.values['date'] = root.find('IssueDate').text
+                printing_invoice.values['status'] = 'Creata'  
+                printing_invoice.values['katunid'] = root.find('Id').text
+
+                printing_invoice.save()
+
+                invoice_recordid = printing_invoice.recordid
+
+
+
+                for row in invoice_rows:
+                    row_data = {
+                        'Description': row.find('Description').text if row.find('Description') is not None else '',
+                        'Quantity': row.find('Quantity').text if row.find('Quantity') is not None else '',
+                        'UnitPrice': row.find('UnitPrice').text if row.find('UnitPrice') is not None else '',
+                        'Price': row.find('Price').text if row.find('Price') is not None else '',
+                        'Amount': row.find('Amount').text if row.find('Amount') is not None else ''
+                    }
+
+                    invoiceline = UserRecord('printinginvoiceline')
+                    invoiceline.values['recordidprintinginvoice_'] = invoice_recordid
+                    invoiceline.values['description'] = row_data['Description']
+                    invoiceline.values['quantity'] = row_data['Quantity']
+                    invoiceline.values['unitprice'] = row_data['UnitPrice']
+                    invoiceline.values['price'] = row_data['Price']
+                    invoiceline.values['amount'] = row_data['Amount']
+
+                    invoiceline.save()
+                             
+            except ET.ParseError as e:
+                print("errore")
+    return JsonResponse({'status': 'success', 'message': 'Rows extracted successfully.'})
+
+
+def check_invoice(request):
+    bixdata_invoices = HelpderDB.sql_query("SELECT * FROM user_printinginvoice WHERE status='Creata'")
+    bixdata_invoicelines = HelpderDB.sql_query(f"SELECT * FROM user_printinginvoiceline WHERE recordidprintinginvoice_='{invoice['recordid_']}'")
+
+    for invoice in bixdata_invoices:
+        if invoice['status'] == 'Creata':
+            bexio_invoice = {
+                "title": invoice['title'],
+                "contact_id": ""
+            }
+
+
+def script_test(request):
+    companies = HelpderDB.sql_query("SELECT * FROM user_company")
+    return JsonResponse({'companies': companies})

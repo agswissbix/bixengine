@@ -46,6 +46,8 @@ urlpatterns = [
     path('get_dashboard_data/', get_dashboard_data, name='get_dashboard_data'),
     path('script_add_golfclub/', script_add_golfclub, name='script_add_golfclub'),
     
+    path('extract_rows_xml/', extract_rows_xml, name='extract_rows_xml'),
+    path('script_test/', script_test, name='script_test'),
 ]
 
 
