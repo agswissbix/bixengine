@@ -44,15 +44,10 @@ import environ
 import random
 from faker import Faker
 import xml.etree.ElementTree as ET
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
->>>>>>> 6539bb78c9c19858c9f2d1310e6790b32b65c07b
-=======
+
 import pandas as pd
 import numpy as np
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
+
 
 
 env = environ.Env()
