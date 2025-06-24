@@ -46,7 +46,12 @@ import random
 from faker import Faker
 =======
 import xml.etree.ElementTree as ET
+<<<<<<< Updated upstream
 >>>>>>> 6539bb78c9c19858c9f2d1310e6790b32b65c07b
+=======
+import pandas as pd
+import numpy as np
+>>>>>>> Stashed changes
 
 
 env = environ.Env()
@@ -3103,4 +3108,66 @@ def check_invoice(request):
 
 def script_test(request):
     companies = HelpderDB.sql_query("SELECT * FROM user_company")
-    return JsonResponse({'companies': companies})
+
+    # Eventuale controllo per assenza di dati
+    if not companies:
+        return JsonResponse({'error': 'Nessun dato trovato'})
+    
+    df = pd.DataFrame(companies)
+
+    # Nome e path del file
+    file_name = 'Aziende.xlsx'
+    static_dir = 'C:\\Users\\stagista\\Documents'
+    file_path = os.path.join(static_dir, file_name)
+
+    df_clean = df.replace([np.nan, np.inf, -np.inf], '', regex=True)
+
+    # Salvataggio con formattazione
+    with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Aziende')
+        
+        workbook = writer.book
+        worksheet = writer.sheets['Aziende']
+        
+        # Formattazione intestazioni
+        header_format = workbook.add_format({
+            'bold': True,
+            'text_wrap': True,
+            'align': 'center',
+            'valign': 'vcenter',
+            'fg_color': '#DCE6F1',
+            'border': 1
+        })
+
+        # Formattazione celle centrato
+        center_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter'
+        })
+
+        for col_num, value in enumerate(df.columns.values):
+            worksheet.write(0, col_num, value, header_format)
+
+        for row in range(1, len(df_clean) + 1):
+            worksheet.set_row(row, None, center_format)
+
+        # Larghezza colonne
+        worksheet.set_column(0, 0, 35)  
+        worksheet.set_column(1, 1, 15)  
+        worksheet.set_column(2, 2, 18)  
+        worksheet.set_column(3, 3, 15)  
+        worksheet.set_column(4, 4, 18)  
+        worksheet.set_column(5, 5, 15)  
+        worksheet.set_column(6, 6, 20)  
+        worksheet.set_column(7, 7, 15)  
+        worksheet.set_column(8, 8, 10)  
+        worksheet.set_column(9, 9, 10)  
+        worksheet.set_column(10, 10, 85)  
+        worksheet.set_column(11, 11, 10)  
+        worksheet.set_column(12, 12, 25)  
+        worksheet.set_column(13, 13, 50)  
+        worksheet.set_column(14, 14, 20)  
+        worksheet.set_column(15, 15, 40)  
+
+    return JsonResponse({'success': True, 'path documento': file_path})
+
