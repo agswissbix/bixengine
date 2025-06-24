@@ -35,7 +35,7 @@ SECRET_KEY = 'django-insecure-in)&iyx749f@sq53z%%lbf(y7o_ch8&ifst-dk3od373(*%gj(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost','192.168.10.10','192.168.10.11','81.62.161.14','tabellone.swissbix.com','10.30.6.69','pc-pitgestional','bixbelotti.swissbix.com']
+ALLOWED_HOSTS = ['localhost','192.168.10.10','192.168.10.11','81.62.161.14','tabellone.swissbix.com','10.30.6.69','pc-pitgestional','bixbelotti.swissbix.com','wegolf.swissbix.ch']
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = env('EMAIL_HOST')
@@ -185,6 +185,7 @@ CORS_ALLOWED_ORIGINS = [
     'http://pc-pitgestional:3000',
     'http://pc-pitgestional',
     'http://10.0.0.108:3000',
+    'https://wegolf.swissbix.ch:3022'
     env('BIXENGINE_SERVER'),
     env('BIXPORTAL_SERVER'),
 ]
@@ -228,6 +229,8 @@ CSRF_TRUSTED_ORIGINS = [
     'http://10.30.6.69',
     'http://pc-pitgestional:3000',
     'http://pc-pitgestional',
+    'https://wegolf.swissbix.ch:3022',
+    'https://wegolf.swissbix.ch',
     env('BIXENGINE_SERVER'),
     env('BIXPORTAL_SERVER'),
 ]
