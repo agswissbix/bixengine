@@ -185,7 +185,7 @@ CORS_ALLOWED_ORIGINS = [
     'http://pc-pitgestional:3000',
     'http://pc-pitgestional',
     'http://10.0.0.108:3000',
-    'https://wegolf.swissbix.ch:3022'
+    'https://wegolf.swissbix.ch:3022',
     env('BIXENGINE_SERVER'),
     env('BIXPORTAL_SERVER'),
 ]
