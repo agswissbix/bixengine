@@ -45,6 +45,10 @@ import random
 from faker import Faker
 import xml.etree.ElementTree as ET
 
+import pandas as pd
+import numpy as np
+
+
 
 env = environ.Env()
 environ.Env.read_env()
@@ -3055,49 +3059,150 @@ def extract_rows_xml(request):
     return JsonResponse({'status': 'success', 'message': 'Rows extracted successfully.'})
 
 
-def check_invoice(request):
-    bixdata_invoices = HelpderDB.sql_query("SELECT * FROM user_printinginvoice WHERE status='Creata'")
+def bexio_api_set_invoice(request, recordid=None):
+    if not recordid:
+        bixdata_invoices = HelpderDB.sql_query("SELECT * FROM user_printinginvoice WHERE status='Creata' LIMIT 1")
+    else:
+        bixdata_invoices = HelpderDB.sql_query(f"SELECT * FROM user_printinginvoice WHERE recordid_='{recordid}'")
+
 
     for invoice in bixdata_invoices:
-        if invoice['status'] == 'Creata':
 
+        #invoice data
+        recordid_company= invoice['recordidcompany_']
+        record_company = UserRecord('company', recordid_company)
+        bexio_contact_id= record_company.values.get('bexioid', None)
+        invoice_title="Conteggio copie stampanti/Multifunzioni"
+        if (bexio_contact_id is  None) or (bexio_contact_id == ''):
+            bexio_contact_id = 297 #contact id di Swissbix SA
+            invoice_title = "Conto copie stampanti/Multifunzioni Swissbix SA "+invoice['title']
+        # 1. Ottieni la data e ora correnti come oggetto datetime
+        now = datetime.datetime.now()
 
-            bixdata_invoicelines = HelpderDB.sql_query(f"SELECT * FROM user_printinginvoiceline WHERE recordidprintinginvoice_='{invoice['recordid_']}'")
+        # 2. Aggiungi 20 giorni utilizzando timedelta
+        future_date = now + datetime.timedelta(days=30)
 
-            invoiceliness = []
+        # 3. Formatta la nuova data nel formato stringa desiderato
+        invoice_dateto = future_date.strftime("%Y-%m-%d")
 
-            for invoiceline in bixdata_invoicelines:
-                bexio_invoiceline = {
-                    "tax_id": "39",
-                    "account_id": "$countid",
-                    "unit_id": 2,
-                    "amount": "$invoice_row['quantity']",
-                    "unit_price": "$invoice_row['unitprice']",
-                    "type": "KbPositionCustom",
-                }
-                invoiceliness.append(bexio_invoiceline)
+        # Se vuoi anche la data di partenza formattata
+        invoice_datefrom = now.strftime("%Y-%m-%d")
 
-            bexio_invoice = {
-                "title": invoice['title'],
-                "contact_id": "$bexioid",
-                "user_id": 1,
-                "logopaper_id": 1,
-                "language_id": 3,
-                "currency_id": 1,
-                "payment_type_id": 1,
-                "header": "",
-                "footer": "Vi ringraziamo per la vostra fiducia, in caso di disaccordo, vi preghiamo di notificarcelo entro 7 giorni. <br/>Rimaniamo a vostra disposizione per qualsiasi domanda,<br/><br/>Con i nostri più cordiali saluti, Swissbix SA",
-                "mwst_type": 0,
-                "mwst_is_net": True,
-                "show_position_taxes": False,
-                "is_valid_from": "$datefrom",
-                "is_valid_to": "$dateto",
-                "postitions": invoiceliness,
+        #invoice lines
+        bixdata_invoicelines = HelpderDB.sql_query(f"SELECT * FROM user_printinginvoiceline WHERE recordidprintinginvoice_='{invoice['recordid_']}'")
+        invoiceliness = []
+        for invoiceline in bixdata_invoicelines:
+            invoiceline_unitprice= invoiceline['unitprice']
+            invoiceline_quantity= invoiceline['amount']
+            bexio_invoiceline = {
+                "tax_id": "39",
+                "account_id": "353",
+                "unit_id": 2,
+                "amount": invoiceline_quantity,
+                "unit_price": invoiceline_unitprice,
+                "type": "KbPositionCustom",
             }
-    return JsonResponse({'status': 'success', 'message': 'Invoices checked successfully.'})
+            invoiceliness.append(bexio_invoiceline)
+
+        bexio_invoice = {
+            "title": "Conteggio copie stampanti/Multifunzioni",
+            "contact_id": 297,
+            "user_id": 1,
+            "logopaper_id": 1,
+            "language_id": 3,
+            "currency_id": 1,
+            "payment_type_id": 1,
+            "header": "",
+            "footer": "Vi ringraziamo per la vostra fiducia, in caso di disaccordo, vi preghiamo di notificarcelo entro 7 giorni. <br/>Rimaniamo a vostra disposizione per qualsiasi domanda,<br/><br/>Con i nostri più cordiali saluti, Swissbix SA",
+            "mwst_type": 0,
+            "mwst_is_net": True,
+            "show_position_taxes": False,
+            "is_valid_from": invoice_datefrom,
+            "is_valid_to": invoice_dateto,
+            #"postitions": invoiceliness,
+        }
+
+        payload  = r"""{"title":"ICT: Supporto Cliente","contact_id":"297","user_id":1,"logopaper_id":1,"language_id":3,"currency_id":1,"payment_type_id":1,"header":"","footer":"Vi ringraziamo per la vostra fiducia, in caso di disaccordo, vi preghiamo di notificarcelo entro 7 giorni. Rimaniamo a vostra disposizione per qualsiasi domanda,Con i nostri più cordiali saluti, Swissbix SA","mwst_type":0,"mwst_is_net":true,"show_position_taxes":false,"is_valid_from":"2025-06-25","is_valid_to":"2025-07-15","positions":[{"text":"Interventi</b>","type":"KbPositionText"},{"text":"TEST 25/06/2025 Galli Alessandro </b></span>","tax_id":"39","account_id":"155","unit_id":2,"amount":"1","unit_price":"140","type":"KbPositionCustom"}]}"""
+
+
+        
+        
+        url = "https://api.bexio.com/2.0/kb_invoice"
+        accesstoken=os.environ.get('BEXIO_ACCESSTOKEN')
+        headers = {
+            'Accept': "application/json",
+            'Content-Type': "application/json",
+            'Authorization': f"Bearer {accesstoken}",
+        }
+
+        response = requests.request("POST", url, data=payload, headers=headers)
+        status_code = response.status_code
+    return JsonResponse({'status': status_code, 'message': response.json()})
 
 
 
 def script_test(request):
     companies = HelpderDB.sql_query("SELECT * FROM user_company")
-    return JsonResponse({'companies': companies})
+
+    # Eventuale controllo per assenza di dati
+    if not companies:
+        return JsonResponse({'error': 'Nessun dato trovato'})
+    
+    df = pd.DataFrame(companies)
+
+    # Nome e path del file
+    file_name = 'Aziende.xlsx'
+    static_dir = 'C:\\Users\\stagista\\Documents'
+    file_path = os.path.join(static_dir, file_name)
+
+    df_clean = df.replace([np.nan, np.inf, -np.inf], '', regex=True)
+
+    # Salvataggio con formattazione
+    with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Aziende')
+        
+        workbook = writer.book
+        worksheet = writer.sheets['Aziende']
+        
+        # Formattazione intestazioni
+        header_format = workbook.add_format({
+            'bold': True,
+            'text_wrap': True,
+            'align': 'center',
+            'valign': 'vcenter',
+            'fg_color': '#DCE6F1',
+            'border': 1
+        })
+
+        # Formattazione celle centrato
+        center_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter'
+        })
+
+        for col_num, value in enumerate(df.columns.values):
+            worksheet.write(0, col_num, value, header_format)
+
+        for row in range(1, len(df_clean) + 1):
+            worksheet.set_row(row, None, center_format)
+
+        # Larghezza colonne
+        worksheet.set_column(0, 0, 35)  
+        worksheet.set_column(1, 1, 15)  
+        worksheet.set_column(2, 2, 18)  
+        worksheet.set_column(3, 3, 15)  
+        worksheet.set_column(4, 4, 18)  
+        worksheet.set_column(5, 5, 15)  
+        worksheet.set_column(6, 6, 20)  
+        worksheet.set_column(7, 7, 15)  
+        worksheet.set_column(8, 8, 10)  
+        worksheet.set_column(9, 9, 10)  
+        worksheet.set_column(10, 10, 85)  
+        worksheet.set_column(11, 11, 10)  
+        worksheet.set_column(12, 12, 25)  
+        worksheet.set_column(13, 13, 50)  
+        worksheet.set_column(14, 14, 20)  
+        worksheet.set_column(15, 15, 40)  
+
+    return JsonResponse({'success': True, 'path documento': file_path})
+

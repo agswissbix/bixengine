@@ -39,7 +39,6 @@ urlpatterns = [
     path('get_table_active_tab/', get_table_active_tab, name='get_table_active_tab'),
     path('get_favorite_tables/', get_favorite_tables, name='get_favorite_tables'),
     path('save_favorite_tables/', save_favorite_tables, name='save_favorite_tables'),
-    path('script_test/', script_test, name='script_test'),
     path('script_winteler_load_t_wip/', script_winteler_load_t_wip, name='script_winteler_load_t_wip'),
     path('script_update_serviceandasset_domains_info/', script_update_serviceandasset_domains_info, name='script_update_serviceandasset_domains_info'),
     path('script_update_serviceandasset_domains_info/<str:dominio>/', script_update_serviceandasset_domains_info, name='script_update_serviceandasset_domains_info_dominio'),
@@ -47,7 +46,7 @@ urlpatterns = [
     path('script_add_golfclub/', script_add_golfclub, name='script_add_golfclub'),
     
     path('extract_rows_xml/', extract_rows_xml, name='extract_rows_xml'),
-    path("check_invoice/", check_invoice, name="check_invoice"),
+    path("bexio_api_set_invoice/<str:recordid>/", bexio_api_set_invoice, name="bexio_api_set_invoice"),
     path('script_test/', script_test, name='script_test'),
 ]
 
