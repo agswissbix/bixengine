@@ -165,12 +165,14 @@ CORS_ALLOWED_ORIGINS = [
     'http://'+env('BIXENGINE_IP')+':'+env('BIXENGINE_PORT'),
     'http://'+env('BIXPORTAL_IP')+':'+env('BIXPORTAL_PORT'),
     'http://'+env('BIXPORTAL_IP')+':'+env('BIXCUSTOM_PORT'),
-    'http://'+env('BIXPORTAL_IP')+':'+env('NGINX_PORT'),
+    'http://'+env('BIXPORTAL_IP')+':'+env('BIXPORTAL_NGINX_PORT'),
     'http://'+env('BIXPORTAL_IP')+':'+env('BIXCUSTOM_PORT'),
-    'http://'+env('BIXPORTAL_DOMAIN')+':'+env('NGINX_PORT'),
-    'https://'+env('BIXPORTAL_DOMAIN')+':'+env('NGINX_PORT'),
+    'http://'+env('BIXPORTAL_DOMAIN')+':'+env('BIXPORTAL_NGINX_PORT'),
+    'https://'+env('BIXPORTAL_DOMAIN')+':'+env('BIXPORTAL_NGINX_PORT'),
     'http://'+env('BIXPORTAL_DOMAIN')+':'+env('BIXCUSTOM_PORT'),
     'https://'+env('BIXPORTAL_DOMAIN')+':'+env('BIXCUSTOM_PORT'),
+    'http://'+env('BIXPORTAL_DOMAIN')+':'+env('BIXCUSTOM_NGINX_PORT'),
+    'https://'+env('BIXPORTAL_DOMAIN')+':'+env('BIXCUSTOM_NGINX_PORT')
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -187,12 +189,14 @@ CSRF_TRUSTED_ORIGINS = [
     'http://'+env('BIXENGINE_IP')+':'+env('BIXENGINE_PORT'),
     'http://'+env('BIXPORTAL_IP')+':'+env('BIXPORTAL_PORT'),
     'http://'+env('BIXPORTAL_IP')+':'+env('BIXCUSTOM_PORT'),
-    'http://'+env('BIXPORTAL_IP')+':'+env('NGINX_PORT'),
+    'http://'+env('BIXPORTAL_IP')+':'+env('BIXPORTAL_NGINX_PORT'),
     'http://'+env('BIXPORTAL_IP')+':'+env('BIXCUSTOM_PORT'),
-    'http://'+env('BIXPORTAL_DOMAIN')+':'+env('NGINX_PORT'),
-    'https://'+env('BIXPORTAL_DOMAIN')+':'+env('NGINX_PORT'),
+    'http://'+env('BIXPORTAL_DOMAIN')+':'+env('BIXPORTAL_NGINX_PORT'),
+    'https://'+env('BIXPORTAL_DOMAIN')+':'+env('BIXPORTAL_NGINX_PORT'),
     'http://'+env('BIXPORTAL_DOMAIN')+':'+env('BIXCUSTOM_PORT'),
     'https://'+env('BIXPORTAL_DOMAIN')+':'+env('BIXCUSTOM_PORT'),
+    'http://'+env('BIXPORTAL_DOMAIN')+':'+env('BIXCUSTOM_NGINX_PORT'),
+    'https://'+env('BIXPORTAL_DOMAIN')+':'+env('BIXCUSTOM_NGINX_PORT')
 ]
 
 SESSION_COOKIE_SAMESITE = 'None'  # Add this

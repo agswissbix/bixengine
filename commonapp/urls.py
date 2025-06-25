@@ -46,7 +46,7 @@ urlpatterns = [
     path('script_add_golfclub/', script_add_golfclub, name='script_add_golfclub'),
     
     path('extract_rows_xml/', extract_rows_xml, name='extract_rows_xml'),
-    path("check_invoice/", check_invoice, name="check_invoice"),
+    path("bexio_api_set_invoice/<str:recordid>/", bexio_api_set_invoice, name="bexio_api_set_invoice"),
     path('script_test/', script_test, name='script_test'),
 ]
 
