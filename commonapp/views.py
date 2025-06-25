@@ -48,6 +48,7 @@ import xml.etree.ElementTree as ET
 import pandas as pd
 import numpy as np
 from pathlib import Path
+from PIL import Image
 
 
 
@@ -3002,11 +3003,16 @@ def script_add_golfclub(request):
         'response': 'Generati 5 golf club, ciascuno con metriche per 4 anni (2022-2025).',
         'data': generated_data
     })
+
 def extract_rows_xml(request):
-    folder_path = 'D:\\bixdata\\xml'
-    for filename in os.listdir(folder_path):
+    folder_path_xml = os.path.join(settings.XML_DIR)
+    folder_path = os.path.join(settings.MEDIA_ROOT, 'printinginvoice')  # Cartella per i file PDF
+    if not os.path.exists(folder_path_xml):
+        os.makedirs(folder_path_xml)
+    for filename in os.listdir(folder_path_xml):
         if filename.endswith('.xml'):
-            file_path = os.path.join(folder_path, filename)
+            file_path = os.path.join(folder_path_xml, filename)
+            filename = filename.replace('.xml', '')
             try:
                 tree = ET.parse(file_path)
                 root = tree.getroot()
@@ -3029,13 +3035,28 @@ def extract_rows_xml(request):
                 printing_invoice.values['title'] = company_name
                 printing_invoice.values['totalnet'] = root.find('Total').text
                 printing_invoice.values['date'] = root.find('IssueDate').text
-                printing_invoice.values['status'] = 'Creata'  
+                printing_invoice.values['status'] = 'Creata'
                 printing_invoice.values['katunid'] = root.find('Id').text
+                printing_invoice.values['filename'] = filename
 
                 printing_invoice.save()
 
                 invoice_recordid = printing_invoice.recordid
 
+
+                pdf_file = os.path.join(folder_path, 'pdfkatun.pdf')
+
+                printing_invoice.values['pdfkatun'] = 'printinginvoice/' + invoice_recordid + 'pdfkatun.pdf'
+                printing_invoice.save()
+                #salva il file pdf all'interno di bixdata/uploads/printinginvoice/
+
+
+
+                pdf_upload_path = f'bixdata/uploads/printinginvoice/{invoice_recordid}'
+                os.makedirs(pdf_upload_path, exist_ok=True)
+                pdf_file_dest = os.path.join(pdf_upload_path, 'pdfkatun.pdf')
+                with open(pdf_file_dest, 'wb') as f:
+                    f.write(pdf_file.encode('utf-8'))
 
 
                 for row in invoice_rows:
@@ -3209,7 +3230,43 @@ def script_test(request):
 
     return JsonResponse({'success': True, 'path documento': file_path})
 
-
 def sign_timesheet(request):
-    return JsonResponse({'response': 'ok', 'message': 'Firma timbro orario non implementata.'})
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            img_base64 = data.get('image')
+            if not img_base64:
+                return JsonResponse({'error': 'No image data'}, status=400)
+
+            header, img_base64 = img_base64.split(',', 1)
+            img_data = base64.b64decode(img_base64)
+
+            base_path = './media'
+            if not os.path.exists(base_path):
+                os.makedirs(base_path)
+
+            filename = 'firma.png'
+            path = os.path.join(base_path, filename)
+
+            # Apri immagine da bytes
+            from io import BytesIO
+            img_pil = Image.open(BytesIO(img_data))
+
+            # Se ha trasparenza, crea sfondo bianco e incolla
+            if img_pil.mode in ('RGBA', 'LA') or (img_pil.mode == 'P' and 'transparency' in img_pil.info):
+                background = Image.new('RGB', img_pil.size, (255, 255, 255))
+                background.paste(img_pil, mask=img_pil.split()[-1])  # canale alpha come maschera
+                img_pil = background
+            else:
+                img_pil = img_pil.convert('RGB')
+
+            # Salva immagine convertita
+            img_pil.save(path, format='PNG')
+
+            return JsonResponse({'success': True})
+        except Exception as e:
+            return JsonResponse({'success': False})
+    else:
+        return JsonResponse({'success': False})
+
 
