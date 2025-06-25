@@ -47,6 +47,7 @@ import xml.etree.ElementTree as ET
 
 import pandas as pd
 import numpy as np
+from pathlib import Path
 
 
 
@@ -1702,7 +1703,7 @@ Cordiali saluti
     if type == 'emailGasolio':
         stabile_recordid=recordid
         stabile_record=UserRecord('stabile',stabile_recordid)
-        meseLettura='2025-04'
+        meseLettura='2025-06'
         anno, mese = meseLettura.split('-')
 
         sql=f"SELECT * FROM user_contattostabile WHERE deleted_='N' AND recordidstabile_='{stabile_recordid}'"
@@ -1717,7 +1718,7 @@ Cordiali saluti
         attachment_relativepath=stampa_gasoli(request)
         riferimento=stabile_record.values.get('riferimento', '')
         stabile_citta=stabile_record.values['citta']
-        subject=f"Livello Gasolio - 05 {anno} - {riferimento} {stabile_citta}"
+        subject=f"Livello Gasolio - {mese} {anno} - {riferimento} {stabile_citta}"
         body=f"""
          <p>
                 Egregi Signori,<br/>
@@ -1751,7 +1752,7 @@ Cordiali saluti
             "text": body,
             "attachment_fullpath": "",
             "attachment_relativepath": attachment_relativepath,
-            "attachment_name": f"Lettura_Gasolio_05-{anno}-{riferimento}-{stabile_citta}.pdf",
+            "attachment_name": f"Lettura_Gasolio_{mese}-{anno}-{riferimento}-{stabile_citta}.pdf",
             }
 
     return JsonResponse({"success": True, "emailFields": email_fields})
@@ -1766,7 +1767,7 @@ def stampa_gasoli(request):
         recordid_stabile = data.get('recordid')
         #meseLettura=data.get('date')
         #TODO sistemare dinamico
-        meseLettura="2025 05-Maggio"
+        meseLettura="2025 06-Giugno"
         anno, mese = meseLettura.split(' ')
     script_dir = os.path.dirname(os.path.abspath(__file__))
     wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
@@ -1866,7 +1867,9 @@ def save_email(request):
         if attachment_relativepath.startswith("commonapp/static"):
             base_dir=settings.BASE_DIR
             file_path = os.path.join(settings.BASE_DIR, attachment_relativepath)
-            fullpath_originale = default_storage.path(file_path)
+            #fullpath_originale = default_storage.path(file_path)
+            fullpath_originale = Path(file_path)
+            fullpath_originale=str(fullpath_originale)
         else:
                 fullpath_originale=HelpderDB.get_uploadedfile_fullpath(tableid,recordid,'allegato')
         
