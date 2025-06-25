@@ -47,6 +47,7 @@ import xml.etree.ElementTree as ET
 
 import pandas as pd
 import numpy as np
+from PIL import Image
 
 
 
@@ -3206,7 +3207,43 @@ def script_test(request):
 
     return JsonResponse({'success': True, 'path documento': file_path})
 
-
 def sign_timesheet(request):
-    return JsonResponse({'response': 'ok', 'message': 'Firma timbro orario non implementata.'})
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            img_base64 = data.get('image')
+            if not img_base64:
+                return JsonResponse({'error': 'No image data'}, status=400)
+
+            header, img_base64 = img_base64.split(',', 1)
+            img_data = base64.b64decode(img_base64)
+
+            base_path = './media'
+            if not os.path.exists(base_path):
+                os.makedirs(base_path)
+
+            filename = 'firma.png'
+            path = os.path.join(base_path, filename)
+
+            # Apri immagine da bytes
+            from io import BytesIO
+            img_pil = Image.open(BytesIO(img_data))
+
+            # Se ha trasparenza, crea sfondo bianco e incolla
+            if img_pil.mode in ('RGBA', 'LA') or (img_pil.mode == 'P' and 'transparency' in img_pil.info):
+                background = Image.new('RGB', img_pil.size, (255, 255, 255))
+                background.paste(img_pil, mask=img_pil.split()[-1])  # canale alpha come maschera
+                img_pil = background
+            else:
+                img_pil = img_pil.convert('RGB')
+
+            # Salva immagine convertita
+            img_pil.save(path, format='PNG')
+
+            return JsonResponse({'success': True})
+        except Exception as e:
+            return JsonResponse({'success': False})
+    else:
+        return JsonResponse({'success': False})
+
 
