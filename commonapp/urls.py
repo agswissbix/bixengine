@@ -44,10 +44,10 @@ urlpatterns = [
     path('script_update_serviceandasset_domains_info/<str:dominio>/', script_update_serviceandasset_domains_info, name='script_update_serviceandasset_domains_info_dominio'),
     path('get_dashboard_data/', get_dashboard_data, name='get_dashboard_data'),
     path('script_add_golfclub/', script_add_golfclub, name='script_add_golfclub'),
-    
     path('extract_rows_xml/', extract_rows_xml, name='extract_rows_xml'),
     path("bexio_api_set_invoice/<str:recordid>/", bexio_api_set_invoice, name="bexio_api_set_invoice"),
     path('script_test/', script_test, name='script_test'),
+    path('sign_timesheet/', sign_timesheet, name='sign_timesheet'),
 ]
 
 

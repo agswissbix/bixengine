@@ -3206,3 +3206,7 @@ def script_test(request):
 
     return JsonResponse({'success': True, 'path documento': file_path})
 
+
+def sign_timesheet(request):
+    return JsonResponse({'response': 'ok', 'message': 'Firma timbro orario non implementata.'})
+
