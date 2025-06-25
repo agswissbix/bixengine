@@ -23,6 +23,8 @@ UPLOADS_URL = '/uploads/'
 UPLOADS_ROOT = os.path.join(BASE_DIR, '..', 'uploads')
 MEDIA_ROOT = os.path.join(BASE_DIR, '..', 'uploads')
 
+XML_DIR = os.path.join(BASE_DIR, '..', 'xml')
+
 TEMPFILE_URL = '/tempfile/'
 TEMPFILE_ROOT = BASE_DIR
 

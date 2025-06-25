@@ -47,6 +47,7 @@ import xml.etree.ElementTree as ET
 
 import pandas as pd
 import numpy as np
+from pathlib import Path
 from PIL import Image
 
 
@@ -1703,7 +1704,7 @@ Cordiali saluti
     if type == 'emailGasolio':
         stabile_recordid=recordid
         stabile_record=UserRecord('stabile',stabile_recordid)
-        meseLettura='2025-04'
+        meseLettura='2025-06'
         anno, mese = meseLettura.split('-')
 
         sql=f"SELECT * FROM user_contattostabile WHERE deleted_='N' AND recordidstabile_='{stabile_recordid}'"
@@ -1718,7 +1719,7 @@ Cordiali saluti
         attachment_relativepath=stampa_gasoli(request)
         riferimento=stabile_record.values.get('riferimento', '')
         stabile_citta=stabile_record.values['citta']
-        subject=f"Livello Gasolio - 05 {anno} - {riferimento} {stabile_citta}"
+        subject=f"Livello Gasolio - {mese} {anno} - {riferimento} {stabile_citta}"
         body=f"""
          <p>
                 Egregi Signori,<br/>
@@ -1752,7 +1753,7 @@ Cordiali saluti
             "text": body,
             "attachment_fullpath": "",
             "attachment_relativepath": attachment_relativepath,
-            "attachment_name": f"Lettura_Gasolio_05-{anno}-{riferimento}-{stabile_citta}.pdf",
+            "attachment_name": f"Lettura_Gasolio_{mese}-{anno}-{riferimento}-{stabile_citta}.pdf",
             }
 
     return JsonResponse({"success": True, "emailFields": email_fields})
@@ -1767,7 +1768,7 @@ def stampa_gasoli(request):
         recordid_stabile = data.get('recordid')
         #meseLettura=data.get('date')
         #TODO sistemare dinamico
-        meseLettura="2025 05-Maggio"
+        meseLettura="2025 06-Giugno"
         anno, mese = meseLettura.split(' ')
     script_dir = os.path.dirname(os.path.abspath(__file__))
     wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
@@ -1867,7 +1868,9 @@ def save_email(request):
         if attachment_relativepath.startswith("commonapp/static"):
             base_dir=settings.BASE_DIR
             file_path = os.path.join(settings.BASE_DIR, attachment_relativepath)
-            fullpath_originale = default_storage.path(file_path)
+            #fullpath_originale = default_storage.path(file_path)
+            fullpath_originale = Path(file_path)
+            fullpath_originale=str(fullpath_originale)
         else:
                 fullpath_originale=HelpderDB.get_uploadedfile_fullpath(tableid,recordid,'allegato')
         
@@ -3000,11 +3003,16 @@ def script_add_golfclub(request):
         'response': 'Generati 5 golf club, ciascuno con metriche per 4 anni (2022-2025).',
         'data': generated_data
     })
+
 def extract_rows_xml(request):
-    folder_path = 'D:\\bixdata\\xml'
-    for filename in os.listdir(folder_path):
+    folder_path_xml = os.path.join(settings.XML_DIR)
+    folder_path = os.path.join(settings.MEDIA_ROOT, 'printinginvoice')  # Cartella per i file PDF
+    if not os.path.exists(folder_path_xml):
+        os.makedirs(folder_path_xml)
+    for filename in os.listdir(folder_path_xml):
         if filename.endswith('.xml'):
-            file_path = os.path.join(folder_path, filename)
+            file_path = os.path.join(folder_path_xml, filename)
+            filename = filename.replace('.xml', '')
             try:
                 tree = ET.parse(file_path)
                 root = tree.getroot()
@@ -3027,13 +3035,28 @@ def extract_rows_xml(request):
                 printing_invoice.values['title'] = company_name
                 printing_invoice.values['totalnet'] = root.find('Total').text
                 printing_invoice.values['date'] = root.find('IssueDate').text
-                printing_invoice.values['status'] = 'Creata'  
+                printing_invoice.values['status'] = 'Creata'
                 printing_invoice.values['katunid'] = root.find('Id').text
+                printing_invoice.values['filename'] = filename
 
                 printing_invoice.save()
 
                 invoice_recordid = printing_invoice.recordid
 
+
+                pdf_file = os.path.join(folder_path, 'pdfkatun.pdf')
+
+                printing_invoice.values['pdfkatun'] = 'printinginvoice/' + invoice_recordid + 'pdfkatun.pdf'
+                printing_invoice.save()
+                #salva il file pdf all'interno di bixdata/uploads/printinginvoice/
+
+
+
+                pdf_upload_path = f'bixdata/uploads/printinginvoice/{invoice_recordid}'
+                os.makedirs(pdf_upload_path, exist_ok=True)
+                pdf_file_dest = os.path.join(pdf_upload_path, 'pdfkatun.pdf')
+                with open(pdf_file_dest, 'wb') as f:
+                    f.write(pdf_file.encode('utf-8'))
 
 
                 for row in invoice_rows:
