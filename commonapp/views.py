@@ -41,12 +41,9 @@ import whois
 import dns.resolver
 from docx import Document
 import environ
-<<<<<<< HEAD
 import random
 from faker import Faker
-=======
 import xml.etree.ElementTree as ET
->>>>>>> 6539bb78c9c19858c9f2d1310e6790b32b65c07b
 
 
 env = environ.Env()
