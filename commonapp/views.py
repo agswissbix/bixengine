@@ -3067,29 +3067,29 @@ def extract_rows_xml(request):
                         invoiceline.values['price'] = row_data['Price']
                         invoiceline.values['amount'] = row_data['Amount']
 
-                    invoiceline.save()
+                        invoiceline.save()
 
                 else:
                     invoice_recordid = xml_check['recordid_']
 
 
-                folder_path = os.path.join(folder_path, invoice_recordid)
+                folder_path_updated = os.path.join(folder_path, invoice_recordid)
 
                 pdf_file = os.path.join(folder_path_xml, filename + '.pdf')
 
                 
-                if not os.path.exists(folder_path):
-                    os.makedirs(folder_path)
+                if not os.path.exists(folder_path_updated):
+                    os.makedirs(folder_path_updated)
 
                 #sposta il file
                 if not os.path.exists(pdf_file):
                     return JsonResponse({'status': 'error', 'message': f'File PDF {pdf_file} non trovato.'})
                 
                 # sposta il file pdf in folder_path
-                shutil.move(pdf_file, os.path.join(folder_path, 'pdfkatun.pdf'))
+                shutil.copy(pdf_file, os.path.join(folder_path_updated, 'pdfkatun.pdf'))
 
 
-
+                
                 
 
                 printing_invoice.values['pdfkatun'] = 'printinginvoice/' + invoice_recordid + '/pdfkatun.pdf'
