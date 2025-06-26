@@ -150,7 +150,13 @@ class UserTable:
 
                 
             if searchTerm_conditions!='':
-                conditions=conditions+f" AND ({searchTerm_conditions}) "   
+                conditions=conditions+f" AND ({searchTerm_conditions}) "  
+
+        #viewid
+        if viewid:
+            view_query_conditions = HelpderDB.sql_query_value(sql=f"SELECT query_conditions FROM sys_view WHERE id='{viewid}' AND tableid='{self.tableid}'", column='query_conditions')
+            if view_query_conditions:
+                conditions=conditions+f" AND {view_query_conditions} "
         orderby='user_'+self.tableid+'.'+orderby
 
         # → Calcola e salva il numero totale dei record
