@@ -1624,7 +1624,7 @@ def prepara_email(request):
 
         body = ""
         attachment_name=f"{stabile_riferimento} {stabile_citta} - Lavanderia - {mese} - {anno}.pdf"
-        
+
         if stato=='Da fare':
             body = "Rendiconto da fare"
 
@@ -2242,7 +2242,8 @@ def export_excel(request):
             script_dir = os.path.dirname(os.path.abspath(__file__))
             filename_with_path = script_dir.rsplit('views', 1)[0]
             filename_with_path = filename_with_path + '\\static\\excel\\' + filename
-
+            print("filename_with_path:")
+            print(filename_with_path)
             # Crea la directory se non esiste
             os.makedirs(os.path.dirname(filename_with_path), exist_ok=True)
 
