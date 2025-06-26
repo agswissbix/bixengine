@@ -3017,10 +3017,7 @@ def extract_rows_xml(request):
             xml_check = HelpderDB.sql_query_row(f"SELECT * FROM user_printinginvoice WHERE filename='{filename}'")
 
             try:
-
                 if xml_check is None:
-                
-
                     tree = ET.parse(file_path)
                     root = tree.getroot()
 
@@ -3045,6 +3042,7 @@ def extract_rows_xml(request):
                     printing_invoice.values['status'] = 'Creata'
                     printing_invoice.values['katunid'] = root.find('Id').text
                     printing_invoice.values['filename'] = filename
+
 
                     printing_invoice.save()
 
@@ -3077,24 +3075,19 @@ def extract_rows_xml(request):
 
                 pdf_file = os.path.join(folder_path_xml, filename + '.pdf')
 
-                
-                if not os.path.exists(folder_path_updated):
-                    os.makedirs(folder_path_updated)
+                if os.path.exists(pdf_file):
 
-                #sposta il file
-                if not os.path.exists(pdf_file):
-                    return JsonResponse({'status': 'error', 'message': f'File PDF {pdf_file} non trovato.'})
-                
-                # sposta il file pdf in folder_path
-                shutil.copy(pdf_file, os.path.join(folder_path_updated, 'pdfkatun.pdf'))
+                    if not os.path.exists(folder_path_updated):
+                        os.makedirs(folder_path_updated)
 
+                    
+                    shutil.copy(pdf_file, os.path.join(folder_path_updated, 'pdfkatun.pdf'))
 
+                    printing_invoice_update = UserRecord('printinginvoice', invoice_recordid)
                 
-                
+                    printing_invoice_update.values['pdfkatun'] = 'printinginvoice/' + invoice_recordid + '/pdfkatun.pdf'
 
-                printing_invoice.values['pdfkatun'] = 'printinginvoice/' + invoice_recordid + '/pdfkatun.pdf'
-                printing_invoice.save()
-                #salva il file pdf all'interno di bixdata/uploads/printinginvoice/
+                    printing_invoice_update.save()
 
 
                              
