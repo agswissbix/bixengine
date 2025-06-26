@@ -1,13 +1,5 @@
 *.pyc
-
-*.sqlite3
-bixengine/.env
 __pycache__/
-bixengine/__pycache__/
-commonapp/__pycache__/
-
-
-
-bixengine/__pycache__/settings.cpython-311.pyc
-bixengine/__pycache__/urls.cpython-311.pyc
-*.pyc
+*.sqlite3
+.env
+bixengine/.env
