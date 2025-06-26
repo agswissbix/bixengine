@@ -150,7 +150,11 @@ class UserTable:
 
                 
             if searchTerm_conditions!='':
-                conditions=conditions+f" AND ({searchTerm_conditions}) "   
+                conditions=conditions+f" AND ({searchTerm_conditions}) "  
+
+        #viewid
+        if viewid:
+            conditions=conditions+f" AND user_{self.tableid}.recordid_='00000000000000000000000000002707' "
         orderby='user_'+self.tableid+'.'+orderby
 
         # → Calcola e salva il numero totale dei record

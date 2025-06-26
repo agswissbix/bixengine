@@ -1623,7 +1623,8 @@ def prepara_email(request):
         subject=f"Resoconto lavanderia - {stabile_riferimento} {stabile_citta} - {mese} {anno}"
 
         body = ""
-        attachment_name=""
+        attachment_name=f"{stabile_riferimento} {stabile_citta} - Lavanderia - {mese} - {anno}.pdf"
+        
         if stato=='Da fare':
             body = "Rendiconto da fare"
 
@@ -1631,7 +1632,7 @@ def prepara_email(request):
             body = "Rendiconto già inviato"
 
         if stato=='Preparato':
-            attachment_name=f"{stabile_riferimento} {stabile_citta} - Lavanderia - {mese} - {anno}.pdf"
+            
             body=f"""
 
                 <p>
@@ -3071,6 +3072,7 @@ def extract_rows_xml(request):
 
                 else:
                     invoice_recordid = xml_check['recordid_']
+                    printing_invoice = UserRecord('printinginvoice',invoice_recordid)
 
 
                 folder_path = os.path.join(folder_path, invoice_recordid)
