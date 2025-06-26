@@ -3013,70 +3013,90 @@ def extract_rows_xml(request):
         if filename.endswith('.xml'):
             file_path = os.path.join(folder_path_xml, filename)
             filename = filename.replace('.xml', '')
+
+            xml_check = HelpderDB.sql_query_row(f"SELECT * FROM user_printinginvoice WHERE filename='{filename}'")
+
             try:
-                tree = ET.parse(file_path)
-                root = tree.getroot()
 
-                invoice_rows = []
-                # Cerca i nodi invoiceRow sotto invoiceRows
-                invoice_rows_container = root.find('InvoiceRows')
-                if invoice_rows_container is not None:
-                    invoice_rows = invoice_rows_container.findall('InvoiceRow')
+                if xml_check is None:
                 
-                company_name = root.find('RecipientDescription').text 
-                company = HelpderDB.sql_query_row(f"SELECT * FROM user_company WHERE companyname='{company_name}'")
-                if not company:
-                    recordidcompany = '00000000000000000000000000000394'
+
+                    tree = ET.parse(file_path)
+                    root = tree.getroot()
+
+                    invoice_rows = []
+                    # Cerca i nodi invoiceRow sotto invoiceRows
+                    invoice_rows_container = root.find('InvoiceRows')
+                    if invoice_rows_container is not None:
+                        invoice_rows = invoice_rows_container.findall('InvoiceRow')
+                    
+                    company_name = root.find('RecipientDescription').text 
+                    company = HelpderDB.sql_query_row(f"SELECT * FROM user_company WHERE companyname='{company_name}'")
+                    if not company:
+                        recordidcompany = '00000000000000000000000000000394'
+                    else:
+                        recordidcompany = company['recordid_']
+
+                    printing_invoice = UserRecord('printinginvoice')
+                    printing_invoice.values['recordidcompany_'] = recordidcompany
+                    printing_invoice.values['title'] = company_name
+                    printing_invoice.values['totalnet'] = root.find('Total').text
+                    printing_invoice.values['date'] = root.find('IssueDate').text
+                    printing_invoice.values['status'] = 'Creata'
+                    printing_invoice.values['katunid'] = root.find('Id').text
+                    printing_invoice.values['filename'] = filename
+
+                    printing_invoice.save()
+
+                    invoice_recordid = printing_invoice.recordid
+
+                    for row in invoice_rows:
+                        row_data = {
+                            'Description': row.find('Description').text if row.find('Description') is not None else '',
+                            'Quantity': row.find('Quantity').text if row.find('Quantity') is not None else '',
+                            'UnitPrice': row.find('UnitPrice').text if row.find('UnitPrice') is not None else '',
+                            'Price': row.find('Price').text if row.find('Price') is not None else '',
+                            'Amount': row.find('Amount').text if row.find('Amount') is not None else ''
+                        }
+
+                        invoiceline = UserRecord('printinginvoiceline')
+                        invoiceline.values['recordidprintinginvoice_'] = invoice_recordid
+                        invoiceline.values['description'] = row_data['Description']
+                        invoiceline.values['quantity'] = row_data['Quantity']
+                        invoiceline.values['unitprice'] = row_data['UnitPrice']
+                        invoiceline.values['price'] = row_data['Price']
+                        invoiceline.values['amount'] = row_data['Amount']
+
+                    invoiceline.save()
+
                 else:
-                    recordidcompany = company['recordid_']
-
-                printing_invoice = UserRecord('printinginvoice')
-                printing_invoice.values['recordidcompany_'] = recordidcompany
-                printing_invoice.values['title'] = company_name
-                printing_invoice.values['totalnet'] = root.find('Total').text
-                printing_invoice.values['date'] = root.find('IssueDate').text
-                printing_invoice.values['status'] = 'Creata'
-                printing_invoice.values['katunid'] = root.find('Id').text
-                printing_invoice.values['filename'] = filename
-
-                printing_invoice.save()
-
-                invoice_recordid = printing_invoice.recordid
+                    invoice_recordid = xml_check['recordid_']
 
 
-                pdf_file = os.path.join(folder_path, 'pdfkatun.pdf')
+                folder_path = os.path.join(folder_path, invoice_recordid)
 
-                printing_invoice.values['pdfkatun'] = 'printinginvoice/' + invoice_recordid + 'pdfkatun.pdf'
+                pdf_file = os.path.join(folder_path_xml, filename + '.pdf')
+
+                
+                if not os.path.exists(folder_path):
+                    os.makedirs(folder_path)
+
+                #sposta il file
+                if not os.path.exists(pdf_file):
+                    return JsonResponse({'status': 'error', 'message': f'File PDF {pdf_file} non trovato.'})
+                
+                # sposta il file pdf in folder_path
+                shutil.move(pdf_file, os.path.join(folder_path, 'pdfkatun.pdf'))
+
+
+
+                
+
+                printing_invoice.values['pdfkatun'] = 'printinginvoice/' + invoice_recordid + '/pdfkatun.pdf'
                 printing_invoice.save()
                 #salva il file pdf all'interno di bixdata/uploads/printinginvoice/
 
 
-
-                pdf_upload_path = f'bixdata/uploads/printinginvoice/{invoice_recordid}'
-                os.makedirs(pdf_upload_path, exist_ok=True)
-                pdf_file_dest = os.path.join(pdf_upload_path, 'pdfkatun.pdf')
-                with open(pdf_file_dest, 'wb') as f:
-                    f.write(pdf_file.encode('utf-8'))
-
-
-                for row in invoice_rows:
-                    row_data = {
-                        'Description': row.find('Description').text if row.find('Description') is not None else '',
-                        'Quantity': row.find('Quantity').text if row.find('Quantity') is not None else '',
-                        'UnitPrice': row.find('UnitPrice').text if row.find('UnitPrice') is not None else '',
-                        'Price': row.find('Price').text if row.find('Price') is not None else '',
-                        'Amount': row.find('Amount').text if row.find('Amount') is not None else ''
-                    }
-
-                    invoiceline = UserRecord('printinginvoiceline')
-                    invoiceline.values['recordidprintinginvoice_'] = invoice_recordid
-                    invoiceline.values['description'] = row_data['Description']
-                    invoiceline.values['quantity'] = row_data['Quantity']
-                    invoiceline.values['unitprice'] = row_data['UnitPrice']
-                    invoiceline.values['price'] = row_data['Price']
-                    invoiceline.values['amount'] = row_data['Amount']
-
-                    invoiceline.save()
                              
             except ET.ParseError as e:
                 print("errore")
