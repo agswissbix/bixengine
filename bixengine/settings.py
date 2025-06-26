@@ -22,6 +22,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 UPLOADS_URL = '/uploads/'
 UPLOADS_ROOT = os.path.join(BASE_DIR, '..', 'uploads')
 MEDIA_ROOT = os.path.join(BASE_DIR, '..', 'uploads')
+STATIC_ROOT = os.path.join(BASE_DIR, '..', 'bixengine', 'commonapp', 'static')
 
 XML_DIR = os.path.join(BASE_DIR, '..', 'xml')
 

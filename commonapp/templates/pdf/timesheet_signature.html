@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en" style="overflow: scroll; height: 100%">
+
+
+<head>   
+    <meta charset="UTF-8">
+       
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+       
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+       
+    <title>Intervento IT</title>   
+    <style>
+        @import url('https://fonts.cdnfonts.com/css/barcode-font');
+    </style>
+</head>
+
+<body style="font-family: Calibri; height: 100%">   
+
+<style>
+    .border-bottom {
+        border-bottom: 1px solid black;
+    }
+</style>
+
+   
+<div style="width:200px;height:100px;float:left">
+    <img src="https://www.swissbix.ch/corp/wp-content/uploads/2018/08/logo_w.png" width="150%"> 
+</div>
+<div style="float:right; margin-bottom: -50px">
+    <h1>Intervento IT</h1>
+</div>
+<img id="qr_image" src="{{ completeQrUrl }}"  height="100px" width="100px" alt="{{ qr_name }}"
+     style="float:right; margin-right: 10px; margin-bottom: 10px">
+<div style="clear:both"></div>
+<div style="background-color:#e43b2c;width:100%;height:25px;color:white;padding:2px;">
+    Dati Cliente
+</div>
+
+
+<div class="border-bottom">
+    <div style="height:10px;width:100px;">
+    </div>
+    <div style="float:left;width:33%">
+        <b>Azienda/Cognome</b>
+        <br>
+        <p>{{ companyname }}</p>
+    </div>
+    <div style="float:left;width:30%">
+        <b>Nome</b>
+        <br>
+        <p>{{ name }}</p>
+    </div>
+    <div style="float:left;width:30%">
+        <b>Tel.</b>
+        <br>
+        <p>{{ phonenumber }}</p>
+    </div>
+
+    <div style="clear:both"></div>
+
+</div>
+
+
+<div class="border-bottom" style="margin-bottom: 1%">
+    <div style="height:10px;width:100px;">
+    </div>
+    <div style="float:left;width:33%">
+        <b>Indirizzo</b>
+        <br>
+        <p>
+            {% if address %}
+                {{ address }}
+            {% endif %}
+        </p>
+    </div>
+    <div style="float:left;width:30%">
+        <b>Città</b>
+        <br>
+        <p>
+            {% if city %}
+                {{ city }}
+            {% endif %}
+        </p>
+    </div>
+    <div style="float:left;width:30%">
+        <b>E-mail</b>
+        <br>
+        <p>
+            {% if email %}
+                {{ email }}
+            {% endif %}
+        </p>
+    </div>
+
+    <div style="clear:both"></div>
+
+</div>
+
+<div style="clear:both"></div>
+
+<div style="background-color:#e43b2c;width:100%;height:25px;color:white; padding: 2px">
+    Tipologia Intervento
+</div>
+
+<div style="float:left;width:100%">
+    <p>{{ print_hourprice }}</p>
+</div>
+
+
+<div style="clear:both"></div>
+
+<div style="background-color:#e43b2c;width:100%;height:25px;color:white; padding: 2px; margin-top: 0.5%">
+    Tariffa
+</div>
+
+<div style="float:left;width:100%">
+    <p>{{ print_travel }}</p>
+</div>
+
+<div style="clear:both"></div>
+
+<div style="background-color:#e43b2c;width:100%;height:25px;color:white; padding: 2px; margin-top: 0.5%">
+    Trasferta
+</div>
+
+<div style="float:left;width:100%">
+    <p>{{ print_type }}</p>
+</div>
+
+
+<div style="clear:both"></div>
+
+<div style="background-color:#e43b2c;width:100%;height:25px;color:white; padding: 2px; margin-top: 0.5%">
+    Data e Ora Intervento
+</div>
+<div style="float:left;width:10%; text-align: center">
+    <p class="border-bottom">Data</p>
+    {{ date }}
+</div>
+<div style="float:left;width:20%; text-align: center">
+    <p class="border-bottom">Ore di lavoro</p>
+    {{ worktime }}
+</div>
+<div style="float:left;width:35%; text-align: center">
+    <p class="border-bottom">Collaboratore</p>
+    {{ firstname }} {{ lastname }}
+</div>
+<div style="float:left;width:35%; text-align: center">
+    <p class="border-bottom">Registrato Bixdata</p>
+            <input type="checkbox" checked>
+
+</div>
+
+<div style="clear:both"></div>
+
+
+
+
+<div style="clear:both"></div>
+
+
+<div style="background-color:#e43b2c;width:100%;height:25px;color:white; padding: 2px; margin-top: 2%">
+    Descrizione Intervento
+</div>
+
+<br>
+{{ description|linebreaksbr }}
+
+<br>
+<br>
+<br>
+
+
+<div style="clear:both"></div>
+
+
+<div style="position:fixed; bottom: 0">
+
+    <div style="background-color:#e43b2c;width:100%;height:25px;color:white; padding: 2px; margin-top: 2%">
+        Materiale Fornito / Consegnato
+    </div>
+
+    <div style="float:left;width:60%; text-align: center">
+        <p class="border-bottom">Descrizione completa</p>
+    </div>
+    <div style="float:left;width:20%; text-align: center">
+        <p class="border-bottom">Quantità prevista</p>
+    </div>
+
+    <div style="float:left;width:20%; text-align: center">
+        <p class="border-bottom">Quantità attuale</p>
+    </div>
+
+    {% for timesheetline in timesheetlines %}
+
+        <div style="float:left;width:60%; text-align: center">
+            <p class=""> {{ timesheetline.note }}</p>
+        </div>
+        <div style="float:left;width:20%; text-align: center">
+            <p class="">{{ timesheetline.expectedquantity }}</p>
+        </div>
+
+        <div style="float:left;width:20%; text-align: center">
+            <p class=""> {{ timesheetline.actualquantity }}</p>
+        </div>
+
+        <div class="border-bottom" style=" float: left; width: 100%; "></div>
+    {% endfor %}
+
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+
+
+    <div style="clear:both"></div>
+
+    <br>
+
+
+    <p>Confermiamo di aver ricevuto le prestazioni/materiale indicate sopra. La merce fornita rimarrà proprietà di
+        Swissbix SA fino al saldo della fattura.</p>
+
+
+    <br>
+
+    <div style="float:left;width:50%;">
+        <b>Luogo e Data</b>
+    </div>
+    <div style="float:left;width:50%; position: relative;">
+        <b>Firma e Timbro</b>
+            <img src="{{ completeSignatureUrl }}" height="50px" width="100px" style=" margin-bottom: -60px; margin-left: -110px">
+    </div>
+
+    <div style="clear:both; margin-top: 40px"></div>
+
+    <br>
+    <br>
+
+    <div class="border-bottom"></div>
+
+    <div style="text-align: center">
+        <p><b>Swissbix SA </b>- Via Baroffio 6, 6900 Lugano - <b>E-mail</b>: support@swissbix.ch -
+            <b>Tel:</b> +41 91 960 22
+            00
+        </p>
+
+    </div>
+
+</div>
+</body>
+
+</html>
+
+
+
+
