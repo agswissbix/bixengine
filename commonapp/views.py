@@ -3241,32 +3241,38 @@ def sign_timesheet(request):
             header, img_base64 = img_base64.split(',', 1)
             img_data = base64.b64decode(img_base64)
 
-            base_path = './media'
+            base_path = os.path.join(settings.MEDIA_ROOT, 'printinginvoice')
             if not os.path.exists(base_path):
                 os.makedirs(base_path)
 
-            filename = 'firma.png'
-            path = os.path.join(base_path, filename)
-
-            # Apri immagine da bytes
-            from io import BytesIO
+            # Salva firma come immagine
+            firma_path = os.path.join(base_path, 'firma.png')
             img_pil = Image.open(BytesIO(img_data))
 
-            # Se ha trasparenza, crea sfondo bianco e incolla
             if img_pil.mode in ('RGBA', 'LA') or (img_pil.mode == 'P' and 'transparency' in img_pil.info):
                 background = Image.new('RGB', img_pil.size, (255, 255, 255))
-                background.paste(img_pil, mask=img_pil.split()[-1])  # canale alpha come maschera
+                background.paste(img_pil, mask=img_pil.split()[-1])
                 img_pil = background
             else:
                 img_pil = img_pil.convert('RGB')
 
-            # Salva immagine convertita
-            img_pil.save(path, format='PNG')
+            img_pil.save(firma_path, format='PNG')
 
-            return JsonResponse({'success': True})
+            # ✅ Serve anche un file PDF come download
+            pdf_path = os.path.join(base_path, 'dummy.pdf')
+            if not os.path.exists(pdf_path):
+                return JsonResponse({'error': 'PDF non trovato'}, status=404)
+
+            with open(pdf_path, 'rb') as f:
+                pdf_data = f.read()
+
+            response = HttpResponse(pdf_data, content_type='application/pdf')
+            response['Content-Disposition'] = 'attachment; filename="firma_salvata.pdf"'
+            return response
+
         except Exception as e:
-            return JsonResponse({'success': False})
-    else:
-        return JsonResponse({'success': False})
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+    return JsonResponse({'success': False, 'error': 'Invalid method'}, status=405)
 
 
