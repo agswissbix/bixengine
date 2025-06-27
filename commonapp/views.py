@@ -3137,7 +3137,7 @@ def bexio_api_set_invoice(request, recordid=None):
             bexio_invoiceline = {
                 "tax_id": "39",
                 "account_id": "353",
-                "unit_id": 2,
+                "unit_id": 2,   
                 "amount": invoiceline_quantity,
                 "unit_price": invoiceline_unitprice,
                 "type": "KbPositionCustom",
@@ -3274,11 +3274,39 @@ def sign_timesheet(request):
 
             img_pil.save(firma_path, format='PNG')
 
+            uid = uuid.uuid4().hex
+
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_H,
+                box_size=10,
+                border=0,
+            )
+
+            today = datetime.date.today()
+            d1 = today.strftime("%d/%m/%Y")
+
+            qrcontent = 'timesheet_' + str(recordid)
+
+
+            data = qrcontent
+            qr.add_data(data)
+            qr.make(fit=True)
+
+            img = qr.make_image(fill_color="black", back_color="white")
+
+            qr_name = 'qrcode' + uid + '.png'
+
+            qr_path = os.path.join(base_path, qr_name)
+
+            img.save(qr_path)
+
 
             rows = HelpderDB.sql_query(f"SELECT t.*, c.companyname, c.address, c.city, c.email, c.phonenumber, u.firstname, u.lastname FROM user_timesheet AS t JOIN user_company AS c ON t.recordidcompany_=c.recordid_ JOIN sys_user AS u ON t.user = u.id WHERE t.recordid_='{recordid}'")
 
             server = os.environ.get('BIXENGINE_SERVER')
             firma_url = server + '/static/pdf/' + filename_firma
+            qr_url = server + '/static/pdf/' + qr_name
 
             filename_with_path = os.path.join(base_path, 'firma_salvata_' + str(recordid) + '.pdf')
 
@@ -3290,9 +3318,8 @@ def sign_timesheet(request):
                     row[value] = ''
 
             row['recordid'] = recordid
-            #row['completeQrUrl'] = completeUrl + qr_name
-            row['completeSignatureUrl'] = firma_url
-
+            row['qrUrl'] = qr_url
+            row['signatureUrl'] = firma_url
 
 
             timesheetlines = HelpderDB.sql_query(f"SELECT * FROM user_timesheetline WHERE recordidtimesheet_='{recordid}'")
@@ -3315,123 +3342,24 @@ def sign_timesheet(request):
             pdfkit.from_string(content, filename_with_path, configuration=config)
 
 
-            with open(filename_with_path, 'rb') as f:
-                pdf_data = f.read()
+            try:
+                with open(filename_with_path, 'rb') as f:
+                    pdf_data = f.read()
+  
+                    response = HttpResponse(pdf_data, content_type='application/pdf')
+                    response['Content-Disposition'] = 'attachment; filename="timesheet_signature.pdf"'
 
-                response = HttpResponse(pdf_data, content_type='application/pdf')
-                response['Content-Disposition'] = 'attachment; filename="timesheet_signature.pdf"'
-
-                return response
+                    return response
+            finally:
+                if os.path.exists(firma_path):
+                    os.remove(firma_path)
+                if os.path.exists(filename_with_path):
+                    os.remove(filename_with_path)
+                if os.path.exists(qr_path):
+                    os.remove(qr_path)
 
         except Exception as e:
             print(f"Error in sign_timesheet: {e}")
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
-
-
-def save_signature(request):
-    print('funzione signature')
-
-    recordid = request.POST.get('recordid')
-    tableid = request.POST.get('tableid')
-    signature = request.POST.get('signature')
-    completeUrl = request.POST.get('completeUrl')
-    filename = request.POST.get('filename')
-
-    print(tableid)
-    print(signature)
-
-    # download the image
-    format, imgstr = signature.split(';base64,')
-    ext = format.split('/')[-1]
-    filename_signature = f"{tableid}_{recordid}.{ext}"
-
-    filepath_signature = os.path.dirname(os.path.abspath(__file__))
-    filepath_signature = filepath_signature.rsplit('views', 1)[0]
-    filepath_signature = filepath_signature + '\\static\\pdf\\' + filename_signature
-
-    # save the image
-
-    with open(filepath_signature, 'wb') as fh:
-        fh.write(base64.b64decode(imgstr))
-
-    path = os.path.dirname(os.path.abspath(__file__))
-    path = path.rsplit('views', 1)[0]
-    filename_with_path = path + '\\static\\pdf\\' + filename
-
-    uid = uuid.uuid4().hex
-
-    qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_H,
-        box_size=10,
-        border=0,
-    )
-
-    today = datetime.date.today()
-    d1 = today.strftime("%d/%m/%Y")
-
-    qrcontent = str(tableid) + '_' + str(recordid)
-
-    data = qrcontent
-    qr.add_data(data)
-    qr.make(fit=True)
-
-    img = qr.make_image(fill_color="black", back_color="white")
-
-    qr_name = 'qrcode' + uid + '.png'
-
-    img.save(path + '\\static\\pdf\\' + qr_name)
-
-    with connection.cursor() as cursor:
-        cursor.execute(
-            f"SELECT   t.*,c.companyname,c.address,c.city,c.email, c.phonenumber, u.firstname, u.lastname FROM user_timesheet as t join user_company as c on t.recordidcompany_=c.recordid_ join sys_user as u on t.user = u.id WHERE t.recordid_='{recordid}'"
-        )
-        rows = dictfetchall(cursor)
-
-        row = rows[0]
-
-        for value in row:
-            if row[value] is None:
-                row[value] = ''
-
-        row['recordid'] = recordid
-        row['completeQrUrl'] = completeUrl + qr_name
-        row['completeSignatureUrl'] = completeUrl + filename_signature
-
-    with connection.cursor() as cursor:
-        cursor.execute(
-            f"SELECT * FROM user_timesheetline WHERE recordidtimesheet_='{recordid}'"
-        )
-
-        timesheetlines = dictfetchall(cursor)
-
-        for line in timesheetlines:
-            line['note'] = line['note'] or ''
-            line['expectedquantity'] = line['expectedquantity'] or ''
-            line['actualquantity'] = line['actualquantity'] or ''
-
-    row['timesheetlines'] = timesheetlines
-
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
-
-    config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
-    content = render_to_string('pdf/timesheet_signature.html', row)
-
-    pdfkit.from_string(content, filename_with_path, configuration=config)
-
-    try:
-        with open(filename_with_path, 'rb') as fh:
-            response = HttpResponse(fh.read(), content_type="application/pdf")
-            response['Content-Disposition'] = f'inline; filename={filename}'
-
-        return response
-
-    finally:
-        os.remove(path + '\\static\\pdf\\' + qr_name)
-        os.remove(filepath_signature)
-        os.remove(filename_with_path)
-
 
 
