@@ -434,16 +434,17 @@ def sync_richieste_bixdataadiuto(request):
         for row in rows:
             
             merge_sql = f"""
-                INSERT INTO dbo.T_BIXDATA_RICHIESTE (recordid_, tiporichiesta, datarichiesta, utentebixdata, utenteadiuto)
-                SELECT {sql_safe(row['recordid_'])}, {sql_safe(row['tiporichiesta'])}, {sql_safe(row['data'])}, {sql_safe(row['utentebixdata'])}, {sql_safe(row['utenteadiuto'])}
+                INSERT INTO dbo.T_BIXDATA_RICHIESTE (recordid_, tiporichiesta, datarichiesta, utentebixdata, utenteadiuto, idrichiesta)
+                SELECT {sql_safe(row['recordid_'])}, {sql_safe(row['tiporichiesta'])}, {sql_safe(row['data'])}, {sql_safe(row['utentebixdata'])}, {sql_safe(row['utenteadiuto'])}, {sql_safe(row['id'])}
                 WHERE NOT EXISTS (
                     SELECT 1 FROM dbo.T_BIXDATA_RICHIESTE WHERE recordid_ = {sql_safe(row['recordid_'])}
                 )
             """
-            print(merge_sql)
             # Esegui il merge
             tgt_cursor.execute(merge_sql)
             count += 1
+
+            # righe di dettaglio
             richieste_righedettaglio_table = UserTable('richieste_righedettaglio')
             rows_dettagli = richieste_righedettaglio_table.get_records(
                 conditions_list={f"recordidrichieste_={row['recordid_']}"}
@@ -456,7 +457,6 @@ def sync_richieste_bixdataadiuto(request):
                         SELECT 1 FROM dbo.T_BIXDATA_RICHIESTE_DETTAGLI WHERE recordid_ = {sql_safe(row_dettaglio['recordid_'])}
                     )
                 """
-                print(merge_sql_righe)
                 tgt_cursor.execute(merge_sql_righe)
             
 
