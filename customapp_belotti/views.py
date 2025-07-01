@@ -429,6 +429,8 @@ def sync_richieste_bixdataadiuto(request):
             conditions_list={"stato='Richiesta inviata'"},
         )
         count = 0
+        print("Numero di richieste da importare:")
+        print(len(rows))
         for row in rows:
             
             merge_sql = f"""
