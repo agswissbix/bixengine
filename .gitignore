@@ -3,3 +3,4 @@ __pycache__/
 *.sqlite3
 .env
 bixengine/.env
+/commonapp/__pycache__
