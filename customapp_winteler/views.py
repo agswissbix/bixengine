@@ -147,8 +147,16 @@ def script_update_wip_status(request):
                     column_names = [col[0] for col in cursor.description]
                     row_dict = dict(zip(column_names, row))
                     f_idd = row_dict["FIDD"]
+                    data_caricamento= row_dict["F2"]
+                    update_sql = f"""
+                        UPDATE A1047 SET F1092='Caricato' WHERE F1028='{barcode}'
+                         
+                    """
 
-                return HttpResponse(f"FIDD trovato: {f_idd}")
+                    # Esegui il merge
+                    cursor.execute(update_sql)
+
+                return HttpResponse(f"FIDD trovato: {f_idd}, data caricamento: {data_caricamento}") 
             else:
                 return HttpResponse("Nessuna riga trovata in VA1014 per quel barcode")
         finally:
