@@ -120,6 +120,36 @@ def sync_wipbarcode_bixdata_adiuto(request):
 
 
 
+def script_update_wip_status(request):
+    conn_str = (
+        'DRIVER={ODBC Driver 17 for SQL Server};'
+        'SERVER=WIGBSRV17;'  # prova anche con: WIGBSRV17\\SQLEXPRESS
+        'DATABASE=winteler_data;'
+        'UID=sa;'
+        'PWD=Winteler,.-21;'
+        # oppure: 'Trusted_Connection=yes;' se sei su Windows
+    )
+    sql="SEleCT * FRom user_wipbarcode where deleted_='N' AND datacaricamentoadiuto IS NULL LIMIT 1  "
+    records_list=HelpderDB.sql_query(sql)
+    for record_diCt in records_list:
+        barcode=record_diCt['wipbarcode']
+        conn = pyodbc.connect(conn_str, timeout=5)
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute("SELECT * FROM VA1014 WHERE F1028 = ? AND FENA <> 0", (barcode,))
+            row = cursor.fetchone()
+            if row:
+                f_idd = row['FIDD']
+                return HttpResponse(f"FIDD trovato: {f_idd}")
+            else:
+                return HttpResponse("Nessuna riga trovata in VA1014 per quel barcode")
+        finally:
+            cursor.close()
+            conn.close()
+
+
+
 
 
 def sql_safe(value):
@@ -135,3 +165,5 @@ def sql_safe(value):
     # qualunque altro tipo → cast a str, escape singoli apici
     cleaned = str(value).replace("'", "''")
     return f"'{cleaned}'"
+
+
