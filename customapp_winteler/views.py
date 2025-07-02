@@ -140,21 +140,20 @@ def script_update_wip_status(request):
             cursor.execute("SELECT * FROM VA1014 WHERE F1028 = ? AND FENA <> 0", (barcode,))
             row = cursor.fetchone()
             if row:
-                try:
-                    f_idd = row.FIDD  # accesso per attributo
-                except AttributeError:
-                    # fallback sicuro se row è una tupla
-                    column_names = [col[0] for col in cursor.description]
-                    row_dict = dict(zip(column_names, row))
-                    f_idd = row_dict["FIDD"]
-                    data_caricamento= row_dict["F2"]
-                    update_sql = f"""
-                        UPDATE A1047 SET F1092='Caricato' WHERE F1028='{barcode}'
-                         
-                    """
+            
+                # fallback sicuro se row è una tupla
+                column_names = [col[0] for col in cursor.description]
+                row_dict = dict(zip(column_names, row))
+                f_idd = row_dict["FIDD"]
+                data_caricamento= row_dict["F2"]
+                update_sql = f"""
+                    UPDATE A1047 SET F1092='Caricato' WHERE F1028='{barcode}'
+                    
+                """
 
-                    # Esegui il merge
-                    cursor.execute(update_sql)
+                # Esegui il merge
+                cursor.execute(update_sql)
+                cursor.commit()
 
                 return HttpResponse(f"FIDD trovato: {f_idd}, data caricamento: {data_caricamento}") 
             else:
