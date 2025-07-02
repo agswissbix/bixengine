@@ -140,7 +140,14 @@ def script_update_wip_status(request):
             cursor.execute("SELECT * FROM VA1014 WHERE F1028 = ? AND FENA <> 0", (barcode,))
             row = cursor.fetchone()
             if row:
-                f_idd = row['FIDD']
+                try:
+                    f_idd = row.FIDD  # accesso per attributo
+                except AttributeError:
+                    # fallback sicuro se row è una tupla
+                    column_names = [col[0] for col in cursor.description]
+                    row_dict = dict(zip(column_names, row))
+                    f_idd = row_dict["FIDD"]
+
                 return HttpResponse(f"FIDD trovato: {f_idd}")
             else:
                 return HttpResponse("Nessuna riga trovata in VA1014 per quel barcode")
