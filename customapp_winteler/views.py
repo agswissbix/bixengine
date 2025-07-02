@@ -129,14 +129,15 @@ def script_update_wip_status(request):
         'PWD=Winteler,.-21;'
         # oppure: 'Trusted_Connection=yes;' se sei su Windows
     )
-    sql="SEleCT * FRom user_wipbarcode where deleted_='N' AND datacaricamentoadiuto IS NULL AND lottobarcode='WS00001003' LIMIT 1  "
+    sql="SEleCT * FRom user_wipbarcode where deleted_='N' AND statowip='Barcodato' AND lottobarcode='WS00001003' LIMIT 1  "
     records_list=HelpderDB.sql_query(sql)
     for record_diCt in records_list:
         barcode=record_diCt['wipbarcode']
+        lottobarcode=record_diCt['lottobarcode']
         recordid_wip=record_diCt['recordid_']
         conn = pyodbc.connect(conn_str, timeout=5)
         cursor = conn.cursor()
-
+        record_wip=UserRecord('wipbarcode', recordid_wip)
         try:
             cursor.execute("SELECT * FROM VA1014 WHERE F1028 = ? AND FENA <> 0", (barcode,))
             row = cursor.fetchone()
@@ -148,21 +149,32 @@ def script_update_wip_status(request):
                 f_idd = row_dict["FIDD"]
                 data_caricamento= row_dict["F2"]
                 data_caricamento = datetime.datetime.strptime(data_caricamento, "%Y%m%d").strftime("%Y-%m-%d")
+                record_wip.values['datacaricamentoadiuto']=data_caricamento
+                record_wip.values['statowip']="Caricato"
+                record_wip.save()
+
                 update_sql = f"""
                     UPDATE A1047 SET F1092='Caricato' WHERE F1028='{barcode}'
                     
                 """
-                record_wip=UserRecord('wipbarcode', recordid_wip)
-                record_wip.values['datacaricamentoadiuto']=data_caricamento
-                record_wip.save()
-
-                # Esegui il merge
                 cursor.execute(update_sql)
                 cursor.commit()
 
-                return HttpResponse(f"FIDD trovato: {f_idd}, data caricamento: {data_caricamento}") 
+                return HttpResponse(f"Barcode: {barcode}: FIDD trovato: {f_idd}, data caricamento: {data_caricamento}") 
             else:
-                return HttpResponse("Nessuna riga trovata in VA1014 per quel barcode")
+                cursor.execute("SELECT * FROM VA1014 WHERE F1335 = ? AND FENA <> 0", (lottobarcode,))
+                row = cursor.fetchone()
+                if row:
+                    record_wip.values['statowip']="Verificare"
+                    record_wip.save()
+                    update_sql = f"""
+                    UPDATE A1047 SET F1092='Verificare' WHERE F1028='{barcode}'
+                    
+                    """
+                    cursor.execute(update_sql)
+                    cursor.commit()
+                    return HttpResponse(f"Barcode: {barcode}:Nessuna riga trovata in VA1014 per quel barcode ma lotto già caricato. da verificare")
+                return HttpResponse(f"Barcode: {barcode}:Nessuna riga trovata in VA1014 per quel barcode")
         finally:
             cursor.close()
             conn.close()
