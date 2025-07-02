@@ -129,10 +129,11 @@ def script_update_wip_status(request):
         'PWD=Winteler,.-21;'
         # oppure: 'Trusted_Connection=yes;' se sei su Windows
     )
-    sql="SEleCT * FRom user_wipbarcode where deleted_='N' AND datacaricamentoadiuto IS NULL AND wipbarcode='WGO10270206' LIMIT 1  "
+    sql="SEleCT * FRom user_wipbarcode where deleted_='N' AND datacaricamentoadiuto IS NULL AND lottobarcode='WS00001003' LIMIT 1  "
     records_list=HelpderDB.sql_query(sql)
     for record_diCt in records_list:
         barcode=record_diCt['wipbarcode']
+        recordid_wip=record_diCt['recordid_']
         conn = pyodbc.connect(conn_str, timeout=5)
         cursor = conn.cursor()
 
@@ -146,11 +147,15 @@ def script_update_wip_status(request):
                 row_dict = dict(zip(column_names, row))
                 f_idd = row_dict["FIDD"]
                 data_caricamento= row_dict["F2"]
+                data_caricamento = datetime.strptime(data_caricamento, "%Y%m%d").strftime("%Y-%m-%d")
                 update_sql = f"""
                     UPDATE A1047 SET F1092='Caricato' WHERE F1028='{barcode}'
                     
                 """
-
+                record_wip=UserRecord('wipbarcode', recordid_wip)
+                record_wip.values['datacaricamentoadiuto']=data_caricamento
+                record_wip.save()
+                
                 # Esegui il merge
                 cursor.execute(update_sql)
                 cursor.commit()
