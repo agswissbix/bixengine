@@ -129,7 +129,7 @@ def script_update_wip_status(request):
         'PWD=Winteler,.-21;'
         # oppure: 'Trusted_Connection=yes;' se sei su Windows
     )
-    sql="SEleCT * FRom user_wipbarcode where deleted_='N' AND datacaricamentoadiuto IS NULL LIMIT 1  "
+    sql="SEleCT * FRom user_wipbarcode where deleted_='N' AND datacaricamentoadiuto IS NULL AND wipbarcode='WGO10270206' LIMIT 1  "
     records_list=HelpderDB.sql_query(sql)
     for record_diCt in records_list:
         barcode=record_diCt['wipbarcode']
