@@ -147,7 +147,7 @@ def script_update_wip_status(request):
                 row_dict = dict(zip(column_names, row))
                 f_idd = row_dict["FIDD"]
                 data_caricamento= row_dict["F2"]
-                data_caricamento = datetime.strptime(data_caricamento, "%Y%m%d").strftime("%Y-%m-%d")
+                data_caricamento = datetime.datetime.strptime(data_caricamento, "%Y%m%d").strftime("%Y-%m-%d")
                 update_sql = f"""
                     UPDATE A1047 SET F1092='Caricato' WHERE F1028='{barcode}'
                     
@@ -155,7 +155,7 @@ def script_update_wip_status(request):
                 record_wip=UserRecord('wipbarcode', recordid_wip)
                 record_wip.values['datacaricamentoadiuto']=data_caricamento
                 record_wip.save()
-                
+
                 # Esegui il merge
                 cursor.execute(update_sql)
                 cursor.commit()
