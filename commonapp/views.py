@@ -2439,7 +2439,7 @@ def script_test(request):
     return JsonResponse({'response': domain_info})
 
 #TODO
-#CUSTOM
+#CUSTOM WINTELER
 #TEMP
 def script_winteler_load_t_wip(request):
     records= HelpderDB.sql_query("SELECT * FROM t_wipbarcode WHERE dataautomatica IS NULL LIMIT 100")
@@ -2452,7 +2452,7 @@ def script_winteler_load_t_wip(request):
         print('save:')
         print( record_bixdata.values['wipbarcode'])
         record_bixdata.save()
-        sql="UPDATE t_wipbarcode SET dataautomatica='2025-06-06 00:00:00' WHERE wipbarcode='"+record['wipbarcode']+"'"
+        sql="UPDATE t_wipbarcode SET dataautomatica='2025-07-03 00:00:00' WHERE wipbarcode='"+record['wipbarcode']+"'"
         HelpderDB.sql_execute(sql)
 
     return JsonResponse({'response': 'ok'})
