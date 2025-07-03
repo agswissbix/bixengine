@@ -255,7 +255,28 @@ def sync_plesk_adiuto(request):
             )
             conn.commit()
 
-            results.append(f"Inserito nuovo record: adiwid={adiwid}, timestamp={timestamp}")
+            # Verifica inserimento
+            cursor.execute(
+                "SELECT COUNT(*) FROM T_ADIWID_CONFIRMATION WHERE adiwid = ?",
+                adiwid
+            )
+            verify = cursor.fetchone()[0]
+
+            if verify:
+                results.append(f"Inserito correttamente: adiwid={adiwid}, timestamp={timestamp}")
+
+                # Chiama adidl.php per eliminare il record dalla sorgente
+                cleanup_url = "https://adiwinteler.swissbix.com/adidl.php"
+                cleanup_params = {'psw': access_password, 'adiwid': adiwid}
+
+                try:
+                    cleanup_response = requests.get(cleanup_url, params=cleanup_params, timeout=5)
+                    cleanup_response.raise_for_status()
+                    results.append(f"Chiamata adidl.php per adiwid={adiwid}: {cleanup_response.text}")
+                except requests.RequestException as e:
+                    results.append(f"Errore chiamata adidl.php per adiwid={adiwid}: {str(e)}")
+            else:
+                results.append(f"Errore inserimento record adiwid={adiwid}")
 
     except requests.RequestException as e:
         results.append(f"Errore di richiesta HTTP: {str(e)}")
