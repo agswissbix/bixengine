@@ -2442,7 +2442,7 @@ def script_test(request):
 #CUSTOM WINTELER
 #TEMP
 def script_winteler_load_t_wip(request):
-    records= HelpderDB.sql_query("SELECT * FROM t_wipbarcode WHERE dataautomatica IS NULL LIMIT 100")
+    records= HelpderDB.sql_query("SELECT * FROM t_wipbarcode WHERE dataautomatica IS NULL LIMIT 500")
     for record in records:
         record_bixdata= UserRecord('wipbarcode')
         record_bixdata.values['wipbarcode'] = record['wipbarcode']
