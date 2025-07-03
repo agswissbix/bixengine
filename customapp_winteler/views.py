@@ -195,6 +195,82 @@ def script_update_wip_status(request):
     return HttpResponse("<br>".join(results))
 
 
+import pyodbc
+import os
+import requests
+from django.http import HttpResponse
+
+def sync_plesk_adiuto(request):
+    # Connessione SQL Server
+    conn_str = (
+        'DRIVER={ODBC Driver 17 for SQL Server};'
+        'SERVER=WIGBSRV17;'
+        'DATABASE=winteler_data;'
+        'UID=sa;'
+        'PWD=Winteler,.-21;'
+    )
+    conn = pyodbc.connect(conn_str, timeout=5)
+    cursor = conn.cursor()
+
+    results = []
+
+    # Richiesta a adiexp.php
+    url = "https://adiwinteler.swissbix.com/adiexp.php"
+    access_password = os.environ.get('WINTELER_ACCESS_PASSWORD')
+    params = {'psw': access_password}
+
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        results.append(f"Risposta da adiwinteler plesk: {data}")
+
+        if not isinstance(data, list):
+            raise ValueError("La risposta non è una lista JSON")
+
+        for record in data:
+            adiwid = record.get('adiwid')
+            timestamp = record.get('timestamp_confirmation')
+
+            if not adiwid or not timestamp:
+                results.append(f"Record incompleto: {record}")
+                continue
+
+            # Verifica se il record esiste già
+            cursor.execute(
+                "SELECT COUNT(*) FROM T_ADIWID_CONFIRMATION WHERE adiwid = ?",
+                adiwid
+            )
+            exists = cursor.fetchone()[0]
+
+            if exists:
+                results.append(f"Già presente: adiwid={adiwid}")
+                continue
+
+            # Inserisce il nuovo record
+            cursor.execute(
+                "INSERT INTO T_ADIWID_CONFIRMATION (adiwid, timestamp_confirmation) VALUES (?, ?)",
+                adiwid,
+                timestamp
+            )
+            conn.commit()
+
+            results.append(f"Inserito nuovo record: adiwid={adiwid}, timestamp={timestamp}")
+
+    except requests.RequestException as e:
+        results.append(f"Errore di richiesta HTTP: {str(e)}")
+    except ValueError as e:
+        results.append(f"Errore nel parsing JSON: {str(e)}")
+    except pyodbc.Error as e:
+        results.append(f"Errore SQL: {str(e)}")
+    finally:
+        cursor.close()
+        conn.close()
+
+    return HttpResponse("<br>".join(results))
+
+
+
 
 def sql_safe(value):
     if value is None:
