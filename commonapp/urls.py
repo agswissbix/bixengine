@@ -48,6 +48,8 @@ urlpatterns = [
     path("bexio_api_set_invoice/<str:recordid>/", bexio_api_set_invoice, name="bexio_api_set_invoice"),
     path('script_test/', script_test, name='script_test'),
     path('sign_timesheet/', sign_timesheet, name='sign_timesheet'),
+    path('update_user_profile_pic/', update_user_profile_pic, name='update_user_profile_pic'),
+    path('get_dashboard_blocks/', get_dashboard_blocks, name='get_dashboard_blocks'),
 ]
 
 
