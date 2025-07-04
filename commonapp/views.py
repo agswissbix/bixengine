@@ -3361,5 +3361,127 @@ def sign_timesheet(request):
         except Exception as e:
             print(f"Error in sign_timesheet: {e}")
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        
+@csrf_exempt
+def update_user_profile_pic(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST method allowed'}, status=405)
+    
+    try:
+        # Remove this line - it causes the error
+        # data = json.loads(request.body)
+        
+        # Get data from FormData instead
+        user_id = request.POST.get('userid') 
+        image_file = request.FILES.get('image')
+        
+        if not user_id or not image_file:
+            return JsonResponse({'error': 'Missing user_id or image'}, status=400)
+        
+        print(f"User ID: {user_id}")
+        print(f"Image file: {image_file.name}, size: {image_file.size}")
+        
+        # Process the image file here
+        # Example: save to filesystem or convert to base64
+        # image_content = image_file.read()
+        # base64_image = base64.b64encode(image_content).decode('utf-8')
+        
+        return JsonResponse({'success': True})
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+    
+
+@login_required(login_url='/login/')
+def get_dashboard_blocks(request):
+
+    data = json.loads(request.body)
+
+    #dashboard_id = data.get('dashboardid')
+    dashboard_id = 1
+    
+    user_id = request.user.id
+
+
+    dbh = HelpderDB()
+    context = {}
+    context['blocks'] = []  # Initialize the blocks list
+    context['block_list'] = []  # Initialize the block_list list
+
+    with connection.cursor() as cursor2:
+
+        cursor2.execute(
+            "SELECT sys_user_id FROM v_users WHERE id = %s", [user_id]
+        )
+        bixid = cursor2.fetchone()[0]
+
+
+        
+
+        cursor2.execute(
+            "SELECT dashboardid FROM sys_user_dashboard WHERE userid = %s", [bixid]
+        )
+
+        righe = cursor2.fetchall()
+        # dashboard_id = righe[0][0]
+        context['dashboardid'] = dashboard_id
+
+    if request.method == 'POST':
+        selected = ''
+        with connection.cursor() as cursor:
+
+            context['userid'] = bixid
+
+            size = request.POST.get('size')
+            context['size'] = size
+
+            #datas = SysUserDashboardBlock.objects.filter(userid=bixid, size=size, dashboardid=dashboard_id).values()
+            datas = dbh.sql_query(
+                f"SELECT * FROM sys_user_dashboard_block WHERE userid = {bixid} AND size = {size} AND dashboardid = {dashboard_id}"
+            )
+
+            # all_blocks = SysDashboardBlock.objects.all()
+            sql = "SELECT * FROM sys_dashboard_block ORDER BY name asc"
+            all_blocks = dbh.sql_query(sql)
+
+            for block in all_blocks:
+                context['block_list'].append(block)
+
+            for data in datas:
+                results = dbh.sql_query(
+                    "SELECT * FROM v_sys_dashboard_block WHERE id = %s", [data['dashboard_block_id']]
+                )
+                results = results[0]
+                block = dict()
+                block['id'] = data['id']
+
+                block['gsx'] = data['gsx']
+                block['gsy'] = data['gsy']
+                block['gsw'] = data['gsw']
+                block['gsh'] = data['gsh']
+                block['viewid'] = results['viewid']
+                block['widgetid'] = results['widgetid']
+
+                # if they are null set default values
+                if block['gsw'] == None or block['gsw'] == '':
+                    block['gsw'] = 3
+                    block['gsh'] = 2
+
+                width = results['width']
+                if width == None or width == 0 or width == '':
+                    width = 4
+
+                height = results['height']
+                if height == None or height == 0 or height == '':
+                    height = '50%'
+
+                block['width'] = width
+                block['height'] = height
+
+                context['userid'] = bixid
+                context['blocks'].append(block)
+
+    return JsonResponse(context, safe=False)
 
 
