@@ -3399,7 +3399,7 @@ def get_dashboard_blocks(request):
     data = json.loads(request.body)
 
     #dashboard_id = data.get('dashboardid')
-    dashboard_id = 1
+    dashboard_id = 11
     
     user_id = request.user.id
 
@@ -3415,10 +3415,7 @@ def get_dashboard_blocks(request):
             "SELECT sys_user_id FROM v_users WHERE id = %s", [user_id]
         )
         bixid = cursor2.fetchone()[0]
-
-
         
-
         cursor2.execute(
             "SELECT dashboardid FROM sys_user_dashboard WHERE userid = %s", [bixid]
         )
@@ -3433,13 +3430,14 @@ def get_dashboard_blocks(request):
 
             context['userid'] = bixid
 
-            size = request.POST.get('size')
+            size = 'full'
             context['size'] = size
 
             #datas = SysUserDashboardBlock.objects.filter(userid=bixid, size=size, dashboardid=dashboard_id).values()
-            datas = dbh.sql_query(
-                f"SELECT * FROM sys_user_dashboard_block WHERE userid = {bixid} AND size = {size} AND dashboardid = {dashboard_id}"
+            sql = "SELECT * FROM sys_user_dashboard_block WHERE userid = {userid} AND size = 'full' AND dashboardid = {dashboardid}".format(
+                userid=bixid, dashboardid=dashboard_id
             )
+            datas = dbh.sql_query(sql)
 
             # all_blocks = SysDashboardBlock.objects.all()
             sql = "SELECT * FROM sys_dashboard_block ORDER BY name asc"
@@ -3449,9 +3447,11 @@ def get_dashboard_blocks(request):
                 context['block_list'].append(block)
 
             for data in datas:
-                results = dbh.sql_query(
-                    "SELECT * FROM v_sys_dashboard_block WHERE id = %s", [data['dashboard_block_id']]
+                dashboard_block_id = data['dashboard_block_id']
+                sql = "SELECT * FROM v_sys_dashboard_block WHERE id = {dashboard_block_id}".format(
+                    dashboard_block_id=dashboard_block_id
                 )
+                results = dbh.sql_query(sql)
                 results = results[0]
                 block = dict()
                 block['id'] = data['id']
@@ -3475,13 +3475,133 @@ def get_dashboard_blocks(request):
                 height = results['height']
                 if height == None or height == 0 or height == '':
                     height = '50%'
+                
+                if results['reportid'] is None or results['reportid'] == 0:
+
+                    if results['widgetid'] is None:
+                        tableid = results['tableid']
+                        tableid = 'user_' + tableid
+                        block['type'] = 'table'
+
+                        block['html'] = 'table'
+                        #block['html'] = get_records_table(request, results['tableid'], None, None, '', results['viewid'], 1, '', '')
+                    else:
+                        block['html'] = 'test'
+
+                else:
+    
+                    selected = ''
+                    if results['operation'] == 'somma':
+                        fields = results['fieldid'].split(';')
+                        for field in fields:
+                            field = 'SUM(' + field + ')'
+                            selected += field + ','
+                        groupby = results['groupby']
+                        if results['custom'] == 'group_by_day':
+                            groupby = f"DATE_FORMAT({groupby}, '%Y-%m-%d')"
+                        if results['custom'] == 'group_by_month':
+                            groupby = f"DATE_FORMAT({groupby}, '%Y-%m')"
+
+                    query_conditions = results['query_conditions']
+                    #userid = get_userid(request.user.id)
+                    userid = bixid
+                    query_conditions = query_conditions.replace("$userid$", str(userid))
+                    id = data['id']
+                    tableid = results['tableid']
+                    name = results['name']
+                    layout = results['layout']
+                    block['type'] = layout
+                    fromtable = 'user_' + tableid
+
+                    db = HelpderDB()
+                    groupby_field_record = db.sql_query_row(
+                        f"select * from sys_field where tableid='{tableid}' and fieldid='{results['groupby']}'")
+                    if groupby_field_record['fieldtypeid'] == 'Utente':
+                        fromtable = fromtable + f" LEFT JOIN sys_user ON {fromtable}.{results['groupby']}=sys_user.id "
+                        selected += f"sys_user.firstname as {groupby}"
+                    else:
+                        selected += groupby
+
+                    sql = "SELECT " + selected + " FROM " + fromtable + \
+                          " WHERE " + query_conditions + " GROUP BY " + groupby
+                    block['sql'] = sql
+                    values = get_chart(request, sql, id, name, layout, fields)
+                    block['value'] = values['value']
+                    block['labels'] = values['labels']
+                    block['id'] = id
+                    block['name'] = name
+                    block['fields'] = values['fields']
 
                 block['width'] = width
                 block['height'] = height
 
                 context['userid'] = bixid
-                context['blocks'].append(block)
+                context['blocks'].append(block) 
 
     return JsonResponse(context, safe=False)
 
 
+
+def get_chart(request, sql, id, name, layout, fields):
+    query = sql
+    id_sql = id
+    name_chart = name
+    layout_chart = layout
+    fields_chart = fields
+
+    with connection.cursor() as cursor2:
+        cursor2.execute(query)
+        rows = cursor2.fetchall()
+        formatted_rows = []
+        for row in rows:
+            formatted_row = [str(value) if not isinstance(value, (int, float)) else value for value in row]
+            formatted_rows.append(formatted_row)
+
+        rows = formatted_rows
+        value = []
+        for num in range(0, len(fields_chart)):
+            value.append([row[num] for row in rows])
+
+        labels = [row[-1] for row in rows]
+
+        if None in labels:
+            labels = ['Non assegnato' if v is None else v for v in labels]
+
+        for i in range(len(value)):
+            for j in range(len(value[i])):
+                if value[i][j] is not None:
+                    if value[i][j] == 'None':
+                        value[i][j] = 0
+                    value[i][j] = round(value[i][j], 2)
+
+        context = {
+            'value': value[0],
+            'labels': labels,
+            'id': id_sql,
+            'name': name_chart,
+            'fields': fields_chart,
+        }
+
+        return (context)
+
+
+
+def save_dashboard_disposition(request):
+    values = json.loads(request.body).get('values', [])
+
+    print(values)
+    for value in values:
+        record_id = value.get('id')
+        size = value.get('size')
+        gsx = value.get('gsX')
+        gsy = value.get('gsY')
+        gsw = value.get('gsW')
+        gsh = value.get('gsH')
+
+        if record_id is not None:
+
+            sql = f"UPDATE sys_user_dashboard_block SET gsx = {gsx}, gsy = {gsy}, gsw = {gsw}, gsh = {gsh} WHERE id = '{record_id}'"
+
+            HelpderDB.sql_execute(sql)
+    # Return a success response
+    return JsonResponse({'success': True})
