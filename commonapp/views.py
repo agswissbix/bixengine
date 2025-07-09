@@ -3605,3 +3605,34 @@ def save_dashboard_disposition(request):
             HelpderDB.sql_execute(sql)
     # Return a success response
     return JsonResponse({'success': True})
+
+
+def add_dashboard_block(request):
+
+    json_data = json.loads(request.body)
+
+    blockid = json_data.get('blockid')
+    size = json_data.get('size')
+    dashboardid = json_data.get('dashboardid')
+
+    user_id = request.user.id
+
+
+    dbh = HelpderDB()
+    context = {}
+    context['blocks'] = []  # Initialize the blocks list
+    context['block_list'] = []  # Initialize the block_list list
+
+    with connection.cursor() as cursor2:
+
+        cursor2.execute(
+            "SELECT sys_user_id FROM v_users WHERE id = %s", [user_id]
+        )
+        bixid = cursor2.fetchone()[0]
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "INSERT INTO sys_user_dashboard_block (userid, dashboard_block_id, dashboardid, size) VALUES (%s, %s, %s, %s)",
+            [bixid, blockid, dashboardid, size]
+        )
+    return JsonResponse({'success': True})
