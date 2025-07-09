@@ -3636,3 +3636,7 @@ def add_dashboard_block(request):
             [bixid, blockid, dashboardid, size]
         )
     return JsonResponse({'success': True})
+
+
+def save_form_data(request):
+    return JsonResponse({'success': True})
