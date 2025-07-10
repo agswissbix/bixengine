@@ -53,6 +53,7 @@ urlpatterns = [
     path('save_dashboard_disposition/', save_dashboard_disposition, name='save_dashboard_disposition'),
     path('add_dashboard_block/', add_dashboard_block, name='add_dashboard_block'),
     path('save_form_data/', save_form_data, name='save_form_data'),
+    path('get_form_fields/', get_form_fields, name='get_form_fields'),
     
 ]
 

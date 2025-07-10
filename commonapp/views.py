@@ -3441,3 +3441,15 @@ def save_form_data(request):
     except Exception as e:
         print("Errore nel parsing JSON:", e)
         return JsonResponse({"success": False, "error": str(e)}, status=400)
+
+
+def get_form_fields(request):
+    fields = {}
+
+    record=UserRecord('metrica_annuale', '00000000000000000000000000000023')
+    fields['tassa_annua'] = record.values.get('tassa_annua')
+    fields['tassa_ammissione'] = record.values.get('tassa_ammissione')
+    fields['nr_soci'] = record.values.get('nr_soci')
+                                                   
+
+    return JsonResponse({"success": True, "fields": fields})
