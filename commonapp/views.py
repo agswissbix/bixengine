@@ -3639,4 +3639,28 @@ def add_dashboard_block(request):
 
 
 def save_form_data(request):
-    return JsonResponse({'success': True})
+    try:
+        data = json.loads(request.body)  
+
+        # Tutti i dati inviati
+        payload = data.get("payload", {})
+        print("[-PAYLOAD-]:", payload)
+
+        # Esempio dei dati singoli
+        tassa_annua = payload.get("tassa_annua")
+        tassa_ammissione = payload.get("tassa_ammissione")
+        nr_soci = payload.get("nr_soci")
+        print(f"tassa_ammissione: {tassa_ammissione}, tassa_annua: {tassa_annua}, nr_soci: {nr_soci}")
+
+
+        record=UserRecord('metrica_annuale', '00000000000000000000000000000023')
+        record.values['tassa_annua'] = tassa_annua
+        record.values['tassa_ammissione'] = tassa_ammissione
+        record.values['nr_soci'] = nr_soci
+        record.save()
+
+
+        return JsonResponse({"success": True})
+    except Exception as e:
+        print("Errore nel parsing JSON:", e)
+        return JsonResponse({"success": False, "error": str(e)}, status=400)
