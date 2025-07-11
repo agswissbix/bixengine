@@ -1426,6 +1426,8 @@ def save_record_fields(request):
         stabile_record = UserRecord('stabile', recordid)
         if Helper.isempty(stabile_record.values['titolo_stabile']):
             stabile_record.values['titolo_stabile'] = ""
+        if Helper.isempty(stabile_record.values['indirizzo']):
+            stabile_record.values['indirizzo'] = ""
         riferimento = stabile_record.values['titolo_stabile'] + " " + stabile_record.values['indirizzo']
         stabile_record.values['riferimento'] = riferimento
         stabile_record.save()
