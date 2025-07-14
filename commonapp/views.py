@@ -412,7 +412,7 @@ def get_table_records(request):
     page=data.get("currentPage")
     master_tableid= data.get("masterTableid")
     master_recordid= data.get("masterRecordid")
-    table=UserTable(tableid)
+    table=UserTable(tableid,Helper.get_userid(request))
 
     if viewid == '':
         viewid=table.get_default_viewid()
