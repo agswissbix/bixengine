@@ -242,13 +242,14 @@ class UserTable:
         return self._fields_definitions
     
     def get_results_columns(self):
+        #TODO abilitare per i singoli utenti e non solo con i parametri del superuser
         sql=f"""
             SELECT *
             FROM sys_user_field_order
             LEFT JOIN sys_field ON sys_user_field_order.tableid=sys_field.tableid AND sys_user_field_order.fieldid=sys_field.id
             WHERE sys_user_field_order.typepreference = 'search_results_fields'
             AND sys_user_field_order.tableid = '{self.tableid}'
-            AND sys_user_field_order.userid = {self.userid}
+            AND sys_user_field_order.userid = 1
             ORDER BY sys_user_field_order.fieldorder
             """
         columns=HelpderDB.sql_query(sql)
