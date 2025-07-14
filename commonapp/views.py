@@ -2279,7 +2279,7 @@ def get_record_attachments(request):
     recordid = data.get('recordid')
 
     if tableid == 'bollettinitrasporto' or tableid == 'stabile':
-        attachments=HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordid{tableid}_='{recordid}'")
+        attachments=HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordid{tableid}_='{recordid}' AND deleted_ = 'N'")
         attachment_list=[]
         for attachment in attachments:
             recordid=attachment['recordid_']
@@ -2697,8 +2697,7 @@ def download_offerta(request):
 
 def get_dashboard_data(request):
     userid = request.user.id
-
-    dashboards = HelpderDB.sql_query(f"SELECT dashboardid, name from v_user_dashboard_block WHERE bixid={userid}")
+    dashboards = HelpderDB.sql_query(f"SELECT dashboardid AS id, name from v_user_dashboard_block WHERE bixid={userid}")
 
     return JsonResponse({
         'dashboards': dashboards
@@ -3178,7 +3177,7 @@ def get_dashboard_blocks(request):
     data = json.loads(request.body)
 
     #dashboard_id = data.get('dashboardid')
-    dashboard_id = 11
+    dashboard_id = data.get('dashboardid')  # Default to 1 if not provided
     
     user_id = request.user.id
 
