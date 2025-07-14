@@ -219,3 +219,8 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',  # Protegge le API
     ),
 }
+
+
+DATA_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024
+
+FILE_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024

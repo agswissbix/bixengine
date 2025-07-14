@@ -109,6 +109,7 @@ class UserTable:
         return records_obj_list
     
     def get_records(self,viewid='',searchTerm='', conditions_list=list(),fields=None,offset=0,limit=None,orderby='recordid_ desc',columns=None):
+        
         """Ottieni elenco record in base ai parametri di ricerca
 
         Args:
@@ -155,6 +156,13 @@ class UserTable:
         #viewid
         if viewid:
             view_query_conditions = HelpderDB.sql_query_value(sql=f"SELECT query_conditions FROM sys_view WHERE id='{viewid}' AND tableid='{self.tableid}'", column='query_conditions')
+            #view_query_conditions=str(view_query_conditions)
+            # userid
+            #view_query_conditions = f"{view_query_conditions.replace('$userid$', str(self.userid))}"
+            # today
+            today = datetime.date.today().strftime("%Y-%m-%d")
+            #view_query_conditions = f"{view_query_conditions.replace('$today$', today)}"
+            
             if view_query_conditions:
                 conditions=conditions+f" AND {view_query_conditions} "
         orderby='user_'+self.tableid+'.'+orderby
