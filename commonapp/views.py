@@ -226,7 +226,7 @@ def get_sidebarmenu_items(request):
     if active_server == 'belotti':
         other_items.append({
                         "id": "LIFESTYLE",
-                        "description": "Inserimento richiesta"
+                        "description": "INSERIMENTO RICHIESTA"
                     })
         #gruppo=HelpderDB.sql_query_value(f"SELECT gruppo FROM user_sync_adiuto_utenti WHERE utentebixdata='{username}'","gruppo")
         #if gruppo:
