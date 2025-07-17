@@ -163,9 +163,9 @@ def script_update_wip_status(request):
                     record_wip.values['statowip'] = "Caricato"
                     record_wip.save()
 
-                    update_sql = "UPDATE A1047 SET F1092='Caricato' WHERE F1028=?"
-                    cursor.execute(update_sql, (barcode,))
-                    conn.commit()
+                    #update_sql = "UPDATE A1047 SET F1092='Caricato' WHERE F1028=?"
+                    #cursor.execute(update_sql, (barcode,))
+                    #conn.commit()
 
                     results.append(f"Barcode: {barcode}: FIDD trovato: {f_idd}, data caricamento: {data_caricamento}")
 
@@ -177,9 +177,9 @@ def script_update_wip_status(request):
                         record_wip.values['statowip'] = "Verificare"
                         record_wip.save()
 
-                        update_sql = "UPDATE A1047 SET F1092='Verificare' WHERE F1028=?"
-                        cursor.execute(update_sql, (barcode,))
-                        conn.commit()
+                        #update_sql = "UPDATE A1047 SET F1092='Verificare' WHERE F1028=?"
+                        #cursor.execute(update_sql, (barcode,))
+                        #conn.commit()
 
                         results.append(f"Barcode: {barcode}: Nessuna riga trovata in VA1014 per quel barcode ma lotto già caricato. Da verificare")
                     else:
