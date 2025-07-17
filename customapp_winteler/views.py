@@ -95,9 +95,11 @@ def sync_wipbarcode_bixdata_adiuto(request):
             wipbarcode=row['wipbarcode']
             lottobarcode=row['lottobarcode']    
             datascansione=row['datascansione']    
+            statowip=row['statowip']  
+            id=row['id']
             insert_sql = f"""
-            INSERT INTO t_wipbarcode (wipbarcode, lottobarcode, datascansione)
-            VALUES ('{wipbarcode}', '{lottobarcode}', '{datascansione}')
+            INSERT INTO t_wipbarcode (wipbarcode, lottobarcode, datascansione,id, statowip)
+            VALUES ('{wipbarcode}', '{lottobarcode}', '{datascansione}', {id}, '{statowip}')
             """
 
             # Esegui il merge
