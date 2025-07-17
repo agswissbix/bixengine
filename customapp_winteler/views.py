@@ -131,7 +131,7 @@ def script_update_wip_status(request):
         'PWD=Winteler,.-21;'
         # oppure: 'Trusted_Connection=yes;' se sei su Windows
     )
-    sql="SEleCT * FRom user_wipbarcode where deleted_='N' AND statowip='Barcodato'  LIMIT 10  "
+    sql="SEleCT * FRom user_wipbarcode where deleted_='N' AND statowip='Barcodato'  LIMIT 250  "
     records_list=HelpderDB.sql_query(sql)
 
     results = []
