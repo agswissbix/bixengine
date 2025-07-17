@@ -49,6 +49,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 from PIL import Image
+from django.db import transaction, connection
 
 
 
@@ -1532,8 +1533,30 @@ def save_record_fields(request):
         offerta_record.values['nrofferta'] = offerta_id
         offerta_record.save()
 
-    return JsonResponse({"success": True, "detail": "Campi del record salvati con successo", "recordid": record.recordid})
+    
 
+    #TODO
+    #CUSTOM ---UTENTE---TELEFONO AMICO
+    if tableid == 'utenti':
+        utente_record = UserRecord('utenti', recordid)
+
+        mutable_post = request.POST.copy()
+        
+        # Update the mutable copy
+        mutable_post['username'] = utente_record.values['nomeutente']
+        mutable_post['password'] = utente_record.values['password']
+        mutable_post['firstname'] = utente_record.values['nome']
+        #mutable_post['lastname'] = utente_record.fields['cognome']
+        #mutable_post['email'] = utente_record.fields['email']
+        
+        request.POST = mutable_post
+        
+        # Call save_newuser
+        result = save_newuser(request)
+        
+   
+
+    return JsonResponse({"success": True, "detail": "Campi del record salvati con successo", "recordid": record.recordid})
     
 def get_table_views(request):
     data = json.loads(request.body)
@@ -3458,3 +3481,117 @@ def get_form_fields(request):
                                                    
 
     return JsonResponse({"success": True, "fields": fields})
+
+
+#TODO
+#TEMP
+#CUSTOM TELEFONO AMICO
+
+@transaction.atomic
+def save_newuser(request):
+    """
+    Crea o aggiorna un utente Django e le relative tabelle ausiliarie.
+    Utilizza l'ORM solo per il modello User e SQL crudo parametrizzato per le altre.
+    La logica è resa robusta contro errori di duplicazione tramite UPSERT.
+    """
+    # --- 1. Raccolta e Validazione Dati ---
+    username = (request.POST.get("username") or "").lower()
+    firstname = request.POST.get("firstname")
+    password = request.POST.get("password")
+    lastname = request.POST.get("lastname", "")
+    email = request.POST.get("email", "")
+
+    if not all([username, firstname, password]):
+        return JsonResponse(
+            {
+                "success": False,
+                "error": "I campi username, firstname e password sono obbligatori",
+            },
+            status=400,
+        )
+
+    # --- 2. Verifica Esistenza Utente (usando l'ORM) ---
+    user = User.objects.filter(username=username).first()
+
+    if user:
+        # --- CASO: L'UTENTE ESISTE GIÀ (AGGIORNAMENTO) ---
+        user.first_name = firstname
+        user.last_name = lastname
+        user.email = email
+        if password:
+            user.set_password(password)
+        user.save()
+
+        with connection.cursor() as cur:
+            # Aggiorna la tabella sys_user
+            cur.execute(
+                """
+                UPDATE sys_user
+                   SET firstname = %s, lastname = %s, email = %s
+                 WHERE username = %s
+                """,
+                [firstname, lastname, email, username],
+            )
+            
+            # **FIX**: Assicura che il profilo esista (UPSERT per MySQL).
+            # Questo crea il profilo se manca (es. cancellato per errore)
+            # e non fa nulla se esiste già, evitando errori.
+            cur.execute(
+                """
+                INSERT INTO commonapp_userprofile (user_id, is_2fa_enabled)
+                VALUES (%s, 0)
+                ON DUPLICATE KEY UPDATE user_id = VALUES(user_id)
+                """,
+                [user.id]
+            )
+    else:
+        # --- CASO: L'UTENTE NON ESISTE (CREAZIONE) ---
+        user = User.objects.create_user(
+            username=username,
+            password=password,
+            first_name=firstname,
+            last_name=lastname,
+            email=email,
+        )
+        bixid = user.id  # FK verso auth_user
+
+        with connection.cursor() as cur:
+            # Calcola l'ID per sys_user (logica sconsigliata ma mantenuta)
+            cur.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM sys_user")
+            userid = cur.fetchone()[0]
+
+            # Inserisce in sys_user
+            cur.execute(
+                """
+                INSERT INTO sys_user (id, firstname, lastname, username, disabled, superuser, bixid)
+                VALUES (%s, %s, %s, %s, 'N', 'N', %s)
+                """,
+                [userid, firstname, lastname, username, bixid],
+            )
+
+            # **FIX**: Inserisce il profilo usando UPSERT.
+            # Questo previene l'errore di chiave duplicata se un segnale `post_save`
+            # ha già creato il record del profilo.
+            cur.execute(
+                """
+                INSERT INTO commonapp_userprofile (user_id, is_2fa_enabled)
+                VALUES (%s, 0)
+                ON DUPLICATE KEY UPDATE user_id = VALUES(user_id)
+                """,
+                [bixid],
+            )
+
+    return JsonResponse({"success": True})
+
+        
+#TODO
+#TEMP
+def dictfetchall(cursor):
+    "Return all rows from a cursor as a dict"
+    columns = [col[0] for col in cursor.description]
+    return [
+        dict(zip(columns, row))
+        for row in cursor.fetchall()
+    ]
+
+

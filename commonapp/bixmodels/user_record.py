@@ -321,6 +321,8 @@ class UserRecord:
             HelpderDB.sql_execute(sqlinsert)
             self.recordid=next_recordid
             self.save()
+        
+
 
     def get_linked_tables(self):
         sql=f"SELECT sys_table.id as tableid,sys_table.description  FROM sys_user_order LEFT JOIN sys_table ON sys_user_order.fieldid=sys_table.id  WHERE sys_user_order.tableid='{self.tableid}' AND typepreference='keylabel' AND userid={self.userid} order by fieldorder asc"
