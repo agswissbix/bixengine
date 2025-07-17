@@ -86,7 +86,7 @@ def sync_wipbarcode_bixdata_adiuto(request):
         conn.commit()
 
 
-        rows=HelpderDB.sql_query("SELECT wipbarcode, lottobarcode, datascansione FROM user_wipbarcode where deleted_='N'")
+        rows=HelpderDB.sql_query("SELECT * FROM user_wipbarcode where deleted_='N'")
 
 
 
