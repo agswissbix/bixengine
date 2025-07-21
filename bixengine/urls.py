@@ -12,7 +12,4 @@ urlpatterns = [
     path('customapp_winteler/', include('customapp_winteler.urls')),
     path('customapp_pitservice/', include('customapp_pitservice.urls')),
     path('customapp_belotti/', include('customapp_belotti.urls')),
-  
-    
-    
 ]

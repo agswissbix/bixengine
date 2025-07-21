@@ -50,6 +50,8 @@ import numpy as np
 from pathlib import Path
 from PIL import Image
 from django.db import transaction, connection
+from docxtpl import DocxTemplate
+
 
 
 
@@ -3594,4 +3596,75 @@ def dictfetchall(cursor):
         for row in cursor.fetchall()
     ]
 
+def download_trattativa(request):
+  
+    # Percorso al template Word
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    template_path = os.path.join(base_dir, 'templates', 'template.docx')
 
+    if not os.path.exists(template_path):
+        return HttpResponse("File non trovato", status=404)
+
+    # Dati fissi
+    dati_trattativa = {
+        "indirizzo": "Via Industria 1A, Taverne",
+        "azienda": "OpenAI Italia",
+        "titolo": "Implementazione AI",
+        "venditore": "Mario Rossi",
+        "data_chiusura_vendita": "2025-07-17",
+        "data_attuale": datetime.datetime.now().strftime("%d/%m/%Y"),
+    }
+
+    # Calcola il prezzo totale per ogni articolo
+
+    # Carica il template e fai il rendering
+    doc = DocxTemplate(template_path)
+    doc.render(dati_trattativa)
+
+    # Salva il documento in memoria
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+
+    response = HttpResponse(
+        buffer.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    )
+    response['Content-Disposition'] = 'attachment; filename="documento_trattativa_generato.docx"'
+    return response
+
+@csrf_exempt
+def trasferta_pdf(request):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+
+            context = {
+                "nome": data.get("nome", ""),
+                "cognome": data.get("cognome", ""),
+                "reparto": data.get("reparto", ""),
+                "data": data.get("data", ""),
+                "motivo_trasferta": data.get("motivo", ""),
+                "indirizzo_destinazione": data.get("indirizzo", ""),
+                "chilometri_totali": 100,
+                "altri_costi": data.get("altriCosti", ""),
+                "durata": data.get("durata", ""),
+            }
+
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            template_path = os.path.join(base_dir, 'templates', 'trasferta.docx')
+            doc = DocxTemplate(template_path)
+            doc.render(context)
+
+            doc_io = BytesIO()
+            doc.save(doc_io)
+            doc_io.seek(0)
+
+            response = HttpResponse(doc_io.read(), content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+            response['Content-Disposition'] = 'attachment; filename="trasferta_generata.docx"'
+            return response
+
+        except Exception as e:
+            return HttpResponse(f"Errore interno", status=500)
+
+    return HttpResponse("Metodo non consentito", status=405)

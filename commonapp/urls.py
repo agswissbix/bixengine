@@ -54,7 +54,8 @@ urlpatterns = [
     path('add_dashboard_block/', add_dashboard_block, name='add_dashboard_block'),
     path('save_form_data/', save_form_data, name='save_form_data'),
     path('get_form_fields/', get_form_fields, name='get_form_fields'),
-    
+    path('download_trattativa/', download_trattativa, name='download_trattativa'),
+    path('trasferta_pdf/', trasferta_pdf, name='trasferta_pdf'),
 ]
 
 
