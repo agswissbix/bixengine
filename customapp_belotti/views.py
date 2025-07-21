@@ -474,5 +474,13 @@ def sync_richieste_bixdataadiuto(request):
             pass
 
 def send_order(request):
-    return JsonResponse({"success": True})
-
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body.decode('utf-8'))
+            print("Dati ricevuti dal frontend:", data)  # <-- stampa in console
+            return JsonResponse({"success": True, "received": data})
+        except Exception as e:
+            print("Errore nella gestione della richiesta:", e)
+            return JsonResponse({"success": False, "error": str(e)}, status=400)
+    else:
+        return JsonResponse({"success": False, "error": "Metodo non consentito"}, status=405)
