@@ -478,7 +478,36 @@ def send_order(request):
         try:
             data = json.loads(request.body.decode('utf-8'))
             print("Dati ricevuti dal frontend:", data)  # <-- stampa in console
-            return JsonResponse({"success": True, "received": data})
+
+
+            formType = data.get('formType', "")
+            username = Helper.get_username(request)
+            userid = Helper.get_userid(request)
+            utenteadiuto=HelpderDB.sql_query_value(
+                f"SELECT utenteadiuto FROM user_sync_adiuto_utenti WHERE utentebixdata = '{username}'",
+                'utenteadiuto'
+            )   
+            record_richiesta=UserRecord('richieste')
+            record_richiesta.values['tiporichiesta']= formType
+            record_richiesta.values['data'] = datetime.now().strftime("%Y-%m-%d")
+            record_richiesta.values['stato'] = 'Richiesta inviata'
+            record_richiesta.values['utentebixdata'] = userid
+            record_richiesta.values['utenteadiuto'] = utenteadiuto
+            #record_richiesta.save()
+            print("Record richiesta salvato:", record_richiesta.values)
+
+            recordid_richiesta = record_richiesta.recordid
+
+            for order_row in data.get('items', []):
+                record_riga = UserRecord('richieste_righedettaglio')
+                record_riga.values['recordidrichieste_'] = recordid_richiesta
+                record_riga.values['codice'] = order_row.get('codice', "")
+                record_riga.values['prodotto'] = order_row.get('descrizione', "")
+                record_riga.values['quantita'] = order_row.get('quantita', 0)
+                record_riga.values['categoria'] = order_row.get('categoria', "")
+                print("Record riga creato:", record_riga.values)
+                #record_riga.save()
+
         except Exception as e:
             print("Errore nella gestione della richiesta:", e)
             return JsonResponse({"success": False, "error": str(e)}, status=400)
