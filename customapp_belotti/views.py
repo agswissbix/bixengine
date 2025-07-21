@@ -473,3 +473,6 @@ def sync_richieste_bixdataadiuto(request):
         except:
             pass
 
+def send_order(request):
+    return JsonResponse({"success": True})
+
