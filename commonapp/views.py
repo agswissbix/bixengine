@@ -146,7 +146,9 @@ def logout_view(request):
 
 @login_required_api  
 def user_info(request):
-    print("Function: user_info")    
+    print("Function: user_info")   
+    data = json.loads(request.body) 
+    page = data.get("page", "default")
     if request.user.is_authenticated:
         #Temp solution
         activeServer = HelpderDB.sql_query_row("SELECT value FROM sys_settings WHERE setting='cliente_id'")
@@ -155,14 +157,25 @@ def user_info(request):
             record_utente=HelpderDB.sql_query_row(sql)
             nome=record_utente['nome']
             ruolo=record_utente['ruolo']
-            return JsonResponse({
-                "isAuthenticated": True,
-                "username": request.user.username,
-                "name": nome,
-                "role": record_utente['ruolo'],
-                "chat": record_utente['tabchat'],
-                "telefono": record_utente['tabtelefono']
-            })
+            
+            if page=="/home" and ruolo != 'Amministratore':
+                return JsonResponse({
+                    "isAuthenticated": False,
+                    "username": request.user.username,
+                    "name": nome,
+                    "role": record_utente['ruolo'],
+                    "chat": record_utente['tabchat'],
+                    "telefono": record_utente['tabtelefono']
+                })
+            else:
+                return JsonResponse({
+                    "isAuthenticated": True,
+                    "username": request.user.username,
+                    "name": nome,
+                    "role": record_utente['ruolo'],
+                    "chat": record_utente['tabchat'],
+                    "telefono": record_utente['tabtelefono']
+                })
         else:
             return JsonResponse({
                 "isAuthenticated": True,
@@ -229,7 +242,7 @@ def get_sidebarmenu_items(request):
     if active_server == 'belotti':
         other_items.append({
                         "id": "LIFESTYLE",
-                        "description": "INSERIMENTO RICHIESTA"
+                        "description": "INSERIMENTO RICHIESTA ACQUISTI"
                     })
         #gruppo=HelpderDB.sql_query_value(f"SELECT gruppo FROM user_sync_adiuto_utenti WHERE utentebixdata='{username}'","gruppo")
         #if gruppo:

@@ -493,7 +493,7 @@ def send_order(request):
             record_richiesta.values['stato'] = 'Richiesta inviata'
             record_richiesta.values['utentebixdata'] = userid
             record_richiesta.values['utenteadiuto'] = utenteadiuto
-            #record_richiesta.save()
+            record_richiesta.save()
             print("Record richiesta salvato:", record_richiesta.values)
 
             recordid_richiesta = record_richiesta.recordid
@@ -501,12 +501,15 @@ def send_order(request):
             for order_row in data.get('items', []):
                 record_riga = UserRecord('richieste_righedettaglio')
                 record_riga.values['recordidrichieste_'] = recordid_richiesta
-                record_riga.values['codice'] = order_row.get('codice', "")
-                record_riga.values['prodotto'] = order_row.get('descrizione', "")
-                record_riga.values['quantita'] = order_row.get('quantita', 0)
+                record_riga.values['codice'] = order_row.get('id', "")
+                record_riga.values['prodotto'] = order_row.get('name', "")
+                record_riga.values['quantita'] = order_row.get('quantity', 0)
                 record_riga.values['categoria'] = order_row.get('categoria', "")
+                record_riga.values['diottria'] = order_row.get('diottria', "")
+                record_riga.values['colore'] = order_row.get('colore', "")
                 print("Record riga creato:", record_riga.values)
-                #record_riga.save()
+                record_riga.save()
+            return JsonResponse({"success": True, "recordid_richiesta": recordid_richiesta})
 
         except Exception as e:
             print("Errore nella gestione della richiesta:", e)
