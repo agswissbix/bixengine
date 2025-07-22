@@ -507,7 +507,6 @@ def send_order(request):
                 record_riga.values['categoria'] = order_row.get('categoria', "")
                 record_riga.values['diottria'] = order_row.get('diottria', "")
                 record_riga.values['colore'] = order_row.get('colore', "")
-                print("Record riga creato:", record_riga.values)
                 record_riga.save()
             return JsonResponse({"success": True, "recordid_richiesta": recordid_richiesta})
 
