@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     'customapp_winteler',
     'customapp_pitservice',
     'customapp_belotti',
+    'customapp_swissbix',
     'corsheaders',
 ]
 
