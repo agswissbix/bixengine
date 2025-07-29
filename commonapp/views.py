@@ -256,11 +256,12 @@ def get_sidebarmenu_items(request):
                 #        "description": formulario
                  #   })
 
-
+    userid = Helper.get_userid(request)
     response = {
         "menuItems": workspaces_tables,
         "otherItems": other_items,
-        "favoriteTables": favorite_tables
+        "favoriteTables": favorite_tables,
+        "userid": userid
     }
     return JsonResponse(response, safe=False)
 
@@ -3186,31 +3187,24 @@ def sign_timesheet(request):
 def update_user_profile_pic(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST method allowed'}, status=405)
+            
     
-    try:
-        # Remove this line - it causes the error
-        # data = json.loads(request.body)
-        
-        # Get data from FormData instead
-        user_id = request.POST.get('userid') 
-        image_file = request.FILES.get('image')
-        
-        if not user_id or not image_file:
-            return JsonResponse({'error': 'Missing user_id or image'}, status=400)
-        
-        print(f"User ID: {user_id}")
-        print(f"Image file: {image_file.name}, size: {image_file.size}")
-        
-        # Process the image file here
-        # Example: save to filesystem or convert to base64
-        # image_content = image_file.read()
-        # base64_image = base64.b64encode(image_content).decode('utf-8')
-        
-        return JsonResponse({'success': True})
-        
-    except Exception as e:
-        print(f"Error: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+    image_file = request.FILES.get('image')
+
+    query = HelpderDB.sql_query_row(f"SELECT sys_user_id FROM v_users WHERE id = {request.user.id}")
+    userid = query['sys_user_id'] 
+
+    # Save the file
+    from django.core.files.storage import default_storage
+    file_path = f"userProfilePic/{userid}.png"
+    #sostituisci l'immagine esistente se c'è
+    if default_storage.exists(file_path):
+        default_storage.delete(file_path)
+    default_storage.save(file_path, image_file)
+
+    return JsonResponse({'success': True})
+
+    
     
 
 @login_required(login_url='/login/')

@@ -1,24 +1,11 @@
+from datetime import datetime
 from django.http import JsonResponse
-from rest_framework.decorators import api_view, permission_classes, renderer_classes
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from rest_framework.renderers import JSONRenderer
-from django.shortcuts import render
-from django.views.decorators.csrf import ensure_csrf_cookie
+from django_q.models import Schedule, Task
+from django.db import connection
 from django.views.decorators.csrf import csrf_exempt
-import pdfkit
-from commonapp.bixmodels.user_record import *
-from commonapp.bixmodels.user_table import *
-from commonapp.bixmodels.helper_db import *
-from commonapp.helper import *
-import locale
-import re
-from docx import Document
-import os
-
 
 @csrf_exempt
-def script_test(request):
+def script_test():
     type = None
     result_status = 'success'
     result_values = []
