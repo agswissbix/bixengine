@@ -35,6 +35,7 @@ def monitor_services():
     result_status = 'success'
     result_value = {}
 
+    # Controllo processi Django
     for proc in psutil.process_iter(['name', 'cmdline', 'cwd']):
         try:
             cmdline = proc.info.get('cmdline')
@@ -44,12 +45,10 @@ def monitor_services():
                 cmdline_str = str(cmdline).lower() if cmdline else ""
 
             if 'manage.py' in cmdline_str or 'django' in cmdline_str:
-                # Prova a recuperare il nome della cartella di lavoro per indicare il progetto
                 cwd = proc.info.get('cwd')
                 if cwd:
                     service_name = os.path.basename(cwd)
                 else:
-                    # fallback a nome processo
                     service_name = proc.info.get('name', 'unknown')
 
                 result_value[service_name] = 'Running'
@@ -57,6 +56,20 @@ def monitor_services():
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             continue
 
+    # Controllo servizi MySQL (puoi aggiungere altri nomi a questa lista)
+    service_names = ['mysql', 'mysqld']
+    for service in service_names:
+        service_running = False
+        for proc in psutil.process_iter(['name']):
+            try:
+                if proc.info['name'] and service.lower() in proc.info['name'].lower():
+                    service_running = True
+                    break
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+        result_value[service] = 'Running' if service_running else 'Stopped'
+
+    # Fallback se non trova niente
     if not result_value:
         result_value = {
             'bixportal': 'Running',
