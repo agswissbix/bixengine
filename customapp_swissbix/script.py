@@ -30,7 +30,7 @@ def monitor_dates():
     return {"status": result_status, "value": result_value, "type": type}
 
 # ritorna lo stato dei servizi
-""" def monitor_services():
+def monitor_services():
     type = "services"
     result_status = 'success'
     result_value = {}
@@ -63,7 +63,7 @@ def monitor_dates():
             'adifeed': 'disabled',
         }
 
-    return {"status": result_status, "value": result_value, "type": type} """
+    return {"status": result_status, "value": result_value, "type": type}
 # ritorna conteggi di file in delle cartelle
 def monitor_folders():
     path = r"C:\Users\stagista\Documents\test file"
