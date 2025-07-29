@@ -2226,7 +2226,7 @@ def export_excel(request):
 
             records: List[UserRecord]
             conditions_list=list()
-            records=table.get_table_records_obj(viewid=viewid,searchTerm=searchTerm, conditions_list=conditions_list)
+            records=table.get_table_records_obj(viewid=viewid,searchTerm=searchTerm, conditions_list=conditions_list, limit=10000)
             counter=table.get_total_records_count()
             table_columns=table.get_results_columns()
             rows=[]
