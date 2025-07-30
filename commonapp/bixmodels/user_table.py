@@ -174,7 +174,7 @@ class UserTable:
         self._total_records_count = count_result[0]['total_count'] if count_result else 0
 
         if not limit:
-            limit=100
+            limit=400
         sql=f"SELECT {select_fields} {fromsql} where {conditions}  ORDER BY {orderby} LIMIT {limit} "
 
         records = HelpderDB.sql_query(sql)
