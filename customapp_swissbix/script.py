@@ -47,30 +47,32 @@ def monitor_dates():
 
 # ritorna lo stato dei servizi
 def monitor_services():
+    import psutil
+
     type = "services"
     result_status = 'success'
     result_value = {}
 
-    # Lista servizi da controllare
-    service_names = ['Tomcat9', 'bixportal', 'AdiFeed']
+    # Lista servizi da controllare - tutte minuscole per confronto uniforme
+    service_names = ['tomcat9', 'bixportal', 'adifeed']
 
-    # Controlla processi in esecuzione per i servizi specifici
     for service in service_names:
         service_running = False
-        for proc in psutil.process_iter(['name', 'cmdline', 'cwd']):
+        service_lower = service.lower()
+        for proc in psutil.process_iter(['name', 'cmdline']):
             try:
                 name = proc.info.get('name', '').lower()
                 cmdline = proc.info.get('cmdline', [])
                 cmdline_str = " ".join(cmdline).lower() if isinstance(cmdline, (list, tuple)) else str(cmdline).lower()
 
-                if service in name or service in cmdline_str:
+                if service_lower in name or service_lower in cmdline_str:
                     service_running = True
                     break
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
         result_value[service] = 'Running' if service_running else 'Disabled'
 
-    # Se ci sono servizi Disabled, invia il report via email
+    # Invia email se ci sono servizi disabilitati
     disabled_services = [srv for srv, status in result_value.items() if status.lower() == 'disabled']
     if disabled_services:
         destinatari = ["marks.iljins@samtrevano.ch"]  # Cambia con la tua lista destinatari
