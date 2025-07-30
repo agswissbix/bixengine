@@ -109,14 +109,29 @@ def salva_sys_monitoring(run_at, func, output_type, output, cliente_id):
 
 def get_distinct_values(cliente_id=None, tipo=None):
     with connection.cursor() as cursor:
-        cursor.execute("SELECT DISTINCT client_id FROM user_monitoring ORDER BY client_id")
+        # Recupero client_id
+        cursor.execute("""
+            SELECT DISTINCT client_id 
+            FROM user_monitoring 
+            ORDER BY client_id
+        """)
         cliente_ids = [row[0].capitalize() if row[0] else '' for row in cursor.fetchall()]
         
-        cursor.execute("SELECT DISTINCT tipo FROM user_monitoring ORDER BY tipo")
+        # Recupero tipi, escludendo 'no_output'
+        cursor.execute("""
+            SELECT DISTINCT tipo 
+            FROM user_monitoring 
+            WHERE LOWER(tipo) != 'no_output'
+            ORDER BY tipo
+        """)
         tipi = [row[0].capitalize() if row[0] else '' for row in cursor.fetchall()]
 
-        # Filtro dei parametri
-        query = "SELECT DISTINCT parametro FROM user_monitoring WHERE 1=1"
+        # Filtro dei parametri con esclusione di 'no_output'
+        query = """
+            SELECT DISTINCT parametro 
+            FROM user_monitoring 
+            WHERE LOWER(tipo) != 'no_output'
+        """
         params = []
         if cliente_id and cliente_id.lower() != 'all':
             query += " AND client_id = %s"
