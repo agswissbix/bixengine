@@ -39,9 +39,6 @@
             crossDomain: true,
             url: "{% url 'settings_table_usertables' %}",
             data: serialized_data,
-            headers: {
-                'X-CSRFToken': '{{ csrf_token }}'
-            },
             success: function (response) {
                 $("#settings_table_usertables").load('/loading/')
                 setTimeout(function () {
@@ -52,17 +49,20 @@
     }
 
     function newTable() {
-
-        $('.secondary-level').html('')
+        $('.secondary-level').html('');
+        window.alert("csrftoken: " + getCookie('csrftoken'));
 
         $.ajax({
             type: "POST",
             url: "{% url 'settings_table_newtable' %}",
             success: function (response) {
-                $("#settings_table_usertables").load('/loading/')
+                $("#settings_table_usertables").load('/loading/');
                 setTimeout(function () {
                     $("#settings_table_usertables").html(response);
                 }, 150);
+            },
+            error: function (xhr, status, error) {
+                console.error("Errore AJAX:", error);
             }
         });
     }
