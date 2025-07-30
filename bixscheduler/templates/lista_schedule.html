@@ -28,8 +28,9 @@
   <form method="post" action="{% url 'aggiungi_scheduler' %}" class="d-inline">
     {% csrf_token %}
     <button type="submit" class="btn" style="background-color:#074048; color:white; font-weight:600;">
-      Aggiungi Scheduler
+      Aggiungi Scheduler 
     </button>
+    {% url 'aggiungi_scheduler' %}
   </form>
 </div>
 
