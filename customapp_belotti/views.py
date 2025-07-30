@@ -284,6 +284,37 @@ def belotti_salva_formulario(request):
         status=status.HTTP_200_OK
     )
 
+def test_sync_fatture_sirioadiuto(request):
+    source_conn_str = (
+            f"DRIVER={{Pervasive ODBC Unicode Interface}};"
+            f"ServerName={os.environ.get('SIRIO_DB_SERVER')};"
+            f"DBQ={os.environ.get('SIRIO_DB_NAME')};"
+            f"UID={os.environ.get('SIRIO_DB_USER')};"
+        )
+    
+    try:
+        src_conn = pyodbc.connect(source_conn_str, timeout=5)
+        src_cursor = src_conn.cursor()
+
+        src_cursor.execute("SELECT TOP 1000 * FROM Documenti ORDER BY id_sirio DESC")
+        rows = src_cursor.fetchall()
+
+        return JsonResponse({'status': 'success', 'message': rows})
+           
+
+        return JsonResponse({'status': 'success', 'imported_rows': count})
+
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})
+
+    finally:
+        try:
+            src_cursor.close()
+            src_conn.close()
+        except:
+            pass
+    
+
 
 def sync_fatture_sirioadiuto(request):
     source_conn_str = (
