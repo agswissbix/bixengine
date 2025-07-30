@@ -52,12 +52,15 @@
     }
 
     function newTable() {
-
+        console.info("Token:", '{{ csrf_token }}');
         $('.secondary-level').html('')
 
         $.ajax({
             type: "POST",
             url: "{% url 'settings_table_newtable' %}",
+            data: {
+                'csrfmiddlewaretoken': '{{ csrf_token }}'
+            },
             success: function (response) {
                 $("#settings_table_usertables").load('/loading/')
                 setTimeout(function () {

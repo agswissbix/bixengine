@@ -7,6 +7,7 @@ from .businesslogic.models.record import *
 from .businesslogic.models.field_settings import *
 from django.contrib.auth.models import User
 from .helpers.helperdb import *
+from django.views.decorators.csrf import csrf_exempt
 
 
 @login_required(login_url='/login/')
@@ -602,7 +603,6 @@ def load_category_fields(request):
     hv = HelperView(request)
     hv.context['fields'] = fields
     return hv.render_template('admin_settings/category_fields.html')
-
 
 def settings_table_newtable(request):
     return render(request, 'admin_settings/table_settings/newtable.html')
