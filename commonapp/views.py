@@ -1750,7 +1750,8 @@ Cordiali saluti
     if type == 'emailGasolio':
         stabile_recordid=recordid
         stabile_record=UserRecord('stabile',stabile_recordid)
-        meseLettura='2025-06'
+        #TODO sistemare dinamico
+        meseLettura='2025-07'
         anno, mese = meseLettura.split('-')
 
         sql=f"SELECT * FROM user_contattostabile WHERE deleted_='N' AND recordidstabile_='{stabile_recordid}'"
@@ -1814,7 +1815,7 @@ def stampa_gasoli(request):
         recordid_stabile = data.get('recordid')
         #meseLettura=data.get('date')
         #TODO sistemare dinamico
-        meseLettura="2025 06-Giugno"
+        meseLettura="2025 07-Luglio"
         anno, mese = meseLettura.split(' ')
     script_dir = os.path.dirname(os.path.abspath(__file__))
     wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
