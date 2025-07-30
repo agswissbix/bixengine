@@ -1,25 +1,40 @@
-from datetime import datetime
+from datetime import date, datetime
 import os
 from django_q.models import Schedule, Task
 from django.db import connection
-import psutil
+import psutil, shutil
+from commonapp.bixmodels.user_record import UserRecord
 from commonapp.utils.email_sender import EmailSender
 
-def script_test():
-    type = None
-    result_status = 'success'
-    result_values = []
-    return {"status": result_status, "value": result_values, "type": type}
 
 # ritorna dei contatori (ad esempio: numero di stabili, numero di utenti, ecc.)
-def monitor_counters():
+def monitor_timesheet_daily_count():
     type = "counters"
-    result_status = 'success'
-    result_value = {
-        'stabili_totale': 100,
-        'stabili_giornata': 100,
+    result_status = "success"
+    result_value = {}
+
+    today = date.today().isoformat()  # formato 'YYYY-MM-DD'
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT COUNT(*) 
+                FROM user_timesheet 
+                WHERE CAST(date AS DATE) = %s
+            """, [today])
+
+            count = cursor.fetchone()[0]
+            result_value["user_timesheet_today"] = count
+
+    except Exception as e:
+        result_status = "error"
+        result_value["error"] = str(e)
+
+    return {
+        "status": result_status,
+        "value": result_value,
+        "type": type
     }
-    return {"status": result_status, "value": result_value, "type": type}
 
 # ritorna delle date
 def monitor_dates():
@@ -37,7 +52,7 @@ def monitor_services():
     result_value = {}
 
     # Lista servizi da controllare
-    service_names = ['mysql', 'bixengine', 'bixadmin', 'bixspento']
+    service_names = ['Tomcat9', 'bixportal', 'AdiFeed']
 
     # Controlla processi in esecuzione per i servizi specifici
     for service in service_names:
@@ -63,6 +78,60 @@ def monitor_services():
 
     return {"status": result_status, "value": result_value, "type": type}
 
+def move_files():
+    dispatcher_dir = r"C:\Adiuto\Dispatcher"
+    immission_dir = r"C:\Adiuto\Immission"
+    trash_bin_dir = os.path.join(immission_dir, "TrashBin")
+
+    type = "no_output"
+    result_status = "success"
+    result_value = {
+        "moved_files": [],
+        "moved_to_trash": []
+    }
+
+    if not os.path.exists(dispatcher_dir):
+        return {"status": "error", "value": {"error": f"Path dispatcher non trovato: {dispatcher_dir}"}, "type": type}
+    
+    if not os.path.exists(immission_dir):
+        return {"status": "error", "value": {"error": f"Path immission non trovato: {immission_dir}"}, "type": type}
+
+    try:
+        if not os.path.exists(trash_bin_dir):
+            os.makedirs(trash_bin_dir)
+
+        files = os.listdir(dispatcher_dir)
+
+        for file in files:
+            old_path = os.path.join(dispatcher_dir, file)
+            if not os.path.isfile(old_path):
+                continue  # ignora cartelle o altro
+
+            parts = file.split('_')
+            if len(parts) < 2:
+                new_path = os.path.join(trash_bin_dir, file)
+                shutil.move(old_path, new_path)
+                result_value["moved_to_trash"].append(file)
+                print(f"File '{file}' spostato in '{trash_bin_dir}'")
+                continue
+
+            folder_name = parts[0]
+            new_name = "_".join(parts[1:])
+            new_folder_path = os.path.join(immission_dir, folder_name)
+
+            if not os.path.exists(new_folder_path):
+                os.makedirs(new_folder_path)
+
+            new_file_path = os.path.join(new_folder_path, new_name)
+            shutil.move(old_path, new_file_path)
+            result_value["moved_files"].append({"file": file, "destination": new_file_path})
+            print(f"File '{file}' spostato in '{new_folder_path}' con il nuovo nome '{new_name}'.")
+
+    except Exception as e:
+        result_status = "error"
+        result_value = {"error": str(e)}
+
+    return {"status": result_status, "value": result_value, "type": type}
 
 def send_report(monitoring_result, destinatari):
     # monitoring_result = {"status": ..., "value": {...}, "type": ...}
@@ -92,10 +161,9 @@ def send_report(monitoring_result, destinatari):
     )
     return True
 
-
 # ritorna conteggi di file in delle cartelle
 def monitor_folders():
-    path = r"C:\Users\stagista\Documents\test file"
+    path = r"C:\Adiuto\Scansioni\originali"
     type = "folders"
     result_status = 'success'
     result_value = {}
@@ -110,6 +178,43 @@ def monitor_folders():
             if not folder_name:
                 folder_name = current_path
             result_value[folder_name] = len([f for f in files if os.path.isfile(os.path.join(current_path, f))])
+
+    except Exception as e:
+        result_status = "error"
+        result_value["error"] = str(e)
+
+    return {"status": result_status, "value": result_value, "type": type}
+
+def move_attachments_to_dispatcher():
+    type = "no_output"
+    result_status = "success"
+    result_value = {}
+
+    adiuto = 'C:\\Adiuto\\Dispatcher'
+    bixdata = 'C:\\xampp\\htdocs\\bixdata_view\\bixdata_view\\bixdata_app\\attachments'
+
+    try:
+        if not os.path.exists(adiuto):
+            os.makedirs(adiuto)
+
+        if not os.path.exists(bixdata):
+            result_status = "error"
+            result_value["error"] = f"Path sorgente non trovato: {bixdata}"
+            return {"status": result_status, "value": result_value, "type": type}
+
+        files = os.listdir(bixdata)
+        moved_files = []
+
+        for file in files:
+            source_file = os.path.join(bixdata, file)
+            destination_file = os.path.join(adiuto, file)
+
+            if os.path.isfile(source_file):
+                shutil.move(source_file, destination_file)
+                moved_files.append(file)
+
+        result_value["moved_files"] = moved_files
+        result_value["count"] = len(moved_files)
 
     except Exception as e:
         result_status = "error"

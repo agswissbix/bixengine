@@ -26,6 +26,7 @@
             </div>
             <div class="mb-3">
                 <label class="form-label d-block">Parametri</label>
+                <input type="text" class="form-control mb-2" id="param-search" placeholder="Cerca parametro..." oninput="filterParams()">
                 <div id="parametri-container"
                     style="max-height: 180px; overflow-y: auto; border: 1px solid #ced4da; border-radius: 0.25rem; padding: 10px;">
                     {% for p in parametri %}
@@ -39,6 +40,16 @@
                     {% endfor %}
                 </div>
             </div>
+            <div class="mb-3" id="filtro-temporale-container" style="display: none;">
+                <label class="form-label">Periodo</label>
+                <select id="filtro_temporale" class="form-select" onchange="sendFilters()">
+                    <option value="">Tutti</option>
+                    <option value="oggi">Oggi</option>
+                    <option value="settimana">Questa settimana</option>
+                    <option value="mese">Questo mese</option>
+                </select>
+            </div>
+
         </form>
     </div>
 
@@ -88,17 +99,23 @@
             .catch(error => console.error('Errore nel caricamento dei parametri:', error));
     }
 
-    function sendFilters() {
+function sendFilters() {
     const clienteId = document.getElementById('cliente_id').value;
     const tipo = document.getElementById('tipo').value;
     const selectedParams = Array.from(document.querySelectorAll('.parametro-checkbox:checked'))
         .map(cb => cb.value);
+    const filtroTemporaleElem = document.getElementById('filtro_temporale');
+    const filtroTemporale = filtroTemporaleElem ? filtroTemporaleElem.value : '';
 
     const params = new URLSearchParams({
         cliente_id: clienteId,
         tipo: tipo,
         parametro: selectedParams.join(','),
     });
+
+    if (['folders', 'counters'].includes(tipo.toLowerCase()) && filtroTemporale) {
+        params.append('periodo', filtroTemporale);
+    }
 
     fetch('/monitoring/?' + params.toString(), {
         method: 'GET',
@@ -277,8 +294,29 @@
             console.error('Errore:', error);
         });
 }
+function filterParams() {
+    const searchText = document.getElementById('param-search').value.toLowerCase();
+    const checkboxes = document.querySelectorAll('#parametri-container .form-check');
+
+    checkboxes.forEach(div => {
+        const label = div.querySelector('label').textContent.toLowerCase();
+        div.style.display = label.includes(searchText) ? 'block' : 'none';
+    });
+}
     document.addEventListener("DOMContentLoaded", function () {
         sendFilters();
     });
+    document.getElementById('tipo').addEventListener('change', function () {
+    const tipo = this.value.toLowerCase();
+    const filtroTemporaleContainer = document.getElementById('filtro-temporale-container');
+
+    if (['folders', 'counters'].includes(tipo)) {
+        filtroTemporaleContainer.style.display = 'block';
+    } else {
+        filtroTemporaleContainer.style.display = 'none';
+        // Resetta il filtro se non visibile
+        document.getElementById('filtro_temporale').value = '';
+    }
+});
 </script>
 {% endblock %}

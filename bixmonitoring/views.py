@@ -1,7 +1,7 @@
 from django.http import HttpResponse, JsonResponse
 import sys
 import importlib
-from datetime import datetime
+from datetime import datetime, timedelta
 from django.db import connection
 from django.shortcuts import redirect, render
 
@@ -13,6 +13,7 @@ def lista_monitoring(request):
     cliente_id = request.GET.get('cliente_id', 'all')
     tipo = request.GET.get('tipo', 'services')
     parametro = request.GET.get('parametro', 'all')
+    periodo = request.GET.get("periodo")
 
     if parametro != 'all':
         parametro = parametro.split(',')
@@ -26,7 +27,7 @@ def lista_monitoring(request):
             _, _, parametri = get_distinct_values(cliente_id, tipo)
             return JsonResponse({'parametri': parametri})
         else:
-            parametri = get_filtered_values(cliente_id, tipo, parametro)
+            parametri = get_filtered_values(cliente_id, tipo, parametro, periodo)
             data = {
                 'parametri': [{'nome': p[0], 'valore': p[1], 'data': p[2], 'ora': p[3]} for p in parametri],
                 'tipo': tipo,
@@ -108,14 +109,29 @@ def salva_sys_monitoring(run_at, func, output_type, output, cliente_id):
 
 def get_distinct_values(cliente_id=None, tipo=None):
     with connection.cursor() as cursor:
-        cursor.execute("SELECT DISTINCT client_id FROM user_monitoring ORDER BY client_id")
+        # Recupero client_id
+        cursor.execute("""
+            SELECT DISTINCT client_id 
+            FROM user_monitoring 
+            ORDER BY client_id
+        """)
         cliente_ids = [row[0].capitalize() if row[0] else '' for row in cursor.fetchall()]
         
-        cursor.execute("SELECT DISTINCT tipo FROM user_monitoring ORDER BY tipo")
+        # Recupero tipi, escludendo 'no_output'
+        cursor.execute("""
+            SELECT DISTINCT tipo 
+            FROM user_monitoring 
+            WHERE LOWER(tipo) != 'no_output'
+            ORDER BY tipo
+        """)
         tipi = [row[0].capitalize() if row[0] else '' for row in cursor.fetchall()]
 
-        # Filtro dei parametri
-        query = "SELECT DISTINCT parametro FROM user_monitoring WHERE 1=1"
+        # Filtro dei parametri con esclusione di 'no_output'
+        query = """
+            SELECT DISTINCT parametro 
+            FROM user_monitoring 
+            WHERE LOWER(tipo) != 'no_output'
+        """
         params = []
         if cliente_id and cliente_id.lower() != 'all':
             query += " AND client_id = %s"
@@ -130,8 +146,8 @@ def get_distinct_values(cliente_id=None, tipo=None):
 
     return cliente_ids, tipi, parametri
 
-def get_filtered_values(client_id, tipo, parametro):
-    # Normalizza parametro in lista di valori validi (non vuoti, non "all")
+def get_filtered_values(client_id, tipo, parametro, periodo=None):
+    # Normalizza parametro in lista di valori validi
     if isinstance(parametro, list):
         param_list = [p.strip() for p in parametro if p.strip() and p.strip().lower() != 'all']
     elif isinstance(parametro, str):
@@ -139,15 +155,23 @@ def get_filtered_values(client_id, tipo, parametro):
     else:
         param_list = []
 
+    # Calcola la data di inizio per il filtro temporale
+    data_inizio = None
+    today = datetime.today().date()
+
+    if periodo == 'oggi':
+        data_inizio = today
+    elif periodo == 'settimana':
+        data_inizio = today - timedelta(days=7)
+    elif periodo == 'mese':
+        data_inizio = today - timedelta(days=30)
+
     with connection.cursor() as cursor:
         tipo_lower = tipo.lower()
-        if tipo_lower in ['folders', 'counters']:
-            value_column = 'valore_num'
-        else:
-            value_column = 'valore_stringa'
+        value_column = 'valore_num' if tipo_lower in ['folders', 'counters'] else 'valore_stringa'
 
         if tipo_lower == 'services':
-            # Query con join per prendere solo il record più recente per parametro
+            # Solo il valore più recente per ogni parametro
             sql = f"""
             SELECT um.parametro, um.{value_column}, um.data, um.ora
             FROM user_monitoring um
@@ -159,13 +183,12 @@ def get_filtered_values(client_id, tipo, parametro):
                   {'' if not param_list else 'AND parametro IN %s'}
                 GROUP BY parametro
             ) latest ON um.parametro = latest.parametro 
-                      AND CONCAT(um.data, ' ', um.ora) = latest.max_datetime
+                     AND CONCAT(um.data, ' ', um.ora) = latest.max_datetime
             WHERE (%s = 'all' OR um.client_id = %s)
               AND (%s = 'all' OR um.tipo = %s)
               {'' if not param_list else 'AND um.parametro IN %s'}
             ORDER BY um.parametro
             """
-
             params = [client_id, client_id, tipo, tipo]
             if param_list:
                 params.append(tuple(param_list))
@@ -174,28 +197,25 @@ def get_filtered_values(client_id, tipo, parametro):
                 params.append(tuple(param_list))
 
         else:
-            # Per folders e counters (e altri tipi), query semplice con filtro IN se serve
+            # Query per folders, counters, ecc.
+            sql = f"""
+            SELECT parametro, {value_column}, data, ora 
+            FROM user_monitoring
+            WHERE (%s = 'all' OR client_id = %s)
+              AND (%s = 'all' OR tipo = %s)
+            """
+            params = [client_id, client_id, tipo, tipo]
+
             if param_list:
                 placeholders = ','.join(['%s'] * len(param_list))
-                sql = f"""
-                SELECT parametro, {value_column}, data, ora 
-                FROM user_monitoring
-                WHERE (%s = 'all' OR client_id = %s)
-                  AND (%s = 'all' OR tipo = %s)
-                  AND parametro IN ({placeholders})
-                ORDER BY data DESC
-                """
-                params = [client_id, client_id, tipo, tipo] + param_list
-            else:
-                # Se non ci sono parametri da filtrare, prendi tutto
-                sql = f"""
-                SELECT parametro, {value_column}, data, ora 
-                FROM user_monitoring
-                WHERE (%s = 'all' OR client_id = %s)
-                  AND (%s = 'all' OR tipo = %s)
-                ORDER BY data DESC
-                """
-                params = [client_id, client_id, tipo, tipo]
+                sql += f" AND parametro IN ({placeholders})"
+                params += param_list
+
+            if data_inizio:
+                sql += " AND data >= %s"
+                params.append(data_inizio)
+
+            sql += " ORDER BY data DESC"
 
         cursor.execute(sql, params)
         results = cursor.fetchall()

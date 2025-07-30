@@ -12,6 +12,7 @@
     <link rel="shortcut icon" type="image/jpg" href="{% static 'images/logos/logo_small_default.jpg' %}?v={{ date }}"/>
 
 
+
     <!--JQuery-->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
@@ -106,6 +107,28 @@
     <script src="https://cdn.jsdelivr.net/npm/zebra_datepicker@1.9.19/dist/zebra_datepicker.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/zebra_datepicker@1.9.19/dist/css/default/zebra_datepicker.min.css" rel="stylesheet">
 
+    <script>
+  function getCookie(name) {
+      let cookieValue = null;
+      if (document.cookie && document.cookie !== '') {
+          const cookies = document.cookie.split(';');
+          for (const cookie of cookies) {
+              const trimmed = cookie.trim();
+              if (trimmed.startsWith(name + '=')) {
+                  cookieValue = decodeURIComponent(trimmed.substring(name.length + 1));
+                  break;
+              }
+          }
+      }
+      return cookieValue;
+  }
+
+  const csrftoken = getCookie('csrftoken');
+
+  $.ajaxSetup({
+      headers: { 'X-CSRFToken': csrftoken }
+  });
+  </script>
 
 
 
@@ -121,7 +144,7 @@
             jsonString = JSON.stringify(jsonObject);
             return jsonString;
         }
-        
+
     </script>
 
 
