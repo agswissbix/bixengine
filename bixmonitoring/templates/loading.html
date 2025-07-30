@@ -1,0 +1,91 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <style type="text/css">
+        .cool-loader-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .cool-loader {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            animation: rotate 1.5s ease-in-out infinite;
+        }
+
+        .cool-loader:before,
+        .cool-loader:after {
+            content: '';
+            position: absolute;
+            border: 5px solid transparent;
+            border-radius: 50%;
+        }
+
+        .cool-loader:before {
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            animation: spin 1.5s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite;
+        }
+
+        .cool-loader:after {
+            top: 6px;
+            left: 6px;
+            right: 6px;
+            bottom: 6px;
+            animation: spin-reverse 1.5s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite;
+        }
+
+        .loader-image {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            max-width: 60%;
+            max-height: 60%;
+        }
+
+        @keyframes rotate {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(180deg);
+            }
+        }
+
+        @keyframes spin-reverse {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(-180deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+<div class="cool-loader-container">
+    <div class="cool-loader">
+        <img class="loader-image" src="{% static 'images/logos/logo_loading_' %}{{ theme }}.png" alt="Logo"/>
+    </div>
+</div>
+</body>
+
+</html>

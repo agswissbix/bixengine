@@ -1,0 +1,284 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block body %}
+
+<div class="d-flex flex-row h-100 w-100">
+    <!-- Riquadro sinistro -->
+    <div class="bg-white rounded-end-3 shadow p-4" style="width: 25%;">
+        <h2 class="mb-4">Filtri Monitoring</h2>
+        <form id="filterForm">
+            <div class="mb-3">
+                <label class="form-label">Cliente ID</label>
+                <select id="cliente_id" class="form-select" onchange="updateParametri(); sendFilters()">
+                    {% for c in cliente_ids %}
+                    <option value="{{ c }}">{{ c }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Tipo</label>
+                    <select id="tipo" class="form-select" onchange="updateParametri(); sendFilters()">
+                        {% for t in tipi %}
+                        <option value="{{ t }}" {% if t == "Services" %}selected{% endif %}>{{ t }}</option>
+                        {% endfor %}
+                    </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label d-block">Parametri</label>
+                <div id="parametri-container"
+                    style="max-height: 180px; overflow-y: auto; border: 1px solid #ced4da; border-radius: 0.25rem; padding: 10px;">
+                    {% for p in parametri %}
+                    <div class="form-check">
+                        <input class="form-check-input parametro-checkbox" type="checkbox" value="{{ p }}"
+                            id="parametro_{{ forloop.counter }}" onchange="sendFilters()">
+                        <label class="form-check-label" for="parametro_{{ forloop.counter }}">
+                            {{ p }}
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Riquadro destro -->
+    <div class="flex-fill bg-white rounded-start-3 shadow p-4 ms-3" id="results">
+        <h2 class="mb-4">Risultati</h2>
+        <p class="text-muted">Nessun contenuto disponibile.</p>
+    </div>
+</div>
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    function updateParametri() {
+        const clienteId = document.getElementById('cliente_id').value;
+        const tipo = document.getElementById('tipo').value;
+
+        const params = new URLSearchParams({
+            cliente_id: clienteId,
+            tipo: tipo,
+            only_params: 'true',
+        });
+
+        fetch('/monitoring/?' + params.toString(), {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById('parametri-container');
+                container.innerHTML = '';
+
+                data.parametri.forEach((p, i) => {
+                    const div = document.createElement('div');
+                    div.className = 'form-check';
+
+                    div.innerHTML = `
+                <input class="form-check-input parametro-checkbox" type="checkbox" value="${p}" id="parametro_${i}" onchange="sendFilters()">
+                <label class="form-check-label" for="parametro_${i}">${p}</label>
+            `;
+                    container.appendChild(div);
+                });
+            })
+            .catch(error => console.error('Errore nel caricamento dei parametri:', error));
+    }
+
+    function sendFilters() {
+    const clienteId = document.getElementById('cliente_id').value;
+    const tipo = document.getElementById('tipo').value;
+    const selectedParams = Array.from(document.querySelectorAll('.parametro-checkbox:checked'))
+        .map(cb => cb.value);
+
+    const params = new URLSearchParams({
+        cliente_id: clienteId,
+        tipo: tipo,
+        parametro: selectedParams.join(','),
+    });
+
+    fetch('/monitoring/?' + params.toString(), {
+        method: 'GET',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Dati ricevuti:', data);
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<h2 class="mb-4">Risultati</h2>';
+
+            const tipoLower = data.tipo ? data.tipo.toLowerCase() : '';
+
+            if (tipoLower === 'services' && data.parametri && data.parametri.length > 0) {
+                // --- gestione services ---
+                data.parametri.forEach(item => {
+                    const status = item.valore ? item.valore.toLowerCase() : '';
+                    const statusColor = status === 'running' ? 'green' : (status === 'disabled' ? 'red' : 'gray');
+
+                    const div = document.createElement('div');
+                    div.className = 'd-flex justify-content-between align-items-center border p-2 mb-2 rounded';
+                    div.innerHTML = `
+                        <span>${item.nome}</span>
+<span style="display:inline-block; width: 16px; height: 16px; border: 2px solid ${statusColor}; border-radius: 50%; position: relative;">
+  <span style="display: block; width: 8px; height: 8px; background-color: ${statusColor}; border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);"></span>
+</span>`;
+                    resultsDiv.appendChild(div);
+                });
+
+            } else if (['folders', 'counters'].includes(tipoLower) && data.parametri && data.parametri.length > 0) {
+                // --- gestione folders/counters: doppio grafico ---
+
+                // Canvas per line chart
+                const lineCanvas = document.createElement('canvas');
+                lineCanvas.id = 'lineChart';
+                lineCanvas.style.maxWidth = '1000px';
+                lineCanvas.style.maxHeight = '500px';
+                resultsDiv.appendChild(lineCanvas);
+
+                // Calcolo labels e datasets per il line chart
+                const dateTimeSet = new Set();
+                data.parametri.forEach(item => {
+                    const dtStr = `${item.data} ${item.ora}`;
+                    dateTimeSet.add(dtStr);
+                });
+                const labels = Array.from(dateTimeSet).sort();
+
+                const nomiSet = new Set(data.parametri.map(item => item.nome));
+                const nomi = Array.from(nomiSet);
+
+                const colors = [
+                    'rgba(75, 192, 192, 1)',
+                    'rgba(255, 99, 132, 1)',
+                    'rgba(54, 162, 235, 1)',
+                    'rgba(255, 206, 86, 1)',
+                    'rgba(153, 102, 255, 1)',
+                    'rgba(255, 159, 64, 1)'
+                ];
+
+                const datasets = nomi.map((nome, i) => {
+                    const valoriMap = {};
+                    data.parametri.forEach(item => {
+                        if (item.nome === nome) {
+                            const dtStr = `${item.data} ${item.ora}`;
+                            valoriMap[dtStr] = Number(item.valore);
+                        }
+                    });
+                    const dataArr = labels.map(dt => valoriMap.hasOwnProperty(dt) ? valoriMap[dt] : null);
+
+                    return {
+                        label: nome,
+                        data: dataArr,
+                        borderColor: colors[i % colors.length],
+                        // il primo è la trasparenza della linea e il secondo dell'area
+                        backgroundColor: colors[i % colors.length].replace('1)', '0.1)'),
+                        fill: true,
+                        // maggiore è, maggiore sarà arrotondamento
+                        tension: 0,
+                    };
+                });
+
+                const ctxLine = document.getElementById('lineChart').getContext('2d');
+                new Chart(ctxLine, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: datasets
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { position: 'top' },
+                            title: {
+                                display: true,
+                                text: 'Andamento dei valori'
+                            }
+                        },
+                        // rotazione data/ora
+                        scales: {
+                            y: { beginAtZero: true },
+                            x: {
+                                ticks: {
+                                    maxRotation: 90,
+                                    minRotation: 90
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Canvas per pie chart
+                const pieCanvas = document.createElement('canvas');
+                pieCanvas.id = 'pieChart';
+                pieCanvas.style.maxWidth = '500px';
+                pieCanvas.style.maxHeight = '500px';
+                pieCanvas.classList.add('mt-4');
+                resultsDiv.appendChild(pieCanvas);
+
+                // Calcolo valori più recenti per ogni parametro (nome)
+                const latestValues = {};
+                nomi.forEach(nome => {
+                    const filtered = data.parametri.filter(item => item.nome === nome);
+                    let latestItem = filtered.reduce((a, b) => {
+                        const aDate = new Date(a.data + 'T' + a.ora);
+                        const bDate = new Date(b.data + 'T' + b.ora);
+                        return bDate > aDate ? b : a;
+                    });
+                    latestValues[nome] = Number(latestItem.valore);
+                });
+
+                // Somma totale
+                const total = Object.values(latestValues).reduce((acc, v) => acc + v, 0);
+
+                // Dati per pie chart (percentuali)
+                const pieData = {
+                    labels: Object.keys(latestValues),
+                    datasets: [{
+                        data: Object.values(latestValues).map(v => v),
+                        backgroundColor: colors.slice(0, nomi.length).map(c => c.replace('1)', '1)')),
+                        // quanto si alza la "fetta" on hover
+                        hoverOffset: 10
+                    }]
+                };
+
+                const ctxPie = document.getElementById('pieChart').getContext('2d');
+                new Chart(ctxPie, {
+                    type: 'pie',
+                    data: pieData,
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    padding: 20 // aumenta lo spazio tra il chart e la legenda
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Grafico degli ultimi valori registrati'
+                            }
+                        },
+                        layout: {
+                            padding: {
+                                bottom: 20 // spinge tutto verso l'alto, aumentando lo spazio sotto
+                            }
+                        }
+                    }
+                });
+
+            } else {
+                resultsDiv.innerHTML += '<p class="text-muted">Nessun contenuto disponibile.</p>';
+            }
+        })
+        .catch(error => {
+            console.error('Errore:', error);
+        });
+}
+    document.addEventListener("DOMContentLoaded", function () {
+        sendFilters();
+    });
+</script>
+{% endblock %}
