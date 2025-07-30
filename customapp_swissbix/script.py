@@ -53,29 +53,31 @@ def monitor_services():
     result_status = 'success'
     result_value = {}
 
-    # Lista servizi da controllare - tutte minuscole per confronto uniforme
     service_names = ['tomcat9', 'bixportal', 'adifeed']
 
     for service in service_names:
         service_running = False
         service_lower = service.lower()
-        for proc in psutil.process_iter(['name', 'cmdline']):
+        for proc in psutil.process_iter(['name', 'cmdline', 'status']):
             try:
                 name = proc.info.get('name', '').lower()
                 cmdline = proc.info.get('cmdline', [])
                 cmdline_str = " ".join(cmdline).lower() if isinstance(cmdline, (list, tuple)) else str(cmdline).lower()
+                status = proc.info.get('status', '').lower()
 
-                if service_lower in name or service_lower in cmdline_str:
+                # Controlla se il processo contiene la stringa e che non sia zombie o stopped
+                if (service_lower in name or service_lower in cmdline_str) and status not in ('zombie', 'stopped', 'dead'):
                     service_running = True
                     break
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
+
         result_value[service] = 'Running' if service_running else 'Disabled'
 
-    # Invia email se ci sono servizi disabilitati
+    # Invio report se servizi disabilitati
     disabled_services = [srv for srv, status in result_value.items() if status.lower() == 'disabled']
     if disabled_services:
-        destinatari = ["marks.iljins@samtrevano.ch"]  # Cambia con la tua lista destinatari
+        destinatari = ["marks.iljins@samtrevano.ch"]
         send_report({"status": result_status, "value": result_value, "type": type}, destinatari)
 
     return {"status": result_status, "value": result_value, "type": type}
