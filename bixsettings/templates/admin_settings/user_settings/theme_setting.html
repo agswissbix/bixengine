@@ -1,0 +1,34 @@
+<script>
+    function save_theme() {
+        $.ajax({
+            type: "POST",
+            url: "{% url 'save_theme_setting' %}",
+            data: {
+                'userid': $('#select-theme').data('userid'),
+                'theme': $('#select-theme').val(),
+            },
+            success: function (data) {
+                swal({
+                    title: "Salvato",
+                    text: "Nuovo tema impostato",
+                    icon: "success",
+                    timer: 800,
+                    buttons: false,
+                });
+            }
+        })
+    }
+</script>
+
+<div>
+    <select id="select-theme" data-userid="{{user_theme.userid}}" class="form-control" id="category-select" name="category">
+        {% for theme in theme_list %}
+            {% if user_theme.value == theme %}
+                <option value="{{theme}}" selected>{{theme}}</option>
+            {% else %}
+                <option value="{{theme}}">{{theme}}</option>
+            {% endif %}
+        {% endfor %}
+    </select>
+    <button class="btn btn-primary float-end" onclick="save_theme()">Salva</button>
+</div>

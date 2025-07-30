@@ -1,0 +1,74 @@
+
+<br>
+<br>
+<div id="container_settings" style="height: 95%; overflow: scroll">
+    <button class="btn btn-primary float-end" id="save-settings-button" onclick="saveWorkspaceSettings()">Salva</button>
+    <div id="settings_block_usertables_settings" class="drag-elements-container" >
+        <div class="drag-item">
+            {% for workspace in workspaces %}
+                <div data-order="{{  forloop.counter0 }}" class="drag-item2" style=" margin-top: 3%" class="border border-primary p-2 ">
+                    <div>
+                        <span class="fw-bold">{{workspace.name}}</span>
+                        <input id="workspace-name" class="input-group-text bg-white border border-secondary"  value="{{workspace.name}}" style="width: 100%;">
+                        <input id="workspace-icon" class="input-group-text bg-white border border-secondary"  value="{{workspace.icon}}" style="width: 100%">
+                    </div>
+                    <div>
+                        <span class="settings_block_usertables_fieldid" hidden data-fieldid="{{ workspace.workspaceid }}"> {{workspace.workspaceid}}  </span>
+                    </div>
+                </div>
+            {% endfor %}
+        </input class="form-check-input">
+    </div>
+</div>
+
+
+<script>
+    (function() {
+
+
+        dragula([].slice.apply(document.querySelectorAll('.drag-item')), {
+            direction: 'vertical'
+        });
+    })();
+
+    function updateOrder() {
+        var fieldElements = $('.drag-item2');
+        fieldElements.each(function (index) {
+            $(this).attr('data-order', index + 1);
+        });
+    }
+
+    function saveWorkspaceSettings() {
+        updateOrder();
+        workspaces = [];
+        var fieldElements = $('.drag-item2');
+        fieldElements.each(function (index) {
+            var workspace = {
+                workspaceid: $(this).find('.settings_block_usertables_fieldid').attr('data-fieldid'),
+                name: $(this).find('#workspace-name').val(),
+                icon: $(this).find('#workspace-icon').val(),
+                order: $(this).attr('data-order'),
+            }
+            workspaces.push(workspace);
+        });
+        console.log(workspaces);
+
+        
+        $.ajax({
+            url: "{% url 'save_workspace_settings' %}",
+            type: 'POST',
+            data: {
+                'workspaces': JSON.stringify(workspaces),
+            },
+            success: function (data) {
+                swal({
+                    title: "Impostazioni salvate",
+                    text: "Le impostazioni sono state salvate correttamente",
+                    icon: "success",
+                    timer: 800,
+                    buttons: false,
+                })            
+            }
+        })
+    }
+</script>

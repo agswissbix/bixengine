@@ -1,0 +1,414 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block body %}
+
+<div style="overflow:scroll; height: 100%">
+
+    <div class="container text-center card card-body" style="margin: auto">
+        <h3>Nuova dashboard</h3>
+        {% csrf_token %}
+        <div class="container text-center card card-body" style="margin-top: 2%">
+            <h4>Nuova dashboard</h4>
+            <form method="post" action="{% url 'new_dashboard' %}" class="container text-center" style="float: left">
+                <label for="dashboard-name">Nome Dashboard</label>
+                <input type="text" name="dashboard-name">
+                <button style="float: right" type="submit" class="btn btn-primary">Salva</button>
+            </form>
+        </div>
+    </div>
+
+
+    <div class="container text-center card card-body" style="margin-top: 2%" style="float: left; height: 20%">
+        <h3>Aggiorna dashboard degli utenti</h3>
+        {% csrf_token %}
+        <div class="container text-center card card-body" style="margin-top: 2%; height: 100%; overflow:scroll ">
+            <form method="post" action="{% url 'save_users_dashboards' %}" class="container text-center" style="float: left">
+                {% for user in context.users %}
+                    <h4>{{ user.username }}</h4>
+                    {% for user_dashboard in context.dashboards %}
+                    
+                        {% if user_dashboard.visible == True %}
+                            {{ user_dashboard.name }}
+                            <input type="checkbox" name="{{ user_dashboard.name }}-{{ user.sys_user_id }}" value="{{ user_dashboard.id }}" checked>
+                        {% else %}
+                            {{ user_dashboard.name }}
+                            <input type="checkbox" name="{{ user_dashboard.name }}-{{ user.sys_user_id }}" value="{{ user_dashboard.id }}">
+                        {% endif %}
+                    {% endfor %}
+                {% endfor %}
+                <br>
+                <button style="float: right" type="submit" class="btn btn-primary">Salva</button>
+            </form>
+        </div>
+    </div>
+
+
+
+<div class="container text-center card card-body" style="margin-top: 2%">
+    <h4>Aggiungi dashboard block</h4>
+    <select id="table-select" class="form-select" aria-label="Default select example" name="tableid-form-block">
+        <option selected></option>
+            {% for table in context.tables %}
+                <option value="{{ table.id }}">{{ table.id }}</option>
+            {% endfor %}
+    </select>
+    <button style="width: 10%; float: right" class="btn btn-secondary" type="button" onclick="select_table()">Seleziona</button>
+
+    <form method="post" action="{% url 'new_chart_block' %}" class="container text-center" style="float: left">
+
+        <div class="row">
+            <div class="col-md-4 d-flex flex-column">
+                <h4>Nome blocco</h4>
+                <div class="flex-fill">
+                    <input name="block_name" style="width: 100%" type="text">
+                </div>
+            </div>
+
+
+            <div class="col-md-4 d-flex flex-column">
+                <h4>View name</h4>
+                <select class="form-select build-form" aria-label="Default select example" name="view_id">
+                    <option selected></option>
+                        {% for item in context.views|dictsort:"name" %}
+                            <option data-tableid="{{ item.tableid }}" value="{{ item.id }}">{{ item.name }}
+                                - {{ item.tableid }}</option>
+                        {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-4 d-flex flex-column">
+                <h4>Report name</h4>
+                <select class="form-select build-form" aria-label="Default select example" name="report_id">
+                    <option selected></option>
+                        {% for item in context.reports|dictsort:"name" %}
+                            <option data-tableid="{{ item.tableid }}" value="{{ item.id }}">{{ item.name }}
+                                - {{ item.tableid }}</option>
+                        {% endfor %}
+                </select>
+            </div>
+
+
+        </div>
+
+        <button style="float: right" type="submit" class="btn btn-primary">Salva</button>
+
+    </form>
+</div>
+
+
+<div class="container text-center card card-body" style="margin-top: 2%">
+
+    <h4>Nuovo Report</h4>
+
+    <form method="post" action="{% url 'new_report' %}" class="container text-center" style="float: left">
+
+        <div class="row">
+
+            <div class="col-md-4 d-flex flex-column">
+                <h4>Tableid</h4>
+                <select class="form-select" id="table-select-report" aria-label="Default select example" name="tableid">
+                    <option selected></option>
+                    {% for table in context.tables %}
+                        <option value="{{ table.id }}">{{ table.id }}</option>
+                    {% endfor %}
+                </select>
+                <button class="btn btn-secondary" type="button" onclick="select_table_report()">Seleziona</button>
+            </div>
+
+
+            <div class="col-md-4 d-flex flex-column">
+                <h4>Nome report</h4>
+                <div class="flex-fill">
+                    <input style="width: 100%" type="text" name="report_name">
+                </div>
+            </div>
+
+            <div class="col-md-4 d-flex flex-column">
+                <h4>Fieldid</h4>
+                <select class="form-select build-form-report" aria-label="Default select example" name="fieldid">
+                    <option selected></option>
+                    {% for field in context.fields|dictsort:"fieldid" %}
+                        <option data-tableid="{{ field.tableid }}" value="{{ field.fieldid }}">{{ field.fieldid }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+
+            <div class="col-md-4 d-flex flex-column">
+                <h4>Operation</h4>
+                <select class="form-select" aria-label="Default select example" name="operation">
+                    <option value="somma">sum</option>
+                    <option value="media">avg</option>
+                    <option value="conteggio">count</option>
+                </select>
+            </div>
+
+
+            <div class="col-md-4 d-flex flex-column">
+                <h4>Layout</h4>
+                <select class="form-select" aria-label="Default select example" name="layout">
+                    <option value="barchart">column</option>
+                    <option value="linechart">line</option>
+                    <option value="piechart">pie</option>
+                    <option value="table">table</option>
+                </select>
+            </div>
+
+
+            <div class="col-md-4 d-flex flex-column">
+                <h4>Group by</h4>
+                <div class="flex-fill">
+                    <input style="width: 100%" type="text" name="groupby">
+                </div>
+            </div>
+
+
+        </div>
+
+    <button style="float: right" type="submit" class="btn btn-primary">Salva</button>
+    </form>
+
+
+</div>
+
+
+<div class="container text-center card card-body" style="margin-top: 2%">
+
+    <h4>Nuova View </h4>
+
+    <form method="post" action="{% url 'new_view' %}" class="container text-center" style="float: left">
+
+        <div class="row">
+
+            <div class="col-md-4 d-flex flex-column">
+                <h4>Tableid</h4>
+                <select class="form-select" id="table-select-report" aria-label="Default select example" name="tableid">
+                    <option selected></option>
+                    {% for table in context.tables %}
+                        <option value="{{ table.id }}">{{ table.id }}</option>
+                    {% endfor %}
+                </select>
+                <button class="btn btn-secondary" type="button" onclick="select_table_report()">Seleziona</button>
+            </div>
+
+
+            <div class="col-md-4 d-flex flex-column">
+                <h4>Nome view</h4>
+                <div class="flex-fill">
+                    <input style="width: 100%" type="text" name="view_name">
+                </div>
+            </div>
+
+
+
+
+            <div class="col-md-4 d-flex flex-column">
+                <h4>Query conditions</h4>
+                <div class="flex-fill">
+                    <textarea style="width: 100%"  name="query_conditions"></textarea>
+                </div>
+            </div>
+
+
+        </div>
+
+    <button style="float: right" type="submit" class="btn btn-primary">Salva</button>
+    </form>
+
+
+</div>
+
+
+
+<div class="container text-center card card-body" style="margin-top: 2%; margin-bottom: 5%">
+
+    <ul class="nav nav-pills nav-fill">
+      <li class="nav-item">
+        <a class="nav-link active" aria-current="page" href="#">Active</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link"aria-current="page" href="#">Much longer nav link</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="#">Link</a>
+      </li>
+    </ul>
+
+    <h4>Modifica dashboards </h4>
+
+        <div class="row" id="edit-dashboards">
+
+                <h4>Tableid</h4>
+
+<table id="dashboardTable">
+    <thead>
+        {% for field in context.dashboards.0 %}
+            <th>{{ field }}</th>
+        {% endfor %}
+        <th>Edit</th>
+        <th>Delete</th>
+    </thead>
+    {% for dashboard in context.dashboards %}
+        <tr data-action="">
+            <div class="dashboardrow">
+                {% for key, value in dashboard.items %}
+                    <td>
+                        <input class="dashboard-values" disabled value="{{ value }}" id="{{ key }}" name="{{ key }}">
+                    </td>
+                {% endfor %}
+                <td>
+                    <button class="btn btn-secondary edit-btn">
+                        <span class="material-symbols-outlined">
+                            edit
+                        </span>
+                    </button>
+                </td>
+                <td>
+                    <button class="btn btn-danger delete-btn">
+                        <span class="material-symbols-outlined">
+                            delete
+                        </span>
+                    </button>
+                </td>
+            </div>
+        </tr>
+    {% endfor %}
+</table>
+<button class="btn btn-success" style="width: 5%; margin: auto;" id="addRowButton">
+    <span class="material-symbols-outlined">
+        add
+    </span>
+</button>
+
+
+
+    <button style="float: right; width: 10%" class="btn btn-primary" onclick="save_dashboard_table()">Salva</button>
+
+</div>
+
+
+
+</div>
+
+
+<script>
+
+    function save_dashboard_table() {
+        dashboard_rows = []
+
+
+       $('#dashboardTable tr:has(td)').each(function() {
+            if ($(this).attr('data-action') != '') {
+                console.info($('#dashboardTable tr').val())
+                row_values = []
+                $(this).find('.dashboard-values').each(function () {
+                    row_values.push({name: this.id, value: this.value});
+                });
+                dashboard_rows.push({action: $(this).attr('data-action'), values: row_values});
+            }
+        })
+
+        console.info(dashboard_rows)
+
+        $.ajax({
+            type: "POST",
+            crossDomain: true,
+            url: "{% url 'save_dashboard_table' %}",
+            data: {
+                'rows': JSON.stringify(dashboard_rows),
+            },
+            success: function (response) {
+                 swal({
+                    title: "Dashboard aggiornate",
+                    text: "Hai modificato la tabella delle dashboard con successo",
+                    icon: "success",
+                    timer: 800,
+                    buttons: false,
+                })
+            },
+
+
+
+            error: function (response) {
+
+            }
+        });
+
+    }
+
+    $(document).ready(function() {
+    // Attach click event to each edit button
+    $('.edit-btn').click(function() {
+        var row = $(this).closest('tr'); // Find the parent row of the clicked button
+        $(row).attr('data-action', 'edit')
+
+        // Access input fields within this row
+        row.find('input').each(function() {
+           $(this).prop('disabled', false);
+        });
+
+        // You can also identify the row being edited by using its index or any other unique identifier
+        var rowIndex = row.index();
+        console.log('Editing row at index:', rowIndex);
+    });
+
+
+    $('.delete-btn').click(function() {
+        var row = $(this).closest('tr'); // Find the parent row of the clicked button
+        $(row).attr('data-action', 'delete')
+        $(row).css('background-color', '#f27d74')
+    });
+
+        // Function to handle "Add" button click
+    $('#addRowButton').click(function() {
+        var newRow = '<tr data-action="add"><div class="dashboardrow">';
+        // Add input fields for each column
+        {% for field in context.dashboards.0 %}
+            newRow += '<td><input class="dashboard-values" value="" id="{{ field }}" name="{{ field }}"></td>';
+        {% endfor %}
+        newRow += '';
+
+
+
+        // Append the new row to the table
+        $('#dashboardTable tbody').append(newRow);
+
+    });
+
+});
+
+
+
+
+
+    function select_table_report() {
+        var selected_table = $('#table-select-report').val()
+        $('.build-form-report').each(function () {
+            $(this).children().each(function () {
+                if ($(this).data('tableid') == selected_table) {
+                    $(this).show()
+                } else {
+                    $(this).hide()
+                }
+            })
+        })
+    }
+
+
+    function select_table() {
+        var selected_table = $('#table-select').val()
+        $('.build-form').each(function () {
+            $(this).children().each(function () {
+                if ($(this).data('tableid') == selected_table) {
+                    $(this).show()
+                } else {
+                    $(this).hide()
+                }
+            })
+        })
+    }
+</script>
+
+
+
+{% endblock %}

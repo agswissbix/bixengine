@@ -1,0 +1,457 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block body %}
+
+<style>
+    .table-button {
+        width: 20%;
+        text-align: left;
+        margin-bottom: 5px;
+    }
+
+    .fields-button {
+        width: 100%;
+        margin-bottom: 5px;
+    }
+</style>
+
+<script>
+
+    function hideSettings() {
+        var els = document.querySelectorAll('.visible');
+        els.forEach(function (el) {
+            el.classList.remove('visible');
+            el.html('');
+            //el.classList.add('hidden');
+        });
+    } 
+
+
+    function getUserTablesList(userid) {
+
+        $('.secondary-level').html('')
+
+
+        var serialized_data = [];
+        serialized_data.push({name: 'userid', value: userid});
+        $.ajax({
+            type: "POST",
+            crossDomain: true,
+            url: "{% url 'settings_table_usertables' %}",
+            data: serialized_data,
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            success: function (response) {
+                $("#settings_table_usertables").load('/loading/')
+                setTimeout(function () {
+                    $("#settings_table_usertables").html(response);
+                }, 150);
+            }
+        });
+    }
+
+    function newTable() {
+
+        $('.secondary-level').html('')
+
+        $.ajax({
+            type: "POST",
+            url: "{% url 'settings_table_newtable' %}",
+            success: function (response) {
+                $("#settings_table_usertables").load('/loading/')
+                setTimeout(function () {
+                    $("#settings_table_usertables").html(response);
+                }, 150);
+            }
+        });
+    }
+
+    function saveTableSettings(el) {
+
+        updateOrder();
+
+        var serialized_data = []
+        var userid = $('#user_username').attr('data-userid');
+        var orderArray = [];
+
+        $('.drag-item').each(function () {
+
+            var workspace = $(this).attr('data-workspace');
+
+
+            var tables = [];
+
+
+            $(this).find('.drag-item2').each(function () {
+                if ($(this).find('.checkbox').is(':checked')) {
+                    var tableid = $(this).attr('data-tableid');
+                    tables.push(tableid);
+                }
+            });
+            orderArray.push({workspace: workspace, tables: tables});
+        });
+
+        orderArray = JSON.stringify(orderArray);
+        console.info(orderArray)
+        serialized_data.push({name: 'tables', value: orderArray});
+        $.ajax({
+            type: "POST",
+            url: "{% url 'settings_table_usertables_save' %}",
+            data: {
+                'tables': orderArray,
+                'userid': userid
+            },
+            success: function (response) {
+                swal({
+                    title: "Impostazioni salvate",
+                    text: "Le impostazioni sono state salvate correttamente",
+                    icon: "success",
+                    timer: 800,
+                    buttons: false,
+                })
+                $("#table_options").html(response);
+            },
+            error: function () {
+            }
+        });
+    }
+
+    function setFieldsOrder(fields_type) {
+
+
+        var tableid = $('#table_settings_menu').attr('data-tableid');
+        var userid = $('#user_username').attr('data-userid');
+
+        $('#user_username').attr('data-fields_type', fields_type);
+
+
+        $.ajax({
+            type: "POST",
+            url: "{% url 'settings_table_tablefields' %}",
+            data: {tableid: tableid, userid: userid, fields_type: fields_type},
+            success: function (response) {
+                $("#settings_col4").css('display', 'block');
+
+                $("#settings_table_fields_settings").load('/loading/')
+
+                setTimeout(function () {
+                    $("#settings_table_fields_settings").html(response);
+                }, 150);
+
+            },
+            error: function () {
+            }
+        });
+    }
+
+    function setLinkedOrder() {
+
+        var tableid = $('#table_settings_menu').attr('data-tableid');
+        var userid = $('#user_username').attr('data-userid');
+
+
+        $.ajax({
+            type: "POST",
+            url: "{% url 'settings_table_linkedtables' %}",
+            data: {tableid: tableid, userid: userid},
+            success: function (response) {
+                $("#settings_col4").css('display', 'block');
+
+                $("#settings_table_fields_settings").load('/loading/')
+
+                setTimeout(function () {
+                    $("#settings_table_fields_settings").html(response);
+                }, 150);
+
+            },
+            error: function () {
+            }
+        });
+    }
+
+    function setFieldsOrderSave() {
+        updateOrder()
+        var orderArray = []
+
+
+
+        var userid = $('#user_username').attr('data-userid');
+        var tableid = $('#table_settings_menu').attr('data-tableid');
+        var fields_type = $('#user_username').attr('data-fields_type');
+
+        $('#settings_block_usertables_settings').find('.drag-item2').each(function () {
+            if ($(this).find('.checkbox').is(':checked')) {
+                var fieldid = $(this).find('.settings_block_usertables_fieldid').attr('data-fieldid');
+                orderArray.push(fieldid);
+            }
+        });
+
+       if ($('#linked_columns_select').length) {
+            master_tableid = $('#linked_columns_select').val();
+        } else {
+            master_tableid = null;
+       }
+
+
+        orderArray = JSON.stringify(orderArray);
+        console.info(orderArray)
+
+        $.ajax({
+            type: "POST",
+            url: "{% url 'settings_table_tablefields_save' %}",
+            data: {
+                'orderArray': orderArray,
+                'userid': userid,
+                'tableid': tableid,
+                'fields_type': fields_type,
+                'master_tableid': master_tableid
+            },
+            success: function (response) {
+                swal({
+                    title: "Impostazioni salvate",
+                    text: "Le impostazioni sono state salvate correttamente",
+                    icon: "success",
+                    timer: 800,
+                    buttons: false,
+                })
+            },
+            error: function () {
+            }
+        });
+    }
+
+    function setLinkedOrderSave() {
+        updateOrder()
+        var orderArray = []
+
+
+
+        var userid = $('#user_username').attr('data-userid');
+        var tableid = $('#table_settings_menu').attr('data-tableid');
+
+        $('#settings_block_usertables_settings').find('.drag-item2').each(function () {
+            if ($(this).find('.checkbox').is(':checked')) {
+                var fieldid = $(this).find('.settings_block_usertables_fieldid').attr('data-fieldid');
+                orderArray.push(fieldid);
+            }
+        });
+
+
+
+        orderArray = JSON.stringify(orderArray);
+        console.info(orderArray)
+
+        $.ajax({
+            type: "POST",
+            url: "{% url 'settings_table_linkedtables_save' %}",
+            data: {
+                'orderArray': orderArray,
+                'userid': userid,
+                'tableid': tableid,
+            },
+            success: function (response) {
+                swal({
+                    title: "Impostazioni salvate",
+                    text: "Le impostazioni sono state salvate correttamente",
+                    icon: "success",
+                    timer: 800,
+                    buttons: false,
+                })
+            },
+            error: function () {
+            }
+        });
+    }
+
+    function setKanbanFields() {
+
+        var tableid = $('#table_settings_menu').attr('data-tableid');
+        var userid = $('#user_username').attr('data-userid');
+
+        //$('#user_username').attr('data-fields_type', fields_type);
+
+
+        $.ajax({
+            type: "POST",
+            url: "{% url 'settings_table_kanbanfields' %}",
+            data: {tableid: tableid, userid: userid},
+            success: function (response) {
+                $("#settings_col4").css('display', 'block');
+
+                $("#settings_table_fields_settings").load('/loading/')
+
+                setTimeout(function () {
+                    $("#settings_table_fields_settings").html(response);
+                }, 150);
+
+            },
+            error: function () {
+            }
+        });
+
+    }
+
+    function setColorTableButton(el) {
+        var els = document.querySelectorAll('.table-button');
+        els.forEach(function (el) {
+            el.style.backgroundColor = '#6c757d';
+        });
+        el.style.backgroundColor = '#3b3c3e';
+
+    }
+
+    var els = document.querySelectorAll('.table-button');
+    els.forEach(function (el) {
+        el.addEventListener('click', function () {
+            setColorTableButton(el);
+        });
+    });
+
+
+    function tableSettingsSettings() {
+        var tableid = $('#table_settings_menu').attr('data-tableid');
+        $.ajax({
+            type: "POST",
+            url: "{% url 'settings_table_settings' %}",
+            data: {
+                'tableid': tableid
+            },
+            success: function (response) {
+                $('#settings_table_fields_settings').load('/loading/')
+                setTimeout(function () {
+                    $('#settings_table_fields_settings').html(response)
+                }, 100);
+            },
+        });
+    }
+    
+
+    function fieldsSettingsSettings() {
+
+        var tableid = $('#table_settings_menu').attr('data-tableid');
+        var userid = $('#user_username').attr('data-userid');
+
+        $.ajax({
+            type: "POST",
+            url: "{% url 'settings_table_fields' %}",
+            data: {
+                'tableid': tableid,
+                'userid': userid,
+            },
+            success: function (response) {
+
+                $("#settings_table_fields_settings").load('/loading/')
+
+                setTimeout(function () {
+                    $("#settings_table_fields_settings").html(response);
+                }, 150);
+            },
+        })
+    }
+
+
+
+    function tableColumnLinked() {
+
+        var userid = $('#user_username').attr('data-userid');
+        var tableid = $('#table_settings_menu').attr('data-tableid');
+
+
+        $.ajax({
+            type: "POST",
+            data: {
+                'userid': userid,
+                'tableid': tableid,
+            },
+            url: "{% url 'settings_table_columnlinked' %}",
+            success: function (response) {
+                $("#settings_col4").css('display', 'block');
+
+                $("#results-column-container").load('/loading/')
+
+                setTimeout(function () {
+                    $("#results-column-container").html(response);
+                }, 150);
+
+            },
+            error: function (response) {
+            }
+        });
+    }
+
+    function tableColumnLinkedSave() {
+        $.ajax({
+            type: "POST",
+            url: "{% url 'settings_table_columnlinked_save' %}",
+            success: function (response) {
+                alert('ok')
+            },
+            error: function () {
+            }
+        });
+    }
+
+    function getWorkspaces() {
+        $.ajax({
+            type: "POST",
+            url: "{% url 'get_workspaces' %}",
+            success: function (response) {
+                $("#settings_table_usertables").load('/loading/')
+                setTimeout(function () {
+                    $("#settings_table_usertables").html(response);
+                }, 150);
+            }   
+        })
+    }
+
+</script>
+
+<div id="settings_table" style="height: 100%; width: 100%; overflow-x: auto; overflow-y: hidden;">
+    <div style="width: 200%; height: 100%;">
+
+    <div id="settings_table_users" style="width: 10%;float: left;">
+        Utenti <br/>
+        <select class="form-control" id="user_select" onchange="getUserTablesList(this.value); $('#user_username').attr('data-userid', this.value)">
+            <option value="0">Seleziona un utente</option>
+            {% for user in users %}
+                <option value="{{ user.id }}">{{ user.username }}</option>
+            {% endfor %}
+        </select>
+        <!--
+        {% for user in users %}
+
+            <button class="btn btn-secondary table-button "
+                    onclick="getUserTablesList('{{ user.id }}'); $('#user_username').attr('data-userid', '{{ user.id }}')">{{ user.username }}</button>
+            <br>
+        {% endfor %}
+        -->
+        <input type="text" hidden="true" disabled id="user_username" value="">
+        <br>
+        <button class="btn btn-primary" onclick="newTable()">Nuova tabella</button>
+        <br>
+        <br>
+        <button class="btn btn-secondary" onclick="getWorkspaces()">Impostazioni workspaces</button>
+
+
+    </div>
+    <div id="settings_table_usertables" style="width: 20%;float: left; height: 100%; margin-left: 1%">
+
+    </div>
+
+    <div id="table_settings_menu" class="secondary-level" style="width: 10%; height: 15%; float: left; margin-left: 1%;">
+
+    </div> 
+
+        <input type="hidden" id="selected-field-block">
+
+    <div id="settings_table_fields_settings" class="secondary-level third-level" style="width: 15%; height: 80%; float: left; margin-left: 1%;">
+    </div>
+
+    <div id="fields_table_settings" class="secondary-level third-level" style="width: 15%; height: 90%; float: left; margin-left: 1%; overflow:scroll">
+
+    </div>
+</div>
+</div>
+
+{% endblock %}

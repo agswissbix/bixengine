@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block body %}
+
+<script>
+    function newUser() {
+        $.ajax({
+            type: "POST",
+            url: "{% url 'settings_user_newuser' %}",
+            success: function (response) {
+                $("#container-users-2").load('/loading/')
+                setTimeout(function () {
+                    $("#container-users-2").html(response);
+                }, 150);
+            }
+        });
+    }
+
+    function newGroup() {
+        $.ajax({
+            type: "POST",
+            url: "{% url 'settings_user_newgroup' %}",
+            success: function (response) {
+                $("#container-users-2").load('/loading/')
+                setTimeout(function () {
+                    $("#container-users-2").html(response);
+                }, 150);
+            }
+        });
+    }
+
+    function getGroupSettings(groupusername) {
+        console.info(groupusername)
+        $.ajax({
+            type: "POST",
+            url: "{% url 'get_group_settings' %}",
+            data: {
+                'groupusername': groupusername
+            },
+            success: function (response) {
+                $("#container-users-2").load('/loading/')
+                setTimeout(function () {
+                    $("#container-users-2").html(response);
+                }, 150);
+            }
+        });
+    }
+
+    function getUserSettings(userid) {
+        $.ajax({
+            type: "POST",
+            url: "{% url 'get_user_settings_admin' %}",
+            data:{
+                'userid': userid
+            },
+            success: function (response) {
+                $("#container-users-2").load('/loading/')
+                setTimeout(function () {
+                    console.info(response)
+                    $("#container-users-2").html(response);
+                }, 400);
+            }
+        });
+    }
+
+</script>
+
+<div id="user-settings-container" class="container-fluid" style="height: 100%">
+    <div class="row" style="height: 100%">
+        <div id="users-list-container" class="col-2">
+            Utenti <br/>
+
+            <select class="form-control" id="user_select" onchange="getUserSettings(this.value)">
+                <option value="0">Seleziona un utente</option>
+                {% for user in users %}
+                    <option value="{{ user.id }}">{{ user.username }}</option>
+                {% endfor %}
+            </select>
+            <!--
+            <div id="user-buttons-container">
+                {% for user in users %}
+                <button onclick="getUserSettings( '{{user.id}}' )" class="btn btn-secondary user-button">{{ user.username }}</button>
+                <br>
+                {% endfor %}
+            </div>
+            -->
+            <br>
+            <button class="btn btn-primary" onclick="newUser()">Nuovo Utente</button>
+        </div>
+
+        <div id="groups-list-container" class="col-2">
+            <div id="group-buttons-container">
+                {% for group in groups %}
+                    <button class="btn btn-secondary user-button" value="{{ group.username }}" onclick="getGroupSettings(this.value)">{{ group.username }}</button>
+                    <br>
+                {% endfor %}
+            </div>
+
+            <br>
+            <button class="btn btn-primary" onclick="newGroup()">Nuovo Gruppo</button>
+        </div>
+        <div id="container-users-2" class="col-3">
+
+        </div>
+    </div>
+</div>
+
+
+<style>
+    .user-button {
+        text-align: left;
+        margin-bottom: 5px;
+    }
+
+    #user-buttons-container {
+        width: fit-content;
+    }
+</style>
+
+{% endblock %}

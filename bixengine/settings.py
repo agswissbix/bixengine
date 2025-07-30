@@ -69,6 +69,7 @@ INSTALLED_APPS = [
     'customapp_pitservice',
     'customapp_belotti',
     'customapp_swissbix',
+    'bixsettings',
     'corsheaders',
 ]
 

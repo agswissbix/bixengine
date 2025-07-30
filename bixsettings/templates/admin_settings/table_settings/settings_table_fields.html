@@ -1,0 +1,237 @@
+<div id="new-field-form" class="container mt-4">
+    <div class="row">
+        <div class="col-md-3">
+            <label for="new-field-id" class="form-label">ID</label>
+            <input type="text" class="form-control" id="new-field-id" placeholder="ID">
+        </div>
+        <div class="col-md-3">
+            <label for="new-field-description" class="form-label">Descrizione</label>
+            <input type="text" class="form-control" id="new-field-description" placeholder="Descrizione">
+        </div>
+        <div class="col-md-3">
+            <label for="new-field-type" class="form-label">Select</label>
+            <select class="form-select" id="new-field-type" onchange="newFieldLinkedTable(this.value)">
+                <option value="Parola">Parola</option>
+                <option value="Utente">Utente</option>
+                <option value="Numero">Numero</option>
+                <option value="Linked">Linked</option>
+                <option value="Data">Data</option>
+                <option value="Memo">Nota</option>
+                <option value="Categoria">Categoria</option>
+                <option value="LongText">LongText</option>
+                <option value="Checkbox">Checkbox</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <button class="btn btn-primary" onclick="newTableField()">Salva</button>
+        </div>
+    </div>
+
+    <div id="linked-container-newfield" style="display:none">
+         <select class="form-select" id="field-linked-table" onchange="selectedLinkedTable(this.value)">
+            {% for table in tables %}
+                <option value="{{ table.id }}">{{ table.description }}</option>
+            {% endfor %}
+         </select>
+    </div>
+
+</div>
+<br>
+
+<div id="settings_block_usertables_settings" class="drag-elements-container" style="height: 95%; overflow-x: hidden; overflow-y: scroll">
+    <div class="drag-item">
+        {% for field in fields %}
+            <div class="drag-item2">
+                <p class="settings_block_usertables_fieldid" data-fieldid-word="{{ field.fieldid }}"
+                   data-fieldid="{{ field.id }}">{{ field.description }} ({{ field.fieldid }})</p>
+                <button class="btn btn-secondary" onclick="settingsFieldsSettings('{{ field.fieldid }}', $('#selected-fieldid').val('{{ field.fieldid }}'))">Impostazioni
+                </button>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+
+<input type="hidden" id="selected-fieldid" value="">
+
+<script>
+
+    function selectedLinkedTable(tableid) {
+        $.ajax({
+            type: "POST",
+            data: {
+                'tableid': tableid
+            },
+            url: "{% url 'settings_table_fields_linked_table' %}",
+            success: function (response) {
+                $('#fields_table_settings').html(response);
+            },
+            error: function () {
+            }
+        })
+    }
+
+    function newFieldLinkedTable(fieldtype) {
+        if (fieldtype == 'Linked') {
+            $('#linked-container-newfield').show();
+        } else if (fieldtype == 'Categoria') {
+            $('#fields_table_settings').html('<button class="btn btn-primary" onclick="addNewField(\'fields_table_settings\')">aggiungi</button>');
+        } else {
+            $('#linked-container-newfield').hide();
+        }
+    }
+
+    function addNewField(containername) {
+      const container = document.getElementById(containername);
+
+      const inputContainer = document.createElement('div');
+      inputContainer.style.display = 'flex';
+      inputContainer.style.gap = '10px';
+      inputContainer.style.marginTop = '2%';
+
+
+      const inputBr = document.createElement('br');
+
+
+      const input1 = document.createElement('input');
+      input1.classList.add('id-input-element');
+      input1.placeholder = 'ID';
+
+      const input2 = document.createElement('input');
+      input2.classList.add('description-input-element');
+      input2.placeholder = 'Description';
+
+      inputContainer.appendChild(input1);
+      inputContainer.appendChild(input2);
+
+
+      container.appendChild(inputContainer);
+    }
+
+
+
+
+    function loadCategoryFields() {
+        $.ajax({
+            type: "POST",
+            data: {
+                'tableid': $('#table_settings_menu').data('tableid')
+            },
+            url: "{% url 'load_category_fields' %}",
+            success: function (response) {
+                $('#fields_table_settings').html(response);
+            },
+            error: function () {
+            }
+        })
+    }
+
+
+    function settingsFieldsSettings(fieldid) {
+        tableid = $('#table_settings_menu').data('tableid');
+        var userid = $('#user_username').attr('data-userid');
+        $.ajax({
+            type: "POST",
+            data: {
+                'fieldid': fieldid,
+                'tableid': tableid,
+                'userid': userid
+            },
+            url: "{% url 'settings_table_fields_settings_block' %}",
+            success: function (response) {
+                $('#fields_table_settings').load('/loading/');
+                setTimeout(function () {
+                    $("#fields_table_settings").html(response);
+                }, 150);
+            },
+            error: function () {
+            }
+        });
+    }
+
+    function newTableField() {
+        serialized_data = {
+            'fieldid': $('#new-field-id').val(),
+            'fielddescription': $('#new-field-description').val(),
+            'fieldtype': $('#new-field-type').val(),
+            'tableid': $('#table_settings_menu').data('tableid'),
+            'userid': $('#user_username').data('userid')
+        }
+
+        if (serialized_data['fieldid'] == '' || serialized_data['fielddescription'] == '') {
+
+            swal({
+                title: "Attenzione!",
+                text: "compilare tutti i campi",
+                icon: "warning",
+                timer: 1200,
+                buttons: false,
+            })
+
+        }
+
+
+        if ($('#new-field-type').val() == 'Linked') {
+
+            const checkboxes = document.querySelectorAll('#fields_table_settings .checkbox');
+
+            const isChecked = Array.from(checkboxes).some(checkbox => checkbox.checked);
+
+            if (!isChecked) {
+                alert('Per favore, seleziona almeno una casella.');
+            } else {
+
+                serialized_data['linkedtable'] = $('#field-linked-table').val();
+
+                var linkedTableFields = []
+                $('.linked-table-fields').each(function () {
+                    if ($(this).siblings('.checkbox').is(':checked')) {
+                        linkedTableFields.push($(this).data('fieldid'));
+                    }
+                });
+                serialized_data['linkedtablefields'] = linkedTableFields;
+            }
+
+            } else if ($('#new-field-type').val() == 'Categoria') {
+                var idElements = $('.id-input-element');
+                var descriptionElements = $('.description-input-element');
+
+                var pairedArray = [];
+
+                idElements.each(function(index) {
+                    if (index < descriptionElements.length) {
+                        var idValue = $(this).val();
+                        var descriptionValue = $(descriptionElements[index]).val();
+                        pairedArray.push({'id': idValue, 'description': descriptionValue});
+                    }
+                });
+                serialized_data['valuesArray'] = pairedArray
+
+            }
+
+
+        console.info(serialized_data);
+
+        serialized_data = JSON.stringify(serialized_data);
+
+        $.ajax({
+            type: "POST",
+            data: {
+                'serialized_data': serialized_data
+            },
+            url: "{% url 'settings_table_fields_new_field' %}",
+            success: function (response) {
+                    swal({
+                        title: "Salvato!",
+                        text: "Il record è stato salvato",
+                        icon: "success",
+                        timer: 800,
+                        buttons: false,
+                    })
+                fieldsSettingsSettings()
+
+            },
+            error: function () {
+            }
+        });
+    }
+</script>

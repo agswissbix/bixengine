@@ -1,0 +1,185 @@
+<div id="settings-fields-container">
+
+{% for fields in record %}
+
+    <label for="field-description">Descrizione</label>
+    <input id="field-description" name="field-description" type="text" name="" value="{{ fields.description }}" class="form-control">
+
+    <label for="field-label">Label</label>
+    <input id="field-label" name="field-label" type="text" name="" value="{{ fields.label }}" class="form-control">
+
+{% endfor %}
+
+{% for setting, val in fieldsettings.items %}
+    {% if val.type == 'select' %}
+        <label for="{{ setting }}">{{ setting }}</label>
+        <select name="{{ setting }}" class="form-select setting-value">
+            {% for option in val.options %}
+                {% if option == val.value %}
+                    <option selected value="{{ option }}">{{ option }}</option>
+                {% else %}
+                    <option value="{{ option }}">{{ option }}</option>
+                {% endif %}
+            {% endfor %}
+        </select>
+    {% else %}
+        <label for="{{ setting }}">{{ setting }}</label>
+        <input type="text" name="{{ setting }}" value="{{ val.value }}" class="form-control setting-value">
+    {% endif %}
+{% endfor %}
+</div>
+
+
+<br>
+<br>
+
+
+
+{% if record.0.lookuptableid != None %}
+    <h3>lookup items</h3>
+    <div id="lookup-items-container">
+        <button class="btn btn-secondary" onclick="addNewField('new-items-container')">aggiungi</button>
+
+
+        <br>
+        <br>
+
+
+        {% for item in items  %}
+            <div class="lookupitem">
+                <input type="text" id="item-{{ forloop.counter }}" name="item-{{ forloop.counter }}" value="{{ item.itemdesc }}" class="form-control lookup-items" data-itemcode="{{ item.itemcode }}">
+                <button class="btn btn-danger" onclick="$('#item-{{ forloop.counter }}').css('background-color', '#f19292'); $('#item-{{ forloop.counter }}').attr('data-status', 'deleted')">
+                    <span class="material-symbols-outlined">delete</span></button>
+            </div>
+
+
+
+        {% endfor %}
+         <div id="new-items-container"></div>
+
+    <br>
+
+    </div>
+{% endif %}
+
+    <button type="button" onclick="saveTableSettingsSettingsFields()" class="btn btn-primary">Save Settings</button>
+
+
+
+
+<style>
+    .setting-value {
+        width: 200px;
+        height: 50px;
+    }
+
+    .lookup-items {
+        width: 50%;
+    }
+
+    .lookupitem {
+    display: flex;
+    align-items: center;
+}
+
+.lookupitem .form-control {
+    flex: 1;
+    margin-right: 10px; /* Adjust the spacing between input and button if needed */
+}
+
+</style>
+
+
+<script>
+       function saveTableSettingsSettingsFields() {
+
+        var serialized_data = [] 
+        newItems = []
+        currentItems = []
+        deletedItems = []
+
+
+           var field = $('#selected-fieldid').val()
+
+         field_description = $('#field-description').val()
+         field_label = $('#field-label').val()
+
+
+        if ($('#lookup-items-container').length > 0) {
+                var idElements = $('.id-input-element');
+                var descriptionElements = $('.description-input-element');
+
+                var pairedArray = [];
+
+                idElements.each(function(index) {
+                    if (this.value != '') {
+                        if (index < descriptionElements.length) {
+                            var idValue = $(this).val();
+                            var descriptionValue = $(descriptionElements[index]).val();
+                            pairedArray.push({'id': idValue, 'description': descriptionValue});
+                        }
+                    }
+                });
+
+                newItems = pairedArray
+
+                if ($('.lookup-items').length > 0) {
+                    $('.lookup-items').each(function () {
+                        if ($(this).attr('data-status') == 'deleted') {
+                            deletedItems.push({'itemdesc': $(this).val(), 'itemcode': $(this).attr('data-itemcode')})
+                        } else {
+                            currentItems.push({'itemdesc': $(this).val(), 'itemcode': $(this).attr('data-itemcode')})
+                        }
+
+                    })
+
+
+                }
+
+        }
+
+
+
+
+        $('#settings-fields-container').find('.setting-value').each(function () {
+            var value = $(this).val();
+            var name = $(this).attr('name');
+            serialized_data.push({name: name, value: value});
+        });
+        settings = JSON.stringify(serialized_data);
+
+        newItems = JSON.stringify(newItems)
+        currentItems = JSON.stringify(currentItems)
+        deletedItems = JSON.stringify(deletedItems)
+
+
+        console.info(serialized_data)
+        $.ajax({
+            type: "POST",
+            data: {
+                'settings': settings,
+                'userid': $('#user_username').attr('data-userid'),
+                'tableid': $('#table_settings_menu').attr('data-tableid'),
+                'field': field,
+                'field_description': field_description,
+                'field_label': field_label,
+                'newItems': newItems,
+                'currentItems': currentItems,
+                'deletedItems': deletedItems
+            },
+            url: "{% url 'settings_table_fields_settings_fields_save' %}",
+            success: function (response) {
+                  swal({
+                        title: "Salvato!",
+                        text: "Il record è stato salvato",
+                        icon: "success",
+                        timer: 800,
+                        buttons: false,
+                    })
+
+            },
+            error: function () {
+            }
+        })
+    }
+</script>

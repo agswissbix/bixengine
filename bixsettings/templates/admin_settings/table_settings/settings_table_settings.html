@@ -1,0 +1,105 @@
+<div id="settings-table-container" style="height: 100%; overflow: scroll">
+    {% for setting, val in tablesettings.items %}
+        {% if val.type == 'select' %}
+            <label for="{{ setting }}">{{ setting }}</label>
+            <select name="{{ setting }}" class="form-select setting-value">
+                {% if setting == 'default_viewid' %}
+                	{% for option in val.options %}
+                        {% if option.id == val.value %}
+                            <option selected value="{{ option.id }}">{{ option.name }}</option>
+                        {% else %}
+                            <option value="{{ option.id }}">{{ option.name }}</option>
+                        {% endif %}
+                	{% endfor %}
+
+                {% else %}
+                    {% for option in val.options %}
+                        {% if option == val.value %}
+                            <option selected value="{{ option }}">{{ option }}</option>
+                        {% else %}
+                            <option value="{{ option }}">{{ option }}</option>
+                        {% endif %}
+                    {% endfor %}
+                {% endif %}
+            </select>
+        {% elif val.type == 'multiselect' %}
+            <label for="{{ setting }}">{{ setting }}</label>
+            <br>
+            <select name="{{ setting }}" class="select2-input form-select setting-value" multiple="multiple">
+                {% for option in val.options %}
+                    <option value="{{ option.name }}" {% if option.selected %}selected{% endif %}>{{ option.name }}</option>
+                {% endfor %}
+            </select>            
+            <br>
+        {% else %}
+            <label for="{{ setting }}">{{ setting }}</label>
+            <input type="text" name="{{ setting }}" value="{{ val.value }}" class="form-control setting-value">
+        {% endif %}
+    {% endfor %}
+    </div>
+    
+    <button type="button" onclick="saveTableSettingsSettingsTables()" class="btn btn-primary">Save Settings</button>
+    <style>
+        .setting-value {
+            width: 200px;
+            height: 50px;
+        }
+    </style>
+    
+    
+    <script>
+            $('.select2-input').each(function () {
+                $(this).select2({
+                    dropdownParent: $(this).parent()
+                }).addClass('select2-initialized');
+            });
+        
+        
+            $(document).on('select2:open', function (e) {
+                window.setTimeout(function () {
+                    document.querySelector('input.select2-search__field').focus();
+                }, 0);
+            })
+
+            function saveTableSettingsSettingsTables() {
+                var serialized_data = [];
+            
+                $('#settings-table-container').find('.setting-value').each(function () {
+                    var value = $(this).val();
+                    if (Array.isArray(value)) {
+                        value = value.join(',');
+                    }
+                    var name = $(this).attr('name');
+                    serialized_data.push({name: name, value: value});
+                });
+            
+                var settings = JSON.stringify(serialized_data);
+            
+                $.ajax({
+                    type: "POST",
+                    data: {
+                        'settings': settings,
+                        'userid': $('#user_username').attr('data-userid'),
+                        'tableid': $('#table_settings_menu').attr('data-tableid')
+                    },
+                    url: "{% url 'settings_table_fields_settings_save' %}",
+                    success: function (response) {
+                        console.log("Settings salvati correttamente");
+                        swal({
+                            title: "Salvato!",
+                            text: "Le impostazioni della tabella sono state salvate",
+                            icon: "success",
+                            timer: 800,
+                            buttons: false,
+                        });
+                    },
+                    error: function () {
+                        console.error("Errore nel salvataggio settings");
+                    }
+                });
+            }
+            
+    </script>
+    
+    
+    

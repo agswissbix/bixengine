@@ -1,0 +1,21 @@
+<script>
+
+function testFunction() {
+                $.ajax({
+                    type: "POST",
+                    crossDomain: true,
+                    url: "{% url 'test_function' %}",
+                    success: function (response) {
+                        alert('eseguito');
+                    },
+                    error: function (response) {
+                        alert('errore');
+                    }
+                });
+            }
+
+</script>
+
+<div>
+    <button onclick="testFunction()">test funzione</button>
+</div>
