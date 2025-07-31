@@ -10,6 +10,9 @@ from commonapp.utils.email_sender import EmailSender
 
 # ritorna dei contatori (ad esempio: numero di stabili, numero di utenti, ecc.)
 def monitor_timesheet_daily_count():
+    """
+    Conteggio del numero di record su user_timesheet durante la giornata
+    """
     type = "counters"
     result_status = "success"
     result_value = {}
@@ -39,6 +42,9 @@ def monitor_timesheet_daily_count():
 
 # ritorna delle date
 def monitor_dates():
+    """
+    Controllo delle date
+    """
     type = "dates"
     result_status = 'success'
     result_value = {
@@ -48,18 +54,22 @@ def monitor_dates():
 
 # ritorna lo stato dei servizi, funziona per gli avvii django manage.py, e react con npm, inoltre con servizi windows
 def monitor_services():
+    """
+    Controllo dei servizi in esecuzione Windows e dei progetti attivi
+    """
+
     type = "services"
     result_status = 'success'
     result_value = {}
 
     # Servizi Windows da controllare (esatti)
     service_names = ['AdiFeed', 'Tomcat9']
-
-    # Progetti Django/React con parole chiave associate
     project_keywords = {
-        'bixengine': ['manage.py', 'gunicorn', 'bixengine'],  # Django
-        'bixportal': ['npm', 'react-scripts', 'vite']          # React
+        'bixengine': ['manage.py', 'gunicorn', 'bixengine'],
+        'bixportal': ['npm', 'react-scripts', 'vite']
     }
+
+
 
     # Controllo dei servizi Windows
     for service in service_names:
@@ -101,6 +111,9 @@ def monitor_services():
     return {"status": result_status, "value": result_value, "type": type}
 
 def move_files():
+    """
+    Sposta tutti i file da: C:/Adiuto/Dispatcher a: C:/Adiuto/Immission/TrashBin
+    """
     dispatcher_dir = r"C:\Adiuto\Dispatcher"
     immission_dir = r"C:\Adiuto\Immission"
     trash_bin_dir = os.path.join(immission_dir, "TrashBin")
@@ -185,6 +198,10 @@ def send_report(monitoring_result, destinatari):
 
 # ritorna conteggi di file in delle cartelle
 def monitor_folders():
+    """
+    Controlla il numero di file nella cartella: C:/Adiuto/Scansioni/originali ed eventuali sottocartelle
+    """
+
     path = r"C:\Adiuto\Scansioni\originali"
     type = "folders"
     result_status = 'success'
@@ -208,6 +225,10 @@ def monitor_folders():
     return {"status": result_status, "value": result_value, "type": type}
 
 def move_attachments_to_dispatcher():
+    """
+    Sposta tutti i file dalla cartella: C:/xampp/htdocs/bixdata_view/bixdata_view/bixdata_app/attachments alla cartella: C:/Adiuto/Dispatcher
+    """
+
     type = "no_output"
     result_status = "success"
     result_value = {}

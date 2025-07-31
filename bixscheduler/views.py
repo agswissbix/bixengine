@@ -92,6 +92,7 @@ def lista_schedule(request):
         restart_schedule(s)
 
     available_tasks = get_available_tasks()
+    print(available_tasks)
     return render(request, 'lista_schedule.html', {
         'schedules': schedules,
         'available_tasks': available_tasks
