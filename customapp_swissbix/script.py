@@ -1,5 +1,6 @@
 from datetime import date, datetime
 import os
+import subprocess
 from django_q.models import Schedule, Task
 from django.db import connection
 import psutil, shutil
@@ -45,40 +46,57 @@ def monitor_dates():
     }
     return {"status": result_status, "value": result_value, "type": type}
 
-# ritorna lo stato dei servizi
+# ritorna lo stato dei servizi, funziona per gli avvii django manage.py, e react con npm, inoltre con servizi windows
 def monitor_services():
-    import psutil
-
     type = "services"
     result_status = 'success'
     result_value = {}
 
-    service_names = ['tomcat9', 'bixportal', 'adifeed']
+    # Servizi Windows da controllare (esatti)
+    service_names = ['TapiSrv']
 
+    # Progetti Django/React con parole chiave associate
+    project_keywords = {
+        'bixengine': ['manage.py', 'gunicorn', 'bixengine'],  # Django
+        'bixportal': ['npm', 'react-scripts', 'vite']          # React
+    }
+
+    # Controllo dei servizi Windows
     for service in service_names:
-        service_running = False
-        service_lower = service.lower()
-        for proc in psutil.process_iter(['name', 'cmdline', 'status']):
-            try:
-                name = proc.info.get('name', '').lower()
-                cmdline = proc.info.get('cmdline', [])
-                cmdline_str = " ".join(cmdline).lower() if isinstance(cmdline, (list, tuple)) else str(cmdline).lower()
-                status = proc.info.get('status', '').lower()
+        try:
+            output = subprocess.check_output(['sc', 'query', service], stderr=subprocess.DEVNULL, text=True)
+            if 'RUNNING' in output:
+                result_value[service] = 'Running'
+            else:
+                result_value[service] = 'Disabled'
+        except subprocess.CalledProcessError:
+            result_value[service] = 'Disabled'
 
-                # Controlla se il processo contiene la stringa e che non sia zombie o stopped
-                if (service_lower in name or service_lower in cmdline_str) and status not in ('zombie', 'stopped', 'dead'):
-                    service_running = True
+    # Controllo dei progetti Django/React tramite processi attivi
+    for project, keywords in project_keywords.items():
+        project_running = False
+
+        for proc in psutil.process_iter(['cmdline']):
+            try:
+                cmdline = proc.info.get('cmdline', [])
+                if not cmdline:
+                    continue
+                cmdline_str = " ".join(cmdline).lower()
+
+                if any(keyword.lower() in cmdline_str for keyword in keywords):
+                    project_running = True
                     break
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
 
-        result_value[service] = 'Running' if service_running else 'Disabled'
+        result_value[project] = 'Running' if project_running else 'Disabled'
 
-    # Invio report se servizi disabilitati
-    disabled_services = [srv for srv, status in result_value.items() if status.lower() == 'disabled']
-    if disabled_services:
+    # Invia il report se qualcosa è disabilitato
+    disabled_items = [name for name, status in result_value.items() if status.lower() == 'disabled']
+    if disabled_items:
+        #da cambiare
         destinatari = ["marks.iljins@samtrevano.ch"]
-        send_report({"status": result_status, "value": result_value, "type": type}, destinatari)
+        #send_report({"status": result_status,"value": result_value,"type": type}, destinatari)
 
     return {"status": result_status, "value": result_value, "type": type}
 
