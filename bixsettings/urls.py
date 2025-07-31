@@ -25,11 +25,10 @@ urlpatterns = [
     
 
 
-
     path('tables', settings_views.settings_table, name='settings_table'),
     path('users', settings_views.settings_user, name='settings_users'),
     
-    path('settings/charts/', settings_views.settings_charts, name='settings_charts'),
+    path('charts/', settings_views.settings_charts, name='settings_charts'),
     path('save_users_dashboards/', settings_views.save_users_dashboards, name='save_users_dashboards'),
     path('new_chart_block/', settings_views.new_chart_block, name='new_chart_block'),
     path('new_report/', settings_views.new_report, name='new_report'),

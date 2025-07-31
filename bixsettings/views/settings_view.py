@@ -1078,3 +1078,6 @@ def save_dashboard_table(request):
                 cursor.execute(query)
 
     return JsonResponse({'success': True})
+
+def loading(request):
+    return render(request, 'admin_settings/loading.html')
