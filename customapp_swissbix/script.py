@@ -53,7 +53,7 @@ def monitor_services():
     result_value = {}
 
     # Servizi Windows da controllare (esatti)
-    service_names = ['TapiSrv']
+    service_names = ['AdiFeed', 'Tomcat9']
 
     # Progetti Django/React con parole chiave associate
     project_keywords = {
