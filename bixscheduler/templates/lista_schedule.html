@@ -60,8 +60,10 @@
           </td>
           <td class="text-center">
             <select name="func" required class="form-select form-select-sm mx-auto" style="max-width: 150px;">
-              {% for value, label in available_tasks %}
-                <option value="{{ value }}" {% if s.func == value %}selected{% endif %}>{{ label }}</option>
+              {% for value, label, description in available_tasks %}
+                <option value="{{ value }}" {% if s.func == value %}selected{% endif %} title="{{ description|default:'' }}">
+                  {{ label }}
+                </option>
               {% endfor %}
             </select>
           </td>

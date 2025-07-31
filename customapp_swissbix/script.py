@@ -1,5 +1,6 @@
 from datetime import date, datetime
 import os
+import subprocess
 from django_q.models import Schedule, Task
 from django.db import connection
 import psutil, shutil
@@ -9,6 +10,9 @@ from commonapp.utils.email_sender import EmailSender
 
 # ritorna dei contatori (ad esempio: numero di stabili, numero di utenti, ecc.)
 def monitor_timesheet_daily_count():
+    """
+    Conteggio del numero di record su user_timesheet durante la giornata
+    """
     type = "counters"
     result_status = "success"
     result_value = {}
@@ -38,6 +42,9 @@ def monitor_timesheet_daily_count():
 
 # ritorna delle date
 def monitor_dates():
+    """
+    Controllo delle date
+    """
     type = "dates"
     result_status = 'success'
     result_value = {
@@ -45,40 +52,68 @@ def monitor_dates():
     }
     return {"status": result_status, "value": result_value, "type": type}
 
-# ritorna lo stato dei servizi
+# ritorna lo stato dei servizi, funziona per gli avvii django manage.py, e react con npm, inoltre con servizi windows
 def monitor_services():
+    """
+    Controllo dei servizi in esecuzione Windows e dei progetti attivi
+    """
+
     type = "services"
     result_status = 'success'
     result_value = {}
 
-    # Lista servizi da controllare
-    service_names = ['Tomcat9', 'bixportal', 'AdiFeed']
+    # Servizi Windows da controllare (esatti)
+    service_names = ['AdiFeed', 'Tomcat9']
+    project_keywords = {
+        'bixengine': ['manage.py', 'gunicorn', 'bixengine'],
+        'bixportal': ['npm', 'react-scripts', 'vite']
+    }
 
-    # Controlla processi in esecuzione per i servizi specifici
+
+
+    # Controllo dei servizi Windows
     for service in service_names:
-        service_running = False
-        for proc in psutil.process_iter(['name', 'cmdline', 'cwd']):
-            try:
-                name = proc.info.get('name', '').lower()
-                cmdline = proc.info.get('cmdline', [])
-                cmdline_str = " ".join(cmdline).lower() if isinstance(cmdline, (list, tuple)) else str(cmdline).lower()
+        try:
+            output = subprocess.check_output(['sc', 'query', service], stderr=subprocess.DEVNULL, text=True)
+            if 'RUNNING' in output:
+                result_value[service] = 'Running'
+            else:
+                result_value[service] = 'Disabled'
+        except subprocess.CalledProcessError:
+            result_value[service] = 'Disabled'
 
-                if service in name or service in cmdline_str:
-                    service_running = True
+    # Controllo dei progetti Django/React tramite processi attivi
+    for project, keywords in project_keywords.items():
+        project_running = False
+
+        for proc in psutil.process_iter(['cmdline']):
+            try:
+                cmdline = proc.info.get('cmdline', [])
+                if not cmdline:
+                    continue
+                cmdline_str = " ".join(cmdline).lower()
+
+                if any(keyword.lower() in cmdline_str for keyword in keywords):
+                    project_running = True
                     break
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
-        result_value[service] = 'Running' if service_running else 'Disabled'
 
-    # Se ci sono servizi Disabled, invia il report via email
-    disabled_services = [srv for srv, status in result_value.items() if status.lower() == 'disabled']
-    if disabled_services:
-        destinatari = ["marks.iljins@samtrevano.ch"]  # Cambia con la tua lista destinatari
-        send_report({"status": result_status, "value": result_value, "type": type}, destinatari)
+        result_value[project] = 'Running' if project_running else 'Disabled'
+
+    # Invia il report se qualcosa è disabilitato
+    disabled_items = [name for name, status in result_value.items() if status.lower() == 'disabled']
+    if disabled_items:
+        #da cambiare
+        destinatari = ["marks.iljins@samtrevano.ch"]
+        #send_report({"status": result_status,"value": result_value,"type": type}, destinatari)
 
     return {"status": result_status, "value": result_value, "type": type}
 
 def move_files():
+    """
+    Sposta tutti i file da: C:/Adiuto/Dispatcher a: C:/Adiuto/Immission/TrashBin
+    """
     dispatcher_dir = r"C:\Adiuto\Dispatcher"
     immission_dir = r"C:\Adiuto\Immission"
     trash_bin_dir = os.path.join(immission_dir, "TrashBin")
@@ -163,6 +198,10 @@ def send_report(monitoring_result, destinatari):
 
 # ritorna conteggi di file in delle cartelle
 def monitor_folders():
+    """
+    Controlla il numero di file nella cartella: C:/Adiuto/Scansioni/originali ed eventuali sottocartelle
+    """
+
     path = r"C:\Adiuto\Scansioni\originali"
     type = "folders"
     result_status = 'success'
@@ -186,6 +225,10 @@ def monitor_folders():
     return {"status": result_status, "value": result_value, "type": type}
 
 def move_attachments_to_dispatcher():
+    """
+    Sposta tutti i file dalla cartella: C:/xampp/htdocs/bixdata_view/bixdata_view/bixdata_app/attachments alla cartella: C:/Adiuto/Dispatcher
+    """
+
     type = "no_output"
     result_status = "success"
     result_value = {}

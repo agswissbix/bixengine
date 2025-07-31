@@ -13,7 +13,8 @@ def get_available_tasks():
         if not name.startswith('_'):
             path = f'bixscheduler.tasks.{name}'
             label = name.replace('_', ' ').title()
-            available.append((path, label))
+            description = inspect.getdoc(func) or ''
+            available.append((path, label, description))
 
     # Recupera cliente_id
     cliente_id = get_cliente_id()
@@ -30,7 +31,8 @@ def get_available_tasks():
             if not name.startswith('_'):
                 path = f"{target_module}.script.{name}"
                 label = f"{target_module.upper()}: {name.replace('_', ' ').title()}"
-                available.append((path, label))
+                description = inspect.getdoc(func) or ''
+                available.append((path, label, description))
 
     return available
 

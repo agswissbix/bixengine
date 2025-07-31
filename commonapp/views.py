@@ -3676,3 +3676,7 @@ def trasferta_pdf(request):
             return HttpResponse(f"Errore interno", status=500)
 
     return HttpResponse("Metodo non consentito", status=405)
+
+def loading(request):
+
+    return render(request, 'loading.html')
