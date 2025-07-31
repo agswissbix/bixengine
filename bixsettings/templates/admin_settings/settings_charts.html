@@ -6,10 +6,10 @@
 
     <div class="container text-center card card-body" style="margin: auto">
         <h3>Nuova dashboard</h3>
-        {% csrf_token %}
         <div class="container text-center card card-body" style="margin-top: 2%">
             <h4>Nuova dashboard</h4>
             <form method="post" action="{% url 'new_dashboard' %}" class="container text-center" style="float: left">
+                {% csrf_token %}
                 <label for="dashboard-name">Nome Dashboard</label>
                 <input type="text" name="dashboard-name">
                 <button style="float: right" type="submit" class="btn btn-primary">Salva</button>

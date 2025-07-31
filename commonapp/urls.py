@@ -56,6 +56,8 @@ urlpatterns = [
     path('get_form_fields/', get_form_fields, name='get_form_fields'),
     path('download_trattativa/', download_trattativa, name='download_trattativa'),
     path('trasferta_pdf/', trasferta_pdf, name='trasferta_pdf'),
+    path('loading/', loading, name='loading'),
+
 ]
 
 
