@@ -44,6 +44,7 @@ import environ
 import random
 from faker import Faker
 import xml.etree.ElementTree as ET
+import importlib
 
 import pandas as pd
 import numpy as np
@@ -427,59 +428,131 @@ def get_table_records(request):
     print('Function: get_table_records')
     data = json.loads(request.body)
     tableid = data.get("tableid")
-    viewid= data.get("view")
-    searchTerm= data.get("searchTerm")
-    order=data.get("order")
-    page=data.get("currentPage")
-    master_tableid= data.get("masterTableid")
-    master_recordid= data.get("masterRecordid")
-    table=UserTable(tableid,Helper.get_userid(request))
+    viewid = data.get("view")
+    searchTerm = data.get("searchTerm")
+    order = data.get("order")
+    page = data.get("currentPage")
+    master_tableid = data.get("masterTableid")
+    master_recordid = data.get("masterRecordid")
+
+    table = UserTable(tableid, Helper.get_userid(request))
 
     if viewid == '':
-        viewid=table.get_default_viewid()
+        viewid = table.get_default_viewid()
 
     records: List[UserRecord]
-    conditions_list=list()
-    records=table.get_table_records_obj(viewid=viewid,searchTerm=searchTerm,conditions_list=conditions_list,master_tableid=master_tableid,master_recordid=master_recordid)
-    counter=table.get_total_records_count()
-    table_columns=table.get_results_columns()
-    rows=[]
+    conditions_list = []
+    records = table.get_table_records_obj(
+        viewid=viewid,
+        searchTerm=searchTerm,
+        conditions_list=conditions_list,
+        master_tableid=master_tableid,
+        master_recordid=master_recordid
+    )
+    counter = table.get_total_records_count()
+    table_columns = table.get_results_columns()
+
+    # --- Leggi alert e parsea le condizioni UNA volta sola ---
+    # NB: se il tuo helper supporta parametri, usa quelli (eviti injection)
+    alerts = HelpderDB.sql_query(
+            f"SELECT * FROM sys_alert WHERE tableid='{tableid}' AND alert_type='cssclass'"
+        )
+
+    compiled_alerts = []
+    for alert in alerts:
+        try:
+            cond_str = alert['alert_condition']  # <-- assicurati del nome colonna
+            alert_param = json.loads(alert['alert_param'])
+
+            cssclass = alert_param.get('cssclass', '')
+            target = alert_param.get('target', 'record')  # 'record' | 'field'
+            fieldid = alert_param.get('fieldid', '')
+
+            conds = Helper.parse_sql_like_and(cond_str)  # <-- lista di (field, op, val)
+
+            compiled_alerts.append({
+                'conds': conds,
+                'cssclass': cssclass,
+                'target': target,
+                'fieldid': fieldid
+            })
+        except json.JSONDecodeError:
+            print(f"Errore nel decodificare il JSON per l'alert: {alert.get('id')}")
+        except ValueError as e:
+            print(f"Condizione non valida per alert {alert.get('id')}: {e}")
+
+    # --- Costruzione risposta ---
+    rows = []
     for record in records:
-        row={}
-        row['recordid']=record.recordid
-        row['css']= "#"
-        row['fields']=[]
-        fields=record.get_record_results_fields()
-        for field in fields:
-                #TODO
-                cssClass=''
-                if tableid=='serviceandasset':
-                    if field['fieldid'] == 'status' and field['value'] == 'Active':
-                        cssClass='bg-emerald-50'
-                    if field['fieldid'] == 'status' and field['value'] == 'Closed':
-                        cssClass='bg-gray-50'
-                    if field['fieldid'] == 'status' and field['value'] == 'Disabled':
-                        cssClass='bg-yellow-50'
-                    if field['fieldid'] == 'status' and field['value'] == 'CHECK':
-                        cssClass='bg-red-100'
-                    if field['fieldid'] == 'status' and field['value'] == 'CHECK - DNS':
-                        cssClass='bg-yellow-100'
-                    
-                row['fields'].append({'recordid':'','css':cssClass,'type':field['type'],'value':field['value'],'fieldid':field['fieldid']})
+        # Adatta qui: se record non è dict, ricavane i campi:
+        fields = record.get_record_results_fields()  # [{fieldid, value, type, ...}, ...]
+        # Mappa: fieldid -> value (serve per i confronti)
+
+        # 1) Normalizza la mappa valori: fieldid (string) -> value
+        #    Se hai già record.values come dict, convertilo con chiavi stringa:
+        if hasattr(record, "values") and isinstance(record.values, dict):
+            values_map = {str(k): v for k, v in record.values.items()}
+        else:
+            # fallback: ricava dai fields
+            values_map = {str(f["fieldid"]): f.get("value") for f in fields}
+
+
+
+        # 2) Inizializza contenitori CSS
+        record_css = []                      # classi da applicare all'intero record
+        field_css_map = defaultdict(list)    # fieldid (string) -> [cssclass, ...]
+
+        # 3) Applica gli alert che matchano
+        for a in compiled_alerts:
+            if Helper.evaluate_and_conditions(values_map, a["conds"]):
+                css = a.get("cssclass", "")
+                if not css:
+                    continue
+
+                if a.get("target", "record") == "record":
+                    record_css=css
+                else:  # target == 'field'
+                    fid = str(a.get("fieldid", "")).strip()
+                    if fid:
+                        field_css_map[fid]=css
+
+        row = {
+        "recordid": record.recordid,
+        "css": record_css,
+            "fields": []
+        }
+
+        # 5) Popola i campi con css specifico (SOLO quelli destinati al campo)
+        #    Se vuoi anche ereditare le classi del record sui campi, unisci le liste:
+        #    fcss_list = record_css + field_css_map.get(fid, [])
+        
+        for f in fields:
+            fcss=''
+            fid = str(f["fieldid"])
+            css = field_css_map.get(fid)
+            if css:                     # True se fid è presente e il valore non è vuoto
+                fcss = (fcss + " " + css).strip()
+
+            row["fields"].append({
+                "recordid": record.recordid,
+                "css": fcss,
+                "type": f.get("type"),
+                "value": f.get("value"),
+                "fieldid": f["fieldid"],
+            })
+
         rows.append(row)
-    
-    columns=[]
-    for table_column in table_columns:
-        columns.append({'fieldtypeid':table_column['fieldtypeid'],'desc':table_column['description']})
+
+        
+
+    # Colonne
+    columns = [{'fieldtypeid': c['fieldtypeid'], 'desc': c['description']} for c in table_columns]
 
     response_data = {
         "counter": counter,
         "rows": rows,
         "columns": columns
     }
-        
-    #time.sleep(4)
-
     return JsonResponse(response_data)
 
 
@@ -1571,9 +1644,30 @@ def save_record_fields(request):
         result = save_newuser(request)
         
    
-
+    custom_save_record_fields(tableid, recordid)
     return JsonResponse({"success": True, "detail": "Campi del record salvati con successo", "recordid": record.recordid})
-    
+
+
+
+def custom_save_record_fields(tableid, recordid):
+    idcliente = Helper.get_cliente_id()
+    # Nome del modulo dinamico
+    module_name = f"customapp_{idcliente}.customfunc"
+
+    try:
+        # Import dinamico
+        customfunc = importlib.import_module(module_name)
+
+        # Chiama la funzione se esiste
+        if hasattr(customfunc, "save_record_fields"):
+            return customfunc.save_record_fields(tableid, recordid)
+        else:
+            print(f"Funzione 'save_record_fields' non trovata in {module_name}")
+    except ModuleNotFoundError:
+        print(f"Modulo personalizzato {module_name} non trovato")
+    except Exception as e:
+        print(f"Errore durante l'importazione o l'esecuzione: {e}")
+
 def get_table_views(request):
     data = json.loads(request.body)
     tableid= data.get("tableid")
@@ -1891,7 +1985,7 @@ def save_email(request):
     #TODO 
     if tableid == 'rendicontolavanderia':
         record_rendiconto=UserRecord('rendicontolavanderia',recordid)
-        if record_rendiconto.values['stato']=='Nessuna ricerica':
+        if record_rendiconto.values['stato']=='Nessuna ricarica':
             record_rendiconto.values['stato']="Inviato - Nessuna ricarica"
         else:
             record_rendiconto.values['stato']="Inviato"
@@ -3458,20 +3552,24 @@ def save_form_data(request):
         data = json.loads(request.body)  
 
         # Tutti i dati inviati
+        year = data.get("year", "")
         payload = data.get("payload", {})
         print("[-PAYLOAD-]:", payload)
 
-        # Esempio dei dati singoli
-        tassa_annua = payload.get("tassa_annua")
-        tassa_ammissione = payload.get("tassa_ammissione")
-        nr_soci = payload.get("nr_soci")
-        print(f"tassa_ammissione: {tassa_ammissione}, tassa_annua: {tassa_annua}, nr_soci: {nr_soci}")
 
 
         record=UserRecord('metrica_annuale', '00000000000000000000000000000023')
-        record.values['tassa_annua'] = tassa_annua
-        record.values['tassa_ammissione'] = tassa_ammissione
-        record.values['nr_soci'] = nr_soci
+        record.values['tassa_annua'] = payload.get("tassa_annua")
+        record.values['tassa_ammissione'] = payload.get("tassa_ammissione")
+        record.values['nr_soci'] = payload.get("nr_soci")
+        record.values['uomini'] = payload.get("uomini")
+        record.values['donne'] = payload.get("donne")
+        #soci attivi
+        #soci passivi
+        # soci juniores
+        record.values['eta_media'] = payload.get("eta_media")
+        #cifra affari soci
+        record.values['nr_giri_soci'] = payload.get("nr_giri_soci")
         record.save()
 
 
@@ -3482,12 +3580,28 @@ def save_form_data(request):
 
 
 def get_form_fields(request):
+    data = json.loads(request.body)  
+
+    # Tutti i dati inviati
+    year = data.get("year", {})
+
     fields = {}
 
     record=UserRecord('metrica_annuale', '00000000000000000000000000000023')
     fields['tassa_annua'] = record.values.get('tassa_annua')
     fields['tassa_ammissione'] = record.values.get('tassa_ammissione')
     fields['nr_soci'] = record.values.get('nr_soci')
+    fields['uomini'] = record.values.get('uomini')
+    fields['donne'] = record.values.get('donne')
+    #soci attivi
+    #soci passivi
+    # soci juniores
+    fields['eta_media'] = record.values.get('eta_media')
+    #cifra affari soci
+    fields['nr_giri_soci'] = record.values.get('nr_giri_soci')
+    #prezzo cart soci
+    
+
                                                    
 
     return JsonResponse({"success": True, "fields": fields})

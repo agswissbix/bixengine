@@ -242,8 +242,8 @@ def prepara_email(request):
                                     <b>Pit Service Sagl</b><br/>
                                     La cura del tuo immobile<br/>
                                     Phone: 091.993.03.92 <br/>
-                                    Via San Gottardo 26 <br/>
-                                    6943 Vezia <br/>
+                                    Via Carvina 6 <br/>
+                                    6807 Taverne <br/>
                                 </p>
                             </td>
                         </tr>
@@ -271,8 +271,8 @@ Cordiali saluti
                                 <b>Pit Service Sagl</b><br/>
                                 La cura del tuo immobile<br/>
                                 Phone: 091.993.03.92 <br/>
-                                Via San Gottardo 26 <br/>
-                                6943 Vezia <br/>
+                                Via Carvina 6 <br/>
+                                6807 Taverne <br/>
                             </p>
                         </td>
                     </tr>
@@ -326,8 +326,8 @@ Cordiali saluti
                                 <b>Pit Service Sagl</b><br/>
                                 La cura del tuo immobile<br/>
                                 Phone: 091.993.03.92 <br/>
-                                Via San Gottardo 26 <br/>
-                                6943 Vezia <br/>
+                                Via Carvina 6 <br/>
+                                6807 Taverne <br/>
                             </p>
                         </td>
                     </tr>

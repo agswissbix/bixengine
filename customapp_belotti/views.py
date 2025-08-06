@@ -314,11 +314,20 @@ def test_sync_fatture_sirioadiuto(request):
             pass
 
 
-def sync_fatture_sirioadiuto(request):
+def sync_fatture_sirioadiutoBAK(request):
+    src_db_name=os.environ.get('SIRIO_DB_NAME')
     source_conn_str = (
         f"DRIVER={{Pervasive ODBC Unicode Interface}};"
         f"ServerName={os.environ.get('SIRIO_DB_SERVER')};"
-        f"DBQ={os.environ.get('SIRIO_DB_NAME')};"
+        f"DBQ={src_db_name};"
+        f"UID={os.environ.get('SIRIO_DB_USER')};"
+    )
+
+    src_db_name=os.environ.get('SIRIO_DB_NAME_2')
+    source_conn_str_2 = (
+        f"DRIVER={{Pervasive ODBC Unicode Interface}};"
+        f"ServerName={os.environ.get('SIRIO_DB_SERVER')};"
+        f"DBQ={src_db_name_2};"
         f"UID={os.environ.get('SIRIO_DB_USER')};"
     )
 
@@ -331,12 +340,14 @@ def sync_fatture_sirioadiuto(request):
     )
 
     try:
+        data=[]
         src_conn = pyodbc.connect(source_conn_str, timeout=5)
         tgt_conn = pyodbc.connect(target_conn_str, timeout=5)
         src_cursor = src_conn.cursor()
         tgt_cursor = tgt_conn.cursor()
 
-        src_cursor.execute("SELECT TOP 1000 * FROM Documenti ORDER BY id_sirio DESC")
+        src_cursor.execute("SELECT TOP 10 * FROM Documenti ORDER BY id_sirio DESC")
+        columns = [column[0] for column in src_cursor.description]
         rows = src_cursor.fetchall()
 
         count = 0
@@ -400,11 +411,203 @@ def sync_fatture_sirioadiuto(request):
             """
 
             # Esegui il merge
-            tgt_cursor.execute(merge_sql)
+            #tgt_cursor.execute(merge_sql)
             count += 1
+            rows = src_cursor.fetchall()
 
-        tgt_conn.commit()
+            data.append([dict(zip(columns, row)) for row in rows])
+
+            return JsonResponse({'status': 'success', 'rows': data}, safe=False)
+        #tgt_conn.commit()
         return JsonResponse({'status': 'success', 'imported_rows': count})
+
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})
+
+    finally:
+        try:
+            src_cursor.close()
+            src_conn.close()
+            tgt_cursor.close()
+            tgt_conn.close()
+        except:
+            pass
+
+
+def sync_fatture_sirioadiuto(request):
+    sirio_server = os.environ.get('SIRIO_DB_SERVER')
+    sirio_user   = os.environ.get('SIRIO_DB_USER')
+
+    adiuto_server = os.environ.get('ADIUTO_DB_SERVER')
+    adiuto_db     = os.environ.get('ADIUTO_DB_NAME')
+    adiuto_user   = os.environ.get('ADIUTO_DB_USER')
+    adiuto_pwd    = os.environ.get('ADIUTO_DB_PASSWORD')
+
+    def build_sirio_conn_str(db_name: str) -> str:
+        return (
+            f"DRIVER={{Pervasive ODBC Unicode Interface}};"
+            f"ServerName={sirio_server};"
+            f"DBQ={db_name};"
+            f"UID={sirio_user};"
+        )
+    
+    def get_sirio_db_names() -> list[str]:
+        # Preferito: variabile singola CSV
+        csv = os.environ.get('SIRIO_DB_NAMES')
+        return [x.strip() for x in csv.split(',') if x.strip()]
+        
+    src_db_name=os.environ.get('SIRIO_DB_NAME')
+    source_conn_str = (
+        f"DRIVER={{Pervasive ODBC Unicode Interface}};"
+        f"ServerName={os.environ.get('SIRIO_DB_SERVER')};"
+        f"DBQ={src_db_name};"
+        f"UID={os.environ.get('SIRIO_DB_USER')};"
+    )
+
+
+    target_conn_str = (
+        f"DRIVER={{ODBC Driver 17 for SQL Server}};"
+        f"SERVER={adiuto_server};"
+        f"DATABASE={adiuto_db};"
+        f"UID={adiuto_user};"
+        f"PWD={adiuto_pwd};"
+    )
+
+    select_sql = """
+        SELECT TOP 10
+            barcode_adiuto,
+            id_sirio,
+            numero_fattura,
+            titolo,
+            data_fattura,
+            data_scadenza,
+            importo,
+            sigla_valuta,
+            tipo_documento,
+            id_fornitore,
+            nome_fornitore,
+            indirizzo_fornitore,
+            altro_indirizzo_fornitore,
+            via_fornitore,
+            npa_fornitore,
+            luogo_fornitore,
+            telefono_fornitore,
+            altro_telefono_fornitore,
+            email_fornitore
+        FROM Documenti
+        ORDER BY id_sirio DESC
+    """
+
+    base_fields = [
+        "barcode_adiuto",
+        "id_sirio",
+        "numero_fattura",
+        "titolo",
+        "data_fattura",
+        "data_scadenza",
+        "importo",
+        "sigla_valuta",
+        "tipo_documento",
+        "id_fornitore",
+        "nome_fornitore",
+        "indirizzo_fornitore",
+        "altro_indirizzo_fornitore",
+        "via_fornitore",
+        "npa_fornitore",
+        "luogo_fornitore",
+        "telefono_fornitore",
+        "altro_telefono_fornitore",
+        "email_fornitore",
+    ]
+
+    all_fields = base_fields + ["db_name"]
+
+    placeholders = ",".join(["?"] * len(all_fields))
+    columns_list = ",".join(all_fields)
+    merge_sql = f"""
+    MERGE dbo.T_SIRIO_FATTUREFORNITORE AS T
+    USING (VALUES ({placeholders})) AS S({columns_list})
+        -- Consigliato: includi db_name nella ON per distinguere le sorgenti
+        ON T.id_sirio = S.id_sirio
+    AND T.numero_fattura = S.numero_fattura
+    AND T.db_name = S.db_name
+    WHEN MATCHED THEN
+        UPDATE SET
+            barcode_adiuto = S.barcode_adiuto,
+            titolo = S.titolo,
+            data_fattura = S.data_fattura,
+            data_scadenza = S.data_scadenza,
+            importo = S.importo,
+            sigla_valuta = S.sigla_valuta,
+            tipo_documento = S.tipo_documento,
+            id_fornitore = S.id_fornitore,
+            nome_fornitore = S.nome_fornitore,
+            indirizzo_fornitore = S.indirizzo_fornitore,
+            altro_indirizzo_fornitore = S.altro_indirizzo_fornitore,
+            via_fornitore = S.via_fornitore,
+            npa_fornitore = S.npa_fornitore,
+            luogo_fornitore = S.luogo_fornitore,
+            telefono_fornitore = S.telefono_fornitore,
+            altro_telefono_fornitore = S.altro_telefono_fornitore,
+            email_fornitore = S.email_fornitore
+            -- Nota: non aggiorno T.db_name perché è parte della ON ed è "identità" della riga
+    WHEN NOT MATCHED THEN
+        INSERT ({columns_list})
+        VALUES ({columns_list});
+    """
+
+    try:
+        db_names = get_sirio_db_names()
+        total_count = 0
+        per_source = []
+        preview_rows = []   # facoltativo: ritorna i records letti (per debug)
+        errors = []
+        with pyodbc.connect(target_conn_str, timeout=5) as tgt_conn:
+            with tgt_conn.cursor() as tgt_cursor:
+
+                for db_name in db_names:
+                    processed = 0
+                    try:
+                        with pyodbc.connect(build_sirio_conn_str(db_name), timeout=5) as src_conn:
+                            with src_conn.cursor() as src_cursor:
+                                src_cursor.execute(select_sql)
+                                rows = src_cursor.fetchall()
+
+                                # opzionale: preview (lista piatta di dict)
+                                columns = [c[0] for c in src_cursor.description]
+                                preview_rows.extend(
+                                    [{'db': db_name, **dict(zip(columns, r))} for r in rows]
+                                )
+
+                                # Esecuzione MERGE per ogni riga
+                                for r in rows:
+                                    # r è un pyodbc.Row: recupero valori nell'ordine definito in "fields"
+                                    params = tuple(getattr(r, fld) for fld in base_fields)
+
+                                    params = params + (db_name,)
+                                    #tgt_cursor.execute(merge_sql, params)
+                                    processed += 1
+
+                        # commit per singola sorgente (così le precedenti restano valide anche se una fallisce)
+                        tgt_conn.commit()
+
+                    except Exception as e:
+                        # rollback della sorgente corrente
+                        tgt_conn.rollback()
+                        errors.append({'db': db_name, 'message': str(e)})
+
+                    total_count += processed
+                    per_source.append({'db': db_name, 'imported_rows': processed})
+
+        resp = {
+            'status': 'success',
+            'imported_rows': total_count,
+            'by_source': per_source,
+            'rows_preview': preview_rows,  # rimuovi in produzione se non serve
+        }
+        if errors:
+            resp['errors'] = errors
+        return JsonResponse(resp, safe=False)
 
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)})
