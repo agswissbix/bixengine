@@ -57,6 +57,8 @@ urlpatterns = [
     path('download_trattativa/', download_trattativa, name='download_trattativa'),
     path('trasferta_pdf/', trasferta_pdf, name='trasferta_pdf'),
     path('loading/', loading, name='loading'),
+    path('new_dashboard/', new_dashboard, name='new_dashboard'),
+    path('logout_view/', logout_view, name='logout_view'),
 
 ]
 
