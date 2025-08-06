@@ -510,7 +510,7 @@ def sync_fatture_sirioadiuto(request):
     )
 
     select_sql = """
-        SELECT TOP 5000 
+        SELECT TOP 10 
             barcode_adiuto,
             id_sirio,
             numero_fattura,
@@ -619,16 +619,26 @@ def sync_fatture_sirioadiuto(request):
                                     [{'db': db_name, **dict(zip(columns, r))} for r in rows]
                                 )
 
-                                # Esecuzione MERGE per ogni riga
                                 for r in rows:
-                                    # r è un pyodbc.Row: recupero valori nell'ordine definito in "fields"
+                                    # --- RAW (in base all’ordine definito da base_fields) ---
                                     raw_values = [getattr(r, fld, None) for fld in base_fields]
 
+                                    # --- NORMALIZZAZIONE PER VARCHAR(50) (come per la MERGE) ---
                                     params_base = tuple(
                                         to_varchar50(fld, val) for fld, val in zip(base_fields, raw_values)
                                     )
 
+                                    # Se vuoi anche vedere la preview, usa i valori normalizzati:
+                                    normalized_map = {
+                                        fld: val for fld, val in zip(base_fields, params_base)
+                                    }
+                                    normalized_map['db_name'] = db_name
+                                    preview_rows.append(normalized_map)
+
+                                    # --- PARAMS PER LA MERGE (se/quando la esegui) ---
                                     params = params_base + (db_name,)
+                                    #tgt_cursor.execute(merge_sql, params)
+                                    # tgt_cursor.execute(merge_sql, params)  # <-- riattiva quando vuoi eseguire davvero
                                     processed += 1
 
                         # commit per singola sorgente (così le precedenti restano valide anche se una fallisce)
