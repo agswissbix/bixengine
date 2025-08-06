@@ -3548,63 +3548,106 @@ def add_dashboard_block(request):
 
 
 def save_form_data(request):
+    """
+    Salva o aggiorna dinamicamente i dati di un form per un utente e un anno specifici.
+    """
     try:
-        data = json.loads(request.body)  
+        # --- 1. Autenticazione e Parsing Input ---
+        # Esempio: DEVI implementare l'autenticazione per ottenere l'utente
+        # user = get_user_from_request(request)
+        # if not user:
+        #     return JsonResponse({"error": "Autenticazione fallita"}, status=401)
 
-        # Tutti i dati inviati
-        year = data.get("year", "")
-        payload = data.get("payload", {})
-        print("[-PAYLOAD-]:", payload)
+        request_data = json.loads(request.body)
+        year = request_data.get("year")
+        payload = request_data.get("payload")
 
+        # Controlla che i dati necessari siano presenti
+        if not year or payload is None:
+            return JsonResponse({"error": "Dati mancanti nella richiesta (year o payload)"}, status=400)
 
+        # --- 2. Recupero del Record Esistente ---
+        # Dovresti recuperare il record specifico per l'utente e l'anno.
+        # Esempio: record, created = UserRecord.objects.get_or_create(user_id=user.id, anno=year)
+        
+        # Per ora, usiamo il tuo esempio
+        record = UserRecord('metrica_annuale', '00000000000000000000000000000023')
 
-        record=UserRecord('metrica_annuale', '00000000000000000000000000000023')
-        record.values['tassa_annua'] = payload.get("tassa_annua")
-        record.values['tassa_ammissione'] = payload.get("tassa_ammissione")
-        record.values['nr_soci'] = payload.get("nr_soci")
-        record.values['uomini'] = payload.get("uomini")
-        record.values['donne'] = payload.get("donne")
-        #soci attivi
-        #soci passivi
-        # soci juniores
-        record.values['eta_media'] = payload.get("eta_media")
-        #cifra affari soci
-        record.values['nr_giri_soci'] = payload.get("nr_giri_soci")
+        # --- 3. Aggiornamento Dinamico dei Valori ---
+        # Il metodo .update() aggiorna il dizionario 'values' con tutte le coppie chiave-valore
+        # presenti nel dizionario 'payload'. Se una chiave esiste già, il suo valore viene sovrascritto.
+        # Se non esiste, viene creata.
+        if hasattr(record, 'values') and isinstance(record.values, dict):
+            record.values.update(payload)
+        else:
+            # Se 'record.values' non esiste, lo crea e lo popola con il payload.
+            record.values = payload
+
+        # --- 4. Salvataggio nel Database ---
         record.save()
 
+        return JsonResponse({"success": True, "message": "Dati salvati con successo."})
 
-        return JsonResponse({"success": True})
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Request body non valido"}, status=400)
     except Exception as e:
-        print("Errore nel parsing JSON:", e)
-        return JsonResponse({"success": False, "error": str(e)}, status=400)
+        # Log dell'errore per il debug
+        print(f"Errore in save_form_data: {e}")
+        return JsonResponse({"error": "Errore interno del server"}, status=500)
 
 
+
+
+#TODO spostare in customapp_wegolf
 def get_form_fields(request):
-    data = json.loads(request.body)  
+    try:
+        request_data = json.loads(request.body)
 
-    # Tutti i dati inviati
-    year = data.get("year", {})
+        year = request_data.get("year")
+        if not year:
+            return JsonResponse({"error": "Anno mancante"}, status=400)
 
-    fields = {}
+        fields = {}
 
-    record=UserRecord('metrica_annuale', '00000000000000000000000000000023')
-    fields['tassa_annua'] = record.values.get('tassa_annua')
-    fields['tassa_ammissione'] = record.values.get('tassa_ammissione')
-    fields['nr_soci'] = record.values.get('nr_soci')
-    fields['uomini'] = record.values.get('uomini')
-    fields['donne'] = record.values.get('donne')
-    #soci attivi
-    #soci passivi
-    # soci juniores
-    fields['eta_media'] = record.values.get('eta_media')
-    #cifra affari soci
-    fields['nr_giri_soci'] = record.values.get('nr_giri_soci')
-    #prezzo cart soci
-    
+        record=UserRecord('metrica_annuale', '00000000000000000000000000000023')
+        values=record.values
+        
+        form_config = {
+                "soci_ospiti": {
+                    "title": "Soci & Ospiti", "icon": "soci", "fields": [
+                        {"type": "heading", "name": "heading_soci", "label": "Dati Soci"},
+                        {"name": "tassa_ammissione", "label": "Tassa ammissione (azioni/fondo perso)", "type": "number", "value": ""},
+                        {"name": "tassa_annua", "label": "Tassa annua (€)", "type": "number", "placeholder": "€", "value": ""},
+                        {"name": "nr_soci", "label": "Nr. soci totali", "type": "number", "value": ""},
+                        {"name": "uomini", "label": "Nr. soci uomini", "type": "number", "value": ""},
+                        {"name": "donne", "label": "Nr. soci donne", "type": "number", "value": ""}
+                    ]
+                },
+                "campo": {
+                    "title": "Campo", "icon": "generic", "fields": [
+                        {"name": "nr_buche", "label": "Numero buche", "type": "number", "value": ""},
+                        # Aggiungi qui altre sezioni e campi se necessario
+                    ]
+                }
+            }
+        
+        saved_values = {}
+        record = UserRecord('metrica_annuale', '00000000000000000000000000000023')
+        saved_values = record.values
+        for section in form_config.values():
+                    for field in section['fields']:
+                        if field.get('name') in saved_values:
+                            # Assegna il valore salvato, gestendo il caso di None
+                            field['value'] = saved_values[field['name']] or ""
+        final_response = {"config": form_config}
+        return JsonResponse(final_response)
 
-                                                   
-
-    return JsonResponse({"success": True, "fields": fields})
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Request body non valido"}, status=400)
+    except Exception as e:
+        # Log dell'errore per il debug
+        print(f"Errore in get_form_fields: {e}")
+        return JsonResponse({"error": "Errore interno del server"}, status=500)
 
 
 #TODO
