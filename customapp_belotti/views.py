@@ -510,7 +510,7 @@ def sync_fatture_sirioadiuto(request):
     )
 
     select_sql = """
-        SELECT TOP 10 
+        SELECT TOP 5000 
             barcode_adiuto,
             id_sirio,
             numero_fattura,
@@ -637,8 +637,7 @@ def sync_fatture_sirioadiuto(request):
 
                                     # --- PARAMS PER LA MERGE (se/quando la esegui) ---
                                     params = params_base + (db_name,)
-                                    #tgt_cursor.execute(merge_sql, params)
-                                    # tgt_cursor.execute(merge_sql, params)  # <-- riattiva quando vuoi eseguire davvero
+                                    tgt_cursor.execute(merge_sql, params)
                                     processed += 1
 
                         # commit per singola sorgente (così le precedenti restano valide anche se una fallisce)
