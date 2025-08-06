@@ -578,7 +578,7 @@ def sync_fatture_sirioadiuto(request):
                                     params = tuple(getattr(r, fld) for fld in base_fields)
 
                                     params = params + (db_name,)
-                                    #tgt_cursor.execute(merge_sql, params)
+                                    tgt_cursor.execute(merge_sql, params)
                                     processed += 1
 
                         # commit per singola sorgente (così le precedenti restano valide anche se una fallisce)
@@ -605,14 +605,6 @@ def sync_fatture_sirioadiuto(request):
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)})
 
-    finally:
-        try:
-            src_cursor.close()
-            src_conn.close()
-            tgt_cursor.close()
-            tgt_conn.close()
-        except:
-            pass
 
 
 
