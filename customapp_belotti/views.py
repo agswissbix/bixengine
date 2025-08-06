@@ -455,14 +455,7 @@ def sync_fatture_sirioadiuto(request):
         # Preferito: variabile singola CSV
         csv = os.environ.get('SIRIO_DB_NAMES')
         return [x.strip() for x in csv.split(',') if x.strip()]
-        
-    src_db_name=os.environ.get('SIRIO_DB_NAME')
-    source_conn_str = (
-        f"DRIVER={{Pervasive ODBC Unicode Interface}};"
-        f"ServerName={os.environ.get('SIRIO_DB_SERVER')};"
-        f"DBQ={src_db_name};"
-        f"UID={os.environ.get('SIRIO_DB_USER')};"
-    )
+
 
 
     target_conn_str = (
@@ -474,7 +467,7 @@ def sync_fatture_sirioadiuto(request):
     )
 
     select_sql = """
-        SELECT TOP 10
+        SELECT TOP 2
             barcode_adiuto,
             id_sirio,
             numero_fattura,
