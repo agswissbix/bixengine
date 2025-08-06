@@ -455,7 +455,45 @@ def sync_fatture_sirioadiuto(request):
         # Preferito: variabile singola CSV
         csv = os.environ.get('SIRIO_DB_NAMES')
         return [x.strip() for x in csv.split(',') if x.strip()]
+    
+    def _normalize_date_to_112(v: Any) -> str | None:
+        """Rende una data come stringa 'YYYYMMDD' (112). Restituisce None se vuoto."""
+        if v is None:
+            return None
+        if isinstance(v, (datetime, date)):
+            return v.strftime('%Y%m%d')
 
+        if isinstance(v, str):
+            s = v.strip()
+            if not s:
+                return None
+            # già YYYYMMDD
+            if re.fullmatch(r'\d{8}', s):
+                return s
+            # YYYY-MM-DD o YYYY/MM/DD
+            m = re.fullmatch(r'(\d{4})[-/](\d{2})[-/](\d{2})', s)
+            if m:
+                return f'{m.group(1)}{m.group(2)}{m.group(3)}'
+            # DD-MM-YYYY o DD/MM/YYYY
+            m = re.fullmatch(r'(\d{2})[-/](\d{2})[-/](\d{4})', s)
+            if m:
+                return f'{m.group(3)}{m.group(2)}{m.group(1)}'
+        # fallback: non riconosciuto → stringa "così com'è"
+        return str(v)
+
+    def to_varchar50(field: str, value: Any) -> str | None:
+        """Normalizza il valore per l'insert/update in una colonna VARCHAR(50)."""
+        if value is None:
+            return None
+
+        if field in VARCHAR50_DATE_FIELDS:
+            out = _normalize_date_to_112(value)
+            return out[:50] if out else None
+
+
+        # Default: stringa trim + cut
+        s = str(value).strip()
+        return s[:50] if s else None
 
 
     target_conn_str = (
@@ -467,7 +505,7 @@ def sync_fatture_sirioadiuto(request):
     )
 
     select_sql = """
-        SELECT TOP 1000
+        SELECT TOP 5000
             barcode_adiuto,
             id_sirio,
             numero_fattura,
@@ -517,6 +555,12 @@ def sync_fatture_sirioadiuto(request):
 
     placeholders = ",".join(["?"] * len(all_fields))
     columns_list = ",".join(all_fields)
+
+
+    # Quali campi tratti come "date" e "decimal"
+    VARCHAR50_DATE_FIELDS    = {'data_fattura', 'data_scadenza'}
+    VARCHAR50_DECIMAL_FIELDS = {'importo'}   # aggiungi qui altri importi se servono
+
     merge_sql = f"""
     MERGE dbo.T_SIRIO_FATTUREFORNITORE AS T
     USING (VALUES ({placeholders})) AS S({columns_list})
@@ -575,10 +619,13 @@ def sync_fatture_sirioadiuto(request):
                                 # Esecuzione MERGE per ogni riga
                                 for r in rows:
                                     # r è un pyodbc.Row: recupero valori nell'ordine definito in "fields"
-                                    params = tuple(getattr(r, fld) for fld in base_fields)
+                                    raw_values = [getattr(r, fld, None) for fld in base_fields]
 
-                                    params = params + (db_name,)
-                                    tgt_cursor.execute(merge_sql, params)
+                                    params_base = tuple(
+                                        to_varchar50(fld, val) for fld, val in zip(base_fields, raw_values)
+                                    )
+
+                                    params = params_base + (db_name,)
                                     processed += 1
 
                         # commit per singola sorgente (così le precedenti restano valide anche se una fallisce)
