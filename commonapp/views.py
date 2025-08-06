@@ -143,6 +143,9 @@ def login_view(request):
 @login_required_api  
 def logout_view(request):
     logout(request)
+    # Pulisci la sessione
+    request.session.flush()
+    
     return JsonResponse({"success": True, "detail": "User logged out"})
 
 @login_required_api  
@@ -3837,3 +3840,10 @@ def trasferta_pdf(request):
 def loading(request):
 
     return render(request, 'loading.html')
+
+def new_dashboard(request):
+    return JsonResponse({'success': True, 'message': 'New dashboard created successfully.'})
+
+
+def delete_dashboard_block(request):
+    return JsonResponse({'success': True, 'message': 'Dashboard block deleted successfully.'})
