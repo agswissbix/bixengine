@@ -435,6 +435,8 @@ def sync_fatture_sirioadiutoBAK(request):
 
 
 def sync_fatture_sirioadiuto(request):
+    
+
     sirio_server = os.environ.get('SIRIO_DB_SERVER')
     sirio_user   = os.environ.get('SIRIO_DB_USER')
 
@@ -443,6 +445,9 @@ def sync_fatture_sirioadiuto(request):
     adiuto_user   = os.environ.get('ADIUTO_DB_USER')
     adiuto_pwd    = os.environ.get('ADIUTO_DB_PASSWORD')
 
+     # Quali campi tratti come "date" e "decimal"
+    VARCHAR50_DATE_FIELDS    = {'data_fattura', 'data_scadenza'}
+    
     def build_sirio_conn_str(db_name: str) -> str:
         return (
             f"DRIVER={{Pervasive ODBC Unicode Interface}};"
@@ -557,9 +562,7 @@ def sync_fatture_sirioadiuto(request):
     columns_list = ",".join(all_fields)
 
 
-    # Quali campi tratti come "date" e "decimal"
-    VARCHAR50_DATE_FIELDS    = {'data_fattura', 'data_scadenza'}
-    VARCHAR50_DECIMAL_FIELDS = {'importo'}   # aggiungi qui altri importi se servono
+   
 
     merge_sql = f"""
     MERGE dbo.T_SIRIO_FATTUREFORNITORE AS T
