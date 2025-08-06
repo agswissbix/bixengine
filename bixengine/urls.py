@@ -10,7 +10,6 @@ urlpatterns = [
     path('logout/', custom_admin_site.logout, name='admin_logout'),    path('auth/login/', login_view, name='login'),
     path('auth/logout/', logout_view, name='logout'),
     path('auth/user/', user_info, name='user_info'),
-    #path('loading/', commonapp.loading, name='loading'),
 
     path('commonapp/', include('commonapp.urls')),
     path('customapp_telefonoamico/', include('customapp_telefonoamico.urls')),

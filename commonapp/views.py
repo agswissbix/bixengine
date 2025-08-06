@@ -3763,7 +3763,7 @@ def trasferta_pdf(request):
 
             context = {
                 "nome": data.get("nome", ""),
-                "cognome": data.get("cognome", ""),
+                "cognome": data.get("cognome", ""), 
                 "reparto": data.get("reparto", ""),
                 "data": data.get("data", ""),
                 "motivo_trasferta": data.get("motivo", ""),
@@ -3772,7 +3772,7 @@ def trasferta_pdf(request):
                 "altri_costi": data.get("altriCosti", ""),
                 "durata": data.get("durata", ""),
             }
-
+ 
             base_dir = os.path.dirname(os.path.abspath(__file__))
             template_path = os.path.join(base_dir, 'templates', 'trasferta.docx')
             doc = DocxTemplate(template_path)
