@@ -505,7 +505,7 @@ def sync_fatture_sirioadiuto(request):
     )
 
     select_sql = """
-        SELECT TOP 5000
+        SELECT TOP 5000 
             barcode_adiuto,
             id_sirio,
             numero_fattura,
