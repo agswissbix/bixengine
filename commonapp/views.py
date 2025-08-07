@@ -3378,7 +3378,7 @@ def get_dashboard_blocks(request):
                 # if they are null set default values
                 if block['gsw'] == None or block['gsw'] == '':
                     block['gsw'] = 3
-                    block['gsh'] = 2
+                    block['gsh'] = 4
 
                 width = results['width']
                 if width == None or width == 0 or width == '':
@@ -3386,7 +3386,7 @@ def get_dashboard_blocks(request):
 
                 height = results['height']
                 if height == None or height == 0 or height == '':
-                    height = '50%'
+                    height= '50%'
                 
                 if results['reportid'] is None or results['reportid'] == 0:
 
@@ -3842,8 +3842,42 @@ def loading(request):
     return render(request, 'loading.html')
 
 def new_dashboard(request):
+
+    data = json.loads(request.body)
+    dashboard_name = data.get('dashboard_name')
+
+    userid = request.user.id
+    userid = HelpderDB.sql_query_row(f"SELECT sys_user_id FROM v_users WHERE id = {userid}")['sys_user_id']
+
+
+    HelpderDB.sql_execute(
+        f"INSERT INTO sys_dashboard (userid, name) VALUES ('1', '{dashboard_name}')"
+    )
+
+    dashboardid = HelpderDB.sql_query_row(
+        f"SELECT id FROM sys_dashboard WHERE userid = '1' AND name = '{dashboard_name}'"
+    )['id']
+
+
+
+
+    HelpderDB.sql_execute(
+        f"INSERT INTO sys_user_dashboard (userid, dashboardid) VALUES ('{userid}', '{dashboardid}')"
+    )
+
+
     return JsonResponse({'success': True, 'message': 'New dashboard created successfully.'})
 
 
 def delete_dashboard_block(request):
+    data = json.loads(request.body)
+    blockid = data.get('blockid')
+    dashboardid = data.get('dashboardid')
+    userid = request.user.id
+    userid = HelpderDB.sql_query_row(f"SELECT sys_user_id FROM v_users WHERE id = {userid}")['sys_user_id']
+    
+    HelpderDB.sql_execute(
+        f"DELETE FROM sys_user_dashboard_block WHERE id = '{blockid}' AND userid = '{userid}' AND dashboardid = '{dashboardid}'"
+    )
+
     return JsonResponse({'success': True, 'message': 'Dashboard block deleted successfully.'})
