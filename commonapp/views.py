@@ -3604,6 +3604,66 @@ def save_form_data(request):
 #TODO spostare in customapp_wegolf
 def get_form_fields(request):
     try:
+        def create_form_config(sys_fields):
+            """
+            Genera dinamicamente la configurazione del form (form_config)
+            a partire da una lista di campi (sys_fields).
+
+            Args:
+                sys_fields (list): Una lista di dizionari, dove ogni dizionario
+                                rappresenta un campo del database.
+
+            Returns:
+                dict: Il dizionario form_config strutturato.
+            """
+            form_config = {}
+            # Un set per tenere traccia delle intestazioni (sublabel) già aggiunte
+            # per ogni gruppo, per evitare duplicati.
+            added_headings = {}
+
+            for field in sys_fields:
+                # Estrai le informazioni dal campo corrente
+                group_name = field.get("label")
+                sub_group_name = field.get("sublabel")
+                field_name = field.get("fieldid")
+                field_label = field.get("description")
+                field_type = field.get("explanation")
+
+                # Se il gruppo principale non esiste in form_config, lo inizializzo
+                if group_name not in form_config:
+                    form_config[group_name] = {
+                        "title": group_name,
+                        "icon": "generic",  # Icona di default
+                        "fields": []
+                    }
+                    # Inizializzo anche il set per le intestazioni di questo gruppo
+                    added_headings[group_name] = set()
+
+                # Se c'è un sottogruppo (sublabel) e non è ancora stato aggiunto come heading,
+                # lo creo e lo aggiungo.
+                if sub_group_name and sub_group_name not in added_headings[group_name]:
+                    heading = {
+                        "type": "heading",
+                        # Creo un nome univoco per l'heading per sicurezza
+                        "name": f"heading_{sub_group_name.lower().replace(' ', '_')}",
+                        "label": sub_group_name
+                    }
+                    form_config[group_name]["fields"].append(heading)
+                    # Marco questo heading come aggiunto per non ripeterlo
+                    added_headings[group_name].add(sub_group_name)
+
+                # Creo il dizionario del campo effettivo
+                form_field = {
+                    "name": field_name,
+                    "label": field_label,
+                    "type": field_type,
+                    "value": "" # Valore di default vuoto come da esempio
+                }
+
+                # Aggiungo il campo alla lista dei campi del suo gruppo
+                form_config[group_name]["fields"].append(form_field)
+
+            return form_config
         request_data = json.loads(request.body)
 
         year = request_data.get("year")
@@ -3614,25 +3674,37 @@ def get_form_fields(request):
 
         record=UserRecord('metrica_annuale', '00000000000000000000000000000023')
         values=record.values
-        
+        sys_fields= HelpderDB.sql_query(f"SELECT * FROM sys_field WHERE tableid='metrica_annuale' AND explanation is not null")
         form_config = {
-                "soci_ospiti": {
+                "Soci & Ospiti": {
                     "title": "Soci & Ospiti", "icon": "soci", "fields": [
-                        {"type": "heading", "name": "heading_soci", "label": "Dati Soci"},
+                        {"type": "heading", "name": "Dati Soci", "label": "Dati Soci"},
                         {"name": "tassa_ammissione", "label": "Tassa ammissione (azioni/fondo perso)", "type": "number", "value": ""},
                         {"name": "tassa_annua", "label": "Tassa annua (€)", "type": "number", "placeholder": "€", "value": ""},
                         {"name": "nr_soci", "label": "Nr. soci totali", "type": "number", "value": ""},
                         {"name": "uomini", "label": "Nr. soci uomini", "type": "number", "value": ""},
-                        {"name": "donne", "label": "Nr. soci donne", "type": "number", "value": ""}
+                        {"name": "donne", "label": "Nr. soci donne", "type": "number", "value": ""},
+                        {"name": "aktiv", "label": "Soci attivi", "type": "number", "value": ""},#TODO
+                        {"name": "passiv", "label": "Soci passivi", "type": "number", "value": ""},#TODO
+                        {"name": "junioren", "label": "Soci Juniores", "type": "number", "value": ""},#TODO
+                        {"name": "eta_media", "label": "Età media soci", "type": "number", "value": ""},
+                        {"name": "cifra_affari", "label": "Cifra affari soci", "type": "number", "value": ""},
+                        {"name": "nr_giri_soci", "label": "Nr giri soci", "type": "number", "value": ""},
+                        {"name": "prezzo_cart", "label": "Prezzo cart soci", "type": "number", "value": ""},
+                        {"name": "prezzo_trolley_elettrico", "label": "Prezzo trolley elettrico soci", "type": "number", "value": ""},
+                        {"name": "prezzo_trolley_manuale", "label": "Prezzo trolley manuale soci", "type": "number", "value": ""},
+                        {"name": "tassa_gara_club", "label": "Tassa gara club", "type": "number", "value": ""},
                     ]
                 },
-                "campo": {
+                "Campo": {
                     "title": "Campo", "icon": "generic", "fields": [
                         {"name": "nr_buche", "label": "Numero buche", "type": "number", "value": ""},
                         # Aggiungi qui altre sezioni e campi se necessario
                     ]
                 }
             }
+        
+        form_config = create_form_config(sys_fields)
         
         saved_values = {}
         record = UserRecord('metrica_annuale', '00000000000000000000000000000023')
