@@ -50,7 +50,6 @@
 
     function newTable() {
         $('.secondary-level').html('');
-        window.alert("csrftoken: " + getCookie('csrftoken'));
 
         $.ajax({
             type: "POST",
@@ -407,8 +406,8 @@
 
 </script>
 
-<div id="settings_table" style="height: 100%; width: 100%; overflow-x: auto; overflow-y: hidden;">
-    <div style="width: 200%; height: 100%;">
+    <div id="settings_table" style="height: 95%; width: 100%; overflow-x: auto; overflow-y: hidden; transform: rotateX(180deg);">
+    <div style="width: 200%; height: 100%; transform: rotateX(180deg);">
 
     <div id="settings_table_users" style="width: 10%;float: left;">
         Utenti <br/>
@@ -430,7 +429,6 @@
         <br>
         <button class="btn btn-primary" onclick="newTable()">Nuova tabella</button>
         <br>
-        {% url 'settings_table_newtable' %}
         <br>
         <button class="btn btn-secondary" onclick="getWorkspaces()">Impostazioni workspaces</button>
 

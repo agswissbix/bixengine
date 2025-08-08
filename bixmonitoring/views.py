@@ -5,10 +5,11 @@ from datetime import datetime, timedelta
 from django.db import connection
 from django.shortcuts import redirect, render
 
+from django.contrib.auth.decorators import login_required
 from commonapp.bixmodels.user_record import UserRecord
 
 
-
+@login_required(login_url='/login/')
 def lista_monitoring(request):
     cliente_id = request.GET.get('cliente_id', 'all')
     tipo = request.GET.get('tipo', 'services')
@@ -42,6 +43,7 @@ def lista_monitoring(request):
     }
     return render(request, 'lista_monitoring.html', context)
 
+@login_required(login_url='/login/')
 def get_output(func, output, run_at, cliente_id):
     print(f"DEBUG - Tipo output: {type(output)}; Valore output: {output}")
 
@@ -71,6 +73,7 @@ def get_output(func, output, run_at, cliente_id):
     # Salvataggio su user_monitoring
     salva_user_monitoring(status, run_at, func, output_type, values, cliente_id)
 
+@login_required(login_url='/login/')
 def salva_user_monitoring(status, run_at, func, output_type, values, cliente_id):
     data = run_at.date().isoformat()
     ora = run_at.strftime("%H:%M:%S")
@@ -97,6 +100,7 @@ def salva_user_monitoring(status, run_at, func, output_type, values, cliente_id)
 
         record.save()
 
+@login_required(login_url='/login/')
 def salva_sys_monitoring(run_at, func, output_type, output, cliente_id):
     data = run_at.date().isoformat()  
     ora = run_at.strftime("%H:%M:%S") 
@@ -107,6 +111,7 @@ def salva_sys_monitoring(run_at, func, output_type, output, cliente_id):
             VALUES (%s, %s, %s, %s, %s, %s);
         """, [data, ora, cliente_id, func, output_type, output])
 
+@login_required(login_url='/login/')
 def get_distinct_values(cliente_id=None, tipo=None):
     with connection.cursor() as cursor:
         # Recupero client_id
@@ -146,6 +151,7 @@ def get_distinct_values(cliente_id=None, tipo=None):
 
     return cliente_ids, tipi, parametri
 
+@login_required(login_url='/login/')
 def get_filtered_values(client_id, tipo, parametro, periodo=None):
     # Normalizza parametro in lista di valori validi
     if isinstance(parametro, list):
@@ -182,7 +188,7 @@ def get_filtered_values(client_id, tipo, parametro, periodo=None):
                   AND (%s = 'all' OR tipo = %s)
                   {'' if not param_list else 'AND parametro IN %s'}
                 GROUP BY parametro
-            ) latest ON um.parametro = latest.parametro 
+            ) latest ON um.parametro = latest.parametro
                      AND CONCAT(um.data, ' ', um.ora) = latest.max_datetime
             WHERE (%s = 'all' OR um.client_id = %s)
               AND (%s = 'all' OR um.tipo = %s)
