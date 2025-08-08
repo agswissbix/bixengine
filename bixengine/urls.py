@@ -18,7 +18,6 @@ urlpatterns = [
     path('customapp_belotti/', include('customapp_belotti.urls')),
     path('settings/', include('bixsettings.urls')),
 
-    # ✅ App migrati da bixadmin
     path('scheduler/', include('bixscheduler.urls')),
     path('monitoring/', include('bixmonitoring.urls')),
 ]

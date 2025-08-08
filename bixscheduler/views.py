@@ -11,6 +11,7 @@ import importlib
 HOOK_PATH = 'bixscheduler.hooks.on_task_success'
 FUNC_PATH = 'bixscheduler.tasks.'
 
+@login_required(login_url='/login/')
 def toggle_scheduler(request, schedule_id):
     schedule = get_object_or_404(Schedule, id=schedule_id)
     if schedule.next_run is None:
@@ -40,7 +41,7 @@ def delete_scheduler(request, schedule_id):
         schedule.delete()
     return redirect('lista_schedule')
 
-#@login_required(login_url='/login/')
+@login_required(login_url='/login/')
 def lista_schedule(request):
     if request.method == 'POST':
         schedule_id = request.POST.get('id')
@@ -98,6 +99,7 @@ def lista_schedule(request):
         'available_tasks': available_tasks
     })
 
+@login_required(login_url='/login/')
 def restart_schedule(schedule):
     now, ref, stype = timezone.now(), schedule.next_run, schedule.schedule_type
 
@@ -150,6 +152,7 @@ def restart_schedule(schedule):
     schedule.save(update_fields=['next_run'])
     schedule.display_next_run = next_run + timedelta(hours=2)
 
+@login_required(login_url='/login/')
 def aggiungi_scheduler(request):
     if request.method == 'POST':
         now = timezone.now()

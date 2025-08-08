@@ -73,5 +73,12 @@ urlpatterns = [
     path('get_workspaces/', settings_views.get_workspaces, name='get_workspaces'),
     path('save_workspace_settings/', settings_views.save_workspace_settings, name='save_workspace_settings'),
     path('get_script_page/', settings_views.get_script_page, name='get_script_page'),
+
+    path('chart/', settings_views.get_render_content_chart, name='charts_view'),
+    path('block_records_chart/', settings_views.get_block_records_chart, name='block_records_chart'),
+    path('save_chart_settings/', settings_views.save_chart_settings, name='save_chart_settings'),
+    path('new_chart_block/', settings_views.new_chart_block, name='new_chart_block'),
+    path('settings_charts/', settings_views.settings_charts, name='settings_charts'),
+
 ]
 
