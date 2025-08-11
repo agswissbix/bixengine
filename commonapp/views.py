@@ -3954,3 +3954,10 @@ def delete_dashboard_block(request):
     )
 
     return JsonResponse({'success': True, 'message': 'Dashboard block deleted successfully.'})
+
+def get_user_theme(request):
+    userid = request.user.id
+    userid = HelpderDB.sql_query_row(f"SELECT sys_user_id FROM v_users WHERE id = {userid}")['sys_user_id']
+
+    theme = HelpderDB.sql_query_row(f"SELECT value FROM sys_user_settings WHERE userid = '{userid}' AND setting = 'theme'")
+    return JsonResponse({'success': True, 'theme': theme})

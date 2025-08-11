@@ -60,6 +60,7 @@ urlpatterns = [
     path('new_dashboard/', new_dashboard, name='new_dashboard'),
     path('logout_view/', logout_view, name='logout_view'),
     path('delete_dashboard_block/', delete_dashboard_block, name='delete_dashboard_block'),
+    path('get_user_theme/', get_user_theme, name='get_user_theme')
 
 ]
 
