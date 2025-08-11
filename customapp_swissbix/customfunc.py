@@ -39,3 +39,8 @@ def save_record_fields(tableid,recordid):
         if record_deal.values['dealstatus'] is None or (record_deal.values['dealstatus'] != 'Vinta' and record_deal.values['dealstatus'] != 'Persa'):
             record_deal.values['dealstatus']='Aperta'
         record_deal.save()
+
+
+
+def card_task_pianificaperoggi(recordid):
+    print("card_task_pianificaperoggi")

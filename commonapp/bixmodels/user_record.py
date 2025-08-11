@@ -213,6 +213,7 @@ class UserRecord:
             return_fields.append(return_field)
         return return_fields
     
+    @timing_decorator
     def get_record_results_fields(self):
         return_fields=[]
         sql = f"SELECT sys_field.* FROM sys_field join sys_user_field_order on sys_field.id=sys_user_field_order.fieldid WHERE sys_field.tableid='{self.tableid}' AND sys_user_field_order.userid=1 AND sys_user_field_order.tableid='{self.tableid}' AND typePreference='search_results_fields' ORDER BY fieldorder asc"

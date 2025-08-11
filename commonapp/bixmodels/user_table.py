@@ -43,6 +43,7 @@ class UserTable:
     def get_total_records_count(self):
         return self._total_records_count
 
+    @timing_decorator
     def get_table_records(self,viewid='',searchTerm='', conditions_list=list(),fields=None,offset=0,limit=None,orderby='recordid_ desc'):
         columns = self.get_results_columns()
         fields=[]
@@ -51,6 +52,7 @@ class UserTable:
         records = self.get_records(viewid,searchTerm,conditions_list,fields,offset,limit,orderby,columns)
         return records
     
+    @timing_decorator
     def get_table_records_obj(self, viewid='', searchTerm='', conditions_list=list(), fields=None, offset=0, limit=None, orderby='recordid_ desc', master_tableid=None, master_recordid=None):
         """
         Recupera i record e le loro proprietà come lista di oggetti UserRecord ottimizzata.
@@ -108,6 +110,9 @@ class UserTable:
         # Restituisce la lista di oggetti UserRecord popolati
         return records_obj_list
     
+
+    
+    @timing_decorator
     def get_records(self,viewid='',searchTerm='', conditions_list=list(),fields=None,offset=0,limit=None,orderby='recordid_ desc',columns=None):
         
         """Ottieni elenco record in base ai parametri di ricerca
