@@ -109,6 +109,7 @@ def test_connection_post(request):
 
 
 @ensure_csrf_cookie
+@csrf_exempt
 def get_csrf(request):
     """
     Assicura che venga impostato un cookie CSRF in risposta.
