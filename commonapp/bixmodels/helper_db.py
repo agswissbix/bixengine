@@ -4,7 +4,7 @@ from django.contrib.auth.decorators import login_required
 import time
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib import messages
-from django.db import connection, connections
+from django.db import connection, connections, DatabaseError
 from django.http import JsonResponse
 from django.contrib.auth.models import Group, Permission, User, Group
 from django_user_agents.utils import get_user_agent
@@ -17,6 +17,7 @@ import os
 from django.conf import settings
 from django.core.files.storage import default_storage
 from pathlib import Path
+
 
 
 class HelpderDB:
@@ -158,3 +159,65 @@ class HelpderDB:
             return list(value)
         # qualunque altro oggetto (tipicamente str)
         return [v.strip() for v in str(value).split(';') if v.strip()]
+    
+
+    @classmethod
+    def get_linked_records_by_ids(cls, table_name: str, key_field: str, record_ids: list):
+        """
+        Recupera in modo sicuro i record da una tabella collegata usando una lista di ID.
+
+        Args:
+            table_name (str): Il nome della tabella utente (es. 'customers').
+            key_field (str): Il campo da restituire come valore (es. 'companyname').
+            record_ids (list): Una lista di recordid_ da cercare.
+
+        Returns:
+            list: Una lista di dizionari, ognuno contenente 'recordid_' e il valore del key_field.
+                  Restituisce una lista vuota se non ci sono ID o risultati.
+        """
+        # 1. Caso base: se la lista di ID è vuota, non fare nulla.
+        if not record_ids:
+            return []
+
+        # 2. Sicurezza: Controlla che i nomi della tabella e del campo siano validi
+        #    identificatori SQL per prevenire SQL injection su di essi.
+        if not table_name.isidentifier() or not key_field.isidentifier():
+            # Logga l'errore o solleva un'eccezione più specifica
+            print(f"ERRORE: Nome tabella o campo non valido: {table_name}, {key_field}")
+            raise ValueError("Tentativo di usare un nome di tabella o campo non valido.")
+
+        # 3. Prepara la query parametrizzata
+        #    Crea un numero di placeholder (%s) pari al numero di ID.
+        placeholders = ', '.join(['%s'] * len(record_ids))
+        
+        # La query SQL è sicura perché i valori verranno inseriti dal driver del DB,
+        # non tramite formattazione di stringhe.
+        # Nota: `recordid_` e `key_field` sono stati validati sopra.
+        sql = f"""
+            SELECT recordid_, {key_field}
+            FROM user_{table_name}
+            WHERE recordid_ IN ({placeholders})
+        """
+        
+        # 4. Esegui la query in modo sicuro
+        #    Questo è un esempio, adatta al tuo modo di eseguire query.
+        results = []
+        try:
+            with connection.cursor() as cursor:
+                # Il driver del DB sostituirà i '%s' con i valori in record_ids,
+                # gestendo l'escaping e prevenendo injection.
+                cursor.execute(sql, record_ids)
+                
+                # Converte i risultati in una lista di dizionari per comodità
+                columns = [col[0] for col in cursor.description]
+                results = [
+                    dict(zip(columns, row))
+                    for row in cursor.fetchall()
+                ]
+        except DatabaseError  as e:
+            # Logga l'errore del database
+            print(f"Errore DB in get_linked_records_by_ids: {e}")
+            # Potresti voler sollevare l'eccezione o restituire una lista vuota
+            return []
+            
+        return results

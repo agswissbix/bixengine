@@ -18,6 +18,8 @@ from commonapp.bixmodels.helper_db import HelpderDB
 from typing import List, Any
 import re
 from typing import Any, List, Tuple, Dict
+import time
+import functools # <-- Aggiungi se non c'è
 
 
 def login_required_api(view_func):
@@ -76,6 +78,57 @@ def _coerce_value(raw: str) -> Any:
     # Fallback: stringa così com'è
     return raw
 
+
+# =================================================================
+#  DECORATOR PER LA MISURAZIONE DEL TEMPO DI ESECUZIONE
+# =================================================================
+def timing_decorator(func):
+    """
+    Un decorator che stampa su console il tempo di esecuzione 
+    della funzione a cui è applicato.
+    """
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        print(f"⏱️  Esecuzione di '{func.__name__}'...")
+        start_time = time.perf_counter()
+        
+        # Esegue la funzione originale
+        result = func(*args, **kwargs)
+        
+        end_time = time.perf_counter()
+        total_time = end_time - start_time
+        
+        print(f"✅  '{func.__name__}' eseguita in {total_time:.4f} secondi.")
+        return result
+    return wrapper
+
+
+# =================================================================
+#  CONTEXT MANAGER PER LA MISURAZIONE DI BLOCCHI DI CODICE
+# =================================================================
+class CodeTimer:
+    """
+    Un context manager per misurare il tempo di esecuzione di un blocco di codice.
+
+    Uso:
+        with CodeTimer("Nome del blocco"):
+            # Il tuo codice da misurare
+            time.sleep(1)
+    """
+    def __init__(self, name="Blocco di codice"):
+        self.name = name
+        self.start_time = None
+
+    def __enter__(self):
+        """Viene eseguito all'inizio del blocco 'with'."""
+        self.start_time = time.perf_counter()
+        print(f"⏱️  [INIZIO] Esecuzione di '{self.name}'...")
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """Viene eseguito alla fine del blocco 'with'."""
+        elapsed_time = time.perf_counter() - self.start_time
+        print(f"✅  [FINE] '{self.name}' eseguito in {elapsed_time:.4f} secondi.")
 
 
 class Helper:
