@@ -4159,3 +4159,16 @@ def get_user_theme(request):
 
     theme = HelpderDB.sql_query_row(f"SELECT value FROM sys_user_settings WHERE userid = '{userid}' AND setting = 'theme'")
     return JsonResponse({'success': True, 'theme': theme})
+
+def set_user_theme(request):
+
+    data = json.loads(request.body)
+    theme = data.get("theme")
+
+    userid = request.user.id
+
+    userid = HelpderDB.sql_query_row(f"SELECT sys_user_id FROM v_users WHERE id = {userid}")['sys_user_id']
+
+    HelpderDB.sql_execute(f"UPDATE sys_user_settings SET value = '{theme}' WHERE userid = '{userid}' AND setting = 'theme'")
+
+    return JsonResponse({'success': True, 'message': 'User theme updated successfully.'})
