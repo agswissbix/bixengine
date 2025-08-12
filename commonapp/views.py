@@ -886,6 +886,8 @@ def get_pitservice_pivot_lavanderia(request):
     response_data["columns"] = []
     data = json.loads(request.body)
     tableid = data.get("tableid")
+    view = data.get("view")
+    searchterm = data.get("searchTerm")
     table=UserTable(tableid)
 
     #TODO 
@@ -895,15 +897,10 @@ def get_pitservice_pivot_lavanderia(request):
     if tableid == "rendicontolavanderia":
         # 1. Lettura (UNICA query) + filtro anno opzionale
         anno_filter = globals().get("anno_filter")       # es. "2025"
-        sql = """
-            SELECT *
-            FROM user_rendicontolavanderia
-            WHERE deleted_ = 'N'
-        """
-        if anno_filter:
-            sql += f" AND anno = '{anno_filter}'"
+        
+        rows=table.get_pivot_records(viewid=view, searchTerm=searchterm, limit=10000)
 
-        df = pd.DataFrame(HelpderDB.sql_query(sql))
+        df = pd.DataFrame(rows)
 
         # 2. Elenco mesi nel formato presente nel DB (es. "04-Aprile")
         mesi = [
@@ -3612,6 +3609,17 @@ def get_dashboard_blocks(request):
                             groupby = f"DATE_FORMAT({groupby}, '%Y-%m-%d')"
                         if results['custom'] == 'group_by_month':
                             groupby = f"DATE_FORMAT({groupby}, '%Y-%m')"
+                    
+                    if results['operation'] == 'conta':
+                        fields = results['fieldid'].split(';')
+                        for field in fields:
+                            field = 'COUNT(' + field + ')'
+                            selected += field + ','
+                        groupby = results['groupby']
+                        if results['custom'] == 'group_by_day':
+                            groupby = f"DATE_FORMAT({groupby}, '%Y-%m-%d')"
+                        if results['custom'] == 'group_by_month':
+                            groupby = f"DATE_FORMAT({groupby}, '%Y-%m')"
 
                     query_conditions = results['query_conditions']
                     #userid = get_userid(request.user.id)
@@ -3663,20 +3671,20 @@ def get_chart(request, sql, id, name, layout, fields):
     with connection.cursor() as cursor2:
         cursor2.execute(query)
         rows = cursor2.fetchall()
-        formatted_rows = []
-        for row in rows:
-            formatted_row = [str(value) if not isinstance(value, (int, float)) else value for value in row]
-            formatted_rows.append(formatted_row)
+       # formatted_rows = []
+        #for row in rows:
+         #   formatted_row = [str(value) if not isinstance(value, (int, float)) else value for value in row]
+          #  formatted_rows.append(formatted_row)
 
-        rows = formatted_rows
+       # rows = formatted_rows
         value = []
         for num in range(0, len(fields_chart)):
             value.append([row[num] for row in rows])
 
         labels = [row[-1] for row in rows]
 
-        if None in labels:
-            labels = ['Non assegnato' if v is None else v for v in labels]
+        if None in labels or 'None' in labels or '' in labels:
+            labels = ['Non assegnato' if v is None or v == 'None' or v == '' else v for v in labels]
 
         for i in range(len(value)):
             for j in range(len(value[i])):

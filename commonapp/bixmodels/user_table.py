@@ -110,7 +110,21 @@ class UserTable:
         # Restituisce la lista di oggetti UserRecord popolati
         return records_obj_list
     
+    @timing_decorator
+    def get_pivot_records(self,viewid='',searchTerm='', conditions_list=list(),fields=None,offset=0,limit=None,orderby='recordid_ desc'):
+        sql=f"""
+            SELECT *
+            FROM sys_field
+            WHERE 
+            tableid = '{self.tableid}'
+            """
+        columns=HelpderDB.sql_query(sql)
 
+        fields=[]
+        for column in columns:
+            fields.append(column['fieldid'])
+        records = self.get_records(viewid,searchTerm,conditions_list,fields,offset,limit,orderby,columns)
+        return records
     
     @timing_decorator
     def get_records(self,viewid='',searchTerm='', conditions_list=list(),fields=None,offset=0,limit=None,orderby='recordid_ desc',columns=None):
