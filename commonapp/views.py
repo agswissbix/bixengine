@@ -4177,6 +4177,11 @@ def set_user_theme(request):
 
     userid = HelpderDB.sql_query_row(f"SELECT sys_user_id FROM v_users WHERE id = {userid}")['sys_user_id']
 
-    HelpderDB.sql_execute(f"UPDATE sys_user_settings SET value = '{theme}' WHERE userid = '{userid}' AND setting = 'theme'")
+    #check if the record at the db exists before
+    existing_record = HelpderDB.sql_query_row(f"SELECT * FROM sys_user_settings WHERE userid = '{userid}' AND setting = 'theme'")
+    if not existing_record:
+        HelpderDB.sql_execute(f"INSERT INTO sys_user_settings (userid, setting, value) VALUES ('{userid}', 'theme', '{theme}')")
+    else:
+        HelpderDB.sql_execute(f"UPDATE sys_user_settings SET value = '{theme}' WHERE userid = '{userid}' AND setting = 'theme'")
 
     return JsonResponse({'success': True, 'message': 'User theme updated successfully.'})
