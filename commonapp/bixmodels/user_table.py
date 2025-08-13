@@ -46,7 +46,9 @@ class UserTable:
         return self._total_records_count
 
     @timing_decorator
-    def get_table_records(self,viewid='',searchTerm='', conditions_list=list(),fields=None,offset=0,limit=None,orderby='recordid_ desc'):
+    def get_table_records(self,viewid='',searchTerm='', conditions_list=None,fields=None,offset=0,limit=None,orderby='recordid_ desc'):
+        if conditions_list is None:
+            conditions_list = []
         columns = self.get_results_columns()
         fields=[]
         for column in columns:
@@ -55,11 +57,13 @@ class UserTable:
         return records
     
     @timing_decorator
-    def get_table_records_obj(self, viewid='', searchTerm='', conditions_list=list(), fields=None, offset=0, limit=None, orderby='recordid_ desc', master_tableid=None, master_recordid=None):
+    def get_table_records_obj(self, viewid='', searchTerm='', conditions_list=None, fields=None, offset=0, limit=None, orderby='recordid_ desc', master_tableid=None, master_recordid=None):
         """
         Recupera i record e le loro proprietà come lista di oggetti UserRecord ottimizzata.
         ORA gestisce anche l'eager loading dei dati collegati.
         """
+        if conditions_list is None:
+            conditions_list = []
         if master_tableid and master_recordid:
             conditions_list.append(f"recordid{master_tableid}_='{master_recordid}'")
 
@@ -147,7 +151,9 @@ class UserTable:
         return records_obj_list
     
     @timing_decorator
-    def get_pivot_records(self,viewid='',searchTerm='', conditions_list=list(),fields=None,offset=0,limit=None,orderby='recordid_ desc'):
+    def get_pivot_records(self,viewid='',searchTerm='', conditions_list=None,fields=None,offset=0,limit=None,orderby='recordid_ desc'):
+        if conditions_list is None:
+            conditions_list = []
         sql=f"""
             SELECT *
             FROM sys_field
@@ -163,7 +169,7 @@ class UserTable:
         return records
     
     @timing_decorator
-    def get_records(self,viewid='',searchTerm='', conditions_list=list(),fields=None,offset=0,limit=None,orderby='recordid_ desc',columns=None):
+    def get_records(self,viewid='',searchTerm='', conditions_list=None,fields=None,offset=0,limit=None,orderby='recordid_ desc',columns=None):
         
         """Ottieni elenco record in base ai parametri di ricerca
 
@@ -175,6 +181,8 @@ class UserTable:
         Returns:
             _type_: lista di dict dei risultati
         """ 
+        if conditions_list is None:
+            conditions_list = []
         select_fields=f"user_{self.tableid}.*"
         fromsql=f"FROM user_{self.tableid}"
 
