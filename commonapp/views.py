@@ -580,9 +580,9 @@ def get_calendar_records(request):
                 
                 row['css'] = 'bg-green-100 border-l-4 border-red-500 text-red-800 dark:bg-red-900/50 dark:border-red-400 dark:text-red-200'
                 if tipo_assenza=='Vacanza':
-                    row['css'] = 'bg-green-100 border-l-4 border-red-500 text-red-800 dark:bg-red-900/50 dark:border-red-400 dark:text-red-200'
+                    row['css'] = 'bg-green-100 border-l-4 border-green-500 text-green-800 dark:bg-green-900/50 dark:border-green-400 dark:text-green-200'
                 if tipo_assenza=='Malattia':
-                    row['css'] = 'bg-green-100 border-l-4 border-red-500 text-red-800 dark:bg-red-900/50 dark:border-red-400 dark:text-red-200'
+                    row['css'] = 'bg-red-100 border-l-4 border-red-500 text-red-800 dark:bg-red-900/50 dark:border-red-400 dark:text-red-200'
                 row['fields'] = []
                 response_data['rows'].append(row)
                 
