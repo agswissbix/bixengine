@@ -40,48 +40,121 @@ class UserRecord:
         self.master_tableid = master_tableid
         self.master_recordid = master_recordid
         self.values = {}
-        self.fields = {} # Questo conterrà le definizioni dei campi arricchite con i valori
-        self.context = 'insert_fields' # Mantenuto se serve
-
+        self.fields = {} # Conterrà le definizioni arricchite con 'value' e 'convertedvalue'
+        
         if _prefetched_data:
-            # --- Caso OTTIMIZZATO: Popola dai dati prefetched ---
-            if 'values' not in _prefetched_data or 'fields_definitions' not in _prefetched_data:
-                 raise ValueError("Dati prefetched incompleti per UserRecord.")
-
-            self.values = _prefetched_data['values'] # Dati grezzi del record
-            self.recordid = self.values.get('recordid_') # Assicurati che recordid sia corretto
-
-            # Popola self.fields combinando definizioni e valori
+            # --- Caso OTTIMIZZATO ---
+            self.values = _prefetched_data['values']
+            self.recordid = self.values.get('recordid_')
             field_definitions = _prefetched_data['fields_definitions']
+            # NUOVO: estrai le mappe di dati pre-caricati
+            eager_loaded_data = _prefetched_data.get('eager_loaded_data', {})
+
             for fieldid, definition_template in field_definitions.items():
-                field_instance_definition = definition_template.copy()
-                value = self.values.get(fieldid)
-                if value is None:
-                    value = ""
+                field_instance = definition_template.copy()
+                if fieldid.startswith('_'):
+                    # Se fieldid è '_esempio', la chiave per il valore diventa 'esempio_'
+                    value_key = f"{fieldid[1:]}_"
+                else:
+                    # Altrimenti, usa il fieldid così com'è
+                    value_key = fieldid
 
-                field_instance_definition['value'] = value
-                # Calcola 'convertedvalue' qui o lascialo ai metodi getter se preferisci
-                field_instance_definition['convertedvalue'] = self._convert_display_value(field_instance_definition, value)
+                # Recupera il valore usando la chiave determinata
+                raw_value = self.values.get(value_key, "")
 
-                self.fields[fieldid] = field_instance_definition
+                field_instance['value'] = raw_value
+                
+                # MODIFICATO: Calcola il valore convertito usando i dati eager-loaded
+                field_instance['convertedvalue'] = self._convert_display_value(
+                    field_instance, eager_loaded_data
+                )
+                
+                # NUOVO: Arricchiamo il field con dati utili al frontend
+                if field_instance.get('fieldtypeid') == 'Utente' and raw_value:
+                    try:
+                        field_instance['userid'] = int(raw_value)
+                    except (ValueError, TypeError):
+                        pass
+                elif field_instance.get('keyfieldlink') and (table_link := field_instance.get('tablelink')):
+                    record_link_id = self.values.get(f"recordid{table_link}_")
+                    if record_link_id:
+                        field_instance['linkedmaster_tableid'] = table_link
+                        field_instance['linkedmaster_recordid'] = record_link_id
 
-            # Non serve applicare master_recordid qui, dovrebbe essere già nei 'values'
-            # se la query in UserTable è corretta.
-
+                self.fields[fieldid] = field_instance
         else:
-            # --- Caso NON OTTIMIZZATO: Logica originale con query al DB ---
-            # È buona norma refattorizzare le query in metodi privati
-            self._fetch_field_definitions_from_db() # Metodo che contiene la logica originale per sys_field/settings
+            # --- Caso NON OTTIMIZZATO (fallback alla logica originale) ---
+            self._fetch_field_definitions_from_db()
             if recordid:
-                self._fetch_record_values_from_db() # Metodo che contiene la SELECT * FROM user_table WHERE recordid_ = ...
-                self._populate_fields_with_values() # Metodo per popolare self.fields['value'] etc. dai self.values
+                self._fetch_record_values_from_db()
+                self._populate_fields_with_values() # Questo ora chiamerà il _convert_display_value aggiornato
 
-            # Applica master_recordid SE è un nuovo record (recordid=None)
-            # e stiamo usando la logica originale (non prefetched)
-            if not recordid and master_tableid and master_recordid:
-                 self._apply_master_record_defaults()
+    def _populate_fields_with_values(self):
+        """ Popola il campo 'value' e 'convertedvalue' in self.fields usando self.values (logica di fallback) """
+        if not self.values: return
+        for fieldid, field_def in self.fields.items():
+            value = self.values.get(fieldid, "")
+            self.fields[fieldid]['value'] = value
+            # Passa un dizionario vuoto perché in questo branch non abbiamo dati eager
+            self.fields[fieldid]['convertedvalue'] = self._convert_display_value(field_def, {})
 
-    # --- Metodi Helper per la logica originale (da popolare con il codice originale) ---
+    def _convert_display_value(self, field_definition, eager_data):
+        """
+        MODIFICATO: Converte il valore grezzo in valore display.
+        Prioritizza l'uso di dati pre-caricati (eager_data).
+        Esegue query al DB solo come fallback se eager_data non è disponibile.
+        """
+        raw_value = field_definition.get('value')
+        if raw_value is None: return ""
+
+        field_type = field_definition.get('fieldtypeid')
+        table_link = field_definition.get('tablelink')
+        
+        try:
+            # CASO: Utente
+            if field_type == 'Utente' and raw_value:
+                user_id = int(raw_value)
+                # Prova a usare i dati pre-caricati
+                if 'sys_user' in eager_data:
+                    return eager_data['sys_user'].get(user_id, raw_value)
+                # Fallback: query al DB
+                sql = f"SELECT firstname, lastname FROM sys_user WHERE id='{user_id}'"
+                user = HelpderDB.sql_query_row(sql)
+                return f"{user['firstname']} {user['lastname']}" if user else raw_value
+
+            # CASO: Campo collegato
+            elif table_link and field_definition.get('keyfieldlink'):
+                # L'ID del record collegato si trova in un'altra colonna di self.values
+                linked_record_id = self.values.get(f"recordid{table_link}_")
+                if not linked_record_id:
+                    return raw_value # o ""
+                
+                # Prova a usare i dati pre-caricati
+                if table_link in eager_data:
+                    return eager_data[table_link].get(linked_record_id, linked_record_id)
+                # Fallback: query al DB
+                keyfield = field_definition['keyfieldlink']
+                sql = f"SELECT {keyfield} FROM user_{table_link} WHERE recordid_='{linked_record_id}'"
+                return HelpderDB.sql_query_value(sql, keyfield) or linked_record_id
+
+            # CASO: Data
+            elif field_type == 'Data' and raw_value:
+                if isinstance(raw_value, datetime.date):
+                    return raw_value.strftime('%d/%m/%Y')
+                elif isinstance(raw_value, str):
+                    try:
+                        return datetime.datetime.strptime(raw_value.split(' ')[0], '%Y-%m-%d').strftime('%d/%m/%Y')
+                    except (ValueError, TypeError):
+                        return raw_value
+                return raw_value
+
+            # Altri casi non modificati
+            else:
+                return raw_value
+                
+        except Exception as e:
+            print(f"Error converting value for field {field_definition.get('fieldid')}: {e}")
+            return raw_value
 
     def _fetch_field_definitions_from_db(self):
         """ Recupera definizioni e settings dei campi dal DB (logica originale) """
@@ -106,18 +179,7 @@ class UserRecord:
                 print(f"Attenzione: Record {self.recordid} non trovato nella tabella user_{self.tableid}")
                 self.values = {} # Evita errori successivi
 
-    def _populate_fields_with_values(self):
-        """ Popola il campo 'value' e 'convertedvalue' in self.fields usando self.values """
-        if not self.values: # Se il record non è stato trovato
-             return
-
-        for fieldid, field_def in self.fields.items():
-            value = self.values.get(fieldid)
-            if value is None:
-                value = ""
-            self.fields[fieldid]['value'] = value
-            # Calcola convertedvalue anche qui per consistenza
-            self.fields[fieldid]['convertedvalue'] = self._convert_display_value(field_def, value)
+    
 
     def _apply_master_record_defaults(self):
         """ Applica i valori dal master record se è un nuovo record """
@@ -131,74 +193,7 @@ class UserRecord:
                 # Potresti voler aggiornare anche self.values per coerenza, anche se è vuoto
                 # self.values[master_fieldid] = self.master_recordid
 
-    # --- Metodo per la conversione (può stare qui) ---
-    def _convert_display_value(self, field_definition, value):
-        """ Converte il valore grezzo in valore display (logica da UserTable o originale) """
-        fieldid = field_definition.get('fieldid')
-        field_type = field_definition.get('fieldtypeid', 'standard')
-        keyfieldlink = field_definition.get('keyfieldlink')
-        tablelink = field_definition.get('tablelink')
-        fieldtypewebid = field_definition.get('fieldtypewebid') # Aggiunto per file/html
-
-        try:
-            # NOTA: La logica originale in get_record_results_fields usava self.values
-            # per i campi linkati (_recordid...). Qui usiamo il 'value' passato,
-            # che dovrebbe essere l'ID del record collegato.
-
-            # Caso Link (_recordid... convenzione)
-            # Assumiamo che il fieldid nella definizione sia quello che inizia con '_'
-            # e 'value' sia l'ID record collegato.
-            if fieldid and fieldid.startswith('_') and not Helper.isempty(keyfieldlink) and not Helper.isempty(tablelink) and value:
-                 linked_table_actual_name = tablelink # Usiamo tablelink direttamente
-                 sql=f"SELECT {keyfieldlink} FROM user_{linked_table_actual_name} WHERE recordid_='{value}'"
-                 fetched_value = HelpderDB.sql_query_value(sql, keyfieldlink)
-                 return fetched_value if fetched_value is not None else value
-
-            elif field_type == 'Utente' and value:
-                 sql=f"SELECT firstname, lastname FROM sys_user WHERE id='{value}'"
-                 user=HelpderDB.sql_query_row(sql)
-                 return f"{user['firstname']} {user['lastname']}" if user else value
-
-            elif field_type == 'Data' and value:
-                 if isinstance(value, datetime.date): # Se è già un oggetto data/datetime
-                     return value.strftime('%d/%m/%Y')
-                 elif isinstance(value, str):
-                     try:
-                         # Prova a parsare formati comuni
-                         if ' ' in value: # Probabile datetime YYYY-MM-DD HH:MM:SS
-                              dt_obj = datetime.datetime.strptime(value.split()[0], '%Y-%m-%d')
-                         else: # Probabile solo data YYYY-MM-DD
-                              dt_obj = datetime.datetime.strptime(value, '%Y-%m-%d')
-                         return dt_obj.strftime('%d/%m/%Y')
-                     except ValueError:
-                         return value # Restituisci stringa originale se parsing fallisce
-                 else:
-                     return value
-
-            elif field_type == 'Memo' and fieldtypewebid == 'html':
-                 # Nessuna conversione speciale necessaria qui per il valore grezzo,
-                 # la gestione HTML avviene nel template.
-                 return value
-
-            elif fieldtypewebid == 'file':
-                 # Probabilmente vuoi mostrare il nome del file o un link,
-                 # ma il 'value' grezzo potrebbe essere solo l'ID o path.
-                 # Qui restituiamo il valore grezzo, la logica display è altrove.
-                 return value
-
-            # Aggiungere logica per 'Categoria' (lookup) se necessario per display value
-            elif not Helper.isempty(field_definition.get('lookuptableid')) and value:
-                 #sql = f"SELECT itemvalue FROM sys_lookup_table_item WHERE lookuptableid='{field_definition['lookuptableid']}' AND itemcode='{value}'"
-                 #item_value = HelpderDB.sql_query_value(sql, 'itemvalue')
-                 item_value=value
-                 return item_value if item_value is not None else value
-
-
-            else: # Tipo standard o non gestito
-                 return value
-        except Exception as e:
-            print(f"Error converting value for field {fieldid}: {e}")
-            return value # Restituisci valore grezzo in caso di errore 
+   
 
 
     def get_record_badge_fields(self):

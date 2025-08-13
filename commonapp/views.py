@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 from django.shortcuts import redirect
-from datetime import datetime
+from datetime import datetime, date, timedelta, time
 
 from django.views.decorators.csrf import csrf_exempt
 import json
@@ -435,190 +435,155 @@ def delete_record(request):
 
 @timing_decorator
 def get_table_records(request):
-    print('Function: get_table_records_OPTIMIZED')
-    with CodeTimer("get_table_records BLOCCO 1: Setup e Fetch Iniziale"):
-        data = json.loads(request.body)
-        tableid = data.get("tableid")
-        viewid = data.get("view")
-        searchTerm = data.get("searchTerm")
-        order = data.get("order") # Non usato nel codice originale, ma mantenuto
-        page = data.get("currentPage") # Non usato nel codice originale, ma mantenuto
-        master_tableid = data.get("masterTableid")
-        master_recordid = data.get("masterRecordid")
+    print('Function: get_table_records_refactored')
+    data = json.loads(request.body)
+    tableid = data.get("tableid")
+    viewid = data.get("view")
+    searchTerm = data.get("searchTerm")
+    master_tableid = data.get("masterTableid")
+    master_recordid = data.get("masterRecordid")
 
-        table = UserTable(tableid, Helper.get_userid(request))
+    table = UserTable(tableid, Helper.get_userid(request))
 
-        if not viewid:
-            viewid = table.get_default_viewid()
+    if not viewid:
+        viewid = table.get_default_viewid()
 
-        # 1. Ottieni gli oggetti UserRecord con i dati grezzi
-        # Questo metodo è già ottimizzato per caricare i dati base in una sola query.
-        record_objects = table.get_table_records_obj(
-            viewid=viewid,
-            searchTerm=searchTerm,
-            conditions_list=[], # La lista viene creata dentro il metodo
-            master_tableid=master_tableid,
-            master_recordid=master_recordid
-        )
-        
-        counter = table.get_total_records_count()
-        table_columns = table.get_results_columns() # Definizioni delle colonne da visualizzare
+    # 1. Ottieni gli oggetti UserRecord GIA' PROCESSATI
+    # Questo metodo ora fa tutto il lavoro pesante, incluso l'eager loading e la conversione dei valori
+    record_objects = table.get_table_records_obj(
+        viewid=viewid,
+        searchTerm=searchTerm,
+        master_tableid=master_tableid,
+        master_recordid=master_recordid
+    )
+    
+    counter = table.get_total_records_count()
+    table_columns = table.get_results_columns() # Solo per definire l'ordine e quali colonne mostrare
 
-    # --- OTTIMIZZAZIONE: Eager Loading ---
-    with CodeTimer("get_table_records BLOCCO 2: Eager Loading dei dati collegati"):
-        
-        # Dizionari per aggregare gli ID necessari
-        ids_to_fetch = defaultdict(set)
-        
-        # Mappe per contenere i dati pre-caricati
-        fetched_data_maps = defaultdict(dict)
+    # --- BLOCCO ALERT (invariato) ---
+    alerts = HelpderDB.sql_query(f"SELECT * FROM sys_alert WHERE tableid='{tableid}' AND alert_type='cssclass'")
+    # ... la tua logica per `compiled_alerts` ...
+    compiled_alerts = [] # Placeholder
 
-        # 2. Aggrega tutti gli ID necessari dalle righe e colonne
+    # --- COSTRUZIONE RISPOSTA JSON (ORA MOLTO PIU' SEMPLICE) ---
+    rows = []
+    for record in record_objects:
+        row = {
+            "recordid": record.recordid,
+            "css": "",
+            "fields": []
+        }
+
+        # --- Logica per CSS (invariata) ---
+        values_map = {str(k): v for k, v in record.values.items()}
+        record_css = []
+        field_css_map = defaultdict(list)
+        for a in compiled_alerts:
+            if Helper.evaluate_and_conditions(values_map, a["conds"]):
+                css_class = a.get("cssclass", "")
+                if a.get("target") == "record":
+                    record_css.append(css_class)
+                else:
+                    field_id = str(a.get("fieldid", "")).strip()
+                    if field_id:
+                        field_css_map[field_id].append(css_class)
+        row['css'] = ' '.join(record_css)
+
+        # --- Popola i campi usando i dati pre-calcolati da UserRecord ---
         for column in table_columns:
             fieldid = column.get('fieldid')
-            
-            # Se è un campo utente, raccogli gli ID degli utenti
-            if column.get('fieldtypeid') == 'Utente':
-                for record in record_objects:
-                    user_id = record.values.get(fieldid)
-                    if user_id:
-                        ids_to_fetch['sys_user'].add(user_id)
+            # Recupera la definizione completa del campo dall'oggetto record
+            field_definition = record.fields.get(fieldid, {})
 
-            # Se è un campo collegato a un'altra tabella, raccogli i record ID
-            elif column.get('keyfieldlink') and column.get('tablelink'):
-                table_link = column.get('tablelink')
-                for record in record_objects:
-                    record_link_id = record.values.get(f"recordid{table_link}_")
-                    if record_link_id:
-                        ids_to_fetch[table_link].add(record_link_id)
-
-        # 3. Esegui le query di massa per ogni tipo di dato
-        # Per gli utenti
-        if 'sys_user' in ids_to_fetch:
-            user_ids_list = list(ids_to_fetch['sys_user'])
-            # IMPORTANTE: Usare query parametrizzate per sicurezza!
-            users = HelpderDB.sql_query(f"SELECT * FROM sys_user WHERE id IN ({','.join(map(str, user_ids_list))})")
-            # Mappa: {userid: 'Nome Cognome'}
-            fetched_data_maps['sys_user'] = {u['id']: f"{u.get('firstname', '')} {u.get('lastname', '')}".strip() for u in users}
-
-        # Per le tabelle collegate
-        for table_link, record_ids_set in ids_to_fetch.items():
-            if table_link == 'sys_user': continue # Già gestito
-            
-            record_ids_list = list(record_ids_set)
-            # Trova la colonna corrispondente per ottenere il keyfieldlink
-            keyfield = next((c['keyfieldlink'] for c in table_columns if c.get('tablelink') == table_link), None)
-            
-            if keyfield and record_ids_list:
-                # Mappa: {recordid: valore_del_keyfield}
-                linked_records = HelpderDB.get_linked_records_by_ids(table_link, keyfield, record_ids_list) # Assumendo un helper
-                fetched_data_maps[table_link] = {r['recordid_']: r.get(keyfield) for r in linked_records}
-
-    # --- BLOCCO 3: Valutazione Alert (già ottimizzato) ---
-    with CodeTimer("get_table_records BLOCCO 3: Valutazione Alert"):
-        alerts = HelpderDB.sql_query(f"SELECT * FROM sys_alert WHERE tableid='{tableid}' AND alert_type='cssclass'")
-        # ... la tua logica per compilare `compiled_alerts` rimane identica ...
-        # ... (codice omesso per brevità) ...
-        compiled_alerts = [] # Placeholder, qui inserisci la tua logica originale
-
-
-    # --- BLOCCO 4: Costruzione della risposta JSON (CORRETTO) ---
-    with CodeTimer("get_table_records BLOCCO 4: Costruzione Risposta"):
-        rows = []
-        for record in record_objects:
-            # ✔️ INIZIALIZZAZIONE INCONDIZIONATA
-            # Crea il dizionario 'row' per ogni record, SEMPRE.
-            row = {
+            # I valori sono già pronti!
+            field_data = {
                 "recordid": record.recordid,
-                "css": "",  # Inizia con una stringa CSS vuota
-                "fields": []
-            }
-
-            # --- Logica per CSS ---
-            # Questa logica ora MODIFICA il 'row' esistente invece di crearlo.
-            values_map = {str(k): v for k, v in record.values.items()}
-            record_css = []
-            field_css_map = defaultdict(list)
-            
-            # Placeholder per la tua logica originale degli alert, assicurati che sia corretta.
-            # Ad esempio:
-            for a in compiled_alerts:
-                if Helper.evaluate_and_conditions(values_map, a["conds"]):
-                    css_class = a.get("cssclass", "")
-                    if not css_class:
-                        continue
-                    if a.get("target") == "record":
-                        record_css.append(css_class)
-                    else: # target == 'field'
-                        field_id = str(a.get("fieldid", "")).strip()
-                        if field_id:
-                            field_css_map[field_id].append(css_class)
-            
-            # Aggiorna la chiave 'css' del dizionario 'row'
-            row['css'] = ' '.join(record_css)
-
-            # --- Popola i campi (logica aggiornata) ---
-            for column in table_columns:
-                fieldid = column.get('fieldid')
-                raw_value = record.values.get(fieldid)
-
-                # 1. Crea un dizionario di base per il campo
-                #    Contiene le informazioni comuni a tutti i tipi.
-                field_data = {
-                    "recordid": record.recordid,
-                    "css": ' '.join(field_css_map.get(str(fieldid), [])),
-                    "type": column.get("fieldtypeid", "standard"),
-                    "value": raw_value, # Inizia con il valore grezzo, poi lo aggiorniamo
-                    "fieldid": fieldid,
-                }
-
-                # 2. Arricchisci il dizionario in base al tipo di campo
+                "css": ' '.join(field_css_map.get(str(fieldid), [])),
+                "type": field_definition.get("fieldtypeid", "standard"),
+                "value": field_definition.get("convertedvalue", field_definition.get("value")), # Usa il valore convertito
+                "fieldid": fieldid,
                 
-                # CASO: Utente
-                if column.get('fieldtypeid') == 'Utente' and raw_value:
-                    try:
-                        user_id = int(raw_value)
-                        # Aggiorna il valore con il nome completo dell'utente
-                        field_data['value'] = fetched_data_maps['sys_user'].get(user_id, raw_value)
-                        # ✨ Aggiungi la chiave extra per il frontend
-                        field_data['userid'] = user_id
-                    except (ValueError, TypeError):
-                        # La conversione è fallita, lascia i valori di default
-                        pass
-                        
-                # CASO: Campo collegato
-                elif column.get('keyfieldlink') and (table_link := column.get('tablelink')):
-                    record_link_id = record.values.get(f"recordid{table_link}_")
-                    if record_link_id:
-                        # Aggiorna il valore con quello del campo chiave collegato
-                        field_data['value'] = fetched_data_maps[table_link].get(record_link_id, record_link_id)
-                        # ✨ Aggiungi le chiavi extra per il frontend
-                        field_data['linkedmaster_tableid'] = table_link
-                        field_data['linkedmaster_recordid'] = record_link_id
+                # Aggiungi le chiavi extra se esistono (ora sono dentro field_definition)
+                **{k: v for k, v in field_definition.items() if k in ['userid', 'linkedmaster_tableid', 'linkedmaster_recordid']}
+            }
+            row["fields"].append(field_data)
+        
+        rows.append(row)
 
-                # CASO: Data
-                elif column.get('fieldtypeid') == 'Data' and raw_value:
-                    if isinstance(raw_value, datetime.date):
-                        field_data['value'] = raw_value.strftime('%d/%m/%Y')
-                    elif isinstance(raw_value, str):
-                        try:
-                            field_data['value'] = datetime.datetime.strptime(raw_value.split(' ')[0], '%Y-%m-%d').strftime('%d/%m/%Y')
-                        except (ValueError, TypeError):
-                            pass
-
-                # 3. Aggiungi il dizionario completo e arricchito alla riga
-                row["fields"].append(field_data)
-
-            # Aggiungi il dizionario 'row', ora correttamente e completamente popolato, alla lista
-            rows.append(row)
-
-    # --- Risposta Finale ---
+    # --- Risposta Finale (invariata) ---
     final_columns = [{'fieldtypeid': c['fieldtypeid'], 'desc': c['description']} for c in table_columns]
     response_data = {
         "counter": counter,
         "rows": rows,
         "columns": final_columns
     }
+    return JsonResponse(response_data)
+
+
+def get_calendar_records(request):
+    print('Function: get_calendar_records')
+    data = json.loads(request.body)
+    tableid = data.get("tableid")
+    viewid = data.get("view")
+    searchTerm = data.get("searchTerm")
+    master_tableid = data.get("masterTableid")
+    master_recordid = data.get("masterRecordid")
+
+    table = UserTable(tableid, Helper.get_userid(request))
+
+    if not viewid:
+        viewid = table.get_default_viewid()
+
+    # 1. Ottieni gli oggetti UserRecord con i dati grezzi
+    # Questo metodo è già ottimizzato per caricare i dati base in una sola query.
+    record_objects = table.get_table_records_obj(
+        viewid=viewid,
+        searchTerm=searchTerm,
+        conditions_list=[], # La lista viene creata dentro il metodo
+        master_tableid=master_tableid,
+        master_recordid=master_recordid
+    )
+
+    response_data = {
+        "counter": len(record_objects),
+        "rows": [],
+        "columns": [
+            { "fieldtypeid": 'Testo', "desc": 'Event Title' },
+            { "fieldtypeid": 'Data', "desc": 'Start Date' },
+        ]
+    }
+
+    if tableid == 'assenze':
+        # --- VARIABILI PER ORARI CONFIGURABILI ---
+        # Qui puoi definire gli orari che preferisci
+        orario_inizio = datetime.time(7, 0)  # Ore 07:00
+        orario_fine = datetime.time(20, 0) # Ore 20:00
+        # -----------------------------------------
+
+        for record in record_objects:
+            start_value = record.values.get('dal')
+            end_value = record.values.get('al')
+
+            if not isinstance(start_value, date) or not isinstance(end_value, date):
+                continue
+
+            giorno_corrente = start_value
+            while giorno_corrente <= end_value:
+                row = {}
+                row['recordid'] = record.recordid
+                row['title'] = record.fields['recordiddipendente_']['convertedvalue'] + ' - ' + record.fields['tipo_assenza']['convertedvalue']  # Assicurati che questo campo esista
+                
+                # Combina la data corrente con gli orari definiti sopra
+                row['startDate'] = datetime.datetime.combine(giorno_corrente, orario_inizio).isoformat()
+                row['endDate'] = datetime.datetime.combine(giorno_corrente, orario_fine).isoformat()
+                
+                row['css'] = 'bg-red-100 border-l-4 border-red-500 text-red-800 dark:bg-red-900/50 dark:border-red-400 dark:text-red-200'
+                row['fields'] = []
+                response_data['rows'].append(row)
+                
+                giorno_corrente += timedelta(days=1)
+                
+    response_data['counter'] = len(response_data['rows'])
     return JsonResponse(response_data)
 
 @timing_decorator

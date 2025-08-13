@@ -27,6 +27,8 @@ from django.db.models import OuterRef, Subquery
 from commonapp.bixmodels.helper_db import *
 from commonapp.bixmodels.user_record import *
 from commonapp.helper import *
+from collections import defaultdict
+
 
 bixdata_server = os.environ.get('BIXDATA_SERVER')
 
@@ -56,58 +58,92 @@ class UserTable:
     def get_table_records_obj(self, viewid='', searchTerm='', conditions_list=list(), fields=None, offset=0, limit=None, orderby='recordid_ desc', master_tableid=None, master_recordid=None):
         """
         Recupera i record e le loro proprietà come lista di oggetti UserRecord ottimizzata.
+        ORA gestisce anche l'eager loading dei dati collegati.
         """
         if master_tableid and master_recordid:
             conditions_list.append(f"recordid{master_tableid}_='{master_recordid}'")
 
-        # 1. Recupera le definizioni dei campi UNA SOLA VOLTA
-        # Queste definizioni verranno passate a ciascuna istanza UserRecord
         field_definitions = self._get_fields_definitions()
+        columns_for_search = self.get_results_columns() 
 
-        # 2. Recupera le colonne per la ricerca (se necessario)
-        columns = self.get_results_columns() 
-
-        # 3. Recupera TUTTI i dati grezzi dei record in UNA query
         raw_records_data = self.get_records(
-            viewid=viewid,
-            searchTerm=searchTerm,
-            conditions_list=conditions_list,
-            fields=fields,
-            offset=offset,
-            limit=limit,
-            orderby=orderby,
-            columns=columns
+            viewid=viewid, searchTerm=searchTerm, conditions_list=conditions_list,
+            fields=fields, offset=offset, limit=limit, orderby=orderby,
+            columns=columns_for_search
         )
+        
+        if not raw_records_data:
+            return []
 
-        # 4. Crea istanze UserRecord usando i dati prefetched
+        # --- LOGICA DI EAGER LOADING SPOSTATA QUI DALLA VISTA ---
+        
+        ids_to_fetch = defaultdict(set)
+        # Usiamo le definizioni complete dei campi, non solo le colonne dei risultati
+        all_field_defs = self._get_fields_definitions().values()
+
+        for column in all_field_defs:
+            fieldid = column.get('fieldid')
+            
+            if column.get('fieldtypeid') == 'Utente':
+                for record_data in raw_records_data:
+                    user_id = record_data.get(fieldid)
+                    if user_id:
+                        ids_to_fetch['sys_user'].add(user_id)
+
+            elif column.get('keyfieldlink') and column.get('tablelink'):
+                table_link = column.get('tablelink')
+                # La colonna con l'ID del record collegato segue la convenzione "recordid<nometabella>_"
+                #linked_record_id_field = f"recordid{table_link}_"
+                linked_record_id_field = column.get('fieldid')
+                for record_data in raw_records_data:
+                    record_link_id = record_data.get(linked_record_id_field)
+                    if record_link_id:
+                        ids_to_fetch[table_link].add(record_link_id)
+
+        # --- ESEGUI LE QUERY DI MASSA ---
+        fetched_data_maps = defaultdict(dict)
+        
+        if 'sys_user' in ids_to_fetch:
+            user_ids_list = list(ids_to_fetch['sys_user'])
+            # NOTA: Assicurati che HelpderDB.sql_query sia sicuro contro SQL Injection!
+            # L'uso di IN con una lista di ID numerici è generalmente sicuro se gli ID sono validati.
+            users = HelpderDB.sql_query(f"SELECT id, firstname, lastname FROM sys_user WHERE id IN ({','.join(map(str, user_ids_list))})")
+            fetched_data_maps['sys_user'] = {u['id']: f"{u.get('firstname', '')} {u.get('lastname', '')}".strip() for u in users}
+
+        for table_link, record_ids_set in ids_to_fetch.items():
+            if table_link == 'sys_user': continue
+            
+            record_ids_list = list(record_ids_set)
+            keyfield = next((c['keyfieldlink'] for c in all_field_defs if c.get('tablelink') == table_link), None)
+            
+            if keyfield and record_ids_list:
+                # Assumendo che HelpderDB.get_linked_records_by_ids esista e sia ottimizzato
+                linked_records = HelpderDB.get_linked_records_by_ids(table_link, keyfield, record_ids_list)
+                fetched_data_maps[table_link] = {r['recordid_']: r.get(keyfield) for r in linked_records}
+
+        # --- Crea istanze UserRecord passando TUTTI i dati necessari ---
         records_obj_list = []
         for raw_record in raw_records_data:
             record_id = raw_record.get('recordid_')
             if not record_id:
                 continue
 
-            # Prepara il dizionario dei dati prefetched per UserRecord.__init__
             prefetched_data_for_record = {
-                'values': raw_record, # I dati grezzi completi del record
-                'fields_definitions': field_definitions # Le definizioni comuni a tutti
+                'values': raw_record,
+                'fields_definitions': field_definitions,
+                'eager_loaded_data': fetched_data_maps # <-- NUOVO: Passiamo le mappe!
             }
-
-            # Crea l'istanza UserRecord passando i dati prefetched
             try:
-                 record_instance = UserRecord(
-                     tableid=self.tableid,
-                     recordid=record_id, # Passa l'ID anche se è nei values, per chiarezza
-                     userid=self.userid,
-                     # master_tableid/master_recordid non servono qui, già gestiti nella query
-                     _prefetched_data=prefetched_data_for_record # Il parametro speciale!
-                 )
-                 records_obj_list.append(record_instance)
+                record_instance = UserRecord(
+                    tableid=self.tableid,
+                    recordid=record_id,
+                    userid=self.userid,
+                    _prefetched_data=prefetched_data_for_record
+                )
+                records_obj_list.append(record_instance)
             except Exception as e:
-                 # Logga l'errore ma continua se possibile
-                 print(f"Errore durante la creazione dell'istanza UserRecord per {record_id}: {e}")
+                print(f"Errore durante la creazione dell'istanza UserRecord per {record_id}: {e}")
 
-
-        # Restituisce la lista di oggetti UserRecord popolati
         return records_obj_list
     
     @timing_decorator
