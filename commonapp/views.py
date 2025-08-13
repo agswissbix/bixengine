@@ -571,13 +571,18 @@ def get_calendar_records(request):
             while giorno_corrente <= end_value:
                 row = {}
                 row['recordid'] = record.recordid
-                row['title'] = record.fields['recordiddipendente_']['convertedvalue'] + ' - ' + record.fields['tipo_assenza']['convertedvalue']  # Assicurati che questo campo esista
+                tipo_assenza=record.fields['tipo_assenza']['convertedvalue']
+                row['title'] = record.fields['recordiddipendente_']['convertedvalue'] + ' - ' + tipo_assenza  # Assicurati che questo campo esista
                 
                 # Combina la data corrente con gli orari definiti sopra
                 row['startDate'] = datetime.datetime.combine(giorno_corrente, orario_inizio).isoformat()
                 row['endDate'] = datetime.datetime.combine(giorno_corrente, orario_fine).isoformat()
                 
-                row['css'] = 'bg-red-100 border-l-4 border-red-500 text-red-800 dark:bg-red-900/50 dark:border-red-400 dark:text-red-200'
+                row['css'] = 'bg-green-100 border-l-4 border-red-500 text-red-800 dark:bg-red-900/50 dark:border-red-400 dark:text-red-200'
+                if tipo_assenza=='Vacanza':
+                    row['css'] = 'bg-green-100 border-l-4 border-red-500 text-red-800 dark:bg-red-900/50 dark:border-red-400 dark:text-red-200'
+                if tipo_assenza=='Malattia':
+                    row['css'] = 'bg-green-100 border-l-4 border-red-500 text-red-800 dark:bg-red-900/50 dark:border-red-400 dark:text-red-200'
                 row['fields'] = []
                 response_data['rows'].append(row)
                 
