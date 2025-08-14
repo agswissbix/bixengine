@@ -608,6 +608,49 @@ def get_calendar_records(request):
                 response_data['rows'].append(row)
                 
                 giorno_corrente += timedelta(days=1)
+
+    if tableid == 'bollettini':
+        # --- VARIABILI PER ORARI CONFIGURABILI ---
+        # Qui puoi definire gli orari che preferisci
+        orario_inizio = datetime.time(7, 0)  # Ore 07:00
+        orario_fine = datetime.time(20, 0) # Ore 20:00
+        # -----------------------------------------
+
+        for record in record_objects:
+            tipo_bollettino = record.values.get('tipo_bollettino')
+            if tipo_bollettino=='Sostituzione':
+                start_value = record.values.get('sostituzionedal')
+                end_value = record.values.get('sostituzioneal')
+            else:
+                start_value = record.values.get('data')
+                end_value = record.values.get('data')
+
+            if not isinstance(start_value, date) or not isinstance(end_value, date):
+                continue
+
+            giorno_corrente = start_value
+            while giorno_corrente <= end_value:
+                row = {}
+                row['recordid'] = record.recordid
+                row['title'] = record.fields['recordidstabile_']['convertedvalue'] + ' - ' + record.fields['recordiddipendente_']['convertedvalue']  # Assicurati che questo campo esista
+                
+                # Combina la data corrente con gli orari definiti sopra
+                row['startDate'] = datetime.datetime.combine(giorno_corrente, orario_inizio).isoformat()
+                row['endDate'] = datetime.datetime.combine(giorno_corrente, orario_fine).isoformat()
+                
+                row['css'] = 'bg-gray-100 border-l-4 border-gray-500 text-gray-800 dark:bg-gray-900/50 dark:border-gray-400 dark:text-gray-200'
+                if tipo_bollettino=='Sostituzione':
+                    row['css'] = 'bg-blue-100 border-l-4 border-blue-500 text-blue-800 dark:bg-blue-900/50 dark:border-blue-400 dark:text-blue-200'
+                if tipo_bollettino=='Generico':
+                    row['css'] = 'bg-gray-100 border-l-4 border-gray-500 text-gray-800 dark:bg-gray-900/50 dark:border-gray-400 dark:text-gray-200'
+                if tipo_bollettino=='Pulizia':
+                    row['css'] = 'bg-blue-200 border-l-4 border-blue-500 text-blue-800 dark:bg-blue-900/50 dark:border-blue-400 dark:text-blue-200'
+                if tipo_bollettino=='Giardino':
+                    row['css'] = 'bg-green-200 border-l-4 border-green-500 text-green-800 dark:bg-green-900/50 dark:border-green-400 dark:text-green-200'
+                row['fields'] = []
+                response_data['rows'].append(row)
+                
+                giorno_corrente += timedelta(days=1)
                 
     response_data['counter'] = len(response_data['rows'])
     return JsonResponse(response_data)
