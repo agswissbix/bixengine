@@ -463,7 +463,28 @@ def get_table_records(request):
     # --- BLOCCO ALERT (invariato) ---
     alerts = HelpderDB.sql_query(f"SELECT * FROM sys_alert WHERE tableid='{tableid}' AND alert_type='cssclass'")
     # ... la tua logica per `compiled_alerts` ...
-    compiled_alerts = [] # Placeholder
+    compiled_alerts = []
+    for alert in alerts:
+        try:
+            cond_str = alert['alert_condition']  # <-- assicurati del nome colonna
+            alert_param = json.loads(alert['alert_param'])
+
+            cssclass = alert_param.get('cssclass', '')
+            target = alert_param.get('target', 'record')  # 'record' | 'field'
+            fieldid = alert_param.get('fieldid', '')
+
+            conds = Helper.parse_sql_like_and(cond_str)  # <-- lista di (field, op, val)
+
+            compiled_alerts.append({
+                'conds': conds,
+                'cssclass': cssclass,
+                'target': target,
+                'fieldid': fieldid
+            })
+        except json.JSONDecodeError:
+            print(f"Errore nel decodificare il JSON per l'alert: {alert.get('id')}")
+        except ValueError as e:
+            print(f"Condizione non valida per alert {alert.get('id')}: {e}")
 
     # --- COSTRUZIONE RISPOSTA JSON (ORA MOLTO PIU' SEMPLICE) ---
     rows = []
