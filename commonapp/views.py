@@ -2641,7 +2641,7 @@ def get_table_active_tab(request):
     sql=f"SELECT * FROM sys_user_table_settings WHERE tableid='{tableid}' AND settingid='table_tabs'"
     query_result=HelpderDB.sql_query_row(sql)
     if not query_result:
-        table_tabs = ['Tabella', 'Kanban', 'Pivot', 'Calendario', 'Gallery']
+        table_tabs = ['Tabella', 'Kanban', 'Pivot', 'Calendario', 'MatrixCalendar' , 'Planner' , 'Gallery']
     else:
         table_tabs=query_result['value']
         table_tabs=table_tabs.split(',')

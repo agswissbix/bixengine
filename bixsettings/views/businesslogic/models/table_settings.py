@@ -117,13 +117,15 @@ class TableSettings:
                 {'name': 'Kanban', 'selected': True},
                 {'name': 'Pivot', 'selected': True},
                 {'name': 'Calendario', 'selected': True},
+                {'name': 'MatrixCalendar', 'selected': True},
+                {'name': 'Planner', 'selected': True},
                 {'name': 'Gallery', 'selected': True},
             ],
             'value': 'Fields'
         },
         'table_active_tab': {
             'type': 'select',
-            'options': ['Tabella', 'Kanban', 'Pivot', 'Calendario', 'Gallery'],
+            'options': ['Tabella', 'Kanban', 'Pivot', 'Calendario','MatrixCalendar', 'Planner' , 'Gallery'],
             'value': 'Tabella'
         },
         'popup_layout': {
