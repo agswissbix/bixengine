@@ -24,8 +24,10 @@ ALLOWED_HOSTS = [
     'localhost',
     env('BIXENGINE_DOMAIN'),
     env('BIXPORTAL_DOMAIN'),
+    env('BIXMOBILE_DOMAIN'),
     env('BIXENGINE_IP'),
     env('BIXPORTAL_IP'),
+    env('BIXMOBILE_IP'),
 ]
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
@@ -136,6 +138,7 @@ CORS_ALLOWED_ORIGINS = [
     'https://' + env('BIXPORTAL_DOMAIN') + ':' + env('BIXCUSTOM_PORT'),
     'http://' + env('BIXPORTAL_DOMAIN') + ':' + env('BIXCUSTOM_NGINX_PORT'),
     'https://' + env('BIXPORTAL_DOMAIN') + ':' + env('BIXCUSTOM_NGINX_PORT'),
+    'https://' + env('BIXMOBILE_DOMAIN') + ':' + env('BIXMOBILE_PORT'),
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -162,6 +165,7 @@ CSRF_TRUSTED_ORIGINS = [
     'https://' + env('BIXPORTAL_DOMAIN') + ':' + env('BIXCUSTOM_PORT'),
     'http://' + env('BIXPORTAL_DOMAIN') + ':' + env('BIXCUSTOM_NGINX_PORT'),
     'https://' + env('BIXPORTAL_DOMAIN') + ':' + env('BIXCUSTOM_NGINX_PORT'),
+    'https://' + env('BIXMOBILE_DOMAIN') + ':' + env('BIXMOBILE_PORT'),
 ]
 
 REST_FRAMEWORK = {

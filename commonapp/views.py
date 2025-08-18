@@ -655,6 +655,82 @@ def get_calendar_records(request):
     response_data['counter'] = len(response_data['rows'])
     return JsonResponse(response_data)
 
+def get_records_matrixcalendar(request):
+    print('Function: get_records_matrixcalendar')
+    data = json.loads(request.body)
+    tableid = data.get("tableid")
+    viewid = data.get("view")
+    searchTerm = data.get("searchTerm")
+    master_tableid = data.get("masterTableid")
+    master_recordid = data.get("masterRecordid")
+
+    table = UserTable(tableid, Helper.get_userid(request))
+
+    if not viewid:
+        viewid = table.get_default_viewid()
+
+    # 1. Ottieni gli oggetti UserRecord con i dati grezzi
+    # Questo metodo è già ottimizzato per caricare i dati base in una sola query.
+    record_objects = table.get_table_records_obj(
+        viewid=viewid,
+        searchTerm=searchTerm,
+        conditions_list=[], # La lista viene creata dentro il metodo
+        master_tableid=master_tableid,
+        master_recordid=master_recordid
+    )
+
+    response_data_dev = {
+        'resources': [],
+        'events': []
+    }
+
+    processed_employees = set()
+    
+    # Assegniamo un colore diverso per ogni tipo di assenza per chiarezza visiva
+    absence_colors = {
+        'Ferie': '#3b82f6',      # Blu
+        'Malattia': '#ef4444',   # Rosso
+        'Permesso': '#eab308',   # Giallo
+        'default': '#6b7280'     # Grigio per tipi non specificati
+    }
+
+    for record in record_objects:
+         # 1. Estrazione dei dati dall'oggetto record
+        employee_name = record.fields['recordiddipendente_']['convertedvalue']  # Assicurati che questo campo esista
+        
+        # 2. Gestione delle Risorse (Dipendenti)
+        # Crea un ID univoco per la risorsa rimuovendo gli spazi dal nome.
+        resource_id = "".join(employee_name.split())
+        
+        # Se il dipendente non è ancora stato processato, aggiungilo alla lista 'resources'.
+        if resource_id not in processed_employees:
+            response_data_dev['resources'].append({
+                'id': resource_id,
+                'name': employee_name
+            })
+            processed_employees.add(resource_id) # Aggiungi l'ID al set per non ripeterlo
+            
+        # 3. Creazione degli Eventi (Assenze)
+        event_id = record.fields['id']['convertedvalue']
+        event_title = record.fields['tipo_assenza']['convertedvalue']
+        start_time = record.fields['dal']['value']
+        end_time = record.fields['al']['value']
+        
+        # Crea il dizionario per l'evento
+        event_data = {
+            'id': str(event_id), # L'ID dell'evento
+            'resourceId': resource_id, # Associa l'evento alla risorsa corretta
+            'title': event_title,
+            'description': f"Assenza per {event_title} di {employee_name}",
+            'start':  start_time.isoformat(), # Converte datetime in stringa formato ISO 8601
+            'end': end_time.isoformat(),
+            'color': absence_colors.get(event_title, absence_colors['default'])
+        }
+        
+        response_data_dev['events'].append(event_data)
+   
+    return JsonResponse(response_data_dev)
+
 @timing_decorator
 def get_table_recordsBAK(request):
     print('Function: get_table_records')
