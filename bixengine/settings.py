@@ -139,6 +139,8 @@ CORS_ALLOWED_ORIGINS = [
     'http://' + env('BIXPORTAL_DOMAIN') + ':' + env('BIXCUSTOM_NGINX_PORT'),
     'https://' + env('BIXPORTAL_DOMAIN') + ':' + env('BIXCUSTOM_NGINX_PORT'),
     'https://' + env('BIXMOBILE_DOMAIN') + ':' + env('BIXMOBILE_PORT'),
+    'https://' + env('BIXPORTAL_DOMAIN'),
+    'https://' + env('BIXMOBILE_DOMAIN') 
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -166,6 +168,8 @@ CSRF_TRUSTED_ORIGINS = [
     'http://' + env('BIXPORTAL_DOMAIN') + ':' + env('BIXCUSTOM_NGINX_PORT'),
     'https://' + env('BIXPORTAL_DOMAIN') + ':' + env('BIXCUSTOM_NGINX_PORT'),
     'https://' + env('BIXMOBILE_DOMAIN') + ':' + env('BIXMOBILE_PORT'),
+    'https://' + env('BIXPORTAL_DOMAIN'),
+    'https://' + env('BIXMOBILE_DOMAIN')
 ]
 
 REST_FRAMEWORK = {
