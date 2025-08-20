@@ -70,7 +70,8 @@ def stampa_bollettino(request):
     data['riferimento'] = get_value_safe(record_stabile, 'riferimento')
     data['citta_stabile'] = get_value_safe(record_stabile, 'citta')
     if get_value_safe(record_bollettino, 'data'):
-        data['data'] = datetime.datetime.strptime(get_value_safe(record_bollettino, 'data'), "%Y-%m-%d").strftime("%d.%m.%Y")
+        data_bollettino=get_value_safe(record_bollettino, 'data')
+        data['data'] = data_bollettino.strftime("%d.%m.%Y")
     else:
         data['data'] = ''
     data['dipendente'] = f"{get_value_safe(record_dipendente, 'nome')} {get_value_safe(record_dipendente, 'cognome')}".strip()
