@@ -3950,7 +3950,7 @@ def get_form_fields(request):
                 if group_name not in form_config:
                     form_config[group_name] = {
                         "title": group_name,
-                        "icon": "generic",  # Icona di default
+                        "icon": group_name,  # Icona di default
                         "fields": []
                     }
                     # Inizializzo anche il set per le intestazioni di questo gruppo
