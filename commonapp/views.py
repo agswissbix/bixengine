@@ -3731,6 +3731,12 @@ def get_dashboard_blocks(request):
                         if results['custom'] == 'group_by_month':
                             groupby = f"DATE_FORMAT({groupby}, '%Y-%m')"
 
+                    if results['operation'] == 'custom':
+                        fields=results['fieldid']
+                        selected = results['fieldid']+ ','
+                        groupby = results['groupby']
+
+
                     query_conditions = results['query_conditions']
                     #userid = get_userid(request.user.id)
                     userid = bixid
@@ -3787,22 +3793,27 @@ def get_chart(request, sql, id, name, layout, fields):
           #  formatted_rows.append(formatted_row)
 
        # rows = formatted_rows
-        value = []
-        for num in range(0, len(fields_chart)):
-            value.append([row[num] for row in rows])
 
-        labels = [row[-1] for row in rows]
+        if layout!='multi_barlinechart' and layout!='multi_barchart':
+            value = []
+            for num in range(0, len(fields_chart)):
+                value.append([row[num] for row in rows])
 
-        if None in labels or 'None' in labels or '' in labels:
-            labels = ['Non assegnato' if v is None or v == 'None' or v == '' else v for v in labels]
+            labels = [row[-1] for row in rows]
 
-        for i in range(len(value)):
-            for j in range(len(value[i])):
-                if value[i][j] is not None:
-                    if value[i][j] == 'None':
-                        value[i][j] = 0
-                    value[i][j] = round(value[i][j], 2)
+            if None in labels or 'None' in labels or '' in labels:
+                labels = ['Non assegnato' if v is None or v == 'None' or v == '' else v for v in labels]
 
+            for i in range(len(value)):
+                for j in range(len(value[i])):
+                    if value[i][j] is not None:
+                        if value[i][j] == 'None':
+                            value[i][j] = 0
+                        value[i][j] = round(value[i][j], 2)
+        else:
+            value = []
+            value.append(0)
+            labels=[]
         context = {
             'value': value[0],
             'labels': labels,
