@@ -3712,7 +3712,7 @@ def get_dashboard_blocks(request):
                     if results['operation'] == 'somma':
                         fields = results['fieldid'].split(';')
                         for field in fields:
-                            field = 'SUM(' + field + ')'
+                            field = 'SUM(' + field + ') as ' + field
                             selected += field + ','
                         groupby = results['groupby']
                         if results['custom'] == 'group_by_day':
@@ -3723,7 +3723,7 @@ def get_dashboard_blocks(request):
                     if results['operation'] == 'conta':
                         fields = results['fieldid'].split(';')
                         for field in fields:
-                            field = 'COUNT(' + field + ')'
+                            field = 'COUNT(' + field + ') as ' + field
                             selected += field + ','
                         groupby = results['groupby']
                         if results['custom'] == 'group_by_day':
@@ -3735,6 +3735,12 @@ def get_dashboard_blocks(request):
                         fields=results['fieldid']
                         selected = results['fieldid']+ ','
                         groupby = results['groupby']
+
+                    if results['operation'] == 'somma_inline':
+                        fields=results['fieldid']
+                        selected = results['fieldid']
+                        groupby = results['groupby']
+                    
 
 
                     query_conditions = results['query_conditions']
@@ -3749,16 +3755,19 @@ def get_dashboard_blocks(request):
                     fromtable = 'user_' + tableid
 
                     db = HelpderDB()
-                    groupby_field_record = db.sql_query_row(
-                        f"select * from sys_field where tableid='{tableid}' and fieldid='{results['groupby']}'")
-                    if groupby_field_record['fieldtypeid'] == 'Utente':
-                        fromtable = fromtable + f" LEFT JOIN sys_user ON {fromtable}.{results['groupby']}=sys_user.id "
-                        selected += f"sys_user.firstname as {groupby}"
-                    else:
-                        selected += groupby
+                    if groupby:
+                        groupby_field_record = db.sql_query_row(
+                            f"select * from sys_field where tableid='{tableid}' and fieldid='{results['groupby']}'")
+                        if groupby_field_record['fieldtypeid'] == 'Utente':
+                            fromtable = fromtable + f" LEFT JOIN sys_user ON {fromtable}.{results['groupby']}=sys_user.id "
+                            selected += f"sys_user.firstname as {groupby}"
+                        else:
+                            selected += groupby
 
                     sql = "SELECT " + selected + " FROM " + fromtable + \
-                          " WHERE " + query_conditions + " GROUP BY " + groupby
+                          " WHERE " + query_conditions 
+                    if groupby:
+                        sql += " GROUP BY " + groupby
                     block['sql'] = sql
                     values = get_chart(request, sql, id, name, layout, fields)
                     block['value'] = values['value']
@@ -3777,52 +3786,96 @@ def get_dashboard_blocks(request):
 
 
 
+from django.db import connection
+# Assuming HelpderDB is a custom helper you have.
+# from . import HelpderDB 
+
 def get_chart(request, sql, id, name, layout, fields):
+    """
+    Fetches and processes data for a chart using a list of dictionaries.
+    """
+    # Parameters are assigned to local variables, which is redundant.
+    # We can use the function arguments directly.
     query = sql
-    id_sql = id
-    name_chart = name
-    layout_chart = layout
     fields_chart = fields
 
-    with connection.cursor() as cursor2:
-        cursor2.execute(query)
-        rows = cursor2.fetchall()
-       # formatted_rows = []
-        #for row in rows:
-         #   formatted_row = [str(value) if not isinstance(value, (int, float)) else value for value in row]
-          #  formatted_rows.append(formatted_row)
+    dictrows = HelpderDB.sql_query(query)
 
-       # rows = formatted_rows
-
-        if layout!='multi_barlinechart' and layout!='multi_barchart':
-            value = []
-            for num in range(0, len(fields_chart)):
-                value.append([row[num] for row in rows])
-
-            labels = [row[-1] for row in rows]
-
-            if None in labels or 'None' in labels or '' in labels:
-                labels = ['Non assegnato' if v is None or v == 'None' or v == '' else v for v in labels]
-
-            for i in range(len(value)):
-                for j in range(len(value[i])):
-                    if value[i][j] is not None:
-                        if value[i][j] == 'None':
-                            value[i][j] = 0
-                        value[i][j] = round(value[i][j], 2)
-        else:
-            value = []
-            value.append(0)
-            labels=[]
+    # It's good practice to handle cases with no data to prevent errors.
+    if not dictrows:
         context = {
-            'value': value[0],
-            'labels': labels,
-            'id': id_sql,
-            'name': name_chart,
+            'value': [],
+            'labels': [],
+            'id': id,
+            'name': name,
             'fields': fields_chart,
         }
+        return context
 
-        return (context)
+    labels = []
+    value = []
+
+    if layout == 'multi_barlinechart' or layout == 'multi_barchart':
+        # This block was empty in the original code. 
+        # You would need to implement the logic for these chart types here.
+        # For now, it will return empty data as before.
+        value = [0] # Original behavior
+        labels = []
+
+    elif layout == 'piechart_inline':
+        # For a pie chart, we expect two fields: [value_field, label_field]
+        value_key = fields_chart[0]
+        label_key = fields_chart[1]
+        
+        # Extract values and labels using dictionary keys
+        pie_values = [row_dict.get(value_key, 0) for row_dict in dictrows]
+        labels = [row_dict.get(label_key) for row_dict in dictrows]
+        
+        # The value for a pie chart is a single list of numbers
+        value = [pie_values] # Keep the nested list structure [[]] as per original logic
+
+        # Clean up labels
+        labels = ['Non assegnato' if v is None or v == 'None' or v == '' else v for v in labels]
+
+    else: # Default logic for other charts like bar, line, etc.
+        # The last key in the dictionary is assumed to be the label.
+        # This mirrors the original logic of `row[-1]`.
+        label_key = list(dictrows[0].keys())[-1]
+        
+        # Extract labels from the determined label key
+        labels = [row_dict.get(label_key) for row_dict in dictrows]
+        labels = ['Non assegnato' if v is None or v == 'None' or v == '' else v for v in labels]
+        
+        # `fields_chart` contains the keys for the data series
+        for field_name in fields_chart:
+            series = []
+            for row_dict in dictrows:
+                # Get value, default to 0 if it's None or the string 'None'
+                item = row_dict.get(field_name)
+                if item is None or item == 'None':
+                    series.append(0)
+                else:
+                    # Round numeric values, otherwise append as is
+                    try:
+                        series.append(round(float(item), 2))
+                    except (ValueError, TypeError):
+                        series.append(item) # Append non-numeric if necessary
+            value.append(series)
+
+    # Final context preparation
+    # The original code always returned `value[0]`, which is incorrect for multi-series charts.
+    # We now return the appropriate structure based on the layout.
+    final_value = value[0] if layout == 'piechart_inline' and value else value
+    
+    context = {
+        'value': final_value,
+        'labels': labels,
+        'id': id,
+        'name': name,
+        'fields': fields_chart,
+    }
+
+    return context
 
 
 
@@ -3902,7 +3955,16 @@ def save_form_data(request):
         # Esempio: record, created = UserRecord.objects.get_or_create(user_id=user.id, anno=year)
         
         # Per ora, usiamo il tuo esempio
-        record = UserRecord('metrica_annuale', '00000000000000000000000000000023')
+        #record = UserRecord('metrica_annuale', '00000000000000000000000000000023')
+
+        table=UserTable('metrica_annuale')
+        records=table.get_table_records_obj(conditions_list=["recordidgolfclub_='00000000000000000000000000000008'",f"anno='{str(year)}'"])
+        if records:
+            record=records[0]
+        else:
+            record=UserRecord('metrica_annuale')
+            record.values['anno']=year
+            record.save()
 
         # --- 3. Aggiornamento Dinamico dei Valori ---
         # Il metodo .update() aggiorna il dizionario 'values' con tutte le coppie chiave-valore
@@ -3932,66 +3994,7 @@ def save_form_data(request):
 #TODO spostare in customapp_wegolf
 def get_form_fields(request):
     try:
-        def create_form_config(sys_fields):
-            """
-            Genera dinamicamente la configurazione del form (form_config)
-            a partire da una lista di campi (sys_fields).
-
-            Args:
-                sys_fields (list): Una lista di dizionari, dove ogni dizionario
-                                rappresenta un campo del database.
-
-            Returns:
-                dict: Il dizionario form_config strutturato.
-            """
-            form_config = {}
-            # Un set per tenere traccia delle intestazioni (sublabel) già aggiunte
-            # per ogni gruppo, per evitare duplicati.
-            added_headings = {}
-
-            for field in sys_fields:
-                # Estrai le informazioni dal campo corrente
-                group_name = field.get("label")
-                sub_group_name = field.get("sublabel")
-                field_name = field.get("fieldid")
-                field_label = field.get("description")
-                field_type = field.get("explanation")
-
-                # Se il gruppo principale non esiste in form_config, lo inizializzo
-                if group_name not in form_config:
-                    form_config[group_name] = {
-                        "title": group_name,
-                        "icon": group_name,  # Icona di default
-                        "fields": []
-                    }
-                    # Inizializzo anche il set per le intestazioni di questo gruppo
-                    added_headings[group_name] = set()
-
-                # Se c'è un sottogruppo (sublabel) e non è ancora stato aggiunto come heading,
-                # lo creo e lo aggiungo.
-                if sub_group_name and sub_group_name not in added_headings[group_name]:
-                    heading = {
-                        "type": "heading",
-                        # Creo un nome univoco per l'heading per sicurezza
-                        "name": f"heading_{sub_group_name.lower().replace(' ', '_')}",
-                        "label": sub_group_name
-                    }
-                    form_config[group_name]["fields"].append(heading)
-                    # Marco questo heading come aggiunto per non ripeterlo
-                    added_headings[group_name].add(sub_group_name)
-
-                # Creo il dizionario del campo effettivo
-                form_field = {
-                    "name": field_name,
-                    "label": field_label,
-                    "type": field_type,
-                    "value": "" # Valore di default vuoto come da esempio
-                }
-
-                # Aggiungo il campo alla lista dei campi del suo gruppo
-                form_config[group_name]["fields"].append(form_field)
-
-            return form_config
+        
         request_data = json.loads(request.body)
 
         year = request_data.get("year")
@@ -4000,42 +4003,70 @@ def get_form_fields(request):
 
         fields = {}
 
-        record=UserRecord('metrica_annuale', '00000000000000000000000000000023')
+        table=UserTable('metrica_annuale')
+        records=table.get_table_records_obj(conditions_list=["recordidgolfclub_='00000000000000000000000000000008'",f"anno='{str(year)}'"])
+        if records:
+            record=records[0]
+        else:
+            record=UserRecord('metrica_annuale')
+            record.values['anno']=year
+            record.values['recordidgolfclub_']='00000000000000000000000000000008'
+            record.save()
+        #record=UserRecord('metrica_annuale', '00000000000000000000000000000023')
         values=record.values
-        sys_fields= HelpderDB.sql_query(f"SELECT * FROM sys_field WHERE tableid='metrica_annuale' AND explanation is not null")
-        form_config = {
-                "Soci & Ospiti": {
-                    "title": "Soci & Ospiti", "icon": "soci", "fields": [
-                        {"type": "heading", "name": "Dati Soci", "label": "Dati Soci"},
-                        {"name": "tassa_ammissione", "label": "Tassa ammissione (azioni/fondo perso)", "type": "number", "value": ""},
-                        {"name": "tassa_annua", "label": "Tassa annua (€)", "type": "number", "placeholder": "€", "value": ""},
-                        {"name": "nr_soci", "label": "Nr. soci totali", "type": "number", "value": ""},
-                        {"name": "uomini", "label": "Nr. soci uomini", "type": "number", "value": ""},
-                        {"name": "donne", "label": "Nr. soci donne", "type": "number", "value": ""},
-                        {"name": "aktiv", "label": "Soci attivi", "type": "number", "value": ""},#TODO
-                        {"name": "passiv", "label": "Soci passivi", "type": "number", "value": ""},#TODO
-                        {"name": "junioren", "label": "Soci Juniores", "type": "number", "value": ""},#TODO
-                        {"name": "eta_media", "label": "Età media soci", "type": "number", "value": ""},
-                        {"name": "cifra_affari", "label": "Cifra affari soci", "type": "number", "value": ""},
-                        {"name": "nr_giri_soci", "label": "Nr giri soci", "type": "number", "value": ""},
-                        {"name": "prezzo_cart", "label": "Prezzo cart soci", "type": "number", "value": ""},
-                        {"name": "prezzo_trolley_elettrico", "label": "Prezzo trolley elettrico soci", "type": "number", "value": ""},
-                        {"name": "prezzo_trolley_manuale", "label": "Prezzo trolley manuale soci", "type": "number", "value": ""},
-                        {"name": "tassa_gara_club", "label": "Tassa gara club", "type": "number", "value": ""},
-                    ]
-                },
-                "Campo": {
-                    "title": "Campo", "icon": "generic", "fields": [
-                        {"name": "nr_buche", "label": "Numero buche", "type": "number", "value": ""},
-                        # Aggiungi qui altre sezioni e campi se necessario
-                    ]
+        sys_fields= HelpderDB.sql_query(f"SELECT * FROM sys_user_field_order AS fo JOIN sys_field f ON (fo.tableid=f.tableid AND fo.fieldid=f.id) WHERE fo.tableid='metrica_annuale' AND f.explanation is not null AND f.label != 'Dati' ORDER BY fo.fieldorder ASC")
+
+                
+        form_config = {}
+        # Un set per tenere traccia delle intestazioni (sublabel) già aggiunte
+        # per ogni gruppo, per evitare duplicati.
+        added_headings = {}
+
+        for field in sys_fields:
+            # Estrai le informazioni dal campo corrente
+            group_name = field.get("label")
+            sub_group_name = field.get("sublabel")
+            field_name = field.get("fieldid")
+            field_label = field.get("description")
+            field_type = field.get("explanation")
+
+            # Se il gruppo principale non esiste in form_config, lo inizializzo
+            if group_name not in form_config:
+                form_config[group_name] = {
+                    "title": group_name,
+                    "icon": group_name,  # Icona di default
+                    "fields": []
                 }
+                # Inizializzo anche il set per le intestazioni di questo gruppo
+                added_headings[group_name] = set()
+
+            # Se c'è un sottogruppo (sublabel) e non è ancora stato aggiunto come heading,
+            # lo creo e lo aggiungo.
+            if sub_group_name and sub_group_name not in added_headings[group_name]:
+                heading = {
+                    "type": "heading",
+                    # Creo un nome univoco per l'heading per sicurezza
+                    "name": f"heading_{sub_group_name.lower().replace(' ', '_')}",
+                    "label": sub_group_name
+                }
+                form_config[group_name]["fields"].append(heading)
+                # Marco questo heading come aggiunto per non ripeterlo
+                added_headings[group_name].add(sub_group_name)
+
+            # Creo il dizionario del campo effettivo
+            form_field = {
+                "name": field_name,
+                "label": field_label,
+                "type": field_type,
+                "value": "",
+                "span": "col-span-2",
+                "breakAfter": False
             }
-        
-        form_config = create_form_config(sys_fields)
-        
+
+            # Aggiungo il campo alla lista dei campi del suo gruppo
+            form_config[group_name]["fields"].append(form_field)
+            
         saved_values = {}
-        record = UserRecord('metrica_annuale', '00000000000000000000000000000023')
         saved_values = record.values
         for section in form_config.values():
                     for field in section['fields']:
