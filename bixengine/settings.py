@@ -22,6 +22,7 @@ DEBUG = True
 
 ALLOWED_HOSTS = [
     'localhost',
+    '10.0.0.165',
     env('BIXENGINE_DOMAIN'),
     env('BIXPORTAL_DOMAIN'),
     env('BIXMOBILE_DOMAIN'),
@@ -171,6 +172,10 @@ CSRF_TRUSTED_ORIGINS = [
     'https://' + env('BIXPORTAL_DOMAIN'),
     'https://' + env('BIXMOBILE_DOMAIN')
 ]
+
+QR_FERNET_KEY = os.getenv("QR_FERNET_KEY")
+if not QR_FERNET_KEY:
+    raise RuntimeError("QR_FERNET_KEY non impostata nell'ambiente (.env)")
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
