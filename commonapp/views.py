@@ -4337,3 +4337,74 @@ def set_user_theme(request):
         HelpderDB.sql_execute(f"UPDATE sys_user_settings SET value = '{theme}' WHERE userid = '{userid}' AND setting = 'theme'")
 
     return JsonResponse({'success': True, 'message': 'User theme updated successfully.'})
+
+
+@csrf_exempt
+def stampa_pdf_test(request):
+    data={}
+    filename='test.pdf'
+    
+
+    content = render_to_string('pdf/pdf_test.html', data)
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
+    config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
+    filename_with_path = os.path.dirname(os.path.abspath(__file__))
+    filename_with_path = filename_with_path.rsplit('views', 1)[0]
+    filename_with_path = filename_with_path + '\\static\\pdf\\' + filename
+    pdfkit.from_string(
+        content,
+        filename_with_path,
+        configuration=config,
+        options={
+            "enable-local-file-access": "",
+            # "quiet": ""  # <-- rimuovilo!
+        }
+    )
+
+    try:
+        with open(filename_with_path, 'rb') as fh:
+            response = HttpResponse(fh.read(), content_type="application/pdf")
+            response['Content-Disposition'] = f'inline; filename={filename}'
+            return response
+        return response
+
+    finally:
+        os.remove(filename_with_path)
+
+
+@csrf_exempt
+def stampa_word_test(request):
+    data={}
+    filename='test.pdf'
+    
+
+    content = render_to_string('pdf/pdf_test.html', data)
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
+    config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
+    filename_with_path = os.path.dirname(os.path.abspath(__file__))
+    filename_with_path = filename_with_path.rsplit('views', 1)[0]
+    filename_with_path = filename_with_path + '\\static\\pdf\\' + filename
+    pdfkit.from_string(
+        content,
+        filename_with_path,
+        configuration=config,
+        options={
+            "enable-local-file-access": "",
+            # "quiet": ""  # <-- rimuovilo!
+        }
+    )
+
+    try:
+        with open(filename_with_path, 'rb') as fh:
+            response = HttpResponse(fh.read(), content_type="application/pdf")
+            response['Content-Disposition'] = f'inline; filename={filename}'
+            return response
+        return response
+
+    finally:
+        os.remove(filename_with_path)
+

@@ -64,6 +64,8 @@ urlpatterns = [
     path('delete_dashboard_block/', delete_dashboard_block, name='delete_dashboard_block'),
     path('get_user_theme/', get_user_theme, name='get_user_theme'),
     path('set_user_theme/', set_user_theme, name='set_user_theme'),
+    path('stampa_pdf_test/', stampa_pdf_test, name='stampa_pdf_test'),
+    path('stampa_word_test/', stampa_word_test, name='stampa_word_test'),
 
 ]
 
