@@ -4374,6 +4374,68 @@ def stampa_pdf_test(request):
         os.remove(filename_with_path)
 
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+@csrf_exempt
+def stampa_pdf(request):
+    """
+    Genera un PDF utilizzando un template HTML
+    """
+    try:
+        data = json.loads(request.body)
+        
+        services_data = data.get('data', {})
+        client_info = data.get('cliente', {})
+        
+        # Calcolo i totali
+        section1_total = services_data.get('section1', {}).get('price', 0)
+        section3_total = sum(
+            service.get('quantity', 0) * service.get('unitPrice', 0)
+            for service in services_data.get('section3', {}).values()
+            if isinstance(service, dict)
+        )
+        tier_descriptions = {
+            'tier1': 'Fino a 5 PC + server',
+            'tier2': 'Fino a 10 PC + server', 
+            'tier3': 'Fino a 15 PC + server',
+            'tier4': 'Fino a 20 PC + server'
+        }
+        selected_tier = services_data.get('section1', {}).get('selectedTier', '')
+        tier_display = tier_descriptions.get(selected_tier, selected_tier)
+
+        # Preparo il contesto per il template
+        context = {
+            'client_info': client_info,
+            'services_data': services_data,
+            'section1_total': section1_total,
+            'section3_total': section3_total,
+            'grand_total': section3_total,
+            'tier_display': tier_display,
+        }
+        
+        # Renderizzo il template HTML
+        html_content = render_to_string('pdf/pdf_template.html', context)
+        
+        # Creo il PDF
+        result = BytesIO()
+        from xhtml2pdf import pisa 
+        pdf = pisa.pisaDocument(BytesIO(html_content.encode("UTF-8")), result)
+        
+        if not pdf.err:
+            # Restituisce il PDF come risposta
+            response = HttpResponse(result.getvalue(), content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="ActiveMind_Servizi_{client_info.get("name", "Cliente").replace(" ", "_")}.pdf"'
+            return response
+        else:
+            logger.error(f"Errore nella generazione PDF: {pdf.err}")
+            return JsonResponse({'error': 'Errore nella generazione del PDF'}, status=500)
+            
+    except Exception as e:
+        logger.error(f"Errore nella generazione PDF: {str(e)}")
+        return JsonResponse({'error': f'Errore nella generazione del PDF: {str(e)}'}, status=500)
+
 @csrf_exempt
 def stampa_word_test(request):
     data={}

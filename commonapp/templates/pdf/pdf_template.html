@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ActiveMind - Servizi di Supporto Sistemistico</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 1.5cm;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            line-height: 1.2;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .header {
+            text-align: left;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+        }
+        
+        .company-info {
+            font-size: 12px;
+            color: #333;
+            margin-bottom: 15px;
+            line-height: 1.1;
+        }
+        
+        .client-info {
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+        
+        .client-info h3 {
+            color: #333;
+            margin-bottom: 5px;
+            font-size: 16px;
+        }
+        
+        .document-title {
+            color: #dc2626;
+            font-size: 30px;
+            font-weight: bold;
+            margin: 40px 0 30px 0;
+            text-align: center;
+        }
+        
+        .intro-text {
+            font-size: 16px;
+            line-height: 1.4;
+            margin-bottom: 20px;
+            text-align: justify;
+        }
+        
+        .section {
+            margin-bottom: 15px;
+        }
+        
+        .section-title {
+            background-color: #dc2626;
+            color: white;
+            padding: 6px 10px;
+            font-weight: bold;
+            font-size: 20px;
+            margin-bottom: 8px;
+        }
+        
+        .service-item {
+            margin-bottom: 0px;
+            padding: 0px;
+        }
+        
+        .service-header {
+            font-weight: bold;
+            color: #dc2626;
+            margin-bottom: 0px;
+            margin-top: 20px;
+            font-size: 18px;
+        }
+        
+        .service-details {
+            margin-left: 10px;
+            font-size: 16px;
+        }
+
+        .service-details ul {
+            margin: 0px 0;
+            padding-left: 15px;
+        }
+        
+        .service-details li {
+            margin-bottom: 4px;
+            font-size: 14px;
+        }
+
+        .service-details p {
+            margin: 0px 0;
+            font-size: 14px;
+            padding-left: 15px
+        }
+        
+        .pricing-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0;
+            font-size: 14px;
+        }
+        
+        .pricing-table th,
+        .pricing-table td {
+            border: 1px solid #ccc;
+            padding: 6px 8px;
+            text-align: left;
+        }
+        
+        .pricing-table th {
+            background-color: #f0f0f0;
+            font-weight: bold;
+        }
+        
+        .pricing-table .price {
+            text-align: right;
+            font-weight: bold;
+        }
+        
+        .total-section {
+            padding: 15px;
+            margin: 25px 0;
+        }
+
+        .total-section-title {
+            color: #dc2626; 
+            margin-bottom: 20px; 
+            font-size: 20px;
+            background-color: #f8f8f8;
+            border: 2px solid #dc2626;
+        }
+        
+        .grand-total {
+            font-size: 20px;
+            font-weight: bold;
+            color: #dc2626;
+            border-top: 2px solid #dc2626;
+            padding-top: 8px;
+        }
+        
+        .signature-section {
+            margin-top: 40px;
+        }
+        
+        .signature-row {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 40px;
+        }
+        
+        .signature-box {
+            width: 45%;
+            text-align: left;
+            border-bottom: 1px solid #333;
+            padding-bottom: 50px;
+            font-size: 16px;
+        }
+        
+        .page-break {
+            page-break-before: always;
+        }
+        
+        .conditions {
+            font-size: 16px;
+            margin-top: 25px;
+            line-height: 1.3;
+        }
+        
+        .conditions h4 {
+            color: #dc2626;
+            margin-bottom: 8px;
+            font-size: 20px;
+        }
+        
+        .conditions ul {
+            margin: 5px 0;
+            padding-left: 15px;
+        }
+        
+        .conditions li {
+            margin-bottom: 2px;
+        }
+        
+        .service-title {
+            font-weight: bold;
+            {% comment %} color: #dc2626; {% endcomment %}
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="company-info">
+            <strong style="font-size: 20px;">Swissbix SA</strong><br>
+            Via Lisano 3, 6900 Massagno<br>
+            E-Mail: finance@swissbix.ch | Telefono: +41 91 960 22 00<br>
+            Banca: UBS Switzerland AG | Titolare del conto: Swissbix SA<br>
+            BIC: UBSWCHZH80A | IBAN: CH62 0024 7247 2096 9101 U<br>
+            N. IVA UE: CHE-136.887.933
+        </div>
+    </div>
+
+    <div class="client-info">
+        <h3>Spett.le</h3>
+        <p><strong>{{ client_info.nome }}</strong><br>
+        {{ client_info.indirizzo }}</p>
+        <p style="margin-top: 15px;">Massagno {{ client_info.data }}</p>
+    </div>
+
+    <div class="document-title">Servizi di supporto sistemistico ActiveMind</div>
+    
+    <div class="intro-text">
+        <strong>Intervento tecnico di manutenzione informatica</strong><br>
+        Si garantisce continuità, efficienza e sicurezza al sistema informatico con il nostro servizio 
+        professionale di manutenzione IT programmata, studiata per aziende e professionisti che 
+        desiderano concentrarsi sul proprio business, lasciando l'infrastruttura tecnologica in mani esperte.
+    </div>
+
+    {% if services_data.section1.selectedTier %}
+    <div class="section page-break">
+        <div class="section-title">Sezione 1.0</div>
+        <div class="service-item">
+            <p class="service-header">System Assurance tramite RMM di sistema (intervento propedeutico)</p>
+            <div class="service-details">
+                <h3><strong>Implementazione degli agent RMM (Remote Monitoring and Management)</strong></h3>
+                
+                <table class="pricing-table">
+                    <tr>
+                        <th colspan="2">System Assurance</th>
+                        <th>Qt.</th>
+                        <th>Prezzo unitario</th>
+                    </tr>
+                    <tr>
+                        <td colspan="2">
+                            - Installazione agent RMM (1 mese)<br>
+                            - Avvio e riesamina dello stato dei PC<br>
+                            - Generazione di un Asset managed (inventario)<br>
+                            - Verifica infrastruttura informatica<br>
+                            - Device networking<br>
+                            - Nas/storage<br>
+                            - Switch/router<br>
+                            - Reportistica sull'infrastruttura informatica
+                        </td>
+                        <td>{{ tier_display }}</td>
+                        <td class="price">CHF {{ services_data.section1.price|default:"0"|floatformat:0 }}.-</td>
+                    </tr>
+                </table>
+                
+                <br>
+                <p style="margin: 10px 0;">Il servizio permette di:</p>
+                <ul>
+                    <li>Fotografare lo "stato dell'arte" dell'infrastruttura del cliente</li>
+                    <li>Generare un inventario (asset managed) dei client presenti in azienda</li>
+                    <li>Verificare gli aggiornamenti di windows e pianificarne l'avvio (da integrare nel servizio ActiveMind)</li>
+                    <li>Definire tempistiche e valori economici di intervento da applicare al contratto</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if services_data.section2.selectedFrequency %}
+    <div class="section page-break">
+        <div class="section-title">Sezione 2.0</div>
+        <div class="service-item">
+            <div class="service-header">Condizioni incluse in ActiveMind:</div>
+            <div class="service-details">
+                <h3><strong>Pianificazione intervento</strong></h3>
+                <p><strong>{{ services_data.section2.selectedFrequency }}</strong> programmato anticipatamente</p>
+                <br>
+                <h3><strong>Intervento in loco programmato</strong></h3>
+                <ul>
+                    <li>Pianificazione ed intervento sull'asset managed dell'uscita precedente</li>
+                    <li>L'intervento implica la presenza e l'accesso ai device sotto contratto</li>
+                    <li>Eventuali modifiche da parte del cliente devono essere prontamente comunicate (previa modifica contrattuale in corso)</li>
+                    <li>Il valore economico copre prettamente gli interventi programmati</li>
+                    <li>Gli interventi a regia saranno fatturati secondo accordi a latere</li>
+                    <li>L'intervento programmato verrà confermato 3gg prima dell'uscita per evitare incomprensioni</li>
+                    <li>Verrà redatto un rapporto completo sullo stato dell'intervento eseguito</li>
+                    <li>Seguirà uscita del referente commerciale per un confronto con il cliente sull'operato</li>
+                    <li>Gli interventi sui 3/6/12 mesi includeranno possibilmente i mesi di chiusura o di festività per evitare il più possibile disservizi</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if services_data.section3 %}
+    <div class="section page-break">
+        <div class="section-title">Sezione 3.0</div>
+        <div class="service-header">Servizi inclusi in ActiveMind:</div>
+        
+        {% for service_key, service in services_data.section3.items %}
+        {% if service.quantity > 0 %}
+        <div class="service-item">
+            <h1 class="service-title">
+                {{ service.title }}
+            </h1>
+            <table class="pricing-table">
+                <tr>
+                    <th>Costo unitario</th>
+                    <th>Quantità</th>
+                    <th>Costo totale</th>
+                </tr>
+                <tr>
+                    <td>CHF {{ service.unitPrice|default:"0.00"|floatformat:2 }}.-</td>
+                    <td>{{ service.quantity }}</td>
+                    <td class="price">CHF {{ service.total|default:"0.00"|floatformat:2 }}.-</td>
+                </tr>
+            </table>
+            
+            <div class="service-details">
+                {% comment %} {{ service.features }} {% endcomment %}
+            </div>
+        </div>
+        {% endif %}
+        <hr>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="total-section page-break">
+        <h1 class="total-section-title">Definizione Economica</h1>
+        <table class="pricing-table">
+            <tr>
+                <th>Descrizione</th>
+                <th>Quantità</th>
+                <th>Prezzo unitario</th>
+                <th>Prezzo totale</th>
+            </tr>
+            
+            {% if services_data.section1.selectedTier %}
+            <tr style="border-bottom: 3px solid #ccc;">
+                <td>System Assurance - {{ tier_display }}</td>
+                <td>1</td>
+                <td class="price">CHF {{ services_data.section1.price|default:"0"|floatformat:0 }}.-</td>
+                <td class="price">CHF {{ services_data.section1.price|default:"0"|floatformat:0 }}.-</td>
+            </tr>
+            {% endif %}
+
+            {% for service_key, service in services_data.section3.items %}
+            {% if service.quantity > 0 %}
+            <tr>
+                <td>{{ service.title }}</td>
+                <td>{{ service.quantity }}</td>
+                <td class="price">CHF {{ service.unitPrice|default:"0.00"|floatformat:2 }}.-</td>
+                <td class="price">CHF {{ service.total|default:"0.00"|floatformat:2 }}.-</td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+            
+            <tr style="background-color: #dc2626; color: white; font-weight: bold;">
+                <td colspan="3">TOTALE DEI SERVIZI</td>
+                <td class="price">CHF {{ grand_total|default:"0.00"|floatformat:2 }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="conditions page-break">
+        <h4>Condizioni contrattuali di vendita</h4>
+        <p><strong>Contatti per Assistenza Tecnica:</strong></p>
+        <ul>
+            <li>Apertura ticket: helpdesk@swissbix.ch</li>
+            <li>Supporto telefonico: 091 960 22 09</li>
+            <li>Orari supporto tecnico: dal lunedì al venerdì dalle 9:00 alle 12:00 e dalle 14:00 alle 17:00</li>
+        </ul>
+        <p><strong>Metodo di pagamento e fatturazione:</strong></p>
+        <p>Fatturazione ad intervento eseguito, pagamento a 20gg</p>
+        <p><strong>Condizioni generali:</strong></p>
+        <ul>
+            <li>Condizioni generali di vendita visionabili al link: https://www.swissbix.ch/cgv.pdf</li>
+            <li>I prezzi indicati sono IVA Esclusa</li>
+            <li>Offerta valida fino al {{ client_info.termine }}</li>
+        </ul>
+    </div>
+
+    <div class="signature-section">
+        <p>Massagno, __________________</p>
+        <div class="signature-row">
+            <div class="signature-box" style="border-bottom: none; padding-bottom: 0;">
+                <strong>Mauro Gallani</strong><br>
+                Swissbix SA
+            </div>
+            <div class="signature-box">
+                <strong>Per Accettazione</strong><br>
+                {{ client_info.nome }}
+            </div>
+        </div>
+    </div>
+</body>
+</html>
