@@ -151,13 +151,17 @@
         }
         
         .signature-section {
-            margin-top: 40px;
+            margin-top: 0px;
+        }
+
+        .signature-section p {
+            margin-top: 60px;
         }
         
         .signature-row {
             display: flex;
             justify-content: space-between;
-            margin-top: 40px;
+            margin-top: 0px;
         }
         
         .signature-box {
@@ -165,6 +169,7 @@
             text-align: left;
             border-bottom: 1px solid #333;
             padding-bottom: 50px;
+            margin-left: 400px;
             font-size: 16px;
         }
         
@@ -389,14 +394,23 @@
     <div class="signature-section">
         <p>Massagno, __________________</p>
         <div class="signature-row">
-            <div class="signature-box" style="border-bottom: none; padding-bottom: 0;">
+            <div class="signature-box" style="border-bottom: none; padding-bottom: 0; margin-left: 0;">
                 <strong>Mauro Gallani</strong><br>
                 Swissbix SA
             </div>
-            <div class="signature-box">
-                <strong>Per Accettazione</strong><br>
-                {{ client_info.nome }}
-            </div>
+            {% if digital_signature %}
+                <div class="signature-box" style="border-bottom: none; padding-bottom: 0;">
+                    <strong>Per Accettazione</strong><br>
+                    <img src="{{ digital_signature }}" alt="Firma Digitale" style="max-width: 100%; height: auto;">
+                    <br>
+                    {{ client_info.nome }}
+                </div>
+            {% else %}
+                <div class="signature-box">
+                    <strong>Per Accettazione</strong><br>
+                    {{ client_info.nome }}
+                </div>
+            {% endif %}
         </div>
     </div>
 </body>

@@ -4388,7 +4388,8 @@ def stampa_pdf(request):
         
         services_data = data.get('data', {})
         client_info = data.get('cliente', {})
-        
+        digital_signature = data.get('signature', {})
+
         # Calcolo i totali
         section1_total = services_data.get('section1', {}).get('price', 0)
         section3_total = sum(
@@ -4413,6 +4414,7 @@ def stampa_pdf(request):
             'section3_total': section3_total,
             'grand_total': section3_total,
             'tier_display': tier_display,
+            'digital_signature': digital_signature,
         }
         
         # Renderizzo il template HTML
