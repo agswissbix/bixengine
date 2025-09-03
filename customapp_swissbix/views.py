@@ -19,12 +19,12 @@ def get_activemind(request):
     response_data = {}
     try:
         data = json.loads(request.body)
-        recordid_deal = data.get('recordid', None)
+        recordid_deal = data.get('recordIdTrattativa', None)
         if recordid_deal:
-            record_deal=UserRecord(recordid_deal)
+            record_deal=UserRecord('deal',recordid_deal)
             recordid_company=record_deal.values.get('recordidcompany_', None)
             if recordid_company:
-                record_company=UserRecord(recordid_company)
+                record_company=UserRecord('company',recordid_company)
                 response_data = {
                 "cliente": {
                     "nome": record_company.values.get('companyname', ''),
@@ -47,8 +47,23 @@ def save_activemind(request):
         }, status=405)
 
     try:
-        data = json.loads(request.body)
-        print("Dati JSON ricevuti:", data)
+        request_body = json.loads(request.body)
+        data=request_body.get('data', {})
+        recordid_deal = data.get('recordIdTrattativa', None)
+        #section1
+        section1=data.get('section1', {})
+        selectdTier=section1.get('selectedTier', '')
+        price=section1.get('price', '')
+        record_dealline=UserRecord('dealline')
+        record_dealline.values['recordiddeal_']=recordid_deal
+        record_dealline.values['name']=selectdTier
+        record_dealline.values['price']=price
+        record_dealline.save()
+
+        #section2
+
+        #section3
+
         return JsonResponse({
             'success': True,
             'message': 'Dati ricevuti e processati con successo.'
