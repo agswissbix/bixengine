@@ -18,6 +18,20 @@ from commonapp.helper import *
 def get_activemind(request):
     response_data = {}
     try:
+        data = json.loads(request.body)
+        recordid_deal = data.get('recordid', None)
+        if recordid_deal:
+            record_deal=UserRecord(recordid_deal)
+            recordid_company=record_deal.values.get('recordidcompany_', None)
+            if recordid_company:
+                record_company=UserRecord(recordid_company)
+                response_data = {
+                "cliente": {
+                    "nome": record_company.values.get('companyname', ''),
+                    "indirizzo": record_company.values.get('address', ''),
+                    "citta": record_company.values.get('city', '')
+                }
+            }
         return JsonResponse(response_data)
     except Exception as e:
         return JsonResponse({
