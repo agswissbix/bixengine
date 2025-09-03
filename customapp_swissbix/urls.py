@@ -6,6 +6,7 @@ from customapp_swissbix.bixverifytest import issue_qr_token, verify_qr_token
 urlpatterns = [
     path('get_activemind/', get_activemind, name='get_activemind'),
     path('save_activemind/', save_activemind, name='save_activemind'),
+    path('print_pdf_activemind/', print_pdf_activemind, name='print_pdf_activemind'),
     path("qr/issue", issue_qr_token, name="issue_qr_token"),
     path("qr/verify", verify_qr_token, name="verify_qr_token"),
 ]

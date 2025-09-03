@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -8,6 +9,10 @@
         @page {
             size: A4;
             margin: 1.5cm;
+            @frame header_frame {
+                -pdf-frame-content: cover;
+                left: 50pt; width: 512pt; top: 50pt; height: 40pt;
+            }
         }
         
         body {
@@ -17,6 +22,43 @@
             color: #333;
             margin: 0;
             padding: 0;
+        }
+
+        .cover {
+            width: 100%;
+            height: 100%;
+            background-image: url("{% static 'images/cover.png' %}");
+            background-repeat: no-repeat;
+            background-position: center center;
+            background-size: contain;
+            text-align: center;
+            padding-top: 200px;
+        }
+
+        .cover-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 40px;
+        }
+
+        .cover-client {
+            margin-top: 50px;
+            font-size: 16px;
+        }
+
+        .cover-footer {
+            margin-top: 200px;
+            font-size: 14px;
+        }
+
+        .cover-logo {
+            margin-top: 50px;
+            font-size: 26px;
+            font-weight: bold;
+        }
+
+        .cover-logo span {
+            color: #dc2626;
         }
         
         .header {
@@ -206,7 +248,31 @@
     </style>
 </head>
 <body>
-    <div class="header">
+    <!-- COPERTINA -->
+    <div id="cover" class="cover" style="z-index: 5; position: relative; background-image: url('{% static 'images/cover.png' %}'); background-repeat: no-repeat; background-position: center center; background-size: 100% auto; height: 1000px;">
+        
+        <div class="cover-title">
+            Intervento sistemistico programmato <span style="color:#dc2626;">ActiveMind</span>
+        </div>
+
+        <div class="cover-client">
+            <strong>{{ client_info.nome }}</strong><br>
+            {{ client_info.indirizzo }}<br><br>
+            Oceano, {{ client_info.data }}
+        </div>
+
+        <div class="cover-footer">
+            <div class="cover-logo">
+                SWI<span>S</span>BIX
+            </div>
+        </div>
+    </div>
+
+    <div class="cover-img" style="z-index: 0; position: relative">
+        <img src="{% static 'images/cover.png' %}" alt="Cover Logo">
+    </div>
+
+    {% comment %} <div class="header">
         <div class="company-info">
             <strong style="font-size: 20px;">Swissbix SA</strong><br>
             Via Lisano 3, 6900 Massagno<br>
@@ -231,7 +297,7 @@
         Si garantisce continuità, efficienza e sicurezza al sistema informatico con il nostro servizio 
         professionale di manutenzione IT programmata, studiata per aziende e professionisti che 
         desiderano concentrarsi sul proprio business, lasciando l'infrastruttura tecnologica in mani esperte.
-    </div>
+    </div> {% endcomment %}
 
     {% if services_data.section1.selectedTier %}
     <div class="section page-break">
