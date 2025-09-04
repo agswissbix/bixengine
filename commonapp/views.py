@@ -1842,6 +1842,17 @@ def save_record_fields(request):
         """
         HelpderDB.sql_execute(sql_riferimentocompleto)
 
+    if tableid == 'dipendente':
+        dipendente_record = UserRecord('dipendente', recordid)
+        if Helper.isempty(dipendente_record.values['cognome']):
+            dipendente_record.values['cognome'] = ""
+        if Helper.isempty(dipendente_record.values['nome']):
+            dipendente_record.values['nome'] = ""
+        riferimento = dipendente_record.values['cognome'] + " " + dipendente_record.values['nome']
+        dipendente_record.values['riferimento'] = riferimento
+        dipendente_record.save()
+        
+
     if tableid == 'contatti':
         contatto_record = UserRecord('contatti', recordid)
         if Helper.isempty(contatto_record.values['nome']):
@@ -2099,8 +2110,8 @@ def prepara_email(request):
                                     <b>Pit Service Sagl</b><br/>
                                     La cura del tuo immobile<br/>
                                     Phone: 091.993.03.92 <br/>
-                                    Via San Gottardo 26 <br/>
-                                    6943 Vezia <br/>
+                                    Via Carvina 6 <br/>
+                                    6807 Taverne <br/>
                                 </p>
                             </td>
                         </tr>
@@ -2131,8 +2142,8 @@ Cordiali saluti
                                 <b>Pit Service Sagl</b><br/>
                                 La cura del tuo immobile<br/>
                                 Phone: 091.993.03.92 <br/>
-                                Via San Gottardo 26 <br/>
-                                6943 Vezia <br/>
+                                Via Carvina 6 <br/>
+                                6807 Taverne <br/>
                             </p>
                         </td>
                     </tr>
@@ -2187,8 +2198,8 @@ Cordiali saluti
                                 <b>Pit Service Sagl</b><br/>
                                 La cura del tuo immobile<br/>
                                 Phone: 091.993.03.92 <br/>
-                                Via San Gottardo 26 <br/>
-                                6943 Vezia <br/>
+                                Via Carvina 6 <br/>
+                                6807 Taverne <br/>
                             </p>
                         </td>
                     </tr>
@@ -2218,7 +2229,7 @@ def stampa_gasoli(request):
         recordid_stabile = data.get('recordid')
         #meseLettura=data.get('date')
         #TODO sistemare dinamico
-        meseLettura="2025 07-Luglio"
+        meseLettura="2025 08-Agosto"
         anno, mese = meseLettura.split(' ')
     script_dir = os.path.dirname(os.path.abspath(__file__))
     wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
