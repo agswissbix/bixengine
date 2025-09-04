@@ -1848,7 +1848,7 @@ def save_record_fields(request):
             dipendente_record.values['cognome'] = ""
         if Helper.isempty(dipendente_record.values['nome']):
             dipendente_record.values['nome'] = ""
-        riferimento = dipendente_record.values['cognome'] + " " + dipendente_record.values['nome']
+        riferimento = dipendente_record.values['nome'] + " " + dipendente_record.values['cognome']
         dipendente_record.values['riferimento'] = riferimento
         dipendente_record.save()
         
