@@ -691,8 +691,6 @@ class SysWidget(models.Model):
         db_table = 'sys_widget'
 
 
-from django.db import models
-
 class SysCustomFunction(models.Model):
     CONTEXT_CHOICES = [
         ("results", "Results"),
