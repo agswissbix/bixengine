@@ -67,6 +67,7 @@ urlpatterns = [
     path('stampa_pdf_test/', stampa_pdf_test, name='stampa_pdf_test'),
     path('stampa_word_test/', stampa_word_test, name='stampa_word_test'),
     path('get_user_id/', get_user_id, name='get_user_id'),
+    path('get_custom_functions/', get_custom_functions, name='get_custom_functions'),
 ]
 
 

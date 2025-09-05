@@ -18,6 +18,7 @@ from commonapp.bixmodels import helper_db
 from .bixmodels.sys_table import *
 from .bixmodels.user_record import *
 from .bixmodels.user_table import *
+from commonapp.models import SysCustomFunction
 
 import pyotp
 import qrcode
@@ -4428,3 +4429,9 @@ def stampa_word_test(request):
     finally:
         os.remove(filename_with_path)
 
+def get_custom_functions(request):
+    tableid = request.get('tableid')
+
+    customs_fn = SysCustomFunction.objects.filter(tableid=tableid).values()
+    print(customs_fn)
+    return JsonResponse(list(customs_fn), safe=False)
