@@ -1996,7 +1996,7 @@ def get_table_views(request):
     views=[ ]
     for table_view in table_views:
         views.append({'id':table_view['id'],'name':table_view['name']})
-    response={ "views": views}
+    response={ "views": views, "defaultViewId": 37}
 
     return JsonResponse(response)
 
