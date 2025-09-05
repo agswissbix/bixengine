@@ -196,7 +196,13 @@ def user_info(request):
     else:
         return JsonResponse({"isAuthenticated": False}, status=401)
         
-        
+
+@login_required_api
+def get_user_id(request):
+    cliente = Helper.get_cliente_id()
+    print("Function: get_cliente_id: ", cliente)   
+    return JsonResponse({"cliente": cliente})
+
 
 @login_required_api  
 def get_examplepost(request):  
