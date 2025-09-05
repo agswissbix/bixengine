@@ -1998,12 +1998,15 @@ def custom_save_record_fields(tableid, recordid):
 def get_table_views(request):
     data = json.loads(request.body)
     tableid= data.get("tableid")
+    userid=Helper.get_userid(request)
     table=UserTable(tableid)
+    table_default_viewid=table.get_default_viewid()
     table_views=table.get_table_views()
+
     views=[ ]
     for table_view in table_views:
         views.append({'id':table_view['id'],'name':table_view['name']})
-    response={ "views": views}
+    response={ "views": views, "defaultViewId": table_default_viewid}
 
     return JsonResponse(response)
 
