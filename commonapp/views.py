@@ -4102,6 +4102,24 @@ def get_form_fields(request):
                 if field_specific_settings.get("breakAfter") == 'true':
                     breakAfter = True
             # Creo il dizionario del campo effettivo
+            options=[]
+            # Ipotizziamo che le opzioni siano in una lista di dizionari con chiavi 'value' e 'label'
+            # Se la struttura è diversa, adatta questo ciclo di conseguenza
+            source_options = [
+                {
+                    "value": "option1",
+                    "label": "Opzione 1"
+                },
+                {
+                    "value": "option2",
+                    "label": "Opzione 2"
+                }
+                              ]
+            
+            # Costruisci la lista di opzioni nel formato corretto per il frontend
+            options = [{"value": opt.get("value"), "label": opt.get("label")} for opt in source_options]
+
+
             form_field = {
                 "name": field_name,
                 "label": field_label,
@@ -4109,7 +4127,8 @@ def get_form_fields(request):
                 "value": "",
                 "span": span,
                 "breakAfter": breakAfter,
-                "required": required
+                "required": required,
+                "options": options
             }
 
             # Aggiungo il campo alla lista dei campi del suo gruppo
