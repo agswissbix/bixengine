@@ -4129,7 +4129,8 @@ def get_form_fields(request):
             # Costruisci la lista di opzioni nel formato corretto per il frontend
             #options = [{"value": opt.get("value"), "label": opt.get("label")} for opt in source_options]
 
-
+            showWhen={}
+           
             form_field = {
                 "name": field_name,
                 "label": field_label,
@@ -4138,7 +4139,8 @@ def get_form_fields(request):
                 "span": span,
                 "breakAfter": breakAfter,
                 "required": required,
-                "options": options
+                "options": options,
+                "showWhen": showWhen
             }
 
             # Aggiungo il campo alla lista dei campi del suo gruppo
