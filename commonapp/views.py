@@ -4115,9 +4115,19 @@ def get_form_fields(request):
                     "label": "Opzione 2"
                 }
                               ]
+
+            lookuptableid=field.get("lookuptableid")
+            if lookuptableid:
+                field_options=HelpderDB.sql_query(f"SELECT * FROM sys_lookup_table_item WHERE lookuptableid='{lookuptableid}' ")
+                for field_option in field_options:
+                    itemcode=field_option.get("itemcode","")
+                    itemdesc=field_option.get("itemdesc","")
+                    options.append({"value":itemcode, "label":itemdesc})
+
+            
             
             # Costruisci la lista di opzioni nel formato corretto per il frontend
-            options = [{"value": opt.get("value"), "label": opt.get("label")} for opt in source_options]
+            #options = [{"value": opt.get("value"), "label": opt.get("label")} for opt in source_options]
 
 
             form_field = {
