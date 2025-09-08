@@ -363,6 +363,22 @@ class UserRecord:
             self.values['titolorichiesta']="ticket da telefonata - "+ (record_telefonate.values.get('chi','') or '')
             self.values['personariferimento'] = (record_telefonate.values.get('chi') or '') + " " + (record_telefonate.values.get('telefono') or '')
             self.values['richiesta']=(record_telefonate.values.get('motivo_chiamata','') or '')
+        
+        # 1. Carica tutte le impostazioni per la tabella e l'utente in una sola volta
+        sql_settings = f"""
+            SELECT fieldid, settingid, value
+            FROM sys_user_field_settings
+            WHERE tableid = '{self.tableid}' AND userid = 1
+        """
+        all_settings_raw = HelpderDB.sql_query(sql_settings)
+
+        # 2. Organizza le impostazioni in un dizionario per un accesso efficiente
+        field_settings_map = {}
+        for setting in all_settings_raw:
+            fieldid = setting['fieldid']
+            if fieldid not in field_settings_map:
+                field_settings_map[fieldid] = {}
+            field_settings_map[fieldid][setting['settingid']] = setting['value']
             
         sql=f"""
             SELECT f.*
@@ -387,6 +403,11 @@ class UserRecord:
              #   value=self.values[fieldid]
               #  if not value:
                #     value=""
+
+            # 3. Recupera le impostazioni specifiche per il campo corrente
+            # Usa .get(fieldid, {}) per gestire campi senza impostazioni personalizzate
+            current_field_settings = field_settings_map.get(fieldid, {})
+            
             insert_field['tableid']="1"
             insert_field['fieldid']=fieldid
             insert_field['fieldorder']="1"
@@ -396,12 +417,16 @@ class UserRecord:
             insert_field["lookuptableid"]= field['lookuptableid'],
             insert_field["tablelink"]= field['tablelink'],
             insert_field['linked_mastertable']=field['tablelink'],
-            insert_field['settings']={
+            # 4. Applica le impostazioni dinamicamente
+            insert_field['settings'] = {
+                # Valori di base che possono essere sovrascritti
                 "calcolato": "false",
                 "default": "",
                 "nascosto": "false",
                 "obbligatorio": "false"
             }
+            # Sovrascrivi con le impostazioni dal DB
+            insert_field['settings'].update(current_field_settings)
             
             fieldtype='Parola'
             if not Helper.isempty(field['keyfieldlink']):

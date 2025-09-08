@@ -57,7 +57,18 @@ class FieldSettings:
             'options': ['true', 'false'],
             'type': 'select',
             'value': 'false'
-        }
+        },
+        'span': {
+            'type': 'select',
+            'options': ['col-span-1', 'col-span-2', 'col-span-3', 'col-span-4'],
+            'value': 'col-span-1'
+        },
+        'breakAfter': {
+            'type': 'select',
+            'options': ['true', 'false'],
+            'value': 'false'
+        },
+        
     }
 
     def __init__(self, tableid, fieldid, userid=1):

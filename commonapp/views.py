@@ -4036,7 +4036,23 @@ def get_form_fields(request):
         #record=UserRecord('metrica_annuale', '00000000000000000000000000000023')
         values=record.values
         sys_fields= HelpderDB.sql_query(f"SELECT * FROM sys_user_field_order AS fo JOIN sys_field f ON (fo.tableid=f.tableid AND fo.fieldid=f.id) WHERE fo.tableid='metrica_annuale' AND f.explanation is not null AND f.label != 'Dati' ORDER BY fo.fieldorder ASC")
+        fields_settings_list = HelpderDB.sql_query(f"SELECT * FROM sys_user_field_settings WHERE tableid='metrica_annuale'")
 
+        # --- Settings Pre-processing (New) ---
+        # Create a dictionary for quick lookup: {fieldid: {settingid: value, ...}}
+        processed_settings = {}
+        for setting in fields_settings_list:
+            field_id = setting.get("fieldid")
+            setting_id = setting.get("settingid")
+            setting_value = setting.get("value") # Assuming the column for the setting value is named 'value'
+            
+            if field_id and setting_id:
+                # Initialize the dictionary for this field if it's the first time we see it
+                if field_id not in processed_settings:
+                    processed_settings[field_id] = {}
+                processed_settings[field_id][setting_id] = setting_value
+
+        # --- Form Building ---
                 
         form_config = {}
         # Un set per tenere traccia delle intestazioni (sublabel) già aggiunte
@@ -4074,14 +4090,26 @@ def get_form_fields(request):
                 # Marco questo heading come aggiunto per non ripeterlo
                 added_headings[group_name].add(sub_group_name)
 
+            field_specific_settings = processed_settings.get(field_name, {})
+            required = False  # Default a True
+            span="col-span-1"  # Default a col-span-1
+            breakAfter = False  # Default a False
+            if field_specific_settings:
+                if field_specific_settings.get("obbligatorio") == 'true':
+                    required = True
+                if field_specific_settings.get("span"):
+                    span = field_specific_settings.get("span")
+                if field_specific_settings.get("breakAfter") == 'true':
+                    breakAfter = True
             # Creo il dizionario del campo effettivo
             form_field = {
                 "name": field_name,
                 "label": field_label,
                 "type": field_type,
                 "value": "",
-                "span": "col-span-2",
-                "breakAfter": False
+                "span": span,
+                "breakAfter": breakAfter,
+                "required": required
             }
 
             # Aggiungo il campo alla lista dei campi del suo gruppo
