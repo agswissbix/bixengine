@@ -4458,8 +4458,9 @@ def stampa_word_test(request):
         os.remove(filename_with_path)
 
 def get_custom_functions(request):
-    tableid = request.get('tableid')
+    data = json.loads(request.body)
+    tableid = data.get('tableid')
 
     customs_fn = SysCustomFunction.objects.filter(tableid=tableid).values()
     print(customs_fn)
-    return JsonResponse(list(customs_fn), safe=False)
+    return JsonResponse({'fn': list(customs_fn)}, safe=False)
