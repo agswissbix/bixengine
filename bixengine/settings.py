@@ -22,7 +22,7 @@ DEBUG = True
 
 ALLOWED_HOSTS = [
     'localhost',
-    '10.0.0.161',
+    '10.0.0.116',
     env('BIXENGINE_DOMAIN'),
     env('BIXPORTAL_DOMAIN'),
     env('BIXMOBILE_DOMAIN'),
