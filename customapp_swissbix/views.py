@@ -1,3 +1,7 @@
+import datetime
+from datetime import timedelta
+import uuid
+import base64
 import logging
 from pydoc import html
 from django.http import JsonResponse
@@ -90,14 +94,54 @@ def print_pdf_activemind(request):
         data = json.loads(request.body)
         
         services_data = data.get('data', {})
-        client_info = data.get('cliente', {})
-        digital_signature = data.get('signature', {})
+        recordid_deal = data.get('idTrattativa', None)
+
+        # Recupero info cliente
+        cliente = {}
+        if recordid_deal:
+            record_deal = UserRecord('deal', recordid_deal)
+            recordid_company = record_deal.values.get('recordidcompany_', None)
+            if recordid_company:
+                record_company = UserRecord('company', recordid_company)
+                cliente = {
+                    "nome": record_company.values.get('companyname', ''),
+                    "indirizzo": record_company.values.get('address', ''),
+                    "citta": record_company.values.get('city', '')
+                }
+
+        # Firma digitale (base64 → file immagine)
+        digital_signature_b64 = data.get('signature', None)
+        nameSignature = data.get('nameSignature', '')
+
+        signature_url = None
+        if digital_signature_b64:
+            try:
+                # Rimuovo eventuale prefisso "data:image/png;base64,"
+                if "," in digital_signature_b64:
+                    digital_signature_b64 = digital_signature_b64.split(",")[1]
+
+                signature_bytes = base64.b64decode(digital_signature_b64)
+
+                # Nome univoco
+                filename = f"signature_{uuid.uuid4().hex}.png"
+                # TODO verificare path corretto
+                signature_path = os.path.join(settings.MEDIA_ROOT, "static", filename)
+                os.makedirs(os.path.dirname(signature_path), exist_ok=True)
+
+                # Salvo il file
+                with open(signature_path, "wb") as f:
+                    f.write(signature_bytes)
+
+                # Creo URL relativo a MEDIA_URL (usato nel template)
+                signature_url = f"{settings.MEDIA_URL}signatures/{filename}"
+            except Exception as e:
+                logger.error(f"Errore salvataggio firma: {e}")
 
         # Calcolo i totali
         section1_total = services_data.get('section1', {}).get('price', 0)
-        section3_total = sum(
+        section2_total = sum(
             service.get('quantity', 0) * service.get('unitPrice', 0)
-            for service in services_data.get('section3', {}).values()
+            for service in services_data.get('section2', {}).values()
             if isinstance(service, dict)
         )
         tier_descriptions = {
@@ -109,23 +153,29 @@ def print_pdf_activemind(request):
         selected_tier = services_data.get('section1', {}).get('selectedTier', '')
         tier_display = tier_descriptions.get(selected_tier, selected_tier)
 
-        # Preparo il contesto per il template
+        from customapp_swissbix.mock.activeMind.services import services as services_data_mock
+        services_data.setdefault('section3', {})['features'] = services_data_mock
+
+        # Preparo contesto per template
         context = {
-            'client_info': client_info,
+            'client_info': cliente,
             'services_data': services_data,
             'section1_total': section1_total,
-            'section3_total': section3_total,
-            'grand_total': section3_total,
+            'section2_total': section2_total,
+            'grand_total': section2_total,
             'tier_display': tier_display,
-            'digital_signature': digital_signature,
+            'digital_signature_url': signature_url,
+            'nameSignature': nameSignature,
+            'date': datetime.datetime.now().strftime("%d/%m/%Y"),
+            'limit_acceptance_date': (datetime.datetime.now() + timedelta(days=10)).strftime("%d/%m/%Y"),
         }
         
-        # Renderizzo il template HTML
+        # Render HTML
         template = get_template('activeMind/pdf_template.html')
         html = template.render(context)
 
         from xhtml2pdf import pisa 
-        # Crea il PDF
+        # Genera PDF
         response = HttpResponse(content_type="application/pdf")
         response["Content-Disposition"] = 'inline; filename="offerta.pdf"'
 
@@ -136,22 +186,11 @@ def print_pdf_activemind(request):
         if pisa_status.err:
             return HttpResponse("Errore durante la creazione del PDF", status=500)
         return response
-        # # Creo il PDF
-        # result = BytesIO()
-        # pdf = pisa.pisaDocument(BytesIO(html_content.encode("UTF-8")), result)
-        
-        # if not pdf.err:
-        #     # Restituisce il PDF come risposta
-        #     response = HttpResponse(result.getvalue(), content_type='application/pdf')
-        #     response['Content-Disposition'] = f'attachment; filename="ActiveMind_Servizi_{client_info.get("name", "Cliente").replace(" ", "_")}.pdf"'
-        #     return response
-        # else:
-        #     logger.error(f"Errore nella generazione PDF: {pdf.err}")
-        #     return JsonResponse({'error': 'Errore nella generazione del PDF'}, status=500)
             
     except Exception as e:
         logger.error(f"Errore nella generazione PDF: {str(e)}")
         return JsonResponse({'error': f'Errore nella generazione del PDF: {str(e)}'}, status=500)
+
 
 def link_callback(uri, rel):
     """
@@ -172,3 +211,12 @@ def link_callback(uri, rel):
             return path
 
     raise Exception(f"Immagine o file statico non trovato: {uri}")
+
+def get_services_activemind(request):
+    from customapp_swissbix.mock.activeMind.services import services as services_data_mock
+    # print(services_data_mock)
+    return JsonResponse({"services": services_data_mock}, safe=False)
+
+def get_conditions_activemind(request):
+    from customapp_swissbix.mock.activeMind.conditions import frequencies as conditions_data_mock
+    return JsonResponse({"frequencies": conditions_data_mock}, safe=False)

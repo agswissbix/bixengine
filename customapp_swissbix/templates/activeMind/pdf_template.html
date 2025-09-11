@@ -252,7 +252,7 @@
         <div class="cover-client">
             <strong>{{ client_info.nome }}</strong><br><br><br>
             {{ client_info.indirizzo }}<br><br><br><br><br><br><br><br>
-            Massagno, {{ client_info.data }}
+            Massagno, {{ date }}
         </div>
     </div>
 
@@ -301,38 +301,16 @@
     </div>
     {% endif %}
 
-    {% if services_data.section2.selectedFrequency %}
+    
+    {% if services_data.section2 %}
     <div class="section page-break">
         <div class="section-title">Sezione 2.0</div>
-        <div class="service-item">
-            <div class="service-header">Condizioni incluse in ActiveMind:</div>
-            <div class="service-details">
-                <h3><strong>Pianificazione intervento</strong></h3>
-                <p><strong>{{ services_data.section2.selectedFrequency }}</strong> programmato anticipatamente</p>
-                <br>
-                <h3><strong>Intervento in loco programmato</strong></h3>
-                <ul>
-                    <li>Pianificazione ed intervento sull'asset managed dell'uscita precedente</li>
-                    <li>L'intervento implica la presenza e l'accesso ai device sotto contratto</li>
-                    <li>Eventuali modifiche da parte del cliente devono essere prontamente comunicate (previa modifica contrattuale in corso)</li>
-                    <li>Il valore economico copre prettamente gli interventi programmati</li>
-                    <li>Gli interventi a regia saranno fatturati secondo accordi a latere</li>
-                    <li>L'intervento programmato verrà confermato 3gg prima dell'uscita per evitare incomprensioni</li>
-                    <li>Verrà redatto un rapporto completo sullo stato dell'intervento eseguito</li>
-                    <li>Seguirà uscita del referente commerciale per un confronto con il cliente sull'operato</li>
-                    <li>Gli interventi sui 3/6/12 mesi includeranno possibilmente i mesi di chiusura o di festività per evitare il più possibile disservizi</li>
-                </ul>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    {% if services_data.section3 %}
-    <div class="section page-break">
-        <div class="section-title">Sezione 3.0</div>
         <div class="service-header">Servizi inclusi in ActiveMind:</div>
         
-        {% for service_key, service in services_data.section3.items %}
+        {% for service_key, service in services_data.section2.items %}
+            {% if forloop.counter0|divisibleby:3 and not forloop.first %}
+            <div class="page-break"></div>
+            {% endif %}
         {% if service.quantity > 0 %}
         <div class="service-item">
             <h1 class="service-title">
@@ -352,7 +330,11 @@
             </table>
             
             <div class="service-details">
-                {% comment %} {{ service.features }} {% endcomment %}
+                <ul>
+                    {% for feature in service.features %}
+                        <li>{{ feature }}</li>
+                    {% endfor %}
+                </ul>
             </div>
         </div>
         {% endif %}
@@ -361,6 +343,33 @@
     </div>
     {% endif %}
 
+
+    {% if services_data.section3.selectedFrequency %}
+    <div class="section page-break">
+        <div class="section-title">Sezione 3.0</div>
+        <div class="service-item">
+            <div class="service-header">Condizioni incluse in ActiveMind:</div>
+            <div class="service-details">
+                <h3><strong>Pianificazione intervento</strong></h3>
+                <p><strong>{{ services_data.section3.selectedFrequency }}</strong> programmato anticipatamente</p>
+                <br>
+                <h3><strong>Intervento in loco programmato</strong></h3>
+                <ul>
+                    <li>Pianificazione ed intervento sull'asset managed dell'uscita precedente</li>
+                    <li>L'intervento implica la presenza e l'accesso ai device sotto contratto</li>
+                    <li>Eventuali modifiche da parte del cliente devono essere prontamente comunicate (previa modifica contrattuale in corso)</li>
+                    <li>Il valore economico copre prettamente gli interventi programmati</li>
+                    <li>Gli interventi a regia saranno fatturati secondo accordi a latere</li>
+                    <li>L'intervento programmato verrà confermato 3gg prima dell'uscita per evitare incomprensioni</li>
+                    <li>Verrà redatto un rapporto completo sullo stato dell'intervento eseguito</li>
+                    <li>Seguirà uscita del referente commerciale per un confronto con il cliente sull'operato</li>
+                    <li>Gli interventi sui 3/6/12 mesi includeranno possibilmente i mesi di chiusura o di festività per evitare il più possibile disservizi</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
     <div class="total-section page-break">
         <h1 class="total-section-title">Definizione Economica</h1>
         <table class="pricing-table">
@@ -380,7 +389,7 @@
             </tr>
             {% endif %}
 
-            {% for service_key, service in services_data.section3.items %}
+            {% for service_key, service in services_data.section2.items %}
             {% if service.quantity > 0 %}
             <tr>
                 <td>{{ service.title }}</td>
@@ -412,7 +421,7 @@
         <ul>
             <li>Condizioni generali di vendita visionabili al link: https://www.swissbix.ch/cgv.pdf</li>
             <li>I prezzi indicati sono IVA Esclusa</li>
-            <li>Offerta valida fino al {{ client_info.termine }}</li>
+            <li>Offerta valida fino al {{ limit_acceptance_date }}</li>
         </ul>
     </div>
 
@@ -423,17 +432,17 @@
                 <strong>Mauro Gallani</strong><br>
                 Swissbix SA
             </div>
-            {% if digital_signature %}
+            {% if digital_signature_url %}
                 <div class="signature-box" style="border-bottom: none; padding-bottom: 0;">
                     <strong>Per Accettazione</strong><br>
-                    <img src="{{ digital_signature }}" alt="Firma Digitale" style="max-width: 100%; height: auto;">
+                    <img src="{{ digital_signature_url }}" alt="Firma Digitale" style="max-width: 100%; height: auto;">
                     <br>
-                    {{ client_info.nomeSignature }}
+                    {{ nameSignature }}
                 </div>
             {% else %}
                 <div class="signature-box">
                     <strong>Per Accettazione</strong><br>
-                    {{ client_info.nomeSignature }}
+                    {{ nameSignature }}
                 </div>
             {% endif %}
         </div>
