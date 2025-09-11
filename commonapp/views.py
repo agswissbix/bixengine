@@ -3966,6 +3966,11 @@ def save_form_data(request):
         request_data = json.loads(request.body)
         year = request_data.get("year")
         payload = request_data.get("payload")
+        
+        if not year:
+            return JsonResponse({"error": "Anno mancante"}, status=400)
+        userid=Helper.get_userid(request)
+        recordidgolfclub=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_golfclub WHERE utente={userid}","recordid_")
 
         # Controlla che i dati necessari siano presenti
         if not year or payload is None:
@@ -3979,7 +3984,7 @@ def save_form_data(request):
         #record = UserRecord('metrica_annuale', '00000000000000000000000000000023')
 
         table=UserTable('metrica_annuale')
-        records=table.get_table_records_obj(conditions_list=["recordidgolfclub_='00000000000000000000000000000008'",f"anno='{str(year)}'"])
+        records=table.get_table_records_obj(conditions_list=[f"recordidgolfclub_='{recordidgolfclub}'",f"anno='{str(year)}'"])
         if records:
             record=records[0]
         else:
@@ -4017,21 +4022,21 @@ def get_form_fields(request):
     try:
         
         request_data = json.loads(request.body)
-
+        userid=Helper.get_userid(request)
         year = request_data.get("year")
         if not year:
             return JsonResponse({"error": "Anno mancante"}, status=400)
 
         fields = {}
-
+        recordidgolfclub=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_golfclub WHERE utente={userid}","recordid_")
         table=UserTable('metrica_annuale')
-        records=table.get_table_records_obj(conditions_list=["recordidgolfclub_='00000000000000000000000000000008'",f"anno='{str(year)}'"])
+        records=table.get_table_records_obj(conditions_list=[f"recordidgolfclub_='{recordidgolfclub}'",f"anno='{str(year)}'"])
         if records:
             record=records[0]
         else:
             record=UserRecord('metrica_annuale')
             record.values['anno']=year
-            record.values['recordidgolfclub_']='00000000000000000000000000000008'
+            record.values['recordidgolfclub_']=recordidgolfclub
             record.save()
         #record=UserRecord('metrica_annuale', '00000000000000000000000000000023')
         values=record.values
