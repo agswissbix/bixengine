@@ -1949,6 +1949,15 @@ def save_record_fields(request):
         offerta_record.values['nrofferta'] = offerta_id
         offerta_record.save()
 
+    # ---ORE MENSILI---
+    if tableid == 'oremensili':
+        oremensili_record = UserRecord('oremensili', recordid)
+        dipendente_recordid = oremensili_record.values['recordiddipendente_']
+        dipendente_record = UserRecord('dipendente', dipendente_recordid)
+        ruolo= dipendente_record.values['ruolo']
+        oremensili_record.values['ruolo'] = ruolo
+        oremensili_record.save()
+
     
 
     #TODO
@@ -2745,8 +2754,9 @@ def get_record_attachments(request):
     data = json.loads(request.body)
     tableid = data.get('tableid')
     recordid = data.get('recordid')
-
-    if tableid == 'bollettinitrasporto' or tableid == 'stabile':
+    response={ "attachments": []}
+    #TODO sistemare dinamico
+    if tableid == 'bollettinitrasporto' or tableid == 'stabile' or tableid == 'dipendente':
         attachments=HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordid{tableid}_='{recordid}' AND deleted_ = 'N'")
         attachment_list=[]
         for attachment in attachments:
@@ -2758,7 +2768,7 @@ def get_record_attachments(request):
             
         response={ "attachments": attachment_list}
         print(response)
-        return JsonResponse(response)
+    return JsonResponse(response)
     
 @csrf_exempt
 def get_card_active_tab(request):
