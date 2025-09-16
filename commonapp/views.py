@@ -3753,7 +3753,7 @@ def get_dashboard_blocks(request):
     
                     selected = ''
                     if results['operation'] == 'somma':
-                        fields = results['fieldid'].split(';')
+                        fields = results['fieldid'].split(',')
                         for field in fields:
                             field = 'SUM(' + field + ') as ' + field
                             selected += field + ','
@@ -3764,7 +3764,7 @@ def get_dashboard_blocks(request):
                             groupby = f"DATE_FORMAT({groupby}, '%Y-%m')"
                     
                     if results['operation'] == 'conta':
-                        fields = results['fieldid'].split(';')
+                        fields = results['fieldid'].split(',')
                         for field in fields:
                             field = 'COUNT(' + field + ') as ' + field
                             selected += field + ','
@@ -3858,7 +3858,7 @@ def get_chart(request, sql, id, name, layout, fields):
     labels = []
     value = []
 
-    if layout == 'multi_barlinechart' or layout == 'multi_barchart':
+    if layout == 'wqfef' :
         # This block was empty in the original code. 
         # You would need to implement the logic for these chart types here.
         # For now, it will return empty data as before.
