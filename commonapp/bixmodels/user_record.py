@@ -412,11 +412,12 @@ class UserRecord:
             insert_field['fieldid']=fieldid
             insert_field['fieldorder']="1"
             insert_field['description']=field['description']
+            insert_field["label"]= field['label']
             insert_field['value']={"code": value, "value": value}
-            insert_field["fieldtypewebid"]= "",
-            insert_field["lookuptableid"]= field['lookuptableid'],
-            insert_field["tablelink"]= field['tablelink'],
-            insert_field['linked_mastertable']=field['tablelink'],
+            insert_field["fieldtypewebid"]= ""
+            insert_field["lookuptableid"]= field['lookuptableid']
+            insert_field["tablelink"]= field['tablelink']
+            insert_field['linked_mastertable']=field['tablelink']
             # 4. Applica le impostazioni dinamicamente
             insert_field['settings'] = {
                 # Valori di base che possono essere sovrascritti
