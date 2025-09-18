@@ -434,8 +434,8 @@
             </div>
             {% if digital_signature_url %}
                 <div class="signature-box" style="border-bottom: none; padding-bottom: 0;">
-                    <strong>Per Accettazione</strong><br>
-                    <img src="{{ digital_signature_url }}" alt="Firma Digitale" style="max-width: 100%; height: auto;">
+                    <strong>Per Accettazione</strong><br><br>
+                    <img src="{% static digital_signature_url %}" alt="Firma Digitale" style="max-width: 100%; width: 250px; height: auto;">
                     <br>
                     {{ nameSignature }}
                 </div>

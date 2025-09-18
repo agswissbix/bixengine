@@ -22,7 +22,7 @@ DEBUG = True
 
 ALLOWED_HOSTS = [
     'localhost',
-    '10.0.0.116',
+    '10.0.0.119',
     env('BIXENGINE_DOMAIN'),
     env('BIXPORTAL_DOMAIN'),
     env('BIXMOBILE_DOMAIN'),
@@ -180,10 +180,10 @@ if not QR_FERNET_KEY:
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        # 'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
-        # 'rest_framework.permissions.IsAuthenticated',
+        'rest_framework.permissions.IsAuthenticated',
     ),
 }
 

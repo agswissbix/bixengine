@@ -561,7 +561,7 @@ def get_table_records_kanban(request):
 
     response_data = {
         "id": "1",
-        "title": "Il Mio Progetto",
+        "title": "Il Mio Progetto BE",
         "columns": [
             {
                 "id": "todo",
