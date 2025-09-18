@@ -220,3 +220,18 @@ def get_services_activemind(request):
 def get_conditions_activemind(request):
     from customapp_swissbix.mock.activeMind.conditions import frequencies as conditions_data_mock
     return JsonResponse({"frequencies": conditions_data_mock}, safe=False)
+
+
+def get_record_badge_swissbix_company(request):
+    data = json.loads(request.body)
+    tableid= data.get("tableid")
+    recordid= data.get("recordid")
+
+    record=UserRecord(tableid,recordid)
+    return_badgeItems={}
+    return_badgeItems["companyname"] = record.values.get("companyname", '') 
+    sql=f"SELECT COUNT(*) as total FROM user_timesheet WHERE recordidcompany_='{recordid}' AND deleted_='N'"
+    total_timesheet=HelpderDB.sql_query_value(sql, 'total')
+    return_badgeItems["total_timesheet"] = total_timesheet
+    response={ "badgeItems": return_badgeItems}
+    return JsonResponse(response)   

@@ -11,4 +11,6 @@ urlpatterns = [
     path('get_conditions_activemind/', get_conditions_activemind, name='get_conditions_activemind'),
     path("qr/issue", issue_qr_token, name="issue_qr_token"),
     path("qr/verify", verify_qr_token, name="verify_qr_token"),
+    path('get_record_badge_swissbix_company/', get_record_badge_swissbix_company, name='get_record_badge_swissbix_company'),
+    
 ]
