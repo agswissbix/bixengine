@@ -230,9 +230,52 @@ def get_record_badge_swissbix_company(request):
 
     record=UserRecord(tableid,recordid)
     return_badgeItems={}
-    return_badgeItems["companyname"] = record.values.get("companyname", '') 
-    sql=f"SELECT COUNT(*) as total FROM user_timesheet WHERE recordidcompany_='{recordid}' AND deleted_='N'"
+
+    # sql=f"SELECT logo FROM user_company WHERE recordid_='{recordid}' AND deleted_='N'"
+    # company_logo=HelpderDB.sql_query_value(sql, 'logo')
+    company_logo=''
+
+    sql=f"SELECT email, phonenumber, address FROM user_company WHERE recordid_='{recordid}' AND deleted_='N'"
+    company_email  =HelpderDB.sql_query_value(sql, 'email')
+    company_address=HelpderDB.sql_query_value(sql, 'phonenumber')
+    company_phone=HelpderDB.sql_query_value(sql, 'address')
+
+
+    sql=f"SELECT COUNT(worktime_decimal) as total FROM user_timesheet WHERE recordidcompany_='{recordid}' AND deleted_='N'"
     total_timesheet=HelpderDB.sql_query_value(sql, 'total')
+
+    sql=f"SELECT COUNT(*) as total FROM user_deal WHERE dealstatus='Vinta' AND recordidcompany_='{recordid}' AND deleted_='N'"
+    total_deals=HelpderDB.sql_query_value(sql, 'total')
+
+    sql=f"SELECT customertype FROM user_company WHERE recordid_='{recordid}' AND deleted_='N'"
+    customertype=HelpderDB.sql_query_value(sql, 'customertype')
+
+    sql=f"SELECT paymentstatus FROM user_company WHERE recordid_='{recordid}' AND deleted_='N'"
+    paymentstatus=HelpderDB.sql_query_value(sql, 'paymentstatus')
+
+    sql=f"SELECT salesuser FROM user_company WHERE recordid_='{recordid}' AND deleted_='N'"
+    salesuser=HelpderDB.sql_query_value(sql, 'salesuser')
+    if salesuser:
+        from commonapp.models import SysUser
+        user_sales=SysUser.objects.filter(id=salesuser).first()
+        return_badgeItems["sales_user_name"] = user_sales.firstname + ' ' + user_sales.lastname if user_sales else ''
+        return_badgeItems["sales_user_photo"] = user_sales.id if user_sales else ''
+    else:
+        return_badgeItems["sales_user_name"] = ''
+        return_badgeItems["sales_user_photo"] = ''
+
+    sql=f"SELECT COUNT(*) as total FROM user_invoice WHERE recordidcompany_='{recordid}' AND deleted_='N'"
+    total_invoices=HelpderDB.sql_query_value(sql, 'total')
+
+    return_badgeItems["company_logo"] = company_logo
+    return_badgeItems["company_name"] = record.values.get("companyname", '')
+    return_badgeItems["company_email"] = company_email  
+    return_badgeItems["company_address"] = company_address
+    return_badgeItems["company_phone"] = company_phone
+    return_badgeItems["payment_status"] = paymentstatus 
+    return_badgeItems["customer_type"] = customertype
     return_badgeItems["total_timesheet"] = total_timesheet
+    return_badgeItems["total_deals"] = total_deals
+    return_badgeItems["total_invoices"] = total_invoices
     response={ "badgeItems": return_badgeItems}
     return JsonResponse(response)   
