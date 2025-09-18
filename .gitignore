@@ -4,3 +4,4 @@ __pycache__/
 .env
 bixengine/.env
 /commonapp/__pycache__
+*/static

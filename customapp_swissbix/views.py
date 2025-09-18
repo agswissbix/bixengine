@@ -16,6 +16,7 @@ import pdfkit
 from io import BytesIO
 from django.contrib.staticfiles import finders
 from django.template.loader import get_template
+from bixengine.settings import BASE_DIR
 from commonapp.bixmodels.user_record import *
 from commonapp.bixmodels.user_table import *
 from commonapp.bixmodels.helper_db import *
@@ -125,7 +126,7 @@ def print_pdf_activemind(request):
                 # Nome univoco
                 filename = f"signature_{uuid.uuid4().hex}.png"
                 # TODO verificare path corretto
-                signature_path = os.path.join(settings.MEDIA_ROOT, "static", filename)
+                signature_path = os.path.join(BASE_DIR, "customapp_swissbix/static/signatures", filename)
                 os.makedirs(os.path.dirname(signature_path), exist_ok=True)
 
                 # Salvo il file
@@ -133,7 +134,7 @@ def print_pdf_activemind(request):
                     f.write(signature_bytes)
 
                 # Creo URL relativo a MEDIA_URL (usato nel template)
-                signature_url = f"{settings.MEDIA_URL}signatures/{filename}"
+                signature_url = f"signatures/{filename}"
             except Exception as e:
                 logger.error(f"Errore salvataggio firma: {e}")
 
