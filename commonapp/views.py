@@ -56,6 +56,7 @@ from docxtpl import DocxTemplate
 from collections import defaultdict
 import json
 from django.http import JsonResponse
+import locale
 
 
 
@@ -559,88 +560,94 @@ def get_table_records_kanban(request):
 
     table = UserTable(tableid, Helper.get_userid(request))
 
+    
+
+    record_objects = table.get_table_records_obj(
+        viewid=viewid,
+        searchTerm=searchTerm,
+        master_tableid=master_tableid,
+        master_recordid=master_recordid,
+        limit=100000
+    )
+
+    #TODO rendere dinamico tramite i settings
+    grouping_field = 'dealstage' 
+    grouped_records = defaultdict(list)
+
+    for record in record_objects:
+        # Ottieni il valore del campo per il raggruppamento
+        # Assumiamo che UserRecord abbia un metodo come get_value() o l'accesso tramite attributo
+        grouping_key = record.values.get(grouping_field) 
+        
+        # Aggiungi il record alla lista corrispondente alla sua chiave
+        grouped_records[grouping_key].append(record)
+
+    column_definitions = [
+        {"title": "Appuntamento", "id": "Appuntamento", "color": "bg-pink-100", "editable": True},
+        {"title": "Offerta inviata", "id": "Offerta inviata", "color": "bg-pink-100", "editable": True},
+        {"title": "Tech validation", "id": "Tech validation", "color": "bg-yellow-100", "editable": True},
+        {"title": "Credit Check", "id": "Credit Check", "color": "bg-yellow-100", "editable": True},
+        {"title": "Ordine materiale", "id": "Ordine materiale", "color": "bg-blue-100", "editable": True},
+        {"title": "Progetto in corso", "id": "Progetto in corso", "color": "bg-blue-300", "editable": True},
+        {"title": "Verifica saldo progetto", "id": "Verifica saldo progetto", "color": "bg-green-50", "editable": True},   
+        {"title": "Progetto fatturato", "id": "Progetto fatturato", "color": "bg-green-200", "editable": True},
+    ]     
+
     response_data = {
-        "id": "1",
-        "title": "Il Mio Progetto BE",
-        "columns": [
-            {
-                "id": "todo",
-                "title": "Da Fare",
-                "color": "bg-gray-300",
-                "order": 0,
-                "editable": True,
-                "tasks": [
-                    {
-                        "recordid": "1",
-                        "css": "border-l-4 border-red-500",
-                        "fields": {
-                            "Product name": "Macbook2",
-                            "Color": "nero",
-                            "Price": "2k",
-                        },
-                    },
-                    {
-                        "recordid": "2",
-                        "css": "border-l-4 border-yellow-500",
-                        "fields": {
-                            "Product name": "iPhone",
-                            "Color": "bianco",
-                            "Price": "1k",
-                        },
-                    }
-                ],
-            },
-            {
-                "id": "in-progress",
-                "title": "In Corso",
-                "color": "bg-blue-100",
-                "order": 1,
-                "editable": True,
-                "tasks": [
-                    {
-                        "recordid": "3",
-                        "css": "border-l-4 border-blue-500",
-                        "fields": {
-                            "Product name": "iPad",
-                            "Color": "grigio",
-                            "Price": "1.5k",
-                        }
-                    },
-                ],
-            },
-            {
-                "id": "review",
-                "title": "In Revisione",
-                "color": "bg-yellow-100",
-                "order": 2,
-                "editable": True,
-                "tasks": [
-                    {
-                        "recordid": "4",
-                        "css": "border-l-4 border-purple-500",
-                    },
-                ],
-            },
-            {
-                "id": "done",
-                "title": "Completato",
-                "color": "bg-green-100",
-                "order": 3,
-                "editable": True,
-                "tasks": [
-                    {
-                        "recordid": "5",
-                        "css": "border-l-4 border-green-500",
-                        "fields": {
-                            "Product name": "Apple Watch2",
-                            "Color": "nero",
-                            "Price": "500",
-                        }
-                    },
-                ],
-            },
-        ],
+        "id": "1", # O un ID dinamico per la tua board
+        "isDraggable": True,
+        "columns": []
     }
+
+    # Itera sulle definizioni per mantenere l'ordine corretto
+    for index, col_def in enumerate(column_definitions):
+        column_title = col_def['title']
+        
+        # Prendi la lista di record per questa colonna dai dati raggruppati
+        records_in_group = grouped_records[column_title]
+        
+        # Prepara la lista di "tasks" per questa colonna
+        tasks_list = []
+        locale.setlocale(locale.LC_ALL, 'it_IT.UTF-8')
+        venduto=0
+        margine_effettivo=0
+        for record in records_in_group:
+            # Trasforma ogni oggetto UserRecord nel formato "task" richiesto
+            # NOTA: Qui dovrai mappare i campi che ti interessano
+            task_data = {
+                "recordid": record.values.get("recordid_"), # Assumendo che recordid sia un attributo
+                #"css": "border-l-4 border-red-500", # Logica per il CSS (puoi renderla dinamica)
+                "css": "",
+                "fields": {
+                    # Mappa i campi che vuoi visualizzare nella card
+                    record.fields['reference']['description']: record.fields['reference']['convertedvalue'],
+                    record.fields['closedate']['description']: record.fields['closedate']['convertedvalue'],
+                    record.fields['amount']['description']: record.fields['amount']['convertedvalue'],
+                }
+            }
+            tasks_list.append(task_data)
+            venduto+=float(record.fields['amount']['value']) if record.fields['amount']['value'] else 0
+            margine_effettivo+=float(record.fields['effectivemargin']['value']) if record.fields['effectivemargin']['value'] else 0
+
+        formatted_venduto = locale.format_string("%.2f", venduto, grouping=True)
+        formatted_margine = locale.format_string("%.2f", margine_effettivo, grouping=True)
+        aggregatefunctions = [
+            {"title": "Venduto", "value": formatted_venduto},
+            {"title": "Margine effettivo", "value": formatted_margine}
+        ]
+        # Costruisci l'oggetto completo della colonna
+        column_data = {
+            "id": col_def['id'],
+            "title": column_title,
+            "color": col_def['color'],
+            "order": index, # L'ordine è dato dall'indice del ciclo
+            "editable": col_def['editable'],
+            "tasks": tasks_list,
+            "aggregatefunctions": aggregatefunctions
+        }
+        
+        response_data["columns"].append(column_data) 
+
 
     return JsonResponse(response_data)
 
