@@ -68,6 +68,8 @@ urlpatterns = [
     path('stampa_word_test/', stampa_word_test, name='stampa_word_test'),
     path('get_user_id/', get_user_id, name='get_user_id'),
     path('get_custom_functions/', get_custom_functions, name='get_custom_functions'),
+    path('get_table_records_kanban/', get_table_records_kanban, name='get_table_records_kanban'),
+    
 ]
 
 

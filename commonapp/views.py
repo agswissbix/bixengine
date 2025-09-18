@@ -547,6 +547,103 @@ def get_table_records(request):
     }
     return JsonResponse(response_data)
 
+@timing_decorator
+def get_table_records_kanban(request):
+    print('Function: get_table_records_kanban')
+    data = json.loads(request.body)
+    tableid = data.get("tableid")
+    viewid = data.get("view")
+    searchTerm = data.get("searchTerm")
+    master_tableid = data.get("masterTableid")
+    master_recordid = data.get("masterRecordid")
+
+    table = UserTable(tableid, Helper.get_userid(request))
+
+    response_data = {
+        "id": "1",
+        "title": "Il Mio Progetto",
+        "columns": [
+            {
+                "id": "todo",
+                "title": "Da Fare",
+                "color": "bg-gray-300",
+                "order": 0,
+                "editable": True,
+                "tasks": [
+                    {
+                        "recordid": "1",
+                        "css": "border-l-4 border-red-500",
+                        "fields": {
+                            "Product name": "Macbook2",
+                            "Color": "nero",
+                            "Price": "2k",
+                        },
+                    },
+                    {
+                        "recordid": "2",
+                        "css": "border-l-4 border-yellow-500",
+                        "fields": {
+                            "Product name": "iPhone",
+                            "Color": "bianco",
+                            "Price": "1k",
+                        },
+                    }
+                ],
+            },
+            {
+                "id": "in-progress",
+                "title": "In Corso",
+                "color": "bg-blue-100",
+                "order": 1,
+                "editable": True,
+                "tasks": [
+                    {
+                        "recordid": "3",
+                        "css": "border-l-4 border-blue-500",
+                        "fields": {
+                            "Product name": "iPad",
+                            "Color": "grigio",
+                            "Price": "1.5k",
+                        }
+                    },
+                ],
+            },
+            {
+                "id": "review",
+                "title": "In Revisione",
+                "color": "bg-yellow-100",
+                "order": 2,
+                "editable": True,
+                "tasks": [
+                    {
+                        "recordid": "4",
+                        "css": "border-l-4 border-purple-500",
+                    },
+                ],
+            },
+            {
+                "id": "done",
+                "title": "Completato",
+                "color": "bg-green-100",
+                "order": 3,
+                "editable": True,
+                "tasks": [
+                    {
+                        "recordid": "5",
+                        "css": "border-l-4 border-green-500",
+                        "fields": {
+                            "Product name": "Apple Watch2",
+                            "Color": "nero",
+                            "Price": "500",
+                        }
+                    },
+                ],
+            },
+        ],
+    }
+
+    return JsonResponse(response_data)
+
 
 def get_calendar_records(request):
     print('Function: get_calendar_records')
