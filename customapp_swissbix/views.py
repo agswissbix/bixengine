@@ -264,8 +264,8 @@ def get_record_badge_swissbix_company(request):
         return_badgeItems["sales_user_name"] = ''
         return_badgeItems["sales_user_photo"] = ''
 
-    sql=f"SELECT COUNT(*) as total FROM user_invoice WHERE recordidcompany_='{recordid}' AND deleted_='N'"
-    total_invoices=HelpderDB.sql_query_value(sql, 'total')
+    sql=f"SELECT SUM(totalnet) as total FROM user_invoice WHERE recordidcompany_='{recordid}' AND status='Paid' AND deleted_='N'"
+    total_invoices=round(HelpderDB.sql_query_value(sql, 'total'), 2) if HelpderDB.sql_query_value(sql, 'total') else 0.00
 
     return_badgeItems["company_logo"] = company_logo
     return_badgeItems["company_name"] = record.values.get("companyname", '')
