@@ -175,6 +175,7 @@ class SysDashboardBlock(models.Model):
     reportid = models.ForeignKey('SysReport', models.DO_NOTHING, db_column='reportid', blank=True, null=True)
     widgetid = models.IntegerField(blank=True, null=True)
     calendarid = models.ForeignKey(SysCalendar, models.DO_NOTHING, db_column='calendarid', blank=True, null=True)
+    chartid = models.ForeignKey('SysChart', models.DO_NOTHING, db_column='chartid', blank=True, null=True)
     width = models.CharField(max_length=255, blank=True, null=True)
     height = models.CharField(max_length=255, blank=True, null=True)
     order = models.DecimalField(max_digits=10, decimal_places=0, blank=True, null=True)
@@ -715,7 +716,6 @@ class SysCustomFunction(models.Model):
 
 
 class SysChart(models.Model):
-    id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=255)
     userid = models.ForeignKey(
         SysUser,
