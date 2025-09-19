@@ -714,3 +714,22 @@ class SysCustomFunction(models.Model):
         return f"{self.title} ({self.tableid})"
 
 
+class SysChart(models.Model):
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=255)
+    userid = models.ForeignKey(
+        SysUser,
+        on_delete=models.CASCADE,
+        db_column="userid",
+    )
+    layout = models.CharField(max_length=100)
+    config = models.JSONField()
+
+    class Meta:
+        db_table = "sys_chart"
+        verbose_name = "Grafico"
+        verbose_name_plural = "Grafici"
+
+    def __str__(self):
+        return f"{self.name} ({self.layout})"
+
