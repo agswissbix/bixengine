@@ -2093,6 +2093,49 @@ def save_record_fields(request):
         
         # Call save_newuser
         result = save_newuser(request)
+
+    #CUSTOM ---CHART---
+    if tableid == 'chart':
+        chart_record = UserRecord('chart', recordid)
+        name=chart_record.values['name']
+        userid=1
+        layout=chart_record.values['type']
+        raggruppamento=chart_record.values['raggruppamento']
+        fields=chart_record.values['campi']
+        operation=chart_record.values['operation']
+        dynamicfield1=chart_record.values['dynamicfield1']
+        field2=chart_record.values['campi2']
+        operation2=chart_record.values['operation2']
+        dynamicfield2=chart_record.values['dynamicfield2']
+        reportid=chart_record.values['reportid']
+
+        config_python = {
+            "from_table": "metrica_annuale",
+            "group_by_field": {
+                "field": raggruppamento,
+                "alias": raggruppamento
+            },
+            "datasets": [  # Questa è una lista (array) Python
+                {
+                    "label": "Nuovi Soci",
+                    "expression": "SUM(nr_totale_soci_nr_nuovi_soci)",
+                    "alias": "totale_soci"
+                },
+                {
+                    "label": "Giocatori",
+                    "expression": "SUM(nr_gin_giocati)",
+                    "alias": "totale_giocatori"
+                }
+            ],
+            "order_by": "anno ASC"
+        }
+        status='Bozza'
+        config_json_string = json.dumps(config_python, indent=4)
+            
+        
+        sql=f"INSERT INTO sys_chart (name, layout, config, userid) VALUES ('{name}','{layout}','{config_json_string}','{userid}')"
+        HelpderDB.sql_execute(sql)
+        
         
    
     custom_save_record_fields(tableid, recordid)
@@ -3799,7 +3842,7 @@ def get_dashboard_blocks(request):
             context['size'] = size
 
             #datas = SysUserDashboardBlock.objects.filter(userid=bixid, size=size, dashboardid=dashboard_id).values()
-            sql = "SELECT * FROM sys_user_dashboard_block WHERE userid = {userid} AND size = 'full' AND dashboardid = {dashboardid}".format(
+            sql = "SELECT * FROM sys_user_dashboard_block WHERE userid = {userid} AND dashboardid = {dashboardid}".format(
                 userid=bixid, dashboardid=dashboard_id
             )
             datas = dbh.sql_query(sql)
@@ -3813,7 +3856,7 @@ def get_dashboard_blocks(request):
 
             for data in datas:
                 dashboard_block_id = data['dashboard_block_id']
-                sql = "SELECT * FROM v_sys_dashboard_block WHERE id = {dashboard_block_id}".format(
+                sql = "SELECT * FROM sys_dashboard_block WHERE id = {dashboard_block_id}".format(
                     dashboard_block_id=dashboard_block_id
                 )
                 results = dbh.sql_query(sql)
@@ -3841,7 +3884,7 @@ def get_dashboard_blocks(request):
                 if height == None or height == 0 or height == '':
                     height= '50%'
                 
-                if results['reportid'] is None or results['reportid'] == 0:
+                if results['chartid'] is None or results['chartid'] == 0:
 
                     if results['widgetid'] is None:
                         tableid = results['tableid']
@@ -3854,74 +3897,25 @@ def get_dashboard_blocks(request):
                         block['html'] = 'test'
 
                 else:
-    
+                    chart= HelpderDB.sql_query_row(f"SELECT * FROM sys_chart WHERE id='{results['chartid']}'")
+                    chart_name=chart['name']
+                    chart_layout=chart['layout']
+                    chart_config=chart['config']
+                    chart_config = json.loads(chart_config)
                     selected = ''
-                    if results['operation'] == 'somma':
-                        fields = results['fieldid'].split(',')
-                        for field in fields:
-                            field = 'SUM(' + field + ') as ' + field
-                            selected += field + ','
-                        groupby = results['groupby']
-                        if results['custom'] == 'group_by_day':
-                            groupby = f"DATE_FORMAT({groupby}, '%Y-%m-%d')"
-                        if results['custom'] == 'group_by_month':
-                            groupby = f"DATE_FORMAT({groupby}, '%Y-%m')"
-                    
-                    if results['operation'] == 'conta':
-                        fields = results['fieldid'].split(',')
-                        for field in fields:
-                            field = 'COUNT(' + field + ') as ' + field
-                            selected += field + ','
-                        groupby = results['groupby']
-                        if results['custom'] == 'group_by_day':
-                            groupby = f"DATE_FORMAT({groupby}, '%Y-%m-%d')"
-                        if results['custom'] == 'group_by_month':
-                            groupby = f"DATE_FORMAT({groupby}, '%Y-%m')"
 
-                    if results['operation'] == 'custom':
-                        fields=results['fieldid']
-                        selected = results['fieldid']+ ','
-                        groupby = results['groupby']
-
-                    if results['operation'] == 'somma_inline':
-                        fields=results['fieldid']
-                        selected = results['fieldid']
-                        groupby = results['groupby']
-                    
-
-
-                    query_conditions = results['query_conditions']
+                    #query_conditions = results['query_conditions']
                     #userid = get_userid(request.user.id)
                     userid = bixid
-                    query_conditions = query_conditions.replace("$userid$", str(userid))
-                    id = data['id']
-                    tableid = results['tableid']
-                    name = results['name']
-                    layout = results['layout']
-                    block['type'] = layout
-                    fromtable = 'user_' + tableid
+                    #query_conditions = query_conditions.replace("$userid$", str(userid))
 
-                    db = HelpderDB()
-                    if groupby:
-                        groupby_field_record = db.sql_query_row(
-                            f"select * from sys_field where tableid='{tableid}' and fieldid='{results['groupby']}'")
-                        if groupby_field_record['fieldtypeid'] == 'Utente':
-                            fromtable = fromtable + f" LEFT JOIN sys_user ON {fromtable}.{results['groupby']}=sys_user.id "
-                            selected += f"sys_user.firstname as {groupby}"
-                        else:
-                            selected += groupby
+                    chart_data=get_dynamic_chart_data(request, results['chartid'])
+                    chart_data_json=json.dumps(chart_data)
 
-                    sql = "SELECT " + selected + " FROM " + fromtable + \
-                          " WHERE " + query_conditions 
-                    if groupby:
-                        sql += " GROUP BY " + groupby
-                    block['sql'] = sql
-                    values = get_chart(request, sql, id, name, layout, fields)
-                    block['value'] = values['value']
-                    block['labels'] = values['labels']
-                    block['id'] = id
-                    block['name'] = name
-                    block['fields'] = values['fields']
+                    
+                    block['chart_data'] = chart_data_json
+                    block['name'] = chart_name
+                    block['type'] = 'barchart'
 
                 block['width'] = width
                 block['height'] = height
@@ -4023,6 +4017,98 @@ def get_chart(request, sql, id, name, layout, fields):
     }
 
     return context
+
+def get_dynamic_chart_data(request, chart_id):
+    """
+    Genera dinamicamente i dati per un grafico leggendo la sua configurazione 
+    JSON dal database.
+    """
+    # 1. Recupera la configurazione del grafico dal DB
+    # NOTA DI SICUREZZA: Utilizzare query parametrizzate per evitare SQL Injection
+    # Vedi la nota alla fine della risposta.
+    chart_record = HelpderDB.sql_query_row(f"SELECT * FROM sys_chart WHERE id='{chart_id}'")
+
+    if not chart_record:
+        return {'error': 'Chart not found'}
+
+    # Carica la configurazione JSON
+    config = json.loads(chart_record['config'])
+    
+    # --- 2. Costruzione dinamica della Query SQL ---
+    
+    # Campi da selezionare (es. SUM(field1) AS alias1, ...)
+    select_clauses = []
+    dataset_aliases = []
+    dataset_labels = []
+
+    for ds in config['datasets']:
+        select_clauses.append(f"{ds['expression']} AS {ds['alias']}")
+        dataset_aliases.append(ds['alias'])
+        dataset_labels.append(ds['label'])
+
+    group_by_field = config['group_by_field']['field']
+    group_by_alias = config['group_by_field'].get('alias', group_by_field)
+
+    # Query finale: costruita concatenando le parti per evitare newline (\n)
+    # e mantenendo la leggibilità.
+    query = (
+        f"SELECT {group_by_field} AS {group_by_alias}, {', '.join(select_clauses)} "
+        f"FROM user_{config['from_table']} "
+        f"GROUP BY {group_by_field}"
+    )
+    
+    # Aggiungi ordinamento se specificato
+    if 'order_by' in config:
+        query += f" ORDER BY {config['order_by']}"
+
+    # --- 3. Esecuzione della Query e Formattazione dei Dati ---
+    
+    # NOTA DI SICUREZZA: La query costruita dinamicamente dovrebbe essere usata
+    # con cautela, assicurandosi che i valori in 'config' siano sicuri.
+    dictrows = HelpderDB.sql_query(query)
+
+    if not dictrows:
+        # Ritorna una struttura vuota ma valida per il frontend
+        return {
+            'id': chart_id,
+            'name': chart_record['name'],
+            'layout': chart_record['layout'],
+            'labels': [],
+            'datasets': [{'label': label, 'data': []} for label in dataset_labels]
+        }
+        
+    # Estrai le etichette (asse X)
+    labels = [row[group_by_alias] for row in dictrows]
+
+    # Prepara la struttura per i dataset
+    datasets = []
+    for i, alias in enumerate(dataset_aliases):
+        # Estrai i dati per ogni serie
+        data = []
+        for row in dictrows:
+            value = row.get(alias)
+            try:
+                # Converte in float, arrotonda e aggiunge. Se fallisce, usa 0.
+                data.append(round(float(value), 2) if value is not None else 0)
+            except (ValueError, TypeError):
+                data.append(0) # Default per valori non numerici
+
+        datasets.append({
+            'label': dataset_labels[i],
+            'data': data
+        })
+
+    # 4. Composizione del contesto finale
+    context = {
+        'id': chart_id,
+        'name': chart_record['name'],
+        'layout': chart_record['layout'],
+        'labels': labels,
+        'datasets': datasets,
+    }
+
+    return context
+
 
 
 
