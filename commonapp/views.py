@@ -2107,7 +2107,14 @@ def save_record_fields(request):
         field2=chart_record.values['campi2']
         operation2=chart_record.values['operation2']
         dynamicfield2=chart_record.values['dynamicfield2']
-        reportid=chart_record.values['reportid']
+        chartid=chart_record.values['reportid']
+        datasets=[]
+        for field in fields.split(','):
+            dataset={}
+            dataset['label']=field
+            dataset['expression']=f"SUM({field})"
+            dataset['alias']=field
+            datasets.append(dataset)
 
         config_python = {
             "from_table": "metrica_annuale",
@@ -2115,26 +2122,34 @@ def save_record_fields(request):
                 "field": raggruppamento,
                 "alias": raggruppamento
             },
-            "datasets": [  # Questa è una lista (array) Python
-                {
-                    "label": "Nuovi Soci",
-                    "expression": "SUM(nr_totale_soci_nr_nuovi_soci)",
-                    "alias": "totale_soci"
-                },
-                {
-                    "label": "Giocatori",
-                    "expression": "SUM(nr_gin_giocati)",
-                    "alias": "totale_giocatori"
-                }
-            ],
+            "datasets": datasets,
             "order_by": "anno ASC"
         }
         status='Bozza'
         config_json_string = json.dumps(config_python, indent=4)
             
         
-        sql=f"INSERT INTO sys_chart (name, layout, config, userid) VALUES ('{name}','{layout}','{config_json_string}','{userid}')"
-        HelpderDB.sql_execute(sql)
+        if not chartid:
+            chartid = HelpderDB.sql_query_value(f"SELECT id FROM sys_chart WHERE name='{name}' AND layout='{layout}'  AND userid={userid} ", 'id')
+            if chartid:
+                chart_record.values['reportid'] = chartid
+                chart_record.save()
+                sql=f"INSERT INTO sys_dashboard_block (name, userid, viewid, chartid) VALUES ('{name}',1,53,'{chartid}')"
+                HelpderDB.sql_execute(sql)
+
+
+        if chartid and chartid != 'None':
+            sql=f"UPDATE sys_chart SET name='{name}', layout='{layout}', config='{config_json_string}', userid='{userid}' WHERE id='{chartid}'"
+            HelpderDB.sql_execute(sql)
+            sql=f"UPDATE sys_dashboard_block SET name='{name}' WHERE chartid='{chartid}'"
+            HelpderDB.sql_execute(sql)
+        else:
+            sql=f"INSERT INTO sys_chart (name, layout, config, userid) VALUES ('{name}','{layout}','{config_json_string}','{userid}')"
+            HelpderDB.sql_execute(sql)
+            
+            #reportid=HelpderDB.sql_query_value("SELECT id FROM sys_chart WHERE name='{name}' AND layout='{layout}'  AND userid='{userid}' ", 'id')
+            #chart_record.values['reportid'] = reportid
+            #chart_record.save()
         
         
    
@@ -3803,7 +3818,7 @@ def update_user_profile_pic(request):
 
 @login_required(login_url='/login/')
 def get_dashboard_blocks(request):
-
+    userid=Helper.get_userid(request)
     data = json.loads(request.body)
 
     #dashboard_id = data.get('dashboardid')
@@ -3904,12 +3919,14 @@ def get_dashboard_blocks(request):
                     chart_config = json.loads(chart_config)
                     selected = ''
 
-                    #query_conditions = results['query_conditions']
-                    #userid = get_userid(request.user.id)
-                    userid = bixid
-                    #query_conditions = query_conditions.replace("$userid$", str(userid))
-
-                    chart_data=get_dynamic_chart_data(request, results['chartid'])
+                    viewid = results['viewid']
+                    view= HelpderDB.sql_query_row(f"SELECT * FROM sys_view WHERE id='{viewid}'")
+                    query_conditions = view['query_conditions']
+                    recordid_golfclub=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_golfclub WHERE utente='{userid}'","recordid_")
+                    
+                    query_conditions = query_conditions.replace("$userid$", str(userid))
+                    query_conditions = query_conditions+" AND recordidgolfclub_='{recordid_golfclub}'".format(recordid_golfclub=recordid_golfclub)
+                    chart_data=get_dynamic_chart_data(request, results['chartid'],query_conditions)
                     chart_data_json=json.dumps(chart_data)
 
                     
@@ -4018,7 +4035,7 @@ def get_chart(request, sql, id, name, layout, fields):
 
     return context
 
-def get_dynamic_chart_data(request, chart_id):
+def get_dynamic_chart_data(request, chart_id, query_conditions=''):
     """
     Genera dinamicamente i dati per un grafico leggendo la sua configurazione 
     JSON dal database.
@@ -4054,6 +4071,7 @@ def get_dynamic_chart_data(request, chart_id):
     query = (
         f"SELECT {group_by_field} AS {group_by_alias}, {', '.join(select_clauses)} "
         f"FROM user_{config['from_table']} "
+        f"WHERE {query_conditions} "
         f"GROUP BY {group_by_field}"
     )
     
