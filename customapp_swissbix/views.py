@@ -279,3 +279,83 @@ def get_record_badge_swissbix_company(request):
     return_badgeItems["total_invoices"] = total_invoices
     response={ "badgeItems": return_badgeItems}
     return JsonResponse(response)   
+
+
+def get_record_badge_swissbix_deals(request):
+    data = json.loads(request.body)
+    tableid= data.get("tableid")
+    recordid= data.get("recordid")
+
+    record=UserRecord(tableid,recordid)
+    return_badgeItems={}
+
+    sql=f"SELECT dealname, amount , effectivemargin, dealuser1, dealstage, recordidcompany_ FROM user_deal WHERE recordid_='{recordid}' AND deleted_='N'"
+
+    deal_name=HelpderDB.sql_query_value(sql, 'dealname')
+    deal_amount=HelpderDB.sql_query_value(sql, 'amount')
+    deal_effectivemargin=HelpderDB.sql_query_value(sql, 'effectivemargin')
+    dealstage=HelpderDB.sql_query_value(sql, 'dealstage')
+
+
+    salesuser=HelpderDB.sql_query_value(sql, 'dealuser1')
+    if salesuser:
+        from commonapp.models import SysUser
+        user_sales=SysUser.objects.filter(id=salesuser).first()
+        return_badgeItems["sales_user_name"] = user_sales.firstname + ' ' + user_sales.lastname if user_sales else ''
+        return_badgeItems["sales_user_photo"] = user_sales.id if user_sales else ''
+    else:
+        return_badgeItems["sales_user_name"] = ''
+        return_badgeItems["sales_user_photo"] = ''
+
+    recordidcompany_=HelpderDB.sql_query_value(sql, 'recordidcompany_')
+    sql=f"SELECT companyname FROM user_company WHERE recordid_='{recordidcompany_}' AND deleted_='N'"
+    company_name=HelpderDB.sql_query_value(sql, 'companyname')
+
+    return_badgeItems["deal_name"] = deal_name
+    return_badgeItems["deal_amount"] = deal_amount
+    return_badgeItems["deal_effectivemargin"] = deal_effectivemargin
+    return_badgeItems["company_name"] = company_name
+    return_badgeItems["deal_stage"] = dealstage
+    response={ "badgeItems": return_badgeItems}
+    return JsonResponse(response)   
+
+def get_record_badge_swissbix_project(request):
+    data = json.loads(request.body)
+    tableid= data.get("tableid")
+    recordid= data.get("recordid")
+
+    record=UserRecord(tableid,recordid)
+    return_badgeItems={}
+
+    sql=f"SELECT projectname, assignedto, status, expectedhours, usedhours, residualhours, recordidcompany_ FROM user_project WHERE recordid_='{recordid}' AND deleted_='N'"
+
+    project_name=HelpderDB.sql_query_value(sql, 'projectname')
+    project_status=HelpderDB.sql_query_value(sql, 'status')
+    expected_hours=HelpderDB.sql_query_value(sql, 'expectedhours')
+    used_hours=HelpderDB.sql_query_value(sql, 'usedhours')
+    residual_hours=HelpderDB.sql_query_value(sql, 'residualhours')
+    print(f"expected_hours: {expected_hours}, used_hours: {used_hours}, residual_hours: {residual_hours}")
+    recordidcompany_=HelpderDB.sql_query_value(sql, 'recordidcompany_')
+
+
+    manager=HelpderDB.sql_query_value(sql, 'assignedto')
+    if manager:
+        from commonapp.models import SysUser
+        user_sales=SysUser.objects.filter(id=manager).first()
+        return_badgeItems["manager_name"] = user_sales.firstname + ' ' + user_sales.lastname if user_sales else ''
+        return_badgeItems["manager_photo"] = user_sales.id if user_sales else ''
+    else:
+        return_badgeItems["manager_name"] = ''
+        return_badgeItems["manager_photo"] = ''
+    
+    sql=f"SELECT companyname FROM user_company WHERE recordid_='{recordidcompany_}' AND deleted_='N'"
+    company_name=HelpderDB.sql_query_value(sql, 'companyname')
+
+    return_badgeItems["project_name"] = project_name
+    return_badgeItems["project_status"] = project_status
+    return_badgeItems["expected_hours"] = expected_hours
+    return_badgeItems["used_hours"] = used_hours
+    return_badgeItems["residual_hours"] = residual_hours
+    return_badgeItems["company_name"] = company_name
+    response={ "badgeItems": return_badgeItems}
+    return JsonResponse(response)

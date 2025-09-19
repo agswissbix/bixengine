@@ -12,5 +12,7 @@ urlpatterns = [
     path("qr/issue", issue_qr_token, name="issue_qr_token"),
     path("qr/verify", verify_qr_token, name="verify_qr_token"),
     path('get_record_badge_swissbix_company/', get_record_badge_swissbix_company, name='get_record_badge_swissbix_company'),
+    path('get_record_badge_swissbix_deals/', get_record_badge_swissbix_deals, name='get_record_badge_swissbix_deals'),
+    path('get_record_badge_swissbix_project/', get_record_badge_swissbix_project, name='get_record_badge_swissbix_project'),
     
 ]
