@@ -5,6 +5,7 @@ from django.conf import settings
 from commonapp.views import *
 from django.views.static import serve
 from django.views.decorators.cache import never_cache
+from bixscheduler import views
 
 urlpatterns = [
     path('examplepost/', get_examplepost, name='examplepost'),
