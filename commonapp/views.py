@@ -3932,7 +3932,7 @@ def get_dashboard_blocks(request):
                     
                     block['chart_data'] = chart_data_json
                     block['name'] = chart_name
-                    block['type'] = 'barchart'
+                    block['type'] = 'valore'
 
                 block['width'] = width
                 block['height'] = height
