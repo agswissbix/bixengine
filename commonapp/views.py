@@ -14,6 +14,7 @@ from django.core.files.storage import default_storage
 from django.contrib.auth.decorators import login_required
 from functools import wraps
 
+from bixsettings.views.helpers.helperdb import Helperdb
 from commonapp.bixmodels import helper_db   
 from .bixmodels.sys_table import *
 from .bixmodels.user_record import *
@@ -4403,65 +4404,78 @@ def get_form_fields(request):
 #TEMP
 #CUSTOM TELEFONO AMICO
 
+@login_required(login_url='/login/')
+def get_users_and_groups_api(request):
+    """
+    API per ottenere la lista di utenti e gruppi.
+    Restituisce un JSON con due liste separate.
+    """
+
+    try:
+        # Esegui la query una sola volta
+        all_sys_users = Helperdb.sql_query("SELECT id, username, description, bixid FROM sys_user")
+
+        users = []
+        groups = []
+
+        # Filtra e separa gli utenti e i gruppi
+        for user_data in all_sys_users:
+            if user_data.get('description') == 'Gruppo':
+                groups.append(user_data)
+            else:
+                users.append(user_data)
+        
+        # Restituisci i dati in formato JSON
+        return JsonResponse({
+            "success": True,
+            "users": users,
+            "groups": groups
+        })
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
+
 @transaction.atomic
 def save_newuser(request):
     """
-    Crea o aggiorna un utente Django e le relative tabelle ausiliarie.
-    Utilizza l'ORM solo per il modello User e SQL crudo parametrizzato per le altre.
-    La logica è resa robusta contro errori di duplicazione tramite UPSERT.
+    Gestisce la creazione di un nuovo utente tramite API JSON.
     """
-    # --- 1. Raccolta e Validazione Dati ---
-    username = (request.POST.get("username") or "").lower()
-    firstname = request.POST.get("firstname")
-    password = request.POST.get("password")
-    lastname = request.POST.get("lastname", "")
-    email = request.POST.get("email", "")
+    if request.method != 'POST':
+        return JsonResponse({"success": False, "error": "Metodo non supportato"}, status=405)
 
+    try:
+        # 1. Parsing dei dati JSON
+        data = json.loads(request.body)
+        username = (data.get("username") or "").lower()
+        firstname = data.get("firstname")
+        password = data.get("password")
+        lastname = data.get("lastname", "")
+        email = data.get("email", "")
+    except json.JSONDecodeError:
+        return JsonResponse({"success": False, "error": "Invalid JSON"}, status=400)
+
+    # 2. Validazione Dati
     if not all([username, firstname, password]):
         return JsonResponse(
             {
                 "success": False,
-                "error": "I campi username, firstname e password sono obbligatori",
+                "error": "I campi username, firstname e password sono obbligatori.",
             },
             status=400,
         )
 
-    # --- 2. Verifica Esistenza Utente (usando l'ORM) ---
-    user = User.objects.filter(username=username).first()
+    # 3. Verifica Esistenza Utente
+    if User.objects.filter(username=username).exists():
+        # L'utente esiste già, non è una creazione. Restituisci un errore.
+        return JsonResponse(
+            {
+                "success": False,
+                "error": "Esiste già un utente con questo username.",
+            },
+            status=409,  # Conflitto
+        )
 
-    if user:
-        # --- CASO: L'UTENTE ESISTE GIÀ (AGGIORNAMENTO) ---
-        user.first_name = firstname
-        user.last_name = lastname
-        user.email = email
-        if password:
-            user.set_password(password)
-        user.save()
-
-        with connection.cursor() as cur:
-            # Aggiorna la tabella sys_user
-            cur.execute(
-                """
-                UPDATE sys_user
-                   SET firstname = %s, lastname = %s, email = %s
-                 WHERE username = %s
-                """,
-                [firstname, lastname, email, username],
-            )
-            
-            # **FIX**: Assicura che il profilo esista (UPSERT per MySQL).
-            # Questo crea il profilo se manca (es. cancellato per errore)
-            # e non fa nulla se esiste già, evitando errori.
-            cur.execute(
-                """
-                INSERT INTO commonapp_userprofile (user_id, is_2fa_enabled)
-                VALUES (%s, 0)
-                ON DUPLICATE KEY UPDATE user_id = VALUES(user_id)
-                """,
-                [user.id]
-            )
-    else:
-        # --- CASO: L'UTENTE NON ESISTE (CREAZIONE) ---
+    # 4. Creazione Utente
+    try:
         user = User.objects.create_user(
             username=username,
             password=password,
@@ -4469,10 +4483,11 @@ def save_newuser(request):
             last_name=lastname,
             email=email,
         )
-        bixid = user.id  # FK verso auth_user
+        bixid = user.id
 
+        # 5. Esecuzione SQL aggiuntivo (se necessario)
         with connection.cursor() as cur:
-            # Calcola l'ID per sys_user (logica sconsigliata ma mantenuta)
+            # Calcola l'ID per sys_user (logica da rivedere, ma mantenuta)
             cur.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM sys_user")
             userid = cur.fetchone()[0]
 
@@ -4485,9 +4500,7 @@ def save_newuser(request):
                 [userid, firstname, lastname, username, bixid],
             )
 
-            # **FIX**: Inserisce il profilo usando UPSERT.
-            # Questo previene l'errore di chiave duplicata se un segnale `post_save`
-            # ha già creato il record del profilo.
+            # Inserisce il profilo commonapp_userprofile con UPSERT
             cur.execute(
                 """
                 INSERT INTO commonapp_userprofile (user_id, is_2fa_enabled)
@@ -4496,8 +4509,13 @@ def save_newuser(request):
                 """,
                 [bixid],
             )
+    except Exception as e:
+        # In caso di errore, la transazione viene annullata automaticamente
+        # grazie a @transaction.atomic.
+        return JsonResponse({"success": False, "error": f"Errore interno del server: {str(e)}"}, status=500)
 
-    return JsonResponse({"success": True})
+    return JsonResponse({"success": True, "message": "Utente creato con successo."})
+
 
         
 #TODO
