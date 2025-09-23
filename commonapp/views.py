@@ -19,7 +19,7 @@ from commonapp.bixmodels import helper_db
 from .bixmodels.sys_table import *
 from .bixmodels.user_record import *
 from .bixmodels.user_table import *
-from commonapp.models import SysCustomFunction
+from commonapp.models import SysCustomFunction, SysUser, SysUserSettings
 
 import pyotp
 import qrcode
@@ -4403,6 +4403,68 @@ def get_form_fields(request):
 #TODO
 #TEMP
 #CUSTOM TELEFONO AMICO
+
+def save_user_settings_api(request):
+    """
+    API per salvare la preferenza del tema di un utente.
+    """
+    try:
+        data = json.loads(request.body)
+        userid = data.get('userid')
+        theme = data.get('theme')
+        if not all([userid, theme]):
+            return JsonResponse({"success": False, "error": "UserID o tema mancanti"}, status=400)
+    except (json.JSONDecodeError, KeyError):
+        return JsonResponse({"success": False, "error": "Dati di richiesta non validi"}, status=400)
+
+    try:
+        # Check if the userid exists in sys_user
+        if not SysUser.objects.filter(id=userid).exists():
+            return JsonResponse({"success": False, "error": "UserID non trovato"}, status=400)
+        
+        user_instance = SysUser.objects.get(id=userid)
+
+        SysUserSettings.objects.update_or_create(
+            userid=user_instance,
+            setting='theme',
+            defaults={'value': theme}
+        )
+
+        return JsonResponse({"success": True, "message": "Tema salvato con successo."})
+    except Exception as e:
+        print(f"Errore nel salvataggio delle impostazioni utente: {e}")
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
+
+def get_user_settings_api(request):
+    """
+    API per ottenere le impostazioni di un utente specifico.
+    """
+    try:
+        data = json.loads(request.body)
+        userid = data.get('userid')
+        if not userid:
+            return JsonResponse({"success": False, "error": "UserID mancante"}, status=400)
+    except (json.JSONDecodeError, KeyError):
+        return JsonResponse({"success": False, "error": "Dati di richiesta non validi"}, status=400)
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT userid, value FROM sys_user_settings WHERE userid = %s AND setting = 'theme'",
+                [userid]
+            )
+            user_theme = dictfetchall(cursor)
+        
+        # Gestisce il caso in cui il tema non esista
+        theme_value = user_theme[0]['value'] if user_theme else 'default'
+        
+        return JsonResponse({
+            "success": True,
+            "userid": userid,
+            "theme": theme_value
+        })
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
 
 @login_required(login_url='/login/')
 def get_users_and_groups_api(request):

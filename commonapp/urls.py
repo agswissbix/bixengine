@@ -72,6 +72,8 @@ urlpatterns = [
     path('get_table_records_kanban/', get_table_records_kanban, name='get_table_records_kanban'),
     path('save_newuser/', save_newuser, name='save_newuser'),
     path('get_users_and_groups_api/', get_users_and_groups_api, name='get_users_and_groups_api'),
+    path('get_user_settings_api/', get_user_settings_api, name='get_user_settings_api'),
+    path('save_user_settings_api/', save_user_settings_api, name='save_user_settings_api'),
     
 ]
 

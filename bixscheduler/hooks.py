@@ -2,51 +2,51 @@ import datetime
 import traceback
 import requests
 from django.utils import timezone
+from django.db import transaction, connection
 import logging
-from bixscheduler.utils import get_cliente_id  # percorso reale del file
+from bixscheduler.utils import get_cliente_id 
+from commonapp.bixmodels.user_record import *
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-EXTERNAL_ENDPOINT = "https://devstagista.swissbix.com:3022/bixadmin/monitoring"
-
 def on_task_success(task):
     """
     Hook chiamato quando un task termina con successo.
-    Invia i dati via POST a un endpoint esterno.
+    Crea il log e invia i dati a un endpoint esterno.
     """
-    payload = {
-        "func": task.func,
-        "result": task.result if task.result is not None else "Nessun output",
-        "started": task.started.isoformat() if task.started else None,
-        "stopped": task.stopped.isoformat() if task.stopped else timezone.now().isoformat(),
-        "success": task.success,
-    }
-    headers = {"Authorization": "Bearer TOKEN"}
-
     try:
-        response = requests.post(EXTERNAL_ENDPOINT, json=payload, headers=headers, timeout=10, 
-                                 verify=False # Disabilita la verifica SSL (non in produzione!)
-                                 )
-        response.raise_for_status()
+        # Passiamo i parametri necessari alla funzione helper
+        create_scheduler_log(task)
     except Exception as e:
-        # Log interno, così non rompe il worker
-        logger.info(f"[HOOK ERROR] impossibile inviare a {EXTERNAL_ENDPOINT}: {e}")
+        logger.error(f"[HOOK ERROR] impossibile creare log nel DB: {e}")
+        # In caso di errore, l'hook deve comunque ritornare None.
+        pass
+    
+    # L'hook deve sempre ritornare None per un corretto funzionamento.
+    return None
 
-# def on_task_success(task):
-#     try:
-#         print("HOOK ATTIVATO - TASK RICEVUTO")
-#         print("TASK:", task)
+def create_scheduler_log(task):
+    """
+    Crea un log del task nel database usando la connessione di Django.
+    """
+    try:
+        # Prepara i dati da inserire
+        function_name = task.func
+        output = str(task.result) if task.result is not None else "Nessun output"
+        lastupdate_date = task.stopped if task.stopped else timezone.now()
+        
+        # Crea un'istanza di UserRecord
+        scheduler_log = UserRecord('scheduler_log')
+        
+        scheduler_log.values['date'] = lastupdate_date.date()
+        scheduler_log.values['function'] = function_name
+        scheduler_log.values['output'] = output
+        scheduler_log.values['hour'] = lastupdate_date.strftime('%H:%M:%S')
 
-#         output = getattr(task, 'result', None)
-#         func = getattr(task, 'func', 'unknown')
-#         run_at = datetime.datetime.now()
-#         cliente_id = get_cliente_id()
-
-#         from bixmonitoring.views import get_output
-
-#         # Passi cliente_id insieme agli altri
-#         get_output(func=func, output=output, run_at=run_at, cliente_id=cliente_id)
-#     except Exception:
-#         print("ERRORE NELL'HOOK:")
-#         traceback.print_exc()
+        # Salva il record nel DB
+        scheduler_log.save()
+            
+    except Exception as e:
+        logger.error(f"[HOOK ERROR] Errore nel salvataggio: {e}")
+        raise # Rilanciamo l'eccezione per farla gestire dal blocco try di on_task_success.
