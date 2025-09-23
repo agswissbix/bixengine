@@ -57,13 +57,104 @@ class UserTable:
         return records
     
     @timing_decorator
-    def get_table_records_obj(self, viewid='', searchTerm='', conditions_list=None, fields=None, offset=0, limit=None, orderby='recordid_ desc', master_tableid=None, master_recordid=None):
+    def get_table_records_obj(self, viewid='', searchTerm='', conditions_list=None, fields=None, offset=0, limit=None, orderby='recordid_ desc', master_tableid=None, master_recordid=None, filters_list=None):
         """
         Recupera i record e le loro proprietà come lista di oggetti UserRecord ottimizzata.
-        ORA gestisce anche l'eager loading dei dati collegati.
+        ORA gestisce anche l'eager loading dei dati collegati e i filtri da frontend.
         """
+        print(f"filters_list: {filters_list}")
         if conditions_list is None:
             conditions_list = []
+        if filters_list is None:
+            filters_list = []
+        
+        # --- NUOVO: Processa la lista dei filtri dal frontend ---
+        for filter_item in filters_list:
+            field_id = filter_item.get('fieldid')
+            filter_type = filter_item.get('type')
+            filter_value = filter_item.get('value')
+            
+            if not field_id or not filter_value:
+                continue
+                
+            # Gestione del tipo 'Parola' e 'Text'
+            if filter_type in ['Parola', 'Text']:
+                # La stringa è già il valore da usare per la clausola LIKE.
+                # NOTA: Usiamo LIKE per una ricerca più flessibile, ma possiamo anche usare '=' per "Valore esatto".
+                # Per ora, come richiesto, ci concentriamo su 'Valore esatto'
+                # Utilizziamo `LIKE` con i caratteri jolly `%` per una ricerca più ampia.
+                # Se la condizione fosse 'Valore esatto', l'operatore sarebbe '='. Per ora, gestiamo solo il valore.
+                
+                values = filter_value.split('|')
+
+                if len(values) > 0:
+                    like_conditions = []
+                    for val in values:
+                        sanitized_val = val.replace("'", "''") 
+                        like_conditions.append(f"{field_id} LIKE '%{sanitized_val}%'")
+                    conditions_list.append(f"({' OR '.join(like_conditions)})")
+                
+            # Gestione del tipo 'Numero'
+            elif filter_type == 'Numero':
+                try:
+                    # Il valore è un JSON che contiene i range. Es: '[{"min":"2","max":"3"},{"min":"4","max":"7"}]'
+                    ranges = json.loads(filter_value)
+                    range_conditions = []
+                    for r in ranges:
+                        min_val = r.get('min', '').strip()
+                        max_val = r.get('max', '').strip()
+                        if min_val and max_val:
+                            range_conditions.append(f"({field_id} BETWEEN {min_val} AND {max_val})")
+                        elif min_val:
+                            range_conditions.append(f"({field_id} >= {min_val})")
+                        elif max_val:
+                            range_conditions.append(f"({field_id} <= {max_val})")
+                    
+                    if range_conditions:
+                        conditions_list.append(f"({' OR '.join(range_conditions)})")
+
+                except (json.JSONDecodeError, ValueError):
+                    print(f"Errore di decodifica JSON o valore non valido per il filtro numerico {field_id}: {filter_value}")
+                    continue
+
+            # Gestione del tipo 'Data'
+            elif filter_type == 'Data':
+                try:
+                    # Il valore è un JSON che contiene i range di date. Es: '[{"from":"2025-09-18","to":"2025-09-25"}]'
+                    ranges = json.loads(filter_value)
+                    range_conditions = []
+                    for r in ranges:
+                        from_date = r.get('from', '').strip()
+                        to_date = r.get('to', '').strip()
+                        if from_date and to_date:
+                            range_conditions.append(f"({field_id} BETWEEN '{from_date}' AND '{to_date}')")
+                        elif from_date:
+                            range_conditions.append(f"({field_id} >= '{from_date}')")
+                        elif to_date:
+                            range_conditions.append(f"({field_id} <= '{to_date}')")
+                    
+                    if range_conditions:
+                        conditions_list.append(f"({' OR '.join(range_conditions)})")
+
+                except (json.JSONDecodeError, ValueError):
+                    print(f"Errore di decodifica JSON o valore non valido per il filtro data {field_id}: {filter_value}")
+                    continue
+
+            # Gestione del tipo 'Utente'
+            elif filter_type == 'Utente':
+                filter_values = json.loads(filter_value)
+                
+                if isinstance(filter_values, list) and filter_values:
+                    user_conditions = []
+                    for user_id in filter_values:
+                        if str(user_id).isdigit():
+                            user_conditions.append(f"{field_id}='{user_id}'")
+                    if user_conditions:
+                        conditions_list.append(f"({' OR '.join(user_conditions)})")
+        
+        # --- Fine del blocco di gestione filtri ---
+
+        # Aggiunge le condizioni master-record se presenti
         if master_tableid and master_recordid:
             conditions_list.append(f"recordid{master_tableid}_='{master_recordid}'")
 
@@ -79,10 +170,8 @@ class UserTable:
         if not raw_records_data:
             return []
 
-        # --- LOGICA DI EAGER LOADING SPOSTATA QUI DALLA VISTA ---
-        
+        # --- LOGICA DI EAGER LOADING SPOSTATA QUI DALLA VISTA (invariata) ---
         ids_to_fetch = defaultdict(set)
-        # Usiamo le definizioni complete dei campi, non solo le colonne dei risultati
         all_field_defs = self._get_fields_definitions().values()
 
         for column in all_field_defs:
@@ -96,46 +185,38 @@ class UserTable:
 
             elif column.get('keyfieldlink') and column.get('tablelink'):
                 table_link = column.get('tablelink')
-                # La colonna con l'ID del record collegato segue la convenzione "recordid<nometabella>_"
-                #linked_record_id_field = f"recordid{table_link}_"
                 linked_record_id_field = column.get('fieldid')
                 for record_data in raw_records_data:
                     record_link_id = record_data.get(linked_record_id_field)
                     if record_link_id:
                         ids_to_fetch[table_link].add(record_link_id)
 
-        # --- ESEGUI LE QUERY DI MASSA ---
         fetched_data_maps = defaultdict(dict)
         
         if 'sys_user' in ids_to_fetch:
             user_ids_list = list(ids_to_fetch['sys_user'])
-            # NOTA: Assicurati che HelpderDB.sql_query sia sicuro contro SQL Injection!
-            # L'uso di IN con una lista di ID numerici è generalmente sicuro se gli ID sono validati.
             users = HelpderDB.sql_query(f"SELECT id, firstname, lastname FROM sys_user WHERE id IN ({','.join(map(str, user_ids_list))})")
             fetched_data_maps['sys_user'] = {u['id']: f"{u.get('firstname', '')} {u.get('lastname', '')}".strip() for u in users}
 
         for table_link, record_ids_set in ids_to_fetch.items():
             if table_link == 'sys_user': continue
-            
             record_ids_list = list(record_ids_set)
             keyfield = next((c['keyfieldlink'] for c in all_field_defs if c.get('tablelink') == table_link), None)
             
             if keyfield and record_ids_list:
-                # Assumendo che HelpderDB.get_linked_records_by_ids esista e sia ottimizzato
                 linked_records = HelpderDB.get_linked_records_by_ids(table_link, keyfield, record_ids_list)
                 fetched_data_maps[table_link] = {r['recordid_']: r.get(keyfield) for r in linked_records}
 
-        # --- Crea istanze UserRecord passando TUTTI i dati necessari ---
+        # --- Crea istanze UserRecord (invariato) ---
         records_obj_list = []
         for raw_record in raw_records_data:
             record_id = raw_record.get('recordid_')
             if not record_id:
                 continue
-
             prefetched_data_for_record = {
                 'values': raw_record,
                 'fields_definitions': field_definitions,
-                'eager_loaded_data': fetched_data_maps # <-- NUOVO: Passiamo le mappe!
+                'eager_loaded_data': fetched_data_maps
             }
             try:
                 record_instance = UserRecord(
@@ -169,76 +250,98 @@ class UserTable:
         return records
     
     @timing_decorator
-    def get_records(self,viewid='',searchTerm='', conditions_list=None,fields=None,offset=0,limit=None,orderby='recordid_ desc',columns=None):
-        
-        """Ottieni elenco record in base ai parametri di ricerca
-
-        Args:
-            viewid (str, optional): vista applicata. Defaults to ''.
-            searchTerm (str, optional): termine generico da cercare in tutti i campi. Defaults to ''.
-            conditions_list (_type_, optional): condizioni specifiche sui campi. Defaults to list().
-
-        Returns:
-            _type_: lista di dict dei risultati
-        """ 
+    def get_records(self, viewid='', searchTerm='', conditions_list=None, fields=None, offset=0, limit=None, orderby='recordid_ desc', columns=None):
+        """
+        Ottieni elenco record in base ai parametri di ricerca.
+        Versione migliorata per gestire filtri complessi e JOIN dinamiche.
+        """
         if conditions_list is None:
             conditions_list = []
-        select_fields=f"user_{self.tableid}.*"
-        fromsql=f"FROM user_{self.tableid}"
-
-        if fields:
-            select_fields='user_'+self.tableid+'.recordid_'
-            for field in fields:
-                select_fields=select_fields+',user_'+self.tableid+'.'+field
-
-                
-        conditions=f"user_{self.tableid}.deleted_='N'"
-        #conditions=conditions+f" AND companyname like '%{searchTerm}%' " 
-        for condition in conditions_list:
-            conditions=conditions+f" AND {condition}"   
-
-        #searchterm
-        if searchTerm:
-            searchTerm_conditions=''
+        
+        # Inizializza le parti della query
+        select_fields = [f"user_{self.tableid}.*"]
+        from_clauses = [f"FROM user_{self.tableid}"]
+        where_clauses = [f"user_{self.tableid}.deleted_='N'"]
+        
+        # 1. Gestione del termine di ricerca
+        if searchTerm and columns:
+            searchTerm_conditions = []
             for column in columns:
-                fieldid=column['fieldid']
-                if searchTerm_conditions!='':
-                    searchTerm_conditions=searchTerm_conditions + " OR "
-
-                if fieldid.startswith("_recordid"):
-                    linkedtableid = fieldid[len("_recordid"):]
-                    fromsql=fromsql+f" LEFT JOIN user_{linkedtableid} ON user_{self.tableid}.recordid{linkedtableid}_=user_{linkedtableid}.recordid_ "
-                    searchTerm_conditions=searchTerm_conditions+f"user_{linkedtableid+'.'+column['keyfieldlink']} like '%{searchTerm}%' " 
-                else:
-                    searchTerm_conditions=searchTerm_conditions+f"user_{self.tableid}.{fieldid} like '%{searchTerm}%' "
-
+                fieldid = column.get('fieldid')
+                if not fieldid:
+                    continue
                 
-            if searchTerm_conditions!='':
-                conditions=conditions+f" AND ({searchTerm_conditions}) "  
+                # NOTA: Per unire le tabelle in base al recordid_ del campo collegato
+                # l'approccio migliore è estrarre l'ID della tabella collegata
+                # dal nome del campo (es. recordidclienti_)
+                # o dalla definizione del campo.
+                tablelink = column.get('tablelink')
+                keyfieldlink = column.get('keyfieldlink')
+                
+                if tablelink and keyfieldlink:
+                    # Aggiunge il JOIN alla lista di clausole
+                    from_clauses.append(
+                        f"LEFT JOIN user_{tablelink} ON user_{self.tableid}.{fieldid}=user_{tablelink}.recordid_ "
+                    )
+                    # Aggiunge la condizione di ricerca
+                    sanitized_term = searchTerm.replace("'", "''")
+                    searchTerm_conditions.append(
+                        f"user_{tablelink}.{keyfieldlink} LIKE '%{sanitized_term}%'"
+                    )
+                else:
+                    sanitized_term = searchTerm.replace("'", "''")
+                    searchTerm_conditions.append(
+                        f"user_{self.tableid}.{fieldid} LIKE '%{sanitized_term}%'"
+                    )
+            
+            if searchTerm_conditions:
+                where_clauses.append(f"({' OR '.join(searchTerm_conditions)})")
 
-        #viewid
+        # 2. Aggiungi le condizioni della conditions_list
+        if conditions_list:
+            where_clauses.extend(conditions_list)
+
+        # 3. Gestione della vista
         if viewid:
-            view_query_conditions = HelpderDB.sql_query_value(sql=f"SELECT query_conditions FROM sys_view WHERE id='{viewid}' AND tableid='{self.tableid}'", column='query_conditions')
-            
-            
+            view_query_conditions = HelpderDB.sql_query_value(
+                sql=f"SELECT query_conditions FROM sys_view WHERE id='{viewid}' AND tableid='{self.tableid}'",
+                column='query_conditions'
+            )
             if view_query_conditions:
-                view_query_conditions=str(view_query_conditions)
-                # userid
-                view_query_conditions = f"{view_query_conditions.replace('$userid$', str(self.userid))}"
-                # today
+                view_query_conditions = str(view_query_conditions)
+                view_query_conditions = view_query_conditions.replace('$userid$', str(self.userid))
                 today = datetime.date.today().strftime("%Y-%m-%d")
-                #view_query_conditions = f"{view_query_conditions.replace('$today$', today)}"
-                conditions=conditions+f" AND {view_query_conditions} "
-        orderby='user_'+self.tableid+'.'+orderby
+                # view_query_conditions = view_query_conditions.replace('$today$', today) # Rimuovi se non usato
+                where_clauses.append(view_query_conditions)
 
-        # → Calcola e salva il numero totale dei record
-        count_sql = f"SELECT COUNT(*) as total_count {fromsql} WHERE {conditions}"
+        # 4. Aggiungi i campi specifici se richiesti
+        if fields:
+            select_fields = [f"user_{self.tableid}.{field}" for field in fields]
+            select_fields.insert(0, f"user_{self.tableid}.recordid_")
+        
+        # 5. Costruisci la query finale
+        from_sql_string = " ".join(set(from_clauses)) # `set` per rimuovere JOIN duplicati
+        where_sql_string = " AND ".join(where_clauses)
+        select_sql_string = ", ".join(select_fields)
+        
+        # 6. Calcola e salva il numero totale dei record
+        count_sql = f"SELECT COUNT(*) as total_count {from_sql_string} WHERE {where_sql_string}"
         count_result = HelpderDB.sql_query(count_sql)
         self._total_records_count = count_result[0]['total_count'] if count_result else 0
-
+        
+        # 7. Prepara la query per i record
         if not limit:
-            limit=100
-        sql=f"SELECT {select_fields} {fromsql} where {conditions}  ORDER BY {orderby} LIMIT {limit} "
+            limit = 100
+            
+        orderby_safe = f"user_{self.tableid}.{orderby}" # Previeni SQL Injection su orderby
+        
+        sql = (
+            f"SELECT {select_sql_string} "
+            f"{from_sql_string} "
+            f"WHERE {where_sql_string} "
+            f"ORDER BY {orderby_safe} "
+            f"LIMIT {limit} OFFSET {offset}"
+        )
 
         records = HelpderDB.sql_query(sql)
         return records

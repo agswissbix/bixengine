@@ -58,6 +58,7 @@ from collections import defaultdict
 import json
 from django.http import JsonResponse
 import locale
+from commonapp.bixmodels.helper_db import *
 
 
 
@@ -441,6 +442,80 @@ def delete_record(request):
 
 
 
+@timing_decorator
+def get_table_filters(request):
+    print('Function: get_table_filters')
+    data = json.loads(request.body)
+    tableid = data.get("tableid")
+
+    # Utilizza la query SQL fornita
+    query = f"""
+        SELECT 
+            T1.fieldid, 
+            T1.fieldtypeid, 
+            T1.description 
+        FROM 
+            sys_field T1
+        JOIN 
+            sys_user_field_order T2 ON T1.id = T2.fieldid
+        WHERE 
+            T2.tableid = '{tableid}' 
+        AND 
+            T2.typepreference = 'search_fields'
+    """
+    
+    # Esegui la query
+    try:
+        filters_data = HelpderDB.sql_query(query)
+    except Exception as e:
+        print(f"Errore nella query SQL per i filtri: {e}")
+        return JsonResponse({"success": False, "error": "Database error"}, status=500)
+
+    # Prepara la risposta nel formato desiderato dal frontend
+    response_filters = [
+        {
+            "fieldid": f['fieldid'],
+            "type": f['fieldtypeid'],
+            "label": f['description']
+        }
+        for f in filters_data
+    ]
+
+    return JsonResponse({
+        "success": True,
+        "filters": response_filters
+    })
+
+
+def get_users(request):
+    print('Function: get_users')
+    data = json.loads(request.body)
+
+    # Costruisci la query SQL
+    sql = "SELECT id, firstname, lastname FROM sys_user WHERE disabled = 'N'"
+
+    sql += " ORDER BY firstname LIMIT 50"
+
+    try:
+        users = HelpderDB.sql_query(sql)
+    except Exception as e:
+        print(f"Errore nella query SQL per gli utenti: {e}")
+        return JsonResponse({"success": False, "error": "Database error"}, status=500)
+
+    # Prepara la risposta nel formato desiderato dal frontend
+    response_users = [
+        {
+            "userid": user['id'],
+            "firstname": user['firstname'],
+            "lastname": user['lastname'],
+        }
+        for user in users
+    ]
+
+    return JsonResponse({
+        "success": True,
+        "users": response_users
+    })
 
 @timing_decorator
 def get_table_records(request):
@@ -451,23 +526,27 @@ def get_table_records(request):
     searchTerm = data.get("searchTerm")
     master_tableid = data.get("masterTableid")
     master_recordid = data.get("masterRecordid")
+    filtersList = data.get("filtersList", []) # <-- Recupera la filtersList
 
     table = UserTable(tableid, Helper.get_userid(request))
 
     if not viewid:
         viewid = table.get_default_viewid()
 
+    # Costruisci la clausola WHERE dai filtri
+    print(filtersList)
     # 1. Ottieni gli oggetti UserRecord GIA' PROCESSATI
-    # Questo metodo ora fa tutto il lavoro pesante, incluso l'eager loading e la conversione dei valori
+    # Passa i filtri a get_table_records_obj
     record_objects = table.get_table_records_obj(
         viewid=viewid,
         searchTerm=searchTerm,
         master_tableid=master_tableid,
-        master_recordid=master_recordid
+        master_recordid=master_recordid,
+        filters_list=filtersList
     )
     
     counter = table.get_total_records_count()
-    table_columns = table.get_results_columns() # Solo per definire l'ordine e quali colonne mostrare
+    table_columns = table.get_results_columns()
 
     # --- BLOCCO ALERT (invariato) ---
     alerts = HelpderDB.sql_query(f"SELECT * FROM sys_alert WHERE tableid='{tableid}' AND alert_type='cssclass'")
@@ -548,6 +627,76 @@ def get_table_records(request):
         "columns": final_columns
     }
     return JsonResponse(response_data)
+
+
+def get_sql_condition(field_type, values, condition, field_name):
+    """
+    Genera la stringa SQL per una singola condizione di filtro.
+    """
+    sql_parts = []
+    
+    if field_type in ("Parola", "text"):
+        for value in values:
+            value = value.replace("'", "''")  # Previene SQL injection
+            if condition == "Valore esatto":
+                sql_parts.append(f"`{field_name}` = '{value}'")
+            elif condition == "Diverso da":
+                sql_parts.append(f"`{field_name}` != '{value}'")
+            elif condition == "Contiene":
+                sql_parts.append(f"`{field_name}` LIKE '%{value}%'")
+            elif condition == "Non contiene":
+                sql_parts.append(f"`{field_name}` NOT LIKE '%{value}%'")
+            # ... altre condizioni per le parole se necessarie
+        return " OR ".join(sql_parts)
+
+    elif field_type == "Numero":
+        # I valori sono range, es. ["10-20", "30-40"]
+        for value in values:
+            if '-' in value:
+                min_val, max_val = value.split('-')
+                sql_parts.append(f"(`{field_name}` BETWEEN {min_val} AND {max_val})")
+            else:
+                # Tratta come valore singolo
+                sql_parts.append(f"`{field_name}` = {value}")
+        return " OR ".join(sql_parts)
+
+    elif field_type == "Data":
+        # I valori sono range, es. [{"from": "2023-01-01", "to": "2023-01-31"}]
+        now = datetime.now()
+        
+        # Condizioni predefinite
+        if condition == "Oggi":
+            today_start = now.strftime('%Y-%m-%d 00:00:00')
+            today_end = now.strftime('%Y-%m-%d 23:59:59')
+            return f"(`{field_name}` BETWEEN '{today_start}' AND '{today_end}')"
+        elif condition == "Passato":
+            return f"(`{field_name}` < '{now.strftime('%Y-%m-%d %H:%M:%S')}')"
+        elif condition == "Futuro":
+            return f"(`{field_name}` > '{now.strftime('%Y-%m-%d %H:%M:%S')}')"
+        # ... altre condizioni predefinite per le date
+        
+        # Condizioni su range
+        for value in values:
+            date_range = json.loads(value)
+            from_date = date_range.get('from')
+            to_date = date_range.get('to')
+            
+            if from_date and to_date:
+                sql_parts.append(f"(`{field_name}` BETWEEN '{from_date}' AND '{to_date}')")
+            elif from_date:
+                sql_parts.append(f"`{field_name}` >= '{from_date}'")
+            elif to_date:
+                sql_parts.append(f"`{field_name}` <= '{to_date}'")
+        return " OR ".join(sql_parts)
+    
+    # Gestione delle condizioni "Nessun valore" e "Almeno un valore"
+    if condition == "Nessun valore":
+        return f"(`{field_name}` IS NULL OR `{field_name}` = '')"
+    elif condition == "Almeno un valore":
+        return f"(`{field_name}` IS NOT NULL AND `{field_name}` != '')"
+
+    return ""
+
 
 @timing_decorator
 def get_table_records_kanban(request):

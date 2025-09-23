@@ -22,6 +22,7 @@ urlpatterns = [
     path('get_active_server/', get_active_server, name='get_active_server'),
     path('delete_record/', delete_record, name='delete_record'),
     path('get_table_records/', get_table_records, name='get_table_records'),
+    path('get_table_filters/', get_table_filters, name='get_table_filters'),
     path('get_calendar_records/', get_calendar_records, name='get_calendar_records'),
     path('get_records_matrixcalendar/', get_records_matrixcalendar, name='get_records_matrixcalendar'),
     path('get_pitservice_pivot_lavanderia/', get_pitservice_pivot_lavanderia, name='get_pitservice_pivot_lavanderia'),
@@ -74,6 +75,7 @@ urlpatterns = [
     path('get_users_and_groups_api/', get_users_and_groups_api, name='get_users_and_groups_api'),
     path('get_user_settings_api/', get_user_settings_api, name='get_user_settings_api'),
     path('save_user_settings_api/', save_user_settings_api, name='save_user_settings_api'),
+    path('get_users/', get_users, name='get_users'),
     
 ]
 
