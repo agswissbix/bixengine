@@ -2223,7 +2223,19 @@ def save_record_fields(request):
         dipendente_record.values['saldovacanze'] = saldovacanze
         dipendente_record.save()
 
-    
+    # ---RISCALDAMENTO---
+    if tableid == 'riscaldamento':
+        riscaldamento_record = UserRecord('riscaldamento', recordid)
+        stabile_record = UserRecord('stabile', riscaldamento_record.values['recordidstabile_'])
+        riscaldamento_record.values['recordidcliente_'] = stabile_record.values['recordidcliente_']
+        riscaldamento_record.save()
+
+    # ---PISCINA---
+    if tableid == 'piscina':
+        piscina_record = UserRecord('piscina', recordid)
+        stabile_record = UserRecord('stabile', piscina_record.values['recordidstabile_'])
+        piscina_record.values['recordidcliente_'] = stabile_record.values['recordidcliente_']
+        piscina_record.save()
 
     #TODO
     #CUSTOM ---UTENTE---TELEFONO AMICO
