@@ -264,3 +264,16 @@ def move_attachments_to_dispatcher():
         result_value["error"] = str(e)
 
     return {"status": result_status, "value": result_value, "type": type}
+
+
+
+def test_script():
+    """
+    Script di test
+    """
+
+    type = "counters"
+    result_status = 'success'
+    result_value = {"message": "Script eseguito correttamente"}
+
+    return {"status": result_status, "value": result_value, "type": type}

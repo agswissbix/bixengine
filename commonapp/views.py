@@ -2204,6 +2204,25 @@ def save_record_fields(request):
         offerta_record.values['nrofferta'] = offerta_id
         offerta_record.save()
 
+    # ---DIPENDENTE---
+    if tableid == 'dipendente':
+        dipendente_record = UserRecord('dipendente', recordid)
+        allegati= HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordiddipendente_='{recordid}' AND deleted_='N'")
+        nrallegati=len(allegati) 
+        dipendente_record.values['nrallegati'] = nrallegati
+        dipendente_record.save()
+
+    # ---ATTACHMENT---
+    if tableid == 'attachment':
+        attachment_record = UserRecord('attachment', recordid)
+        dipendente_record = UserRecord('dipendente', attachment_record.values['recordiddipendente_'])
+        allegati= HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordiddipendente_='{attachment_record.values['recordiddipendente_']}' AND deleted_='N'")
+        nrallegati=len(allegati) 
+        dipendente_record.values['nrallegati'] = nrallegati
+        dipendente_record.save()
+
+
+
     # ---ORE MENSILI---
     if tableid == 'oremensili':
         oremensili_record = UserRecord('oremensili', recordid)
@@ -2224,7 +2243,19 @@ def save_record_fields(request):
         dipendente_record.values['saldovacanze'] = saldovacanze
         dipendente_record.save()
 
-    
+    # ---RISCALDAMENTO---
+    if tableid == 'riscaldamento':
+        riscaldamento_record = UserRecord('riscaldamento', recordid)
+        stabile_record = UserRecord('stabile', riscaldamento_record.values['recordidstabile_'])
+        riscaldamento_record.values['recordidcliente_'] = stabile_record.values['recordidcliente_']
+        riscaldamento_record.save()
+
+    # ---PISCINA---
+    if tableid == 'piscina':
+        piscina_record = UserRecord('piscina', recordid)
+        stabile_record = UserRecord('stabile', piscina_record.values['recordidstabile_'])
+        piscina_record.values['recordidcliente_'] = stabile_record.values['recordidcliente_']
+        piscina_record.save()
 
     #TODO
     #CUSTOM ---UTENTE---TELEFONO AMICO
@@ -2380,6 +2411,7 @@ def get_record_linked_tables(request):
     response={ "linkedTables": linkedTables}
     return JsonResponse(response)
 
+#TODO da spostare nelle relative installazioni dei singoli clienti
 @csrf_exempt
 def prepara_email(request):
     data = json.loads(request.body)
@@ -2411,14 +2443,21 @@ def prepara_email(request):
         stabile_indirizzo=stabile_record.values['indirizzo']
         stabile_citta=stabile_record.values['citta']
         sql=f"SELECT * FROM user_contattostabile WHERE deleted_='N' AND recordidstabile_='{stabile_recordid}'"
-        row=HelpderDB.sql_query_row(sql)
-        contatto_emai=''
-        if row:
+        rows=HelpderDB.sql_query(sql)
+        emailto=''
+        for row in rows:
+            contatto_email=None
             contatto_recordid=row['recordidcontatti_']
             if contatto_recordid != 'None':
                 contatto_record=UserRecord('contatti',contatto_recordid)
                 if contatto_record:
-                    contatto_emai=contatto_record.values['email']
+                    contatto_email=contatto_record.values['email']
+            if contatto_email:
+                if emailto=='':
+                    emailto=contatto_email
+                else:
+                    emailto=emailto+','+contatto_email
+
 
         attachment_fullpath=HelpderDB.get_uploadedfile_fullpath('rendicontolavanderia',rendiconto_recordid,'allegato')
         attachment_relativepath=HelpderDB.get_uploadedfile_relativepath('rendicontolavanderia',rendiconto_recordid,'allegato')
@@ -2494,7 +2533,7 @@ Cordiali saluti
             """
 
         email_fields = {
-            "to": contatto_emai,
+            "to": emailto,
             "cc": "contabilita@pitservice.ch,segreteria@pitservice.ch",
             "bcc": "",	
             "subject": subject,
@@ -2513,12 +2552,20 @@ Cordiali saluti
 
         sql=f"SELECT * FROM user_contattostabile WHERE deleted_='N' AND recordidstabile_='{stabile_recordid}'"
         row=HelpderDB.sql_query_row(sql)
-        contatto_email=''
-        if row:
+        rows=HelpderDB.sql_query(sql)
+        emailto=''
+        for row in rows:
+            contatto_email=None
             contatto_recordid=row['recordidcontatti_']
-            contatto_record=UserRecord('contatti',contatto_recordid)
-            if contatto_record:
-                contatto_email=contatto_record.values['email']
+            if contatto_recordid != 'None':
+                contatto_record=UserRecord('contatti',contatto_recordid)
+                if contatto_record:
+                    contatto_email=contatto_record.values['email']
+            if contatto_email:
+                if emailto=='':
+                    emailto=contatto_email
+                else:
+                    emailto=emailto+','+contatto_email
 
         attachment_relativepath=stampa_gasoli(request)
         riferimento=stabile_record.values.get('riferimento', '')
@@ -2550,7 +2597,7 @@ Cordiali saluti
                 """
         
         email_fields = {
-            "to": contatto_email,
+            "to": emailto,
             "cc": "contabilita@pitservice.ch,segreteria@pitservice.ch",
             "bcc": "",	
             "subject": subject,
