@@ -937,7 +937,7 @@ def get_records_matrixcalendar(request):
         searchTerm=searchTerm,
         conditions_list=[], # La lista viene creata dentro il metodo
         master_tableid=master_tableid,
-        master_recordid=master_recordid
+        master_recordid=master_recordid,
     )
 
     response_data_dev = {
@@ -977,14 +977,15 @@ def get_records_matrixcalendar(request):
         start_time = record.fields['dal']['value']
         end_time = record.fields['al']['value']
         
+        print(f"Processing event for {employee_name}: {event_title} from {start_time} to {end_time}")
         # Crea il dizionario per l'evento
         event_data = {
             'id': str(event_id), # L'ID dell'evento
             'resourceId': resource_id, # Associa l'evento alla risorsa corretta
             'title': event_title,
             'description': f"Assenza per {event_title} di {employee_name}",
-            'start':  start_time.isoformat(), # Converte datetime in stringa formato ISO 8601
-            'end': end_time.isoformat(),
+            'start':  start_time.isoformat() if start_time else None, # Converte datetime in stringa formato ISO 8601
+            'end': end_time.isoformat() if end_time else None,
             'color': absence_colors.get(event_title, absence_colors['default'])
         }
         
@@ -3499,6 +3500,8 @@ def download_offerta(request):
 
 def get_dashboard_data(request):
     userid = request.user.id
+    if userid is None:
+        return JsonResponse({'error': 'User not authenticated'}, status=401)
     dashboards = HelpderDB.sql_query(f"SELECT dashboardid AS id, name from v_user_dashboard_block WHERE bixid={userid}")
 
     return JsonResponse({
@@ -4859,6 +4862,8 @@ def delete_dashboard_block(request):
 
 def get_user_theme(request):
     userid = request.user.id
+    if userid is None:
+        return JsonResponse({'success': False, 'error': 'User not authenticated.'}, status=401)
     userid = HelpderDB.sql_query_row(f"SELECT sys_user_id FROM v_users WHERE id = {userid}")['sys_user_id']
 
     theme = HelpderDB.sql_query_row(f"SELECT value FROM sys_user_settings WHERE userid = '{userid}' AND setting = 'theme'")
