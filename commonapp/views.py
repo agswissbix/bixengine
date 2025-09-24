@@ -2213,6 +2213,7 @@ def save_record_fields(request):
 
     # ---ATTACHMENT---
     if tableid == 'attachment':
+        attachment_record = UserRecord('attachment', recordid)
         dipendente_record = UserRecord('dipendente', attachment_record.values['recordiddipendente_'])
         allegati= HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordiddipendente_='{attachment_record.values['recordiddipendente_']}' AND deleted_='N'")
         nrallegati=len(allegati) 
