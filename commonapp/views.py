@@ -2391,6 +2391,7 @@ def get_record_linked_tables(request):
     response={ "linkedTables": linkedTables}
     return JsonResponse(response)
 
+#TODO da spostare nelle relative installazioni dei singoli clienti
 @csrf_exempt
 def prepara_email(request):
     data = json.loads(request.body)
@@ -2422,14 +2423,21 @@ def prepara_email(request):
         stabile_indirizzo=stabile_record.values['indirizzo']
         stabile_citta=stabile_record.values['citta']
         sql=f"SELECT * FROM user_contattostabile WHERE deleted_='N' AND recordidstabile_='{stabile_recordid}'"
-        row=HelpderDB.sql_query_row(sql)
-        contatto_emai=''
-        if row:
+        rows=HelpderDB.sql_query(sql)
+        emailto=''
+        for row in rows:
+            contatto_email=None
             contatto_recordid=row['recordidcontatti_']
             if contatto_recordid != 'None':
                 contatto_record=UserRecord('contatti',contatto_recordid)
                 if contatto_record:
-                    contatto_emai=contatto_record.values['email']
+                    contatto_email=contatto_record.values['email']
+            if contatto_email:
+                if emailto=='':
+                    emailto=contatto_email
+                else:
+                    emailto=emailto+','+contatto_email
+
 
         attachment_fullpath=HelpderDB.get_uploadedfile_fullpath('rendicontolavanderia',rendiconto_recordid,'allegato')
         attachment_relativepath=HelpderDB.get_uploadedfile_relativepath('rendicontolavanderia',rendiconto_recordid,'allegato')
@@ -2505,7 +2513,7 @@ Cordiali saluti
             """
 
         email_fields = {
-            "to": contatto_emai,
+            "to": emailto,
             "cc": "contabilita@pitservice.ch,segreteria@pitservice.ch",
             "bcc": "",	
             "subject": subject,
@@ -2524,12 +2532,20 @@ Cordiali saluti
 
         sql=f"SELECT * FROM user_contattostabile WHERE deleted_='N' AND recordidstabile_='{stabile_recordid}'"
         row=HelpderDB.sql_query_row(sql)
-        contatto_email=''
-        if row:
+        rows=HelpderDB.sql_query(sql)
+        emailto=''
+        for row in rows:
+            contatto_email=None
             contatto_recordid=row['recordidcontatti_']
-            contatto_record=UserRecord('contatti',contatto_recordid)
-            if contatto_record:
-                contatto_email=contatto_record.values['email']
+            if contatto_recordid != 'None':
+                contatto_record=UserRecord('contatti',contatto_recordid)
+                if contatto_record:
+                    contatto_email=contatto_record.values['email']
+            if contatto_email:
+                if emailto=='':
+                    emailto=contatto_email
+                else:
+                    emailto=emailto+','+contatto_email
 
         attachment_relativepath=stampa_gasoli(request)
         riferimento=stabile_record.values.get('riferimento', '')
@@ -2561,7 +2577,7 @@ Cordiali saluti
                 """
         
         email_fields = {
-            "to": contatto_email,
+            "to": emailto,
             "cc": "contabilita@pitservice.ch,segreteria@pitservice.ch",
             "bcc": "",	
             "subject": subject,
