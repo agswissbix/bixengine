@@ -2203,6 +2203,24 @@ def save_record_fields(request):
         offerta_record.values['nrofferta'] = offerta_id
         offerta_record.save()
 
+    # ---DIPENDENTE---
+    if tableid == 'dipendente':
+        dipendente_record = UserRecord('dipendente', recordid)
+        allegati= HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordiddipendente_='{recordid}' AND deleted_='N'")
+        nrallegati=len(allegati) 
+        dipendente_record.values['nrallegati'] = nrallegati
+        dipendente_record.save()
+
+    # ---ATTACHMENT---
+    if tableid == 'attachment':
+        dipendente_record = UserRecord('dipendente', attachment_record.values['recordiddipendente_'])
+        allegati= HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordiddipendente_='{attachment_record.values['recordiddipendente_']}' AND deleted_='N'")
+        nrallegati=len(allegati) 
+        dipendente_record.values['nrallegati'] = nrallegati
+        dipendente_record.save()
+
+
+
     # ---ORE MENSILI---
     if tableid == 'oremensili':
         oremensili_record = UserRecord('oremensili', recordid)
