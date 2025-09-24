@@ -320,7 +320,15 @@ class UserTable:
             select_fields.insert(0, f"user_{self.tableid}.recordid_")
         
         # 5. Costruisci la query finale
-        from_sql_string = " ".join(sorted(list(set(from_clauses)))) # `set` per rimuovere JOIN duplicati
+        seen_elements = set()
+        ordered_unique_clauses = []
+
+        for clause in from_clauses:
+            if clause not in seen_elements:
+                ordered_unique_clauses.append(clause)
+                seen_elements.add(clause)
+
+        from_sql_string = " ".join(ordered_unique_clauses)
         where_sql_string = " AND ".join(where_clauses)
         select_sql_string = ", ".join(select_fields)
         
