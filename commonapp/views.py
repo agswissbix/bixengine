@@ -193,7 +193,7 @@ def user_info(request):
                 "isAuthenticated": True,
                 "username": request.user.username,
                 "name": '',
-                "role": '',
+                "role": 'admin' if request.user.is_superuser else 'user',
                 "chat": '',
                 "telefono": ''
             })
