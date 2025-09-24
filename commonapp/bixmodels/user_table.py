@@ -281,7 +281,7 @@ class UserTable:
                 if tablelink and keyfieldlink:
                     # Aggiunge il JOIN alla lista di clausole
                     from_clauses.append(
-                        f"LEFT JOIN user_{tablelink} ON user_{self.tableid}.{fieldid}=user_{tablelink}.recordid_ "
+                        f"LEFT JOIN user_{tablelink} ON user_{self.tableid}.recordid{tablelink}_ = user_{tablelink}.recordid_ "
                     )
                     # Aggiunge la condizione di ricerca
                     sanitized_term = searchTerm.replace("'", "''")
