@@ -4832,6 +4832,11 @@ def download_trattativa(request):
     return response
 
 def stampa_word_test(request):
+    data = json.loads(request.body)
+    recordid = data.get('recordid')
+    recordid_deal=recordid
+
+    tableid= 'deal'
   
     # Percorso al template Word
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -4840,17 +4845,76 @@ def stampa_word_test(request):
     if not os.path.exists(template_path):
         return HttpResponse("File non trovato", status=404)
 
+    
+    deal_record = UserRecord(tableid, recordid_deal)
+    dealname = deal_record.values.get('dealname', 'N/A')
+    dealuser1 = deal_record.values.get('dealuser1', 'N/A')
+    closedata = deal_record.values.get('closedate', 'N/A')
+
+    company_record = UserRecord('company', deal_record.values['recordidcompany_'])
+    companyname = company_record.values.get('companyname', 'N/A')
+    address = company_record.values.get('address', 'N/A')
+    city = company_record.values.get('city', 'N/A')
+
+    user_record=HelpderDB.sql_query_row(f"SELECT * FROM sys_user WHERE id ='{dealuser1}'")
+    user = user_record['firstname'] + ' ' + user_record['lastname']
+
     # Dati fissi
+    
+    # dealline_records = deal_record.get_linkedrecords('dealline')
+    # items = []
+
+    # for idx, line in enumerate(dealline_records, start=1):
+    #     name = line.values.get('name', 'N/A')
+    #     quantity = line.values.get('quantity', 0)
+    #     unit_price = line.values.get('unitprice', 0.0)
+    #     price = line.values.get('price', 0.0)
+    #     items.append({
+    #         "descrizione": name,
+    #         "qt": quantity,
+    #         "prezzo_unitario": f"{unit_price:.2f}",
+    #         "prezzo_totale": f"{price:.2f}",
+    #     })
+
+    items = [
+        {
+            "descrizione": "Swico, importi da fr. 100.—",
+            "qt": 1,
+            "prezzo_unitario": "CHF 3.71",
+            "prezzo_totale": "CHF 3.71",
+        },
+        {
+            "descrizione": "Setup e configurazione",
+            "qt": 1,
+            "prezzo_unitario": "CHF 150.00",
+            "prezzo_totale": "CHF 150.00",
+        },
+        {
+            "descrizione": "Kyocera EcoSys MA3500ci",
+            "qt": 1,
+            "prezzo_unitario": "CHF 839.00",
+            "prezzo_totale": "CHF 839.00",
+        },
+        {
+            "descrizione": "Canone Contratto ALL-IN Stampanti Multifunzioni mensile",
+            "qt": 1,
+            "prezzo_unitario": "CHF 28.00",
+            "prezzo_totale": "CHF 28.00",
+        },
+    ]
+
+    # dati_trattativa['items'] = items
+
     dati_trattativa = {
-        "indirizzo": "Via Industria 1A, Taverne",
-        "azienda": "OpenAI Italia",
-        "titolo": "Implementazione AI",
-        "venditore": "Mario Rossi",
-        "data_chiusura_vendita": "2025-07-17",
+        "indirizzo": f"{address}, {city}",
+        "azienda": companyname,
+        "titolo": dealname,
+        "venditore": user,
+        "data_chiusura_vendita": closedata,
         "data_attuale": datetime.datetime.now().strftime("%d/%m/%Y"),
+        'items': items,
     }
 
-    # Calcola il prezzo totale per ogni articolo
 
     # Carica il template e fai il rendering
     doc = DocxTemplate(template_path)
