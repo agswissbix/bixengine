@@ -4126,10 +4126,11 @@ def get_dashboard_blocks(request):
                     viewid = results['viewid']
                     view= HelpderDB.sql_query_row(f"SELECT * FROM sys_view WHERE id='{viewid}'")
                     query_conditions = view['query_conditions']
-                    recordid_golfclub=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_golfclub WHERE utente='{userid}'","recordid_")
-                    
                     query_conditions = query_conditions.replace("$userid$", str(userid))
-                    query_conditions = query_conditions+" AND recordidgolfclub_='{recordid_golfclub}'".format(recordid_golfclub=recordid_golfclub)
+
+                    #TODO custom wegolf. abilitare queste condizioni e gestire recordid in modo che sia dinamico dal frontend sia in bixdata che wegolf
+                    #recordid_golfclub=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_golfclub WHERE utente='{userid}'","recordid_")
+                    #query_conditions = query_conditions+" AND recordidgolfclub_='{recordid_golfclub}'".format(recordid_golfclub=recordid_golfclub)
                     chart_data=get_dynamic_chart_data(request, results['chartid'],query_conditions)
                     chart_data_json=json.dumps(chart_data)
 
