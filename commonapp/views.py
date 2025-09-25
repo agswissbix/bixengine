@@ -4831,6 +4831,43 @@ def download_trattativa(request):
     response['Content-Disposition'] = 'attachment; filename="documento_trattativa_generato.docx"'
     return response
 
+def stampa_word_test(request):
+  
+    # Percorso al template Word
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    template_path = os.path.join(base_dir, 'templates', 'template.docx')
+
+    if not os.path.exists(template_path):
+        return HttpResponse("File non trovato", status=404)
+
+    # Dati fissi
+    dati_trattativa = {
+        "indirizzo": "Via Industria 1A, Taverne",
+        "azienda": "OpenAI Italia",
+        "titolo": "Implementazione AI",
+        "venditore": "Mario Rossi",
+        "data_chiusura_vendita": "2025-07-17",
+        "data_attuale": datetime.datetime.now().strftime("%d/%m/%Y"),
+    }
+
+    # Calcola il prezzo totale per ogni articolo
+
+    # Carica il template e fai il rendering
+    doc = DocxTemplate(template_path)
+    doc.render(dati_trattativa)
+
+    # Salva il documento in memoria
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+
+    response = HttpResponse(
+        buffer.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    )
+    response['Content-Disposition'] = 'attachment; filename="documento_trattativa_generato.docx"'
+    return response
+
 @csrf_exempt
 def trasferta_pdf(request):
     if request.method == "POST":
@@ -4975,39 +5012,7 @@ def stampa_pdf_test(request):
         os.remove(filename_with_path)
 
 
-@csrf_exempt
-def stampa_word_test(request):
-    data={}
-    filename='test.pdf'
-    
 
-    content = render_to_string('pdf/pdf_test.html', data)
-
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
-    config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
-    filename_with_path = os.path.dirname(os.path.abspath(__file__))
-    filename_with_path = filename_with_path.rsplit('views', 1)[0]
-    filename_with_path = filename_with_path + '\\static\\pdf\\' + filename
-    pdfkit.from_string(
-        content,
-        filename_with_path,
-        configuration=config,
-        options={
-            "enable-local-file-access": "",
-            # "quiet": ""  # <-- rimuovilo!
-        }
-    )
-
-    try:
-        with open(filename_with_path, 'rb') as fh:
-            response = HttpResponse(fh.read(), content_type="application/pdf")
-            response['Content-Disposition'] = f'inline; filename={filename}'
-            return response
-        return response
-
-    finally:
-        os.remove(filename_with_path)
 
 def get_custom_functions(request):
     data = json.loads(request.body)

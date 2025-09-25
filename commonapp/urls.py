@@ -77,6 +77,7 @@ urlpatterns = [
     path('save_user_settings_api/', save_user_settings_api, name='save_user_settings_api'),
     path('get_users/', get_users, name='get_users'),
     
+    
 ]
 
 
