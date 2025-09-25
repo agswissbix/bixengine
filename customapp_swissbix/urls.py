@@ -14,5 +14,7 @@ urlpatterns = [
     path('get_record_badge_swissbix_company/', get_record_badge_swissbix_company, name='get_record_badge_swissbix_company'),
     path('get_record_badge_swissbix_deals/', get_record_badge_swissbix_deals, name='get_record_badge_swissbix_deals'),
     path('get_record_badge_swissbix_project/', get_record_badge_swissbix_project, name='get_record_badge_swissbix_project'),
+    path('stampa_offerta/', stampa_offerta, name='stampa_offerta'),
+    
     
 ]
