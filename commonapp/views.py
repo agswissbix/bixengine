@@ -4102,7 +4102,11 @@ def get_dashboard_blocks(request):
                 if results['chartid'] is None or results['chartid'] == 0:
 
                     if results['widgetid'] is None:
-                        tableid = results['tableid']
+                        if 'tableid' not in results:
+                            continue
+                        tableid = results['tableid'] if results['tableid'] is not None else ''
+                        if tableid == '':
+                            continue
                         tableid = 'user_' + tableid
                         block['type'] = 'table'
 
