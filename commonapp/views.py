@@ -4137,7 +4137,7 @@ def get_dashboard_blocks(request):
                     
                     block['chart_data'] = chart_data_json
                     block['name'] = chart_name
-                    block['type'] = 'valore'
+                    block['type'] = chart_layout.lower() if chart_layout is not None else 'value'
 
                 block['width'] = width
                 block['height'] = height
