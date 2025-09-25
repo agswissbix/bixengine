@@ -697,9 +697,10 @@ class SysCustomFunction(models.Model):
     tableid = models.ForeignKey('SysTable', models.DO_NOTHING, db_column='tableid', blank=True, null=True)
     context = models.CharField(max_length=20, choices=CONTEXT_CHOICES)
     title = models.CharField(max_length=255)
-    backend_app = models.CharField(max_length=100)
-    backend_function = models.CharField(max_length=100)
-    conditions = models.JSONField(blank=True, null=True)  # puoi salvare condizioni dinamiche
+    function = models.CharField(max_length=100)
+    params = models.CharField(max_length=100, null=True, blank=True)
+    conditions = models.JSONField(blank=True, null=True)
+    order = models.IntegerField(blank=True, null=True)
     css = models.TextField(blank=True, null=True)
 
     class Meta:
