@@ -2335,6 +2335,8 @@ def save_record_fields(request):
         
         
    
+
+
     custom_save_record_fields(tableid, recordid)
     return JsonResponse({"success": True, "detail": "Campi del record salvati con successo", "recordid": record.recordid})
 
@@ -5018,6 +5020,6 @@ def get_custom_functions(request):
     data = json.loads(request.body)
     tableid = data.get('tableid')
 
-    customs_fn = SysCustomFunction.objects.filter(tableid=tableid).values()
+    customs_fn = SysCustomFunction.objects.filter(tableid=tableid).order_by('order').values()
     print(customs_fn)
     return JsonResponse({'fn': list(customs_fn)}, safe=False)

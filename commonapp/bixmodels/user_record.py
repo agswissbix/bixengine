@@ -513,3 +513,13 @@ class UserRecord:
                 return self.fields[field_key]      
         else:
             return ''
+
+
+    def get_linkedrecords_dict(self,linkedtable):
+        if linkedtable=='salesorderline':
+            records=HelpderDB.sql_query(f"SELECT * FROM user_{linkedtable} WHERE recordid{self.tableid}_='{self.recordid}' AND deleted_='N' AND status='In Progress'")
+        elif linkedtable=='dealline':
+            records=HelpderDB.sql_query(f"SELECT * FROM user_{linkedtable} WHERE recordid{self.tableid}_='{self.recordid}' AND deleted_='N' ORDER BY name DESC")
+        else:
+            records=HelpderDB.sql_query(f"SELECT * FROM user_{linkedtable} WHERE recordid{self.tableid}_='{self.recordid}' AND deleted_='N'")
+        return records 

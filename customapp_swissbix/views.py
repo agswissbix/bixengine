@@ -845,3 +845,13 @@ def stampa_offerta(request):
 
     finally:
         os.remove(filename)
+
+
+
+
+def deal_update_status(request):
+    print('test')
+    data = json.loads(request.body)
+    recordid = data.get('recordid')
+    response={ "test": "test"}
+    return JsonResponse(response)
