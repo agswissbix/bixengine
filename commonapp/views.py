@@ -4242,94 +4242,113 @@ def get_chart(request, sql, id, name, layout, fields):
 
     return context
 
-def get_dynamic_chart_data(request, chart_id, query_conditions=''):
+def get_dynamic_chart_data(request, chart_id, query_conditions='1=1'): # Imposta un default sicuro
     """
     Genera dinamicamente i dati per un grafico leggendo la sua configurazione 
-    JSON dal database.
+    JSON dal database. Gestisce anche lookup su tabelle esterne per le etichette.
     """
     # 1. Recupera la configurazione del grafico dal DB
-    # NOTA DI SICUREZZA: Utilizzare query parametrizzate per evitare SQL Injection
-    # Vedi la nota alla fine della risposta.
+    # NOTA DI SICUREZZA: Utilizzare sempre query parametrizzate.
+    # chart_record = HelpderDB.sql_query_row("SELECT * FROM sys_chart WHERE id=%s", (chart_id,))
     chart_record = HelpderDB.sql_query_row(f"SELECT * FROM sys_chart WHERE id='{chart_id}'")
 
     if not chart_record:
         return {'error': 'Chart not found'}
 
-    # Carica la configurazione JSON
     config = json.loads(chart_record['config'])
     
     # --- 2. Costruzione dinamica della Query SQL ---
     
-    # Campi da selezionare (es. SUM(field1) AS alias1, ...)
-    select_clauses = []
-    dataset_aliases = []
-    dataset_labels = []
+    # Campi da selezionare
+    select_clauses = [f"{ds['expression']} AS {ds['alias']}" for ds in config['datasets']]
+    dataset_aliases = [ds['alias'] for ds in config['datasets']]
+    dataset_labels = [ds['label'] for ds in config['datasets']]
 
-    for ds in config['datasets']:
-        select_clauses.append(f"{ds['expression']} AS {ds['alias']}")
-        dataset_aliases.append(ds['alias'])
-        dataset_labels.append(ds['label'])
+    group_by_config = config['group_by_field']
+    group_by_alias = group_by_config.get('alias', group_by_config['field'])
 
-    group_by_field = config['group_by_field']['field']
-    group_by_alias = config['group_by_field'].get('alias', group_by_field)
+    # Variabili per la query
+    select_group_field = ''
+    from_clause = ''
+    group_by_clause = ''
 
-    # Query finale: costruita concatenando le parti per evitare newline (\n)
-    # e mantenendo la leggibilità.
+    # Controlla se è necessario un lookup per il campo di raggruppamento
+    if 'lookup' in group_by_config:
+        # --- Logica per la JOIN ---
+        lookup_config = group_by_config['lookup']
+        main_table_alias = 't1'
+        lookup_table_alias = 't2'
+        
+        main_table = f"user_{config['from_table']}"
+        lookup_table = f"user_{lookup_config['from_table']}"
+        
+        # Campo da mostrare (es. t2.nome_club AS nome_club)
+        select_group_field = f"{lookup_table_alias}.{lookup_config['display_field']} AS {group_by_alias}"
+        
+        # Clausola FROM con JOIN
+        from_clause = (
+            f"FROM {main_table} AS {main_table_alias} "
+            f"JOIN {lookup_table} AS {lookup_table_alias} "
+            f"ON {main_table_alias}.{group_by_config['field']} = {lookup_table_alias}.{lookup_config['on_key']}"
+        )
+        
+        # Raggruppa per il campo descrittivo
+        group_by_clause = f"GROUP BY {lookup_table_alias}.{lookup_config['display_field']}"
+    else:
+        # --- Logica originale (senza JOIN) ---
+        main_table = f"user_{config['from_table']}"
+        
+        # Campo da mostrare (es. recordidgolfclub_ AS recordidgolfclub_)
+        select_group_field = f"{group_by_config['field']} AS {group_by_alias}"
+        
+        # Clausola FROM semplice
+        from_clause = f"FROM {main_table}"
+        
+        # Raggruppa per il campo originale
+        group_by_clause = f"GROUP BY {group_by_config['field']}"
+
+    # Assembla la query finale
     query = (
-        f"SELECT {group_by_field} AS {group_by_alias}, {', '.join(select_clauses)} "
-        f"FROM user_{config['from_table']} "
+        f"SELECT {select_group_field}, {', '.join(select_clauses)} "
+        f"{from_clause} "
         f"WHERE {query_conditions} "
-        f"GROUP BY {group_by_field}"
+        f"{group_by_clause}"
     )
     
-    # Aggiungi ordinamento se specificato
     if 'order_by' in config:
         query += f" ORDER BY {config['order_by']}"
 
     # --- 3. Esecuzione della Query e Formattazione dei Dati ---
     
-    # NOTA DI SICUREZZA: La query costruita dinamicamente dovrebbe essere usata
-    # con cautela, assicurandosi che i valori in 'config' siano sicuri.
     dictrows = HelpderDB.sql_query(query)
 
     if not dictrows:
-        # Ritorna una struttura vuota ma valida per il frontend
         return {
-            'id': chart_id,
-            'name': chart_record['name'],
-            'layout': chart_record['layout'],
+            'id': chart_id, 'name': chart_record['name'], 'layout': chart_record['layout'],
             'labels': [],
             'datasets': [{'label': label, 'data': []} for label in dataset_labels]
         }
         
-    # Estrai le etichette (asse X)
+    # Estrai le etichette (asse X) - ora funzionerà sia con ID che con nomi
     labels = [row[group_by_alias] for row in dictrows]
 
-    # Prepara la struttura per i dataset
+    # Prepara la struttura per i dataset (questa parte rimane invariata)
     datasets = []
     for i, alias in enumerate(dataset_aliases):
-        # Estrai i dati per ogni serie
         data = []
         for row in dictrows:
             value = row.get(alias)
             try:
-                # Converte in float, arrotonda e aggiunge. Se fallisce, usa 0.
                 data.append(round(float(value), 2) if value is not None else 0)
             except (ValueError, TypeError):
-                data.append(0) # Default per valori non numerici
+                data.append(0)
 
-        datasets.append({
-            'label': dataset_labels[i],
-            'data': data
-        })
+        datasets.append({'label': dataset_labels[i], 'data': data})
 
     # 4. Composizione del contesto finale
     context = {
-        'id': chart_id,
-        'name': chart_record['name'],
-        'layout': chart_record['layout'],
-        'labels': labels,
-        'datasets': datasets,
+        'id': chart_id, 'name': chart_record['name'], 'layout': chart_record['layout'],
+        'labels': labels, 'datasets': datasets,
     }
 
     return context
@@ -5087,3 +5106,30 @@ def get_custom_functions(request):
     customs_fn = SysCustomFunction.objects.filter(tableid=tableid).order_by('order').values()
     print(customs_fn)
     return JsonResponse({'fn': list(customs_fn)}, safe=False)
+
+
+def calculate_dependent_fields(request):
+    print("FUN:calculate_dependent_fields")
+    data = json.loads(request.body)
+    updated_fields = {}
+    recordid=data.get('recordid')
+    tableid=data.get('tableid')
+    if tableid=='dealline':
+        fields= data.get('fields')
+        quantity = fields.get('quantity', 0)
+        unitprice = fields.get('unitprice', 0)
+        if quantity == '' or quantity is None:
+            quantity = 0
+        if unitprice == '' or unitprice is None:
+            unitprice = 0
+
+        try:
+            quantity_num = float(quantity)
+        except (ValueError, TypeError):
+            quantity_num = 0
+        try:
+            unitprice_num = float(unitprice)
+        except (ValueError, TypeError):
+            unitprice_num = 0
+        updated_fields['price'] = round(quantity_num * unitprice_num, 2)
+    return JsonResponse({'status': 'success', 'updated_fields': updated_fields})
