@@ -4934,47 +4934,47 @@ def stampa_word_test(request):
 
     # Dati fissi
     
-    # dealline_records = deal_record.get_linkedrecords('dealline')
-    # items = []
+    dealline_records = deal_record.get_linkedrecords_dict('dealline')
+    items = []
 
-    # for idx, line in enumerate(dealline_records, start=1):
-    #     name = line.values.get('name', 'N/A')
-    #     quantity = line.values.get('quantity', 0)
-    #     unit_price = line.values.get('unitprice', 0.0)
-    #     price = line.values.get('price', 0.0)
-    #     items.append({
-    #         "descrizione": name,
-    #         "qt": quantity,
-    #         "prezzo_unitario": f"{unit_price:.2f}",
-    #         "prezzo_totale": f"{price:.2f}",
-    #     })
+    for idx, line in enumerate(dealline_records, start=1):
+        name = line.values.get('name', 'N/A')
+        quantity = line.values.get('quantity', 0)
+        unit_price = line.values.get('unitprice', 0.0)
+        price = line.values.get('price', 0.0)
+        items.append({
+            "descrizione": name,
+            "qt": quantity,
+            "prezzo_unitario": f"{unit_price:.2f}",
+            "prezzo_totale": f"{price:.2f}",
+        })
 
-    items = [
-        {
-            "descrizione": "Swico, importi da fr. 100.—",
-            "qt": 1,
-            "prezzo_unitario": "CHF 3.71",
-            "prezzo_totale": "CHF 3.71",
-        },
-        {
-            "descrizione": "Setup e configurazione",
-            "qt": 1,
-            "prezzo_unitario": "CHF 150.00",
-            "prezzo_totale": "CHF 150.00",
-        },
-        {
-            "descrizione": "Kyocera EcoSys MA3500ci",
-            "qt": 1,
-            "prezzo_unitario": "CHF 839.00",
-            "prezzo_totale": "CHF 839.00",
-        },
-        {
-            "descrizione": "Canone Contratto ALL-IN Stampanti Multifunzioni mensile",
-            "qt": 1,
-            "prezzo_unitario": "CHF 28.00",
-            "prezzo_totale": "CHF 28.00",
-        },
-    ]
+    # items = [
+    #     {
+    #         "descrizione": "Swico, importi da fr. 100.—",
+    #         "qt": 1,
+    #         "prezzo_unitario": "CHF 3.71",
+    #         "prezzo_totale": "CHF 3.71",
+    #     },
+    #     {
+    #         "descrizione": "Setup e configurazione",
+    #         "qt": 1,
+    #         "prezzo_unitario": "CHF 150.00",
+    #         "prezzo_totale": "CHF 150.00",
+    #     },
+    #     {
+    #         "descrizione": "Kyocera EcoSys MA3500ci",
+    #         "qt": 1,
+    #         "prezzo_unitario": "CHF 839.00",
+    #         "prezzo_totale": "CHF 839.00",
+    #     },
+    #     {
+    #         "descrizione": "Canone Contratto ALL-IN Stampanti Multifunzioni mensile",
+    #         "qt": 1,
+    #         "prezzo_unitario": "CHF 28.00",
+    #         "prezzo_totale": "CHF 28.00",
+    #     },
+    # ]
 
     # dati_trattativa['items'] = items
 
