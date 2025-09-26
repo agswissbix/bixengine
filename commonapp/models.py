@@ -158,6 +158,7 @@ class SysDashboard(models.Model):
     name = models.CharField(max_length=255, blank=True, null=True)
     description = models.CharField(max_length=255, blank=True, null=True)
     order_dashboard = models.DecimalField(max_digits=10, decimal_places=0, blank=True, null=True)
+    category = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
         db_table = 'sys_dashboard'
@@ -175,6 +176,7 @@ class SysDashboardBlock(models.Model):
     width = models.CharField(max_length=255, blank=True, null=True)
     height = models.CharField(max_length=255, blank=True, null=True)
     order = models.DecimalField(max_digits=10, decimal_places=0, blank=True, null=True)
+    category = models.CharField(max_length=255, blank=True, null=True)
     gsx = models.IntegerField(blank=True, null=True)
     gsy = models.IntegerField(blank=True, null=True)
     gsw = models.IntegerField(blank=True, null=True)
