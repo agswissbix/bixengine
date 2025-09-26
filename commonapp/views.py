@@ -5185,3 +5185,16 @@ def calculate_dependent_fields(request):
             unitprice_num = 0
         updated_fields['price'] = round(quantity_num * unitprice_num, 2)
     return JsonResponse({'status': 'success', 'updated_fields': updated_fields})
+
+
+def get_filter_options(request):
+    response = {
+        'availableYears': ["2023", "2024", "2025"],
+        'availableClubs': ["Ascona", "Lugano", "Locarno", "Bellinzona"],
+        'filterOptions': [
+            { 'field': "members", 'label': "Nr. Socii", 'options': [] },
+            { 'field': "employees", 'label': "Nr. Dipendenti", 'options': [] },
+        ],
+    }
+
+    return JsonResponse(response)
