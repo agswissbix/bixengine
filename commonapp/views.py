@@ -4242,99 +4242,12 @@ def get_chart(request, sql, id, name, layout, fields):
 
     return context
 
-def get_dynamic_chart_data(request, chart_id, query_conditions='1=1'): # Imposta un default sicuro
+def _format_datasets_from_rows(aliases, labels, dictrows):
     """
-    Genera dinamicamente i dati per un grafico leggendo la sua configurazione 
-    JSON dal database. Gestisce anche lookup su tabelle esterne per le etichette.
+    Helper per formattare una lista di dataset a partire dal risultato di una query.
     """
-    # 1. Recupera la configurazione del grafico dal DB
-    # NOTA DI SICUREZZA: Utilizzare sempre query parametrizzate.
-    # chart_record = HelpderDB.sql_query_row("SELECT * FROM sys_chart WHERE id=%s", (chart_id,))
-    chart_record = HelpderDB.sql_query_row(f"SELECT * FROM sys_chart WHERE id='{chart_id}'")
-
-    if not chart_record:
-        return {'error': 'Chart not found'}
-
-    config = json.loads(chart_record['config'])
-    
-    # --- 2. Costruzione dinamica della Query SQL ---
-    
-    # Campi da selezionare
-    select_clauses = [f"{ds['expression']} AS {ds['alias']}" for ds in config['datasets']]
-    dataset_aliases = [ds['alias'] for ds in config['datasets']]
-    dataset_labels = [ds['label'] for ds in config['datasets']]
-
-    group_by_config = config['group_by_field']
-    group_by_alias = group_by_config.get('alias', group_by_config['field'])
-
-    # Variabili per la query
-    select_group_field = ''
-    from_clause = ''
-    group_by_clause = ''
-
-    # Controlla se è necessario un lookup per il campo di raggruppamento
-    if 'lookup' in group_by_config:
-        # --- Logica per la JOIN ---
-        lookup_config = group_by_config['lookup']
-        main_table_alias = 't1'
-        lookup_table_alias = 't2'
-        
-        main_table = f"user_{config['from_table']}"
-        lookup_table = f"user_{lookup_config['from_table']}"
-        
-        # Campo da mostrare (es. t2.nome_club AS nome_club)
-        select_group_field = f"{lookup_table_alias}.{lookup_config['display_field']} AS {group_by_alias}"
-        
-        # Clausola FROM con JOIN
-        from_clause = (
-            f"FROM {main_table} AS {main_table_alias} "
-            f"JOIN {lookup_table} AS {lookup_table_alias} "
-            f"ON {main_table_alias}.{group_by_config['field']} = {lookup_table_alias}.{lookup_config['on_key']}"
-        )
-        
-        # Raggruppa per il campo descrittivo
-        group_by_clause = f"GROUP BY {lookup_table_alias}.{lookup_config['display_field']}"
-    else:
-        # --- Logica originale (senza JOIN) ---
-        main_table = f"user_{config['from_table']}"
-        
-        # Campo da mostrare (es. recordidgolfclub_ AS recordidgolfclub_)
-        select_group_field = f"{group_by_config['field']} AS {group_by_alias}"
-        
-        # Clausola FROM semplice
-        from_clause = f"FROM {main_table}"
-        
-        # Raggruppa per il campo originale
-        group_by_clause = f"GROUP BY {group_by_config['field']}"
-
-    # Assembla la query finale
-    query = (
-        f"SELECT {select_group_field}, {', '.join(select_clauses)} "
-        f"{from_clause} "
-        f"WHERE {query_conditions} "
-        f"{group_by_clause}"
-    )
-    
-    if 'order_by' in config:
-        query += f" ORDER BY {config['order_by']}"
-
-    # --- 3. Esecuzione della Query e Formattazione dei Dati ---
-    
-    dictrows = HelpderDB.sql_query(query)
-
-    if not dictrows:
-        return {
-            'id': chart_id, 'name': chart_record['name'], 'layout': chart_record['layout'],
-            'labels': [],
-            'datasets': [{'label': label, 'data': []} for label in dataset_labels]
-        }
-        
-    # Estrai le etichette (asse X) - ora funzionerà sia con ID che con nomi
-    labels = [row[group_by_alias] for row in dictrows]
-
-    # Prepara la struttura per i dataset (questa parte rimane invariata)
     datasets = []
-    for i, alias in enumerate(dataset_aliases):
+    for i, alias in enumerate(aliases):
         data = []
         for row in dictrows:
             value = row.get(alias)
@@ -4342,16 +4255,155 @@ def get_dynamic_chart_data(request, chart_id, query_conditions='1=1'): # Imposta
                 data.append(round(float(value), 2) if value is not None else 0)
             except (ValueError, TypeError):
                 data.append(0)
+        datasets.append({'label': labels[i], 'data': data})
+    return datasets
 
-        datasets.append({'label': dataset_labels[i], 'data': data})
 
+def _handle_record_pivot_chart(config, chart_id, chart_record, query_conditions):
+    """
+    Gestisce la generazione di dati per grafici 'record_pivot'.
+    NOTA: La logica per datasets2 è meno comune qui e non è stata implementata.
+    Questa funzione rimane invariata.
+    """
+    # (Codice da risposta precedente, invariato)
+    select_clauses = []
+    aliases = [item['alias'] for item in config['pivot_fields']]
+    labels = [item['label'] for item in config['pivot_fields']]
+    if 'aggregation' in config:
+        agg_config = config['aggregation']
+        agg_function = agg_config.get('function', 'SUM').upper()
+        ALLOWED_FUNCTIONS = ['SUM', 'AVG', 'COUNT', 'MAX', 'MIN']
+        if agg_function not in ALLOWED_FUNCTIONS:
+            raise ValueError(f"Funzione di aggregazione non permessa: {agg_function}")
+        for item in config['pivot_fields']:
+            expression = item.get('field') or f"({item.get('expression')})"
+            select_clauses.append(f"{agg_function}({expression}) AS {item['alias']}")
+    else:
+        for item in config['pivot_fields']:
+            if 'field' in item:
+                select_clauses.append(f"{item['field']} AS {item['alias']}")
+            elif 'expression' in item:
+                select_clauses.append(f"({item['expression']}) AS {item['alias']}")
+    from_table = f"user_{config['from_table']}"
+    query = (f"SELECT {', '.join(select_clauses)} FROM {from_table} WHERE {query_conditions}")
+    if 'aggregation' not in config:
+        query += " LIMIT 1"
+    record_data = HelpderDB.sql_query_row(query)
+    dataset_label = config.get('dataset_label', 'Dati')
+    if not record_data:
+        return {'id': chart_id, 'name': chart_record['name'], 'layout': chart_record['layout'],
+                'labels': labels, 'datasets': [{'label': dataset_label, 'data': []}]}
+    data = []
+    for alias in aliases:
+        value = record_data.get(alias)
+        try:
+            data.append(round(float(value), 2) if value is not None else 0)
+        except (ValueError, TypeError):
+            data.append(0)
+    datasets = [{'label': dataset_label, 'data': data}]
+    context = {'id': chart_id, 'name': chart_record['name'], 'layout': chart_record['layout'],
+               'labels': labels, 'datasets': datasets}
+    return context
+
+
+def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
+    """
+    Gestisce grafici di aggregazione, ora con supporto per datasets e datasets2.
+    """
+    # 1. Raccoglie le definizioni per entrambi i set di dati
+    datasets1_defs = config.get('datasets', [])
+    datasets2_defs = config.get('datasets2', [])
+
+    # Estrae clausole SELECT, alias ed etichette per entrambi
+    select_clauses1 = [f"{ds['expression']} AS {ds['alias']}" for ds in datasets1_defs]
+    dataset1_aliases = [ds['alias'] for ds in datasets1_defs]
+    dataset1_labels = [ds['label'] for ds in datasets1_defs]
+
+    select_clauses2 = [f"{ds['expression']} AS {ds['alias']}" for ds in datasets2_defs]
+    dataset2_aliases = [ds['alias'] for ds in datasets2_defs]
+    dataset2_labels = [ds['label'] for ds in datasets2_defs]
+
+    # Combina tutte le clausole SELECT per un'unica query
+    all_select_clauses = select_clauses1 + select_clauses2
+    
+    # 2. Costruzione della Query (logica GROUP BY invariata)
+    group_by_config = config['group_by_field']
+    group_by_alias = group_by_config.get('alias', group_by_config['field'])
+    select_group_field, from_clause, group_by_clause = '', '', ''
+    if 'lookup' in group_by_config:
+        # ... (logica lookup invariata)
+        lookup_config = group_by_config['lookup']
+        main_table_alias, lookup_table_alias = 't1', 't2'
+        main_table = f"user_{config['from_table']}"
+        lookup_table = f"user_{lookup_config['from_table']}"
+        select_group_field = f"{lookup_table_alias}.{lookup_config['display_field']} AS {group_by_alias}"
+        from_clause = (f"FROM {main_table} AS {main_table_alias} "
+                       f"JOIN {lookup_table} AS {lookup_table_alias} "
+                       f"ON {main_table_alias}.{group_by_config['field']} = {lookup_table_alias}.{lookup_config['on_key']}")
+        group_by_clause = f"GROUP BY {lookup_table_alias}.{lookup_config['display_field']}"
+    else:
+        # ... (logica senza lookup invariata)
+        main_table = f"user_{config['from_table']}"
+        select_group_field = f"{group_by_config['field']} AS {group_by_alias}"
+        from_clause = f"FROM {main_table}"
+        group_by_clause = f"GROUP BY {group_by_config['field']}"
+        
+    query = (f"SELECT {select_group_field}, {', '.join(all_select_clauses)} "
+             f"{from_clause} "
+             f"WHERE {query_conditions} "
+             f"{group_by_clause}")
+    if 'order_by' in config:
+        query += f" ORDER BY {config['order_by']}"
+
+    # 3. Esecuzione della Query e Formattazione dei Dati
+    dictrows = HelpderDB.sql_query(query)
+    
+    if not dictrows:
+        return {'id': chart_id, 'name': chart_record['name'], 'layout': chart_record['layout'],
+                'labels': [], 'datasets': [], 'datasets2': []}
+
+    labels = [row[group_by_alias] for row in dictrows]
+    
+    # Usa la funzione helper per formattare entrambi i set di dati
+    datasets1 = _format_datasets_from_rows(dataset1_aliases, dataset1_labels, dictrows)
+    datasets2 = _format_datasets_from_rows(dataset2_aliases, dataset2_labels, dictrows)
+    
     # 4. Composizione del contesto finale
     context = {
-        'id': chart_id, 'name': chart_record['name'], 'layout': chart_record['layout'],
-        'labels': labels, 'datasets': datasets,
+        'id': chart_id, 
+        'name': chart_record['name'], 
+        'layout': chart_record['layout'],
+        'labels': labels, 
+        'datasets': datasets1
     }
-
+    # Aggiunge datasets2 solo se è stato definito e contiene dati
+    if datasets2:
+        context['datasets2'] = datasets2
+        
     return context
+
+
+def get_dynamic_chart_data(request, chart_id, query_conditions='1=1'):
+    """
+    Genera dinamicamente i dati per un grafico leggendo la sua configurazione 
+    JSON dal database.
+    """
+    # IMPORTANTE: Utilizzare SEMPRE query parametrizzate per prevenire SQL Injection.
+    query = f"SELECT * FROM sys_chart WHERE id={chart_id}"
+    chart_record = HelpderDB.sql_query_row(query)
+
+    if not chart_record:
+        return {'error': 'Chart not found'}
+
+    config = json.loads(chart_record['config'])
+    chart_type = config.get('chart_type', 'aggregate')
+
+    if chart_type == 'record_pivot':
+        return _handle_record_pivot_chart(config, chart_id, chart_record, query_conditions)
+    else: # 'aggregate'
+        return _handle_aggregate_chart(config, chart_id, chart_record, query_conditions)
+
+
 
 
 
