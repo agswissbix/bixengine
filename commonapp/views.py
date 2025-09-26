@@ -4021,10 +4021,10 @@ def update_user_profile_pic(request):
 @login_required(login_url='/login/')
 def get_dashboard_blocks(request):
     userid=Helper.get_userid(request)
-    data = json.loads(request.body)
-
+    request_data = json.loads(request.body)
+    cliente_id = Helper.get_cliente_id()
     #dashboard_id = data.get('dashboardid')
-    dashboard_id = data.get('dashboardid')  # Default to 1 if not provided
+    dashboard_id = request_data.get('dashboardid')  # Default to 1 if not provided
     
     user_id = request.user.id
 
@@ -4131,8 +4131,18 @@ def get_dashboard_blocks(request):
                     query_conditions = query_conditions.replace("$userid$", str(userid))
 
                     #TODO custom wegolf. abilitare queste condizioni e gestire recordid in modo che sia dinamico dal frontend sia in bixdata che wegolf
-                    #recordid_golfclub=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_golfclub WHERE utente='{userid}'","recordid_")
-                    #query_conditions = query_conditions+" AND recordidgolfclub_='{recordid_golfclub}'".format(recordid_golfclub=recordid_golfclub)
+                    if cliente_id == 'wegolf':
+                        recordid_golfclub=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_golfclub WHERE utente='{userid}'","recordid_")
+                        query_conditions = query_conditions+" AND recordidgolfclub_='{recordid_golfclub}'".format(recordid_golfclub=recordid_golfclub)
+                        selected_years=request_data.get('selectedYears', [])
+                        selected_years_conditions = ''
+                        for selected_year in selected_years:
+                            if selected_years_conditions != '':
+                                selected_years_conditions = selected_years_conditions + " OR "
+                            selected_years_conditions = selected_years_conditions + "  anno='{selected_year}'".format(selected_year=selected_year)
+                        if selected_years_conditions != '':
+                            selected_years_conditions = " AND (" + selected_years_conditions + ")"
+                        query_conditions = query_conditions + selected_years_conditions
                     chart_data=get_dynamic_chart_data(request, results['chartid'],query_conditions)
                     chart_data_json=json.dumps(chart_data)
 
@@ -4368,6 +4378,12 @@ def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
     datasets1 = _format_datasets_from_rows(dataset1_aliases, dataset1_labels, dictrows)
     datasets2 = _format_datasets_from_rows(dataset2_aliases, dataset2_labels, dictrows)
     
+    if chart_record['layout'] == 'value':
+        chart_recordid=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_chart WHERE reportid={chart_id} LIMIT 1","recordid_")
+        if chart_recordid:
+            image_relativepath="chart/"+chart_recordid+"/icona.png"
+            if datasets1:
+                datasets1[0]['image']=image_relativepath
     # 4. Composizione del contesto finale
     context = {
         'id': chart_id, 
