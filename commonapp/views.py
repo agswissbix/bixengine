@@ -2291,10 +2291,13 @@ def save_record_fields(request):
         dynamicfield2=chart_record.values['dynamicfield2']
         chartid=chart_record.values['reportid']
         datasets=[]
-        for field in fields.split(','):
+        for field in fields.split(';'):
             dataset={}
             dataset['label']=field
-            dataset['expression']=f"SUM({field})"
+            if operation=='Somma':
+                dataset['expression']=f"SUM({field})"
+            else:
+                dataset['expression']=f"COUNT({field})"
             dataset['alias']=field
             datasets.append(dataset)
 
@@ -4132,8 +4135,9 @@ def get_dashboard_blocks(request):
 
                     #TODO custom wegolf. abilitare queste condizioni e gestire recordid in modo che sia dinamico dal frontend sia in bixdata che wegolf
                     if cliente_id == 'wegolf':
-                        recordid_golfclub=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_golfclub WHERE utente='{userid}'","recordid_")
-                        query_conditions = query_conditions+" AND recordidgolfclub_='{recordid_golfclub}'".format(recordid_golfclub=recordid_golfclub)
+                        if results['chartid'] != 31:
+                            recordid_golfclub=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_golfclub WHERE utente='{userid}'","recordid_")
+                            query_conditions = query_conditions+" AND recordidgolfclub_='{recordid_golfclub}'".format(recordid_golfclub=recordid_golfclub)
                         selected_years=request_data.get('selectedYears', [])
                         selected_years_conditions = ''
                         for selected_year in selected_years:
