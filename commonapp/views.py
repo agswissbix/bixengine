@@ -4176,113 +4176,114 @@ def get_dashboard_blocks(request):
         context['dashboardid'] = dashboard_id
 
     if request.method == 'POST':
-        selected = ''
-        with connection.cursor() as cursor:
-
-            context['userid'] = bixid
-
-            size = 'full'
-            context['size'] = size
-
-            #datas = SysUserDashboardBlock.objects.filter(userid=bixid, size=size, dashboardid=dashboard_id).values()
-            sql = "SELECT * FROM sys_user_dashboard_block WHERE userid = {userid} AND dashboardid = {dashboardid}".format(
-                userid=bixid, dashboardid=dashboard_id
-            )
-            datas = dbh.sql_query(sql)
-
-            # all_blocks = SysDashboardBlock.objects.all()
-            sql = "SELECT * FROM sys_dashboard_block ORDER BY name asc"
-            all_blocks = dbh.sql_query(sql)
-
-            for block in all_blocks:
-                context['block_list'].append(block)
-
-            for data in datas:
-                dashboard_block_id = data['dashboard_block_id']
-                sql = "SELECT * FROM sys_dashboard_block WHERE id = {dashboard_block_id}".format(
-                    dashboard_block_id=dashboard_block_id
-                )
-                results = dbh.sql_query(sql)
-                results = results[0]
-                block = dict()
-                block['id'] = data['id']
-
-                block['gsx'] = data['gsx']
-                block['gsy'] = data['gsy']
-                block['gsw'] = data['gsw']
-                block['gsh'] = data['gsh']
-                block['viewid'] = results['viewid']
-                block['widgetid'] = results['widgetid']
-
-                # if they are null set default values
-                if block['gsw'] == None or block['gsw'] == '':
-                    block['gsw'] = 3
-                    block['gsh'] = 4
-
-                width = results['width']
-                if width == None or width == 0 or width == '':
-                    width = 4
-
-                height = results['height']
-                if height == None or height == 0 or height == '':
-                    height= '50%'
-                
-                if results['chartid'] is None or results['chartid'] == 0:
-
-                    if results['widgetid'] is None:
-                        if 'tableid' not in results:
-                            continue
-                        tableid = results['tableid'] if results['tableid'] is not None else ''
-                        if tableid == '':
-                            continue
-                        tableid = 'user_' + tableid
-                        block['type'] = 'table'
-
-                        block['html'] = 'table'
-                        #block['html'] = get_records_table(request, results['tableid'], None, None, '', results['viewid'], 1, '', '')
-                    else:
-                        block['html'] = 'test'
-
-                else:
-                    chart= HelpderDB.sql_query_row(f"SELECT * FROM sys_chart WHERE id='{results['chartid']}'")
-                    chart_name=chart['name']
-                    chart_layout=chart['layout']
-                    chart_config=chart['config']
-                    chart_config = json.loads(chart_config)
-                    selected = ''
-
-                    viewid = results['viewid']
-                    view= HelpderDB.sql_query_row(f"SELECT * FROM sys_view WHERE id='{viewid}'")
-                    query_conditions = view['query_conditions']
-                    query_conditions = query_conditions.replace("$userid$", str(userid))
-
-                    #TODO custom wegolf. abilitare queste condizioni e gestire recordid in modo che sia dinamico dal frontend sia in bixdata che wegolf
-                    if cliente_id == 'wegolf':
-                        if results['chartid'] != 31:
-                            recordid_golfclub=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_golfclub WHERE utente='{userid}'","recordid_")
-                            query_conditions = query_conditions+" AND recordidgolfclub_='{recordid_golfclub}'".format(recordid_golfclub=recordid_golfclub)
-                        selected_years=request_data.get('selectedYears', [])
-                        selected_years_conditions = ''
-                        for selected_year in selected_years:
-                            if selected_years_conditions != '':
-                                selected_years_conditions = selected_years_conditions + " OR "
-                            selected_years_conditions = selected_years_conditions + "  anno='{selected_year}'".format(selected_year=selected_year)
-                        if selected_years_conditions != '':
-                            selected_years_conditions = " AND (" + selected_years_conditions + ")"
-                        query_conditions = query_conditions + selected_years_conditions
-                    chart_data=get_dynamic_chart_data(request, results['chartid'],query_conditions)
-                    chart_data_json=json.dumps(chart_data)
-
-                    
-                    block['chart_data'] = chart_data_json
-                    block['name'] = chart_name
-                    block['type'] = chart_layout.lower() if chart_layout is not None else 'value'
-
-                block['width'] = width
-                block['height'] = height
+        if dashboard_id:
+            selected = ''
+            with connection.cursor() as cursor:
 
                 context['userid'] = bixid
-                context['blocks'].append(block) 
+
+                size = 'full'
+                context['size'] = size
+
+                #datas = SysUserDashboardBlock.objects.filter(userid=bixid, size=size, dashboardid=dashboard_id).values()
+                sql = "SELECT * FROM sys_user_dashboard_block WHERE userid = {userid} AND dashboardid = {dashboardid}".format(
+                    userid=bixid, dashboardid=dashboard_id
+                )
+                datas = dbh.sql_query(sql)
+
+                # all_blocks = SysDashboardBlock.objects.all()
+                sql = "SELECT * FROM sys_dashboard_block ORDER BY name asc"
+                all_blocks = dbh.sql_query(sql)
+
+                for block in all_blocks:
+                    context['block_list'].append(block)
+
+                for data in datas:
+                    dashboard_block_id = data['dashboard_block_id']
+                    sql = "SELECT * FROM sys_dashboard_block WHERE id = {dashboard_block_id}".format(
+                        dashboard_block_id=dashboard_block_id
+                    )
+                    results = dbh.sql_query(sql)
+                    results = results[0]
+                    block = dict()
+                    block['id'] = data['id']
+
+                    block['gsx'] = data['gsx']
+                    block['gsy'] = data['gsy']
+                    block['gsw'] = data['gsw']
+                    block['gsh'] = data['gsh']
+                    block['viewid'] = results['viewid']
+                    block['widgetid'] = results['widgetid']
+
+                    # if they are null set default values
+                    if block['gsw'] == None or block['gsw'] == '':
+                        block['gsw'] = 3
+                        block['gsh'] = 4
+
+                    width = results['width']
+                    if width == None or width == 0 or width == '':
+                        width = 4
+
+                    height = results['height']
+                    if height == None or height == 0 or height == '':
+                        height= '50%'
+                    
+                    if results['chartid'] is None or results['chartid'] == 0:
+
+                        if results['widgetid'] is None:
+                            if 'tableid' not in results:
+                                continue
+                            tableid = results['tableid'] if results['tableid'] is not None else ''
+                            if tableid == '':
+                                continue
+                            tableid = 'user_' + tableid
+                            block['type'] = 'table'
+
+                            block['html'] = 'table'
+                            #block['html'] = get_records_table(request, results['tableid'], None, None, '', results['viewid'], 1, '', '')
+                        else:
+                            block['html'] = 'test'
+
+                    else:
+                        chart= HelpderDB.sql_query_row(f"SELECT * FROM sys_chart WHERE id='{results['chartid']}'")
+                        chart_name=chart['name']
+                        chart_layout=chart['layout']
+                        chart_config=chart['config']
+                        chart_config = json.loads(chart_config)
+                        selected = ''
+
+                        viewid = results['viewid']
+                        view= HelpderDB.sql_query_row(f"SELECT * FROM sys_view WHERE id='{viewid}'")
+                        query_conditions = view['query_conditions']
+                        query_conditions = query_conditions.replace("$userid$", str(userid))
+
+                        #TODO custom wegolf. abilitare queste condizioni e gestire recordid in modo che sia dinamico dal frontend sia in bixdata che wegolf
+                        if cliente_id == 'wegolf':
+                            if results['chartid'] != 31:
+                                recordid_golfclub=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_golfclub WHERE utente='{userid}'","recordid_")
+                                query_conditions = query_conditions+" AND recordidgolfclub_='{recordid_golfclub}'".format(recordid_golfclub=recordid_golfclub)
+                            selected_years=request_data.get('selectedYears', [])
+                            selected_years_conditions = ''
+                            for selected_year in selected_years:
+                                if selected_years_conditions != '':
+                                    selected_years_conditions = selected_years_conditions + " OR "
+                                selected_years_conditions = selected_years_conditions + "  anno='{selected_year}'".format(selected_year=selected_year)
+                            if selected_years_conditions != '':
+                                selected_years_conditions = " AND (" + selected_years_conditions + ")"
+                            query_conditions = query_conditions + selected_years_conditions
+                        chart_data=get_dynamic_chart_data(request, results['chartid'],query_conditions)
+                        chart_data_json=json.dumps(chart_data)
+
+                        
+                        block['chart_data'] = chart_data_json
+                        block['name'] = chart_name
+                        block['type'] = chart_layout.lower() if chart_layout is not None else 'value'
+
+                    block['width'] = width
+                    block['height'] = height
+
+                    context['userid'] = bixid
+                    context['blocks'].append(block) 
 
     return JsonResponse(context, safe=False)
 
