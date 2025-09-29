@@ -2292,6 +2292,7 @@ def save_record_fields(request):
     if tableid == 'chart':
         chart_record = UserRecord('chart', recordid)
         name=chart_record.values['name']
+        title=chart_record.values['title']
         userid=1
         layout=chart_record.values['type']
         raggruppamento=chart_record.values['raggruppamento']
@@ -2310,6 +2311,16 @@ def save_record_fields(request):
         chartid=chart_record.values['reportid']
         pivot_total_field = chart_record.values.get('pivot_total_field')
 
+
+        #TODO customwegolf
+        sql = f"SELECT fieldid, description FROM sys_field WHERE tableid = 'metrica_annuale'"
+        
+        # Assumiamo che HelpderDB.sql_query ritorni una lista di dizionari, es: [{'fieldid': 'A', 'description': 'Desc A'}]
+        results = HelpderDB.sql_query(sql) 
+        
+        # Crea un dizionario di ricerca: {'fieldid': 'description'}
+        field_descriptions = {row['fieldid']: row['description'] for row in results}
+        
         if tiporaggruppamento=='Pivot':
             if pivot_total_field:
                 pivot_fields = []
@@ -2319,7 +2330,7 @@ def save_record_fields(request):
                 pivot_fields.append({
                     "alias": pivot_total_field,
                     "field": pivot_total_field,
-                    "label": pivot_total_field
+                    "label": field_descriptions.get(pivot_total_field, pivot_total_field)
                 })
 
                 # Aggiunge i campi parziali
@@ -2330,7 +2341,7 @@ def save_record_fields(request):
                             pivot_fields.append({
                                 "alias": field,
                                 "field": field,
-                                "label": field
+                                "label": field_descriptions.get(field, field)
                             })
                 
                 config_python = {
@@ -2354,7 +2365,7 @@ def save_record_fields(request):
                 datasets=[]
                 for field in fields.split(';'):
                     dataset={}
-                    dataset['label']=field
+                    dataset['label']=field_descriptions.get(field, field)
                     dataset['alias']=field
                     dataset['field']=field
                     datasets.append(dataset)
@@ -2373,7 +2384,7 @@ def save_record_fields(request):
             datasets=[]
             for field in fields.split(';'):
                 dataset={}
-                dataset['label']=field
+                dataset['label']=field_descriptions.get(field, field)
                 if operation=='Somma':
                     dataset['expression']=f"SUM({field})"
                 else:
@@ -2396,7 +2407,7 @@ def save_record_fields(request):
                         if operation2=='Media':
                             dataset2={}
                             dataset2['alias']=field2
-                            dataset2['label']="Media" + field2
+                            dataset2['label']="Media" + field_descriptions.get(field2, field2)
                             dataset2['post_calculation']={
                                 "function": "AVG",
                                 "source_dataset_alias": field2
@@ -2406,7 +2417,7 @@ def save_record_fields(request):
                 if fields2 and fields2!='':
                     for field2 in fields2.split(';'):
                         dataset2={}
-                        dataset2['label']=field2
+                        dataset2['label']=field_descriptions.get(field2, field2)
                         if operation2=='Somma':
                             dataset2['expression']=f"SUM({field2})"
                         else:
@@ -2438,21 +2449,21 @@ def save_record_fields(request):
             
         
         if not chartid:
-            chartid = HelpderDB.sql_query_value(f"SELECT id FROM sys_chart WHERE name='{name}' AND layout='{layout}'  AND userid={userid} ", 'id')
+            chartid = HelpderDB.sql_query_value(f"SELECT id FROM sys_chart WHERE name='{title}' AND layout='{layout}'  AND userid={userid} ", 'id')
             if chartid:
                 chart_record.values['reportid'] = chartid
                 chart_record.save()
-                sql=f"INSERT INTO sys_dashboard_block (name, userid, viewid, chartid) VALUES ('{name}',1,53,'{chartid}')"
+                sql=f"INSERT INTO sys_dashboard_block (name, userid, viewid, chartid) VALUES ('{title}',1,53,'{chartid}')"
                 HelpderDB.sql_execute(sql)
 
 
         if chartid and chartid != 'None':
-            sql=f"UPDATE sys_chart SET name='{name}', layout='{layout}', config='{config_json_string}', userid='{userid}' WHERE id='{chartid}'"
+            sql=f"UPDATE sys_chart SET name='{title}', layout='{layout}', config='{config_json_string}', userid='{userid}' WHERE id='{chartid}'"
             HelpderDB.sql_execute(sql)
-            sql=f"UPDATE sys_dashboard_block SET name='{name}' WHERE chartid='{chartid}'"
+            sql=f"UPDATE sys_dashboard_block SET name='{title}' WHERE chartid='{chartid}'"
             HelpderDB.sql_execute(sql)
         else:
-            sql=f"INSERT INTO sys_chart (name, layout, config, userid) VALUES ('{name}','{layout}','{config_json_string}','{userid}')"
+            sql=f"INSERT INTO sys_chart (name, layout, config, userid) VALUES ('{title}','{layout}','{config_json_string}','{userid}')"
             HelpderDB.sql_execute(sql)
             
             #reportid=HelpderDB.sql_query_value("SELECT id FROM sys_chart WHERE name='{name}' AND layout='{layout}'  AND userid='{userid}' ", 'id')
