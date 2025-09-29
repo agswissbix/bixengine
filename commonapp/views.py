@@ -4514,35 +4514,110 @@ def save_dashboard_disposition(request):
     return JsonResponse({'success': True})
 
 
+from collections import namedtuple
+Block = namedtuple('Block', ['gsx', 'gsy', 'gsw', 'gsh'])
+
+MAX_GRID_WIDTH = 12
+NEW_GSW = 4
+NEW_GSH = 4
+
 def add_dashboard_block(request):
-
     json_data = json.loads(request.body)
-
     blockid = json_data.get('blockid')
-    size = json_data.get('size')
+    # Il campo 'size' viene comunque passato, ma ignorato per il calcolo gsw/gsh
+    # size = json_data.get('size') 
     dashboardid = json_data.get('dashboardid')
-
     user_id = request.user.id
-
-
-    dbh = HelpderDB()
-    context = {}
-    context['blocks'] = []  # Initialize the blocks list
-    context['block_list'] = []  # Initialize the block_list list
-
+    
+    # Coordinate e dimensioni di default del nuovo blocco
+    new_gsx = 0
+    new_gsy = 0
+    new_gsw = NEW_GSW
+    new_gsh = NEW_GSH
+    
+    # 1. Recupera l'ID utente di sistema
+    # ... (Il codice per recuperare bixid rimane invariato)
+    dbh = HelpderDB() # Mantenuto se necessario da HelpderDB()
     with connection.cursor() as cursor2:
-
         cursor2.execute(
             "SELECT sys_user_id FROM v_users WHERE id = %s", [user_id]
         )
         bixid = cursor2.fetchone()[0]
 
+    # 2. Recupera i blocchi esistenti per questa dashboard
+    existing_blocks = []
     with connection.cursor() as cursor:
         cursor.execute(
-            "INSERT INTO sys_user_dashboard_block (userid, dashboard_block_id, dashboardid, size) VALUES (%s, %s, %s, %s)",
-            [bixid, blockid, dashboardid, size]
+            "SELECT gsx, gsy, gsw, gsh FROM sys_user_dashboard_block WHERE userid = %s AND dashboardid = %s",
+            [bixid, dashboardid]
         )
-    return JsonResponse({'success': True})
+        # Converti i risultati in oggetti Block per un accesso pulito e gestione di NULL
+        for row in cursor.fetchall():
+            # Assicurati che tutti i valori siano interi (gestendo eventuali NULL come 0)
+            gsx, gsy, gsw, gsh = (int(i) if i is not None else 0 for i in row)
+            existing_blocks.append(Block(gsx, gsy, gsw, gsh))
+
+    # 3. Calcola le coordinate (gsx, gsy)
+    new_gsx, new_gsy = get_empty_position(existing_blocks, new_gsw, new_gsh, MAX_GRID_WIDTH)
+
+    # 4. Inserisce il nuovo blocco con le coordinate calcolate (gsx, gsy) e le dimensioni (gsw, gsh)
+    # NOTA: Ho modificato la query INSERT per includere i campi gsx, gsy, gsw, gsh.
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "INSERT INTO sys_user_dashboard_block (userid, dashboard_block_id, dashboardid, size, gsx, gsy, gsw, gsh) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            [bixid, blockid, dashboardid, json_data.get('size'), new_gsx, new_gsy, new_gsw, new_gsh]
+        )
+
+    # Restituisce le nuove coordinate al frontend per l'aggiornamento immediato
+    return JsonResponse({'success': True, 'gsx': new_gsx, 'gsy': new_gsy})
+
+def get_empty_position(existing_blocks, new_gsw, new_gsh, max_width):
+    """
+    Calcola le coordinate (gsx, gsy) più in alto a sinistra per il nuovo blocco,
+    evitando la sovrapposizione con i blocchi esistenti.
+    """
+    
+    # Inizia la ricerca in tutte le righe possibili. L'altezza massima attuale + 10
+    # è un limite ragionevole per evitare loop infiniti in una griglia vuota.
+    max_y_to_check = 0
+    if existing_blocks:
+         # Trova l'altezza massima (y + h) per definire l'area di ricerca iniziale
+        max_y_to_check = max(b.gsy + b.gsh for b in existing_blocks)
+
+    # Itera riga per riga (y), cercando la posizione a partire dalla riga 0.
+    for y in range(max_y_to_check + new_gsh):
+        # Itera colonna per colonna (x), assicurandosi di non superare la larghezza massima.
+        x = 0
+        while x <= max_width - new_gsw:
+            
+            is_overlap = False
+            for block in existing_blocks:
+                # Controlla l'intersezione (sovrapposizione) tra il nuovo blocco e un blocco esistente:
+                # (A.gsx < B.gsx + B.gsw) AND (A.gsx + A.gsw > B.gsx) AND 
+                # (A.gsy < B.gsy + B.gsh) AND (A.gsy + A.gsh > B.gsy)
+                
+                if (x < block.gsx + block.gsw) and \
+                   (x + new_gsw > block.gsx) and \
+                   (y < block.gsy + block.gsh) and \
+                   (y + new_gsh > block.gsy):
+                    
+                    is_overlap = True
+                    # C'è sovrapposizione. Sposta la ricerca X subito dopo il blocco che ha creato il conflitto.
+                    # Questo evita di dover controllare inutilmente le coordinate intermedie.
+                    x = block.gsx + block.gsw
+                    break # Passa al blocco successivo
+            
+            if not is_overlap:
+                # Trovata la posizione più in alto e più a sinistra che non si sovrappone.
+                return x, y
+            
+            # Se c'è stata sovrapposizione, il ciclo interno ha aggiornato 'x'. 
+            # Se non c'è stata, prova la colonna successiva.
+            if not is_overlap:
+                x += 1
+                
+    # Fallback, dovrebbe accadere solo se la logica della griglia è satura (improbabile con questo loop).
+    return 0, max_y_to_check + new_gsh 
 
 
 def save_form_data(request):
