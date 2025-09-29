@@ -301,46 +301,45 @@
     </div>
     {% endif %}
 
-    
     {% if services_data.section2 %}
-    <div class="section page-break">
-        <div class="section-title">Sezione 2.0</div>
-        <div class="service-header">Servizi inclusi in ActiveMind:</div>
-        
-        {% for service_key, service in services_data.section2.items %}
-            {% if forloop.counter0|divisibleby:3 and not forloop.first %}
-            <div class="page-break"></div>
-            {% endif %}
-        {% if service.quantity > 0 %}
-        <div class="service-item">
-            <h1 class="service-title">
-                {{ service.title }}
-            </h1>
-            <table class="pricing-table">
-                <tr>
-                    <th>Costo unitario</th>
-                    <th>Quantità</th>
-                    <th>Costo totale</th>
-                </tr>
-                <tr>
-                    <td>CHF {{ service.unitPrice|default:"0.00"|floatformat:2 }}.-</td>
-                    <td>{{ service.quantity }}</td>
-                    <td class="price">CHF {{ service.total|default:"0.00"|floatformat:2 }}.-</td>
-                </tr>
-            </table>
-            
-            <div class="service-details">
-                <ul>
-                    {% for feature in service.features %}
-                        <li>{{ feature }}</li>
-                    {% endfor %}
-                </ul>
+        {% for page in section2_pages %}
+             <div class="page-break">
+                {% if forloop.first %}
+                        <div class="section-title">Sezione 2.0</div>
+                        <div class="service-header">Servizi inclusi in ActiveMind:</div>
+                {% endif %}
+                {% for service in page %}
+                    {% if service.quantity > 0 %}
+                        <div class="service-item">
+                            <h1 class="service-title">
+                                {{ service.title }}
+                            </h1>
+                            <table class="pricing-table">
+                                <tr>
+                                    <th>Costo unitario</th>
+                                    <th>Quantità</th>
+                                    <th>Costo totale</th>
+                                </tr>
+                                <tr>
+                                    <td>CHF {{ service.unitPrice|default:"0.00"|floatformat:2 }}.-</td>
+                                    <td>{{ service.quantity }}</td>
+                                    <td class="price">CHF {{ service.total|default:"0.00"|floatformat:2 }}.-</td>
+                                </tr>
+                            </table>
+                            
+                            <div class="service-details">
+                                <ul>
+                                    {% for feature in service.features %}
+                                        <li>{{ feature }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </div>
+                        {% endif %}
+                        <hr>
+                {% endfor %}
             </div>
-        </div>
-        {% endif %}
-        <hr>
         {% endfor %}
-    </div>
     {% endif %}
 
 

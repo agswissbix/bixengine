@@ -94,6 +94,24 @@ def save_activemind(request):
         }, status=500)
     
 
+def chunk_services(services):
+    pages = []
+    page = []
+    counter = 0
+    for s in services:
+        if s.quantity == 0:
+            continue
+        limit = 2 if len(s.features) > 10 else 3
+        page.append(s)
+        counter += 1
+        if counter >= limit:
+            pages.append(page)
+            page = []
+            counter = 0
+    if page:
+        pages.append(page)
+    return pages
+
 @csrf_exempt
 def print_pdf_activemind(request):
     """
@@ -169,6 +187,7 @@ def print_pdf_activemind(request):
         context = {
             'client_info': cliente,
             'services_data': services_data,
+            'section2_pages': chunk_services([type('Service', (object,), s) for s in services_data.get('section2', {}).values() if isinstance(s, dict)]),
             'section1_total': section1_total,
             'section2_total': section2_total,
             'grand_total': section2_total,
@@ -225,6 +244,11 @@ def get_services_activemind(request):
     from customapp_swissbix.mock.activeMind.services import services as services_data_mock
     # print(services_data_mock)
     return JsonResponse({"services": services_data_mock}, safe=False)
+
+def get_products_activemind(request):
+    from customapp_swissbix.mock.activeMind.products import products as products_data_mock
+    # print(products_data_mock)
+    return JsonResponse({"servicesCategory": products_data_mock}, safe=False)
 
 def get_conditions_activemind(request):
     from customapp_swissbix.mock.activeMind.conditions import frequencies as conditions_data_mock
