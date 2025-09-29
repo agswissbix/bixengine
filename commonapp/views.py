@@ -432,6 +432,7 @@ def delete_record(request):
         sql = f"UPDATE user_{tableid} SET deleted_='Y' WHERE recordid_={recordid}"
         HelpderDB.sql_execute(sql)  # usa i parametri per evitare SQL injection
 
+        custom_delete_record(tableid, recordid) 
         return JsonResponse({"success": True, "detail": "Record eliminato con successo"})
     
     except json.JSONDecodeError:
@@ -440,7 +441,18 @@ def delete_record(request):
     except Exception as e:
         return JsonResponse({"success": False, "detail": f"Errore interno: {str(e)}"}, status=500)
 
-
+def custom_delete_record(tableid,recordid):
+    print("Function: custom_delete_record")
+    if tableid=='chart':
+        chart_record=UserRecord('chart',recordid)
+        chartid=chart_record.values['reportid']
+        dashboard_block_dict=HelpderDB.sql_query_row(f"SELECT * FROM sys_dashboard_block WHERE chartid={chartid}")
+        if dashboard_block_dict:
+            dashboard_blockid=dashboard_block_dict['id']
+            HelpderDB.sql_execute(f"DELETE FROM sys_user_dashboard_block WHERE dashboard_block_id={dashboard_blockid}")
+            HelpderDB.sql_execute(f"DELETE FROM sys_dashboard_block WHERE id={dashboard_blockid}")
+        HelpderDB.sql_execute(f"DELETE FROM sys_chart WHERE id={recordid}")
+    
 
 @timing_decorator
 def get_table_filters(request):
@@ -2283,33 +2295,86 @@ def save_record_fields(request):
         userid=1
         layout=chart_record.values['type']
         raggruppamento=chart_record.values['raggruppamento']
+        tiporaggruppamento=chart_record.values['tiporaggruppamento']
         fields=chart_record.values['campi']
+        dynamicfield1=chart_record.values['dynamicfield1']
+        dynamicfield1_label=chart_record.values['dynamicfield1_label']
         operation=chart_record.values['operation']
         dynamicfield1=chart_record.values['dynamicfield1']
-        field2=chart_record.values['campi2']
+        fields2=chart_record.values['campi2']
+        dynamicfield2=chart_record.values['dynamicfield2']
+        dynamicfield2_label=chart_record.values['dynamicfield2_label']
         operation2=chart_record.values['operation2']
         dynamicfield2=chart_record.values['dynamicfield2']
         chartid=chart_record.values['reportid']
-        datasets=[]
-        for field in fields.split(';'):
-            dataset={}
-            dataset['label']=field
-            if operation=='Somma':
-                dataset['expression']=f"SUM({field})"
-            else:
-                dataset['expression']=f"COUNT({field})"
-            dataset['alias']=field
-            datasets.append(dataset)
 
-        config_python = {
-            "from_table": "metrica_annuale",
-            "group_by_field": {
-                "field": raggruppamento,
-                "alias": raggruppamento
-            },
-            "datasets": datasets,
-            "order_by": "anno ASC"
-        }
+        if tiporaggruppamento=='Pivot':
+            datasets=[]
+            for field in fields.split(';'):
+                dataset={}
+                dataset['label']=field
+                dataset['alias']=field
+                dataset['field']=field
+                datasets.append(dataset)
+            
+            config_python = {
+                "chart_type": "record_pivot",
+                "from_table": "metrica_annuale",
+                "aggregation": {
+                    "function": "AVG"
+                },
+                "pivot_fields": datasets,
+                "dataset_label": "Media " + field 
+            }
+
+        if tiporaggruppamento!='Pivot':
+            datasets=[]
+            for field in fields.split(';'):
+                dataset={}
+                dataset['label']=field
+                if operation=='Somma':
+                    dataset['expression']=f"SUM({field})"
+                else:
+                    dataset['expression']=f"COUNT({field})"
+                dataset['alias']=field
+                datasets.append(dataset)
+
+            if dynamicfield1:
+                dataset={}
+                dataset['label']=dynamicfield1_label
+                dataset['expression']=dynamicfield1
+                dataset['alias']=dynamicfield1_label
+                datasets.append(dataset)
+
+            datasets2=[]
+            if fields2 and fields2!='':
+                for field2 in fields2.split(';'):
+                    dataset2={}
+                    dataset2['label']=field2
+                    if operation2=='Somma':
+                        dataset2['expression']=f"SUM({field2})"
+                    else:
+                        dataset2['expression']=f"COUNT({field2})"
+                    dataset2['alias']=field2
+                    datasets2.append(dataset2)
+                
+            if dynamicfield2:
+                dataset2={}
+                dataset2['label']=dynamicfield2_label
+                dataset2['expression']=dynamicfield2
+                dataset2['alias']=dynamicfield2_label
+                datasets2.append(dataset2)
+
+            config_python = {
+                "from_table": "metrica_annuale",
+                "group_by_field": {
+                    "field": raggruppamento,
+                    "alias": raggruppamento
+                },
+                "datasets": datasets,
+                "datasets2": datasets2,
+                "order_by": "anno ASC"
+            }
         status='Bozza'
         config_json_string = json.dumps(config_python, indent=4)
             
