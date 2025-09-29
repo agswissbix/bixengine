@@ -2305,27 +2305,69 @@ def save_record_fields(request):
         dynamicfield2=chart_record.values['dynamicfield2']
         dynamicfield2_label=chart_record.values['dynamicfield2_label']
         operation2=chart_record.values['operation2']
+        operation2_total=chart_record.values['operation2_total']
         dynamicfield2=chart_record.values['dynamicfield2']
         chartid=chart_record.values['reportid']
+        pivot_total_field = chart_record.values.get('pivot_total_field')
 
         if tiporaggruppamento=='Pivot':
-            datasets=[]
-            for field in fields.split(';'):
-                dataset={}
-                dataset['label']=field
-                dataset['alias']=field
-                dataset['field']=field
-                datasets.append(dataset)
-            
-            config_python = {
-                "chart_type": "record_pivot",
-                "from_table": "metrica_annuale",
-                "aggregation": {
-                    "function": "AVG"
-                },
-                "pivot_fields": datasets,
-                "dataset_label": "Media " + field 
-            }
+            if pivot_total_field:
+                pivot_fields = []
+                part_field_aliases = []
+
+                # Aggiunge il campo totale alla lista dei campi da interrogare
+                pivot_fields.append({
+                    "alias": pivot_total_field,
+                    "field": pivot_total_field,
+                    "label": pivot_total_field
+                })
+
+                # Aggiunge i campi parziali
+                if fields:
+                    for field in fields.split(';'):
+                        if field: # Evita stringhe vuote
+                            part_field_aliases.append(field)
+                            pivot_fields.append({
+                                "alias": field,
+                                "field": field,
+                                "label": field
+                            })
+                
+                config_python = {
+                    "chart_type": "record_pivot",
+                    "from_table": "metrica_annuale", # Mantenuto come da codice originale
+                    "aggregation": {
+                        "function": "AVG"
+                    },
+                    "pivot_fields": pivot_fields,
+                    "dataset_label": name, # Usa il nome del grafico come etichetta
+                    "total_breakdown": {
+                        "total_field_alias": pivot_total_field,
+                        "part_field_aliases": part_field_aliases,
+                        "include_remainder": True,
+                        "remainder_label": "Altro"
+                    }
+                }
+
+            # Caso 2: Pivot semplice (senza calcolo percentuale)
+            else:
+                datasets=[]
+                for field in fields.split(';'):
+                    dataset={}
+                    dataset['label']=field
+                    dataset['alias']=field
+                    dataset['field']=field
+                    datasets.append(dataset)
+                
+                config_python = {
+                    "chart_type": "record_pivot",
+                    "from_table": "metrica_annuale",
+                    "aggregation": {
+                        "function": "AVG"
+                    },
+                    "pivot_fields": datasets,
+                    "dataset_label": "Media " + field 
+                }
 
         if tiporaggruppamento!='Pivot':
             datasets=[]
@@ -2346,24 +2388,40 @@ def save_record_fields(request):
                 dataset['alias']=dynamicfield1_label
                 datasets.append(dataset)
 
+
             datasets2=[]
-            if fields2 and fields2!='':
-                for field2 in fields2.split(';'):
+            if operation2_total and operation2_total=='Si':
+                if fields2 and fields2!='':
+                    for field2 in fields2.split(';'):
+                        if operation2=='Media':
+                            dataset2={}
+                            dataset2['alias']=field2
+                            dataset2['label']="Media" + field2
+                            dataset2['post_calculation']={
+                                "function": "AVG",
+                                "source_dataset_alias": field2
+                            }
+                            datasets2.append(dataset2)
+            else:
+                if fields2 and fields2!='':
+                    for field2 in fields2.split(';'):
+                        dataset2={}
+                        dataset2['label']=field2
+                        if operation2=='Somma':
+                            dataset2['expression']=f"SUM({field2})"
+                        else:
+                            dataset2['expression']=f"COUNT({field2})"
+                        dataset2['alias']=field2
+                        datasets2.append(dataset2)
+                    
+                if dynamicfield2:
                     dataset2={}
-                    dataset2['label']=field2
-                    if operation2=='Somma':
-                        dataset2['expression']=f"SUM({field2})"
-                    else:
-                        dataset2['expression']=f"COUNT({field2})"
-                    dataset2['alias']=field2
+                    dataset2['label']=dynamicfield2_label
+                    dataset2['expression']=dynamicfield2
+                    dataset2['alias']=dynamicfield2_label
                     datasets2.append(dataset2)
-                
-            if dynamicfield2:
-                dataset2={}
-                dataset2['label']=dynamicfield2_label
-                dataset2['expression']=dynamicfield2
-                dataset2['alias']=dynamicfield2_label
-                datasets2.append(dataset2)
+
+
 
             config_python = {
                 "from_table": "metrica_annuale",
@@ -4318,8 +4376,12 @@ def get_chart(request, sql, id, name, layout, fields):
         'name': name,
         'fields': fields_chart,
     }
-
     return context
+
+
+
+
+
 
 def _format_datasets_from_rows(aliases, labels, dictrows):
     """
@@ -4337,17 +4399,51 @@ def _format_datasets_from_rows(aliases, labels, dictrows):
         datasets.append({'label': labels[i], 'data': data})
     return datasets
 
+def _perform_post_calculation(post_calc_def, all_db_datasets, labels):
+    """
+    Esegue calcoli post-query, come la media di un altro dataset.
+    """
+    calc_config = post_calc_def['post_calculation']
+    source_alias = calc_config['source_dataset_alias']
+    func = calc_config.get('function', 'AVG').upper()
+
+    # Trova i dati del dataset di origine
+    source_data = None
+    for ds in all_db_datasets:
+        # 'original_alias' è una chiave custom che aggiungeremo per tracciabilità
+        if ds.get('original_alias') == source_alias:
+            source_data = ds['data']
+            break
+    
+    if source_data is None:
+        return None # Dataset di origine non trovato
+
+    # Esegui il calcolo
+    result_value = 0
+    if func == 'AVG':
+        if source_data:
+            result_value = sum(source_data) / len(source_data)
+        else:
+            result_value = 0 # Evita divisione per zero
+    # Qui potrebbero essere aggiunte altre funzioni (SUM, etc.)
+    
+    # Crea il nuovo set di dati (es. una linea orizzontale per la media)
+    num_labels = len(labels)
+    calculated_data = [round(result_value, 2)] * num_labels
+    
+    return {'label': post_calc_def['label'], 'data': calculated_data}
 
 def _handle_record_pivot_chart(config, chart_id, chart_record, query_conditions):
     """
     Gestisce la generazione di dati per grafici 'record_pivot'.
-    NOTA: La logica per datasets2 è meno comune qui e non è stata implementata.
-    Questa funzione rimane invariata.
+    Ora supporta anche il calcolo di percentuali rispetto a un totale.
     """
-    # (Codice da risposta precedente, invariato)
+    # --- PARTE 1: ESECUZIONE QUERY (INVARIATA) ---
     select_clauses = []
-    aliases = [item['alias'] for item in config['pivot_fields']]
-    labels = [item['label'] for item in config['pivot_fields']]
+    # Recupera tutti gli alias e le label definite in pivot_fields
+    pivot_fields_map = {item['alias']: item for item in config['pivot_fields']}
+    aliases = list(pivot_fields_map.keys())
+    
     if 'aggregation' in config:
         agg_config = config['aggregation']
         agg_function = agg_config.get('function', 'SUM').upper()
@@ -4359,58 +4455,111 @@ def _handle_record_pivot_chart(config, chart_id, chart_record, query_conditions)
             select_clauses.append(f"{agg_function}({expression}) AS {item['alias']}")
     else:
         for item in config['pivot_fields']:
-            if 'field' in item:
-                select_clauses.append(f"{item['field']} AS {item['alias']}")
-            elif 'expression' in item:
-                select_clauses.append(f"({item['expression']}) AS {item['alias']}")
+            expression = item.get('field') or f"({item.get('expression')})"
+            select_clauses.append(f"{expression} AS {item['alias']}")
+
     from_table = f"user_{config['from_table']}"
     query = (f"SELECT {', '.join(select_clauses)} FROM {from_table} WHERE {query_conditions}")
-    if 'aggregation' not in config:
-        query += " LIMIT 1"
+    
+    # Per record_pivot, ci aspettiamo sempre un singolo risultato (aggregato o meno)
+    query += " LIMIT 1"
+    
     record_data = HelpderDB.sql_query_row(query)
     dataset_label = config.get('dataset_label', 'Dati')
+
     if not record_data:
         return {'id': chart_id, 'name': chart_record['name'], 'layout': chart_record['layout'],
-                'labels': labels, 'datasets': [{'label': dataset_label, 'data': []}]}
-    data = []
-    for alias in aliases:
-        value = record_data.get(alias)
+                'labels': [item['label'] for item in config['pivot_fields']], 
+                'datasets': [{'label': dataset_label, 'data': []}]}
+
+    # --- PARTE 2: ELABORAZIONE DATI (MODIFICATA) ---
+
+    final_labels = []
+    final_data = []
+
+    if 'total_breakdown' in config:
+        pc_config = config['total_breakdown']
+        total_alias = pc_config['total_field_alias']
+        
         try:
-            data.append(round(float(value), 2) if value is not None else 0)
+            total_value = float(record_data.get(total_alias, 0))
         except (ValueError, TypeError):
-            data.append(0)
-    datasets = [{'label': dataset_label, 'data': data}]
-    context = {'id': chart_id, 'name': chart_record['name'], 'layout': chart_record['layout'],
-               'labels': labels, 'datasets': datasets}
+            total_value = 0
+
+        # Evita divisione per zero
+        if total_value == 0:
+            # Se il totale è zero, tutte le percentuali sono zero
+            final_labels = [pivot_fields_map[alias]['label'] for alias in pc_config['part_field_aliases']]
+            if pc_config.get('include_remainder'):
+                final_labels.append(pc_config['remainder_label'])
+            final_data = [0] * len(final_labels)
+        else:
+            sum_of_parts = 0
+            # Calcola la percentuale per ogni "parte"
+            for part_alias in pc_config['part_field_aliases']:
+                try:
+                    part_value = float(record_data.get(part_alias, 0))
+                except (ValueError, TypeError):
+                    part_value = 0
+                
+                # Aggiunge l'etichetta e il dato percentuale
+                final_labels.append(pivot_fields_map[part_alias]['label'])
+                # --- MODIFICATO ---
+                # Aggiunge il valore effettivo invece della percentuale.
+                final_data.append(round(part_value, 2))
+                sum_of_parts += part_value
+            
+            # Calcola la parte rimanente, se richiesto
+            if pc_config.get('include_remainder', False):
+                remainder_value = total_value - sum_of_parts
+                # --- MODIFICATO ---
+                # Aggiunge il valore effettivo rimanente invece della percentuale.
+                final_labels.append(pc_config['remainder_label'])
+                final_data.append(round(remainder_value, 2))
+
+    # LOGICA ORIGINALE: Se non è configurato il calcolo percentuale
+    else:
+        final_labels = [item['label'] for item in config['pivot_fields']]
+        for alias in aliases:
+            value = record_data.get(alias)
+            try:
+                final_data.append(round(float(value), 2) if value is not None else 0)
+            except (ValueError, TypeError):
+                final_data.append(0)
+
+    # --- PARTE 3: COSTRUZIONE CONTESTO (INVARIATA) ---
+    datasets = [{'label': dataset_label, 'data': final_data}]
+    context = {
+        'id': chart_id, 
+        'name': chart_record['name'], 
+        'layout': chart_record['layout'],
+        'labels': final_labels, 
+        'datasets': datasets
+    }
     return context
 
 
 def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
     """
-    Gestisce grafici di aggregazione, ora con supporto per datasets e datasets2.
+    Gestisce grafici di aggregazione, ora con supporto per post-calcoli in Python.
     """
-    # 1. Raccoglie le definizioni per entrambi i set di dati
-    datasets1_defs = config.get('datasets', [])
-    datasets2_defs = config.get('datasets2', [])
-
-    # Estrae clausole SELECT, alias ed etichette per entrambi
-    select_clauses1 = [f"{ds['expression']} AS {ds['alias']}" for ds in datasets1_defs]
-    dataset1_aliases = [ds['alias'] for ds in datasets1_defs]
-    dataset1_labels = [ds['label'] for ds in datasets1_defs]
-
-    select_clauses2 = [f"{ds['expression']} AS {ds['alias']}" for ds in datasets2_defs]
-    dataset2_aliases = [ds['alias'] for ds in datasets2_defs]
-    dataset2_labels = [ds['label'] for ds in datasets2_defs]
-
-    # Combina tutte le clausole SELECT per un'unica query
-    all_select_clauses = select_clauses1 + select_clauses2
+    # 1. Separa le definizioni dei dataset: quelle da query e quelle da post-calcolo
+    all_dataset_defs = config.get('datasets', []) + config.get('datasets2', [])
     
+    db_defs = [ds for ds in all_dataset_defs if 'expression' in ds]
+    post_calc_defs = [ds for ds in all_dataset_defs if 'post_calculation' in ds]
+
+    db_aliases = [ds['alias'] for ds in db_defs]
+    db_labels = [ds['label'] for ds in db_defs]
+    select_clauses = [f"{ds['expression']} AS {ds['alias']}" for ds in db_defs]
+
     # 2. Costruzione della Query (logica GROUP BY invariata)
     group_by_config = config['group_by_field']
     group_by_alias = group_by_config.get('alias', group_by_config['field'])
     select_group_field, from_clause, group_by_clause = '', '', ''
+    
+    # ... (la logica di lookup e non-lookup per la query rimane IDENTICA a prima)
     if 'lookup' in group_by_config:
-        # ... (logica lookup invariata)
         lookup_config = group_by_config['lookup']
         main_table_alias, lookup_table_alias = 't1', 't2'
         main_table = f"user_{config['from_table']}"
@@ -4421,20 +4570,20 @@ def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
                        f"ON {main_table_alias}.{group_by_config['field']} = {lookup_table_alias}.{lookup_config['on_key']}")
         group_by_clause = f"GROUP BY {lookup_table_alias}.{lookup_config['display_field']}"
     else:
-        # ... (logica senza lookup invariata)
         main_table = f"user_{config['from_table']}"
         select_group_field = f"{group_by_config['field']} AS {group_by_alias}"
         from_clause = f"FROM {main_table}"
         group_by_clause = f"GROUP BY {group_by_config['field']}"
-        
-    query = (f"SELECT {select_group_field}, {', '.join(all_select_clauses)} "
+    
+    query_select_part = f"{select_group_field}, {', '.join(select_clauses)}" if select_clauses else select_group_field
+    query = (f"SELECT {query_select_part} "
              f"{from_clause} "
              f"WHERE {query_conditions} "
              f"{group_by_clause}")
     if 'order_by' in config:
         query += f" ORDER BY {config['order_by']}"
 
-    # 3. Esecuzione della Query e Formattazione dei Dati
+    # 3. Esecuzione della Query e Formattazione Dati
     dictrows = HelpderDB.sql_query(query)
     
     if not dictrows:
@@ -4443,27 +4592,64 @@ def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
 
     labels = [row[group_by_alias] for row in dictrows]
     
-    # Usa la funzione helper per formattare entrambi i set di dati
-    datasets1 = _format_datasets_from_rows(dataset1_aliases, dataset1_labels, dictrows)
-    datasets2 = _format_datasets_from_rows(dataset2_aliases, dataset2_labels, dictrows)
+    all_db_datasets = _format_datasets_from_rows(db_aliases, db_labels, dictrows)
+    for i, ds in enumerate(all_db_datasets):
+        ds['original_alias'] = db_aliases[i]
+
+    # 4. Esegui Post-Calcoli
+    all_post_calc_datasets = []
+    for pc_def in post_calc_defs:
+        calculated_ds = _perform_post_calculation(pc_def, all_db_datasets, labels)
+        if calculated_ds:
+            all_post_calc_datasets.append(calculated_ds)
+
+    # =========================================================================
+    # 5. NUOVA LOGICA DI ASSEMBLAGGIO DEI DATASET (Corretta)
+    # =========================================================================
     
+    # Creiamo una mappa dei dati già pronti per un facile accesso
+    processed_db_map = {ds.pop('original_alias'): ds for ds in all_db_datasets}
+    processed_pc_map = {ds['label']: ds for ds in all_post_calc_datasets}
+
+    final_datasets1 = []
+    for d_def in config.get('datasets', []):
+        if 'expression' in d_def:
+            # È un dataset dal DB, lo cerchiamo tramite il suo alias
+            if d_def['alias'] in processed_db_map:
+                final_datasets1.append(processed_db_map[d_def['alias']])
+        elif 'post_calculation' in d_def:
+            # È un post-calcolo, lo cerchiamo tramite il suo label
+            if d_def['label'] in processed_pc_map:
+                final_datasets1.append(processed_pc_map[d_def['label']])
+
+    final_datasets2 = []
+    for d_def in config.get('datasets2', []):
+        if 'expression' in d_def:
+            if d_def['alias'] in processed_db_map:
+                final_datasets2.append(processed_db_map[d_def['alias']])
+        elif 'post_calculation' in d_def:
+            if d_def['label'] in processed_pc_map:
+                final_datasets2.append(processed_pc_map[d_def['label']])
+
+    # Logica per l'immagine invariata
     if chart_record['layout'] == 'value':
-        chart_recordid=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_chart WHERE reportid={chart_id} LIMIT 1","recordid_")
+        chart_recordid = HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_chart WHERE reportid={chart_id} LIMIT 1", "recordid_")
         if chart_recordid:
-            image_relativepath="chart/"+chart_recordid+"/icona.png"
-            if datasets1:
-                datasets1[0]['image']=image_relativepath
-    # 4. Composizione del contesto finale
+            image_relativepath = f"chart/{chart_recordid}/icona.png"
+            if final_datasets1:
+                final_datasets1[0]['image'] = image_relativepath
+
+    # 6. Composizione del contesto finale
     context = {
         'id': chart_id, 
         'name': chart_record['name'], 
         'layout': chart_record['layout'],
         'labels': labels, 
-        'datasets': datasets1
+        'datasets': final_datasets1
     }
-    # Aggiunge datasets2 solo se è stato definito e contiene dati
-    if datasets2:
-        context['datasets2'] = datasets2
+    
+    if final_datasets2:
+        context['datasets2'] = final_datasets2
         
     return context
 

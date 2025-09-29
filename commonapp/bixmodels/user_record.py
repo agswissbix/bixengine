@@ -384,7 +384,7 @@ class UserRecord:
             SELECT f.*
             FROM sys_user_field_order AS fo LEFT JOIN sys_field AS f ON fo.tableid=f.tableid AND fo.fieldid=f.id
 
-            WHERE fo.tableid='{self.tableid}' AND typepreference='insert_fields' AND fo.userid=1 ORDER BY fieldorder
+            WHERE fo.tableid='{self.tableid}' AND typepreference='insert_fields' AND fo.userid=1 ORDER BY fo.fieldorder
         """
         fields=HelpderDB.sql_query(sql)
         insert_fields=[]
