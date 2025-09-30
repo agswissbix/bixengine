@@ -781,8 +781,21 @@ def send_order(request):
                 record_riga.values['prodotto'] = order_row.get('name', "")
                 record_riga.values['quantita'] = order_row.get('quantity', 0)
                 record_riga.values['categoria'] = order_row.get('categoria', "")
-                record_riga.values['diottria'] = order_row.get('diottria', "")
-                record_riga.values['colore'] = order_row.get('colore', "")
+                diottria=order_row.get('diottria', "")
+                record_riga.values['diottria'] = diottria
+                colore= order_row.get('colore', "")
+                record_riga.values['colore'] =colore
+                boxdl= order_row.get('boxdl', "")
+                record_riga.values['boxdl'] = boxdl
+                referenza= order_row.get('referenza', "")
+                record_riga.values['referenza'] = referenza
+                raggio= order_row.get('raggio', "")
+                record_riga.values['raggio'] = raggio
+                sph= order_row.get('sph', "")
+                record_riga.values['sph'] = sph
+                diametro= order_row.get('diametro', "")
+                record_riga.values['diametro'] = diametro
+                record_riga.values['dettagli'] = f"Colore: {colore}, BoxDL: {boxdl}, Referenza: {referenza}, Raggio: {raggio}, SPH: {sph}, Diametro: {diametro}"
                 record_riga.save()
             return JsonResponse({"success": True, "recordid_richiesta": recordid_richiesta})
 
