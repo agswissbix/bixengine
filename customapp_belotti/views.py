@@ -804,3 +804,22 @@ def send_order(request):
             return JsonResponse({"success": False, "error": str(e)}, status=400)
     else:
         return JsonResponse({"success": False, "error": "Metodo non consentito"}, status=405)
+
+
+def belotti_conferma_ricezione(request):
+    try:
+        data = json.loads(request.body)
+        recordid = data.get('recordId', None)
+        if not recordid:
+            return JsonResponse({"success": False, "error": "recordid mancante"}, status=400)
+        record = UserRecord('richieste', recordid=recordid)
+        if not record:
+            return JsonResponse({"success": False, "error": "Record non trovato"}, status=404)
+
+        record.values['stato'] = 'Merce Ricevuta'
+        record.save()
+
+        return JsonResponse({"success": True, "message": "Stato aggiornato a 'Merce Ricevuta'", "record": record.values})
+
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=500)

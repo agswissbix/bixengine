@@ -11,4 +11,6 @@ urlpatterns = [
     path('test_sync_fatture_sirioadiuto/', test_sync_fatture_sirioadiuto, name='test_sync_fatture_sirioadiuto'),
     path('sync_richieste_bixdataadiuto/', sync_richieste_bixdataadiuto, name='sync_richieste_bixdataadiuto'),
     path('send_order/', send_order, name='send_order'),
+    path('belotti_conferma_ricezione/', belotti_conferma_ricezione, name='belotti_conferma_ricezione'),
+
 ]
