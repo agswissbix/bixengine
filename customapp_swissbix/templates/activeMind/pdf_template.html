@@ -301,8 +301,56 @@
     </div>
     {% endif %}
 
-    {% if services_data.section2 %}
-        {% for page in section2_pages %}
+    {% if section2_products_pages %}
+        {% for page in section2_products_pages %}
+            <div class="page-break">
+                {% if forloop.first %}
+                    <div class="section-title">Sezione 2.0 - Prodotti Ricorrenti</div>
+                    <div class="service-header">Licenze e Prodotti (Costi Mensili o Annuali):</div>
+                {% endif %}
+
+                {% for product in page %}
+                    <div class="service-item">
+                        <h1 class="service-title" style="margin-top: 15px;">
+                            {{ product.title }}
+                            <span style="font-weight: normal; font-size: 13px; color: #555;">
+                                {% if product.billingType == 'yearly' %}(Fatt. Annuale){% else %}(Fatt. Mensile){% endif %}
+                            </span>
+                        </h1>
+                        <table class="pricing-table">
+                            <tr>
+                                <th>Costo unitario</th>
+                                <th>Quantità</th>
+                                <th>Costo totale</th>
+                            </tr>
+                            <tr>
+                                <td>CHF {{ product.unitPrice|default:"0.00"|floatformat:2 }}.-</td>
+                                <td>{{ product.quantity }}</td>
+                                <td class="price">CHF {{ product.total|default:"0.00"|floatformat:2 }}.-</td>
+                            </tr>
+                        </table>
+                        
+                        <div class="service-details">
+                            {% if product.description %}
+                                <p style="padding-left: 0; font-style: italic;">{{ product.description }}</p>
+                            {% endif %}
+                            {% if product.features %}
+                                <ul>
+                                    {% for feature in product.features %}
+                                        <li>{{ feature }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <hr style="border: 0; border-top: 1px dashed #ccc; margin: 10px 0;">
+                {% endfor %}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    {% if section2_services_pages %}
+        {% for page in section2_services_pages %}
              <div class="page-break">
                 {% if forloop.first %}
                         <div class="section-title">Sezione 2.0</div>
@@ -380,18 +428,36 @@
             </tr>
             
             {% if services_data.section1.selectedTier %}
-            <tr style="border-bottom: 3px solid #ccc;">
-                <td>System Assurance - {{ tier_display }}</td>
+            <tr>
+                <td>System Assurance - {{ tier_display }} (Costo Mensile)</td>
                 <td>1</td>
-                <td class="price">CHF {{ services_data.section1.price|default:"0"|floatformat:0 }}.-</td>
-                <td class="price">CHF {{ services_data.section1.price|default:"0"|floatformat:0 }}.-</td>
+                <td class="price">CHF {{ services_data.section1.price|default:"0.00"|floatformat:2 }}.-</td>
+                <td class="price">CHF {{ services_data.section1.price|default:"0.00"|floatformat:2 }}.-</td>
             </tr>
             {% endif %}
 
-            {% for service_key, service in services_data.section2.items %}
-            {% if service.quantity > 0 %}
+            {% for product in section2_products %}
+            {% if product.quantity > 0 %}
             <tr>
-                <td>{{ service.title }}</td>
+                <td>
+                    {{ product.title }}
+                    {% if product.billingType == 'yearly' %}
+                        <span style="font-size: 10px; color: #555;">(Fatt. Annuale)</span>
+                    {% else %}
+                        <span style="font-size: 10px; color: #555;">(Fatt. Mensile)</span>
+                    {% endif %}
+                </td>
+                <td>{{ product.quantity }}</td>
+                <td class="price">CHF {{ product.unitPrice|default:"0.00"|floatformat:2 }}.-</td>
+                <td class="price">CHF {{ product.total|default:"0.00"|floatformat:2 }}.-</td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+
+            {% for service_key, service in services_data.section2Services.items %}
+            {% if service.quantity > 0 %}
+            <tr style="border-top: 1px dashed #ccc;">
+                <td>{{ service.title }} (Base Intervento)</td>
                 <td>{{ service.quantity }}</td>
                 <td class="price">CHF {{ service.unitPrice|default:"0.00"|floatformat:2 }}.-</td>
                 <td class="price">CHF {{ service.total|default:"0.00"|floatformat:2 }}.-</td>
@@ -400,7 +466,7 @@
             {% endfor %}
             
             <tr style="background-color: #dc2626; color: white; font-weight: bold;">
-                <td colspan="3">TOTALE DEI SERVIZI</td>
+                <td colspan="3">TOTALE COMPLESSIVO (Mensile, Ricorrente, Annuale/Intervento)</td>
                 <td class="price">CHF {{ grand_total|default:"0.00"|floatformat:2 }}</td>
             </tr>
         </table>

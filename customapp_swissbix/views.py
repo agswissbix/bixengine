@@ -27,8 +27,8 @@ from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.oxml import OxmlElement
 from docx.enum.section import WD_SECTION
-from docx.enum.style import WD_STYLE_TYPE
-from docxcompose.composer import Composer
+from customapp_swissbix.mock.activeMind.products import products as products_data_mock
+from customapp_swissbix.mock.activeMind.services import services as services_data_mock
 
 logger = logging.getLogger(__name__)
 
@@ -94,11 +94,11 @@ def save_activemind(request):
         }, status=500)
     
 
-def chunk_services(services):
+def chunk(iterable):
     pages = []
     page = []
     counter = 0
-    for s in services:
+    for s in iterable:
         if s.quantity == 0:
             continue
         limit = 2 if len(s.features) > 10 else 3
@@ -165,12 +165,40 @@ def print_pdf_activemind(request):
                 logger.error(f"Errore salvataggio firma: {e}")
 
         # Calcolo i totali
+        # TODO prendere dati come fe es. servizi e prodotti già fatti
         section1_total = services_data.get('section1', {}).get('price', 0)
-        section2_total = sum(
-            service.get('quantity', 0) * service.get('unitPrice', 0)
-            for service in services_data.get('section2', {}).values()
-            if isinstance(service, dict)
-        )
+        
+
+        raw_service_dicts = []
+        for p in services_data.get("services", {}):
+            if isinstance(p, dict) and p.get("quantity", 0) > 0:
+                enriched = build_service_with_totals(
+                    service_id=p["id"],
+                    quantity=p["quantity"],
+                )
+                if enriched:
+                    raw_service_dicts.append(enriched)
+
+        section2_services_total = sum(p["total"] for p in raw_service_dicts)
+
+
+        raw_product_dicts = []
+        for p in services_data.get("products", {}):
+            if isinstance(p, dict) and p.get("quantity", 0) > 0:
+                enriched = build_product_with_totals(
+                    product_id=p["id"],
+                    quantity=p["quantity"],
+                    billing_type=p.get("billingType", "monthly")
+                )
+                if enriched:
+                    raw_product_dicts.append(enriched)
+
+        section2_products_total = sum(p["total"] for p in raw_product_dicts)
+
+
+        grand_total = section1_total + section2_services_total + section2_products_total
+
+
         tier_descriptions = {
             'tier1': 'Fino a 5 PC + server',
             'tier2': 'Fino a 10 PC + server', 
@@ -180,17 +208,29 @@ def print_pdf_activemind(request):
         selected_tier = services_data.get('section1', {}).get('selectedTier', '')
         tier_display = tier_descriptions.get(selected_tier, selected_tier)
 
-        from customapp_swissbix.mock.activeMind.services import services as services_data_mock
-        services_data.setdefault('section3', {})['features'] = services_data_mock
+        service_objects_for_chunking = [
+            type('Service', (object,), s) for s in raw_service_dicts
+        ]
+        product_objects_for_chunking = [
+            type('Product', (object,), p) for p in raw_product_dicts
+        ]
+
 
         # Preparo contesto per template
         context = {
             'client_info': cliente,
             'services_data': services_data,
-            'section2_pages': chunk_services([type('Service', (object,), s) for s in services_data.get('section2', {}).values() if isinstance(s, dict)]),
-            'section1_total': section1_total,
-            'section2_total': section2_total,
-            'grand_total': section2_total,
+            # Passa i prodotti per la sezione economica
+            'section2_products_pages': chunk(product_objects_for_chunking), 
+            # I servizi sono già gestiti da 'section2_pages' (codice precedente)
+            'section2_services_pages': chunk(service_objects_for_chunking),
+            
+            # Nuovi totali
+            'section1_price': section1_total,
+            'section2_services_total': section2_services_total,
+            'section2_products_total': section2_products_total,
+            'grand_total': grand_total,
+            
             'tier_display': tier_display,
             'digital_signature_url': signature_url,
             'nameSignature': nameSignature,
@@ -241,14 +281,64 @@ def link_callback(uri, rel):
     raise Exception(f"Immagine o file statico non trovato: {uri}")
 
 def get_services_activemind(request):
-    from customapp_swissbix.mock.activeMind.services import services as services_data_mock
     # print(services_data_mock)
     return JsonResponse({"services": services_data_mock}, safe=False)
 
+def get_service_by_id(service_id: str):
+    for service in services_data_mock:  # stesso array con categorie
+        if service["id"] == service_id:
+            return service
+    return None
+
+def build_service_with_totals(service_id: str, quantity: int):
+    service = get_service_by_id(service_id)
+    if not service:
+        return None
+    unit_price = service.get("unitPrice", 0)
+    total = unit_price * quantity
+    return {
+        "id": service["id"],
+        "title": service["title"],
+        "description": service.get("description", ""),
+        "features": service.get("features", []),
+        "category": service.get("category"),
+        "unitPrice": unit_price,
+        "quantity": quantity,
+        "total": total,
+    }
+
 def get_products_activemind(request):
-    from customapp_swissbix.mock.activeMind.products import products as products_data_mock
     # print(products_data_mock)
     return JsonResponse({"servicesCategory": products_data_mock}, safe=False)
+
+def get_product_by_id(product_id: str):
+    """Ritorna il dict del prodotto dal mock (in futuro DB)."""
+    for category in products_data_mock:
+        for service in category.get("services", []):
+            if service["id"] == product_id:
+                return service
+    return None
+
+def build_product_with_totals(product_id: str, quantity: int, billing_type: str = "monthly"):
+    """Arricchisce i dati con calcoli e dettagli dal mock."""
+    product = get_product_by_id(product_id)
+    if not product:
+        return None
+    
+    unit_price = product.get("monthlyPrice") if billing_type == "monthly" else product.get("yearlyPrice")
+    total = unit_price * quantity if unit_price else 0
+
+    return {
+        "id": product["id"],
+        "title": product["title"],
+        "description": product.get("description", ""),
+        "features": product.get("features", []),
+        "category": product.get("category"),
+        "billingType": billing_type,
+        "unitPrice": unit_price,
+        "quantity": quantity,
+        "total": total,
+    }
 
 def get_conditions_activemind(request):
     from customapp_swissbix.mock.activeMind.conditions import frequencies as conditions_data_mock
