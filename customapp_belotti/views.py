@@ -809,7 +809,7 @@ def send_order(request):
 def belotti_conferma_ricezione(request):
     try:
         data = json.loads(request.body)
-        recordid = data.get('recordId', None)
+        recordid = data.get('recordid', None)
         if not recordid:
             return JsonResponse({"success": False, "error": "recordid mancante"}, status=400)
         record = UserRecord('richieste', recordid=recordid)
