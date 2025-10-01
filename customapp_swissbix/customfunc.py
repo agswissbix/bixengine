@@ -11,7 +11,7 @@ from commonapp.bixmodels.helper_db import *
 from commonapp.helper import *
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view
-from datetime import datetime, date
+from datetime import *
 
 from commonapp.helper import Helper
 from commonapp.bixmodels.user_record import UserRecord
@@ -198,3 +198,119 @@ def save_record_fields(tableid,recordid):
 
 def card_task_pianificaperoggi(recordid):
     print("card_task_pianificaperoggi")
+
+
+def printing_katun_bexio_api_set_invoice(request):
+    
+    post_data = json.loads(request.body)
+    params = post_data.get('params', None)
+    recordid = params.get('recordid', None)
+
+    if not recordid:
+        bixdata_invoices = HelpderDB.sql_query("SELECT * FROM user_printinginvoice WHERE status='Creata' LIMIT 1")
+    else:
+        bixdata_invoices = HelpderDB.sql_query(f"SELECT * FROM user_printinginvoice WHERE recordid_='{recordid}'")
+
+
+    for invoice in bixdata_invoices:
+
+        #invoice data
+        recordid_company= invoice['recordidcompany_']
+        record_company = UserRecord('company', recordid_company)
+        bexio_contact_id= record_company.values.get('id_bexio', None)
+        invoice_title="Conteggio copie stampanti/Multifunzioni"
+        if (bexio_contact_id is  None) or (bexio_contact_id == ''):
+            bexio_contact_id = 297 #contact id di Swissbix SA
+            invoice_title = "Conteggio copie stampanti/Multifunzioni Swissbix SA "+invoice['title']
+        # 1. Ottieni la data e ora correnti come oggetto datetime
+        now = datetime.now()
+
+        # 2. Aggiungi 20 giorni utilizzando timedelta
+        future_date = now + timedelta(days=30)
+
+        # 3. Formatta la nuova data nel formato stringa desiderato
+        invoice_dateto = future_date.strftime("%Y-%m-%d")
+
+        # Se vuoi anche la data di partenza formattata
+        invoice_datefrom = now.strftime("%Y-%m-%d")
+
+        #invoice lines
+        bixdata_invoicelines = HelpderDB.sql_query(f"SELECT * FROM user_printinginvoiceline WHERE recordidprintinginvoice_='{invoice['recordid_']}'")
+        invoiceliness = []
+        for invoiceline in bixdata_invoicelines:
+            invoiceline_unitprice= invoiceline['unitprice']
+            invoiceline_quantity= invoiceline['quantity']
+            invoiceline_description= invoiceline['description']
+            invoiceline_description_html = invoiceline_description.replace('\n', '<br>')
+
+            bexio_invoiceline = {
+                "tax_id": "39",
+                "account_id": "353",
+                "text": invoiceline_description_html,
+                "unit_id": 2,   
+                "amount": invoiceline_quantity,
+                "unit_price": invoiceline_unitprice,
+                "type": "KbPositionCustom",
+            }
+            invoiceliness.append(bexio_invoiceline)
+
+        bexio_invoice = {
+            "title": "Conteggio copie stampanti/Multifunzioni",
+            "contact_id": bexio_contact_id,
+            "user_id": 1,
+            "language_id": 3,
+            "currency_id": 1,
+            "payment_type_id": 1,
+            "header": "",
+            "footer": "Vi ringraziamo per la vostra fiducia, in caso di disaccordo, vi preghiamo di notificarcelo entro 7 giorni. <br/>Rimaniamo a vostra disposizione per qualsiasi domanda,<br/><br/>Con i nostri più cordiali saluti, Swissbix SA",
+            "mwst_type": 0,
+            "mwst_is_net": True,
+            "show_position_taxes": False,
+            "is_valid_from": invoice_datefrom,
+            "is_valid_to": invoice_dateto,
+            "template_slug": "5a9c000702cf22422a8b4641",
+            "positions": invoiceliness,
+        }
+
+        payload_invoice=json.dumps(bexio_invoice)
+
+        #payload  = r"""{"title":"ICT: Supporto Cliente","contact_id":"297","user_id":1,"logopaper_id":1,"language_id":3,"currency_id":1,"payment_type_id":1,"header":"","footer":"Vi ringraziamo per la vostra fiducia, in caso di disaccordo, vi preghiamo di notificarcelo entro 7 giorni. Rimaniamo a vostra disposizione per qualsiasi domanda,Con i nostri più cordiali saluti, Swissbix SA","mwst_type":0,"mwst_is_net":true,"show_position_taxes":false,"is_valid_from":"2025-06-25","is_valid_to":"2025-07-15","positions":[{"text":"Interventi</b>","type":"KbPositionText"},{"text":"TEST 25/06/2025 Galli Alessandro </b></span>","tax_id":"39","account_id":"155","unit_id":2,"amount":"1","unit_price":"140","type":"KbPositionCustom"}]}"""
+
+
+        url = "https://api.bexio.com/2.0/kb_invoice"
+        accesstoken=os.environ.get('BEXIO_ACCESSTOKEN')
+        
+        headers = {
+            'Accept': "application/json",
+            'Content-Type': "application/json",
+            'Authorization': f"Bearer {accesstoken}",
+        }
+
+        
+
+
+        payload = """
+            {
+                "title": "TEST3",
+                "contact_id": 308,
+                "user_id": 1,
+                "language_id": 1,
+                "currency_id": 1,
+                "payment_type_id": 1,
+                "header": "",
+                "footer": "We hope that our offer meets your expectations and will be happy to answer your questions.",
+                "mwst_type": 0,
+                "mwst_is_net": true,
+                "show_position_taxes": false,
+                "is_valid_from": "2025-10-01",
+                "is_valid_to": "2025-10-21",
+                "template_slug": "5a9c000702cf22422a8b4641",
+                "positions":[{"text":"Interventi</b>","type":"KbPositionText"},{"text":"TEST 25/06/2025 Galli Alessandro </b></span>","tax_id":"39","account_id":"155","unit_id":2,"amount":"1","unit_price":"140","type":"KbPositionCustom"}]
+            }
+            """
+
+        response = requests.request("POST", url, data=payload_invoice, headers=headers)
+
+        status_code = response.status_code
+    return JsonResponse({'status': status_code, 'message': response.json()})
+
