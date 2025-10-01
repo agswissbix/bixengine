@@ -119,9 +119,11 @@ def sync_prodotti_adiutobixdata(request):
 
             for row in rows:
                 codice = row['F1029']
+                descrizione = row['F1030']
+                gruppo = row['F1033']
                 
                 # Verifica se il record esiste in base a utentebixdata
-                sql_check = f"SELECT recordid_ FROM user_sync_adiuto_prodotti WHERE codice = '{codice}'"
+                sql_check = f"SELECT recordid_ FROM user_sync_adiuto_prodotti WHERE codice = '{codice}' AND descrizione = '{descrizione}' AND gruppo = '{gruppo}'"
                 existing = HelpderDB.sql_query_value(sql_check, 'recordid_')
 
                 if existing:
