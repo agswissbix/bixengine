@@ -7,6 +7,8 @@ from django_q.models import Schedule
 from django_q.tasks import async_task
 from bixscheduler.utils import get_available_tasks
 from rest_framework.decorators import api_view
+from commonapp.bixmodels.user_record import *
+
 
 HOOK_PATH = 'bixscheduler.hooks.on_task_success'
 FUNC_PATH = 'bixscheduler.tasks.'
@@ -72,6 +74,10 @@ def lista_schedule_get(request):
 
     available_tasks = get_available_tasks()
     data = []
+
+    sql = f"SELECT MAX(id) as max_id, output FROM user_scheduler_log WHERE function='{s.func}' AND deleted_='N'"
+    output=HelpderDB.sql_query_value(sql, 'output')
+
     for s in schedules:
         data.append({
             "id": s.id,
@@ -82,7 +88,8 @@ def lista_schedule_get(request):
             "next_run": s.next_run,
             "display_next_run": getattr(s, "display_next_run", None),
             "repeats": s.repeats,
-            "hook": s.hook
+            "hook": s.hook,
+            "output": output if output else "",
         })
 
     return JsonResponse({"schedules": data, "available_tasks": available_tasks})
@@ -126,7 +133,7 @@ def lista_schedule_post(request):
 
     # Gestione next_run
     from django.utils.dateparse import parse_datetime
-    next_run_str = schedule_data.get('next_run')
+    next_run_str = schedule_data.get('display_next_run')
     if next_run_str:
         dt = parse_datetime(next_run_str)
         if dt:
@@ -140,11 +147,12 @@ def lista_schedule_post(request):
 
 def restart_schedule(schedule):
     now, ref, stype = timezone.now(), schedule.next_run, schedule.schedule_type
+    print(now , ref, stype)
     if not ref:
         schedule.display_next_run = None
         return
     if ref > now:
-        schedule.display_next_run = ref + timedelta(hours=2)
+        schedule.display_next_run = ref
         return
     if schedule.repeats == 0:
         schedule.next_run = None
@@ -181,7 +189,7 @@ def restart_schedule(schedule):
 
     schedule.next_run = next_run
     schedule.save(update_fields=['next_run'])
-    schedule.display_next_run = next_run + timedelta(hours=2)
+    schedule.display_next_run = next_run
 
 
 @login_required(login_url='/login/')
