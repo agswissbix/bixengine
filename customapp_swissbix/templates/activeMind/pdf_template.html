@@ -391,7 +391,7 @@
     {% endif %}
 
 
-    {% if services_data.section3.selectedFrequency %}
+    {% if services_data.section3.selectedFrequency and section2_services_pages %}
     <div class="section page-break">
         <div class="section-title">Sezione 3.0</div>
         <div class="service-item">
@@ -465,8 +465,30 @@
             {% endif %}
             {% endfor %}
             
+            <tr style="background-color: #f8f8f8; font-weight: bold;">
+                <td colspan="3">SUBTOTALE MENSILE (ricorrente)</td>
+                <td class="price">CHF {{ monthly_total|default:"0.00"|floatformat:2 }}</td>
+            </tr>
+            {% if quarterly_total > 0 %}
+            <tr style="background-color: #f8f8f8; font-weight: bold;">
+                <td colspan="3">SUBTOTALE TRIMESTRALE (ricorrente)</td>
+                <td class="price">CHF {{ quarterly_total|default:"0.00"|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            {% if biannual_total > 0 %}
+            <tr style="background-color: #f8f8f8; font-weight: bold;">
+                <td colspan="3">SUBTOTALE SEMESTRALE (ricorrente)</td>
+                <td class="price">CHF {{ biannual_total|default:"0.00"|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            {% if yearly_total > 0 %}
+            <tr style="background-color: #f8f8f8; font-weight: bold;">
+                <td colspan="3">SUBTOTALE ANNUALE</td>
+                <td class="price">CHF {{ yearly_total|default:"0.00"|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
             <tr style="background-color: #dc2626; color: white; font-weight: bold;">
-                <td colspan="3">TOTALE COMPLESSIVO (Mensile, Ricorrente, Annuale/Intervento)</td>
+                <td colspan="3">TOTALE COMPLESSIVO</td>
                 <td class="price">CHF {{ grand_total|default:"0.00"|floatformat:2 }}</td>
             </tr>
         </table>

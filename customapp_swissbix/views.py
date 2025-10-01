@@ -199,6 +199,8 @@ def print_pdf_activemind(request):
         grand_total = section1_total + section2_services_total + section2_products_total
 
 
+        condition = services_data.get('conditions', {})
+
         tier_descriptions = {
             'tier1': 'Fino a 5 PC + server',
             'tier2': 'Fino a 10 PC + server', 
@@ -207,6 +209,35 @@ def print_pdf_activemind(request):
         }
         selected_tier = services_data.get('section1', {}).get('selectedTier', '')
         tier_display = tier_descriptions.get(selected_tier, selected_tier)
+
+        totals = {
+            "monthly": 0,
+            "quarterly": 0,
+            "biannual": 0,
+            "yearly": 0,
+        }
+
+        for p in raw_product_dicts:
+            billing = p.get("billingType", "monthly").lower()
+            if billing in totals:
+                totals[billing] += p.get("total", 0)
+
+        # Servizi → gestiti da 'conditions'
+        for s in raw_service_dicts:
+            billing = condition.lower() if condition else "monthly"
+            if billing in totals:
+                totals[billing] += s.get("total", 0)
+
+        # Assegno i valori finali
+        monthly_total   = totals["monthly"]
+        quarterly_total = totals["quarterly"]
+        biannual_total  = totals["biannual"]
+        yearly_total    = totals["yearly"]
+
+        monthly_total += section1_total
+
+        # grand total resta invariato
+        grand_total = monthly_total + yearly_total
 
         service_objects_for_chunking = [
             type('Service', (object,), s) for s in raw_service_dicts
@@ -229,6 +260,10 @@ def print_pdf_activemind(request):
             'section1_price': section1_total,
             'section2_services_total': section2_services_total,
             'section2_products_total': section2_products_total,
+            'monthly_total': monthly_total,
+            'quarterly_total': quarterly_total,
+            'biannual_total': biannual_total,
+            'yearly_total': yearly_total,
             'grand_total': grand_total,
             
             'tier_display': tier_display,
