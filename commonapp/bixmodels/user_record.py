@@ -328,7 +328,7 @@ class UserRecord:
             linked_tableid=linked_table['tableid']
             #todo (controllo aggiunto perchè in alcune situazioni mi arrivava linked_tableid vuoto. in particolare nel caso di servicecontract)
             if linked_tableid:
-                sql=f"SELECT count(recordid_) as counter FROM user_{linked_tableid} WHERE recordid{self.tableid}_='{self.recordid}'"
+                sql=f"SELECT count(recordid_) as counter FROM user_{linked_tableid} WHERE recordid{self.tableid}_='{self.recordid}' AND deleted_='N'"
                 counter=HelpderDB.sql_query_value(sql,'counter')
                 linked_table['rowsCount']=counter
     
