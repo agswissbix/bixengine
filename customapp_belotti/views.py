@@ -12,6 +12,7 @@ from commonapp.helper import *
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view
 from datetime import datetime, date
+from customapp_belotti.utils.crypto import get_hashedid_from_recordid, get_recordid_from_hashedid
 
 # Initialize environment variables
 env = environ.Env()
@@ -758,6 +759,7 @@ def send_order(request):
             print("Dati ricevuti dal frontend:", data)  # <-- stampa in console
 
 
+
             formType = data.get('formType', "")
             username = Helper.get_username(request)
             userid = Helper.get_userid(request)
@@ -775,6 +777,12 @@ def send_order(request):
             print("Record richiesta salvato:", record_richiesta.values)
 
             recordid_richiesta = record_richiesta.recordid
+            
+            hashed_id_string = get_hashedid_from_recordid(recordid_richiesta)
+            
+            record_richiesta.values['recordid_hash'] = hashed_id_string
+            record_richiesta.save()
+
 
             for order_row in data.get('items', []):
                 record_riga = UserRecord('richieste_righedettaglio')
@@ -809,12 +817,15 @@ def send_order(request):
         return JsonResponse({"success": False, "error": "Metodo non consentito"}, status=405)
 
 
-def belotti_conferma_ricezione(request):
+def conferma_ricezione(request):
     try:
         data = json.loads(request.body)
-        recordid = data.get('recordid', None)
-        if not recordid:
+        recordidhashed = data.get('recordid', None)
+        if not recordidhashed:
             return JsonResponse({"success": False, "error": "recordid mancante"}, status=400)
+        recordid = get_recordid_from_hashedid(recordidhashed)
+        if not recordid:
+            return JsonResponse({"success": False, "error": "recordid non valido"}, status=400)
         record = UserRecord('richieste', recordid=recordid)
         if not record:
             return JsonResponse({"success": False, "error": "Record non trovato"}, status=404)
@@ -824,5 +835,30 @@ def belotti_conferma_ricezione(request):
 
         return JsonResponse({"success": True, "message": "Stato aggiornato a 'Merce Ricevuta'", "record": record.values})
 
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
+    
+
+def get_form_types(request):
+    try:
+        username = Helper.get_username(request)
+
+        group = HelpderDB.sql_query_value(
+            f"SELECT gruppo FROM user_sync_adiuto_utenti WHERE utentebixdata = '{username}'",
+            'gruppo'
+        )
+
+        if not group:
+            return JsonResponse({"success": False, "error": "Utente non trovato o gruppo non assegnato"}, status=404)
+        
+        formtypes = HelpderDB.sql_query_value(
+            f"SELECT formulari FROM user_sync_adiuto_formularigruppo WHERE gruppo = '{group}'",
+            'formulari'
+        )
+        if not formtypes:
+            return JsonResponse({"success": False, "error": "Nessun formulario trovato per il gruppo dell'utente"}, status=404)
+        
+        array_formtypes = [ft.strip() for ft in formtypes.split(',') if ft.strip()]
+        return JsonResponse({'formtypes': array_formtypes})
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=500)
