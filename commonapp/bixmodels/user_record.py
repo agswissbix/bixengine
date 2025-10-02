@@ -433,7 +433,7 @@ class UserRecord:
             if fieldid=='unitprice' or fieldid=='quantity' or fieldid=='unitexpectedcost':
                 insert_field['hasDependencies']=True
 
-            fieldtype='Parola'
+            fieldtype=field['fieldtypeid']
             if not Helper.isempty(field['keyfieldlink']):
                 fieldtype='linkedmaster'
                 if(field['tablelink']==self.master_tableid):
