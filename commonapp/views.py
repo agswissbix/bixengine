@@ -763,52 +763,60 @@ def get_table_records_kanban(request):
 
     # Itera sulle definizioni per mantenere l'ordine corretto
     for index, col_def in enumerate(column_definitions):
-        column_title = col_def['title']
-        
-        # Prendi la lista di record per questa colonna dai dati raggruppati
-        records_in_group = grouped_records[column_title]
-        
-        # Prepara la lista di "tasks" per questa colonna
-        tasks_list = []
-        locale.setlocale(locale.LC_ALL, 'it_IT.UTF-8')
-        venduto=0
-        margine_effettivo=0
-        for record in records_in_group:
-            # Trasforma ogni oggetto UserRecord nel formato "task" richiesto
-            # NOTA: Qui dovrai mappare i campi che ti interessano
-            task_data = {
-                "recordid": record.values.get("recordid_"), # Assumendo che recordid sia un attributo
-                #"css": "border-l-4 border-red-500", # Logica per il CSS (puoi renderla dinamica)
-                "css": "",
-                "fields": {
-                    # Mappa i campi che vuoi visualizzare nella card
-                    record.fields['reference']['description']: record.fields['reference']['convertedvalue'],
-                    record.fields['closedate']['description']: record.fields['closedate']['convertedvalue'],
-                    record.fields['amount']['description']: record.fields['amount']['convertedvalue'],
-                }
+    column_title = col_def['title']
+    
+    # Prendi la lista di record per questa colonna dai dati raggruppati
+    records_in_group = grouped_records[column_title]
+    
+    # Prepara la lista di "tasks" per questa colonna
+    tasks_list = []
+    # NON SERVE PIÙ: locale.setlocale(locale.LC_ALL, 'it_IT.UTF-8')
+    venduto = 0
+    margine_effettivo = 0
+    
+    for record in records_in_group:
+        # Trasforma ogni oggetto UserRecord nel formato "task" richiesto
+        task_data = {
+            "recordid": record.values.get("recordid_"),
+            "css": "",
+            "fields": {
+                record.fields['reference']['description']: record.fields['reference']['convertedvalue'],
+                record.fields['closedate']['description']: record.fields['closedate']['convertedvalue'],
+                record.fields['amount']['description']: record.fields['amount']['convertedvalue'],
             }
-            tasks_list.append(task_data)
-            venduto+=float(record.fields['amount']['value']) if record.fields['amount']['value'] else 0
-            margine_effettivo+=float(record.fields['effectivemargin']['value']) if record.fields['effectivemargin']['value'] else 0
-
-        formatted_venduto = locale.format_string("%.2f", venduto, grouping=True)
-        formatted_margine = locale.format_string("%.2f", margine_effettivo, grouping=True)
-        aggregatefunctions = [
-            {"title": "Venduto", "value": formatted_venduto},
-            {"title": "Margine effettivo", "value": formatted_margine}
-        ]
-        # Costruisci l'oggetto completo della colonna
-        column_data = {
-            "id": col_def['id'],
-            "title": column_title,
-            "color": col_def['color'],
-            "order": index, # L'ordine è dato dall'indice del ciclo
-            "editable": col_def['editable'],
-            "tasks": tasks_list,
-            "aggregatefunctions": aggregatefunctions
         }
-        
-        response_data["columns"].append(column_data) 
+        tasks_list.append(task_data)
+        venduto += float(record.fields['amount']['value']) if record.fields['amount']['value'] else 0
+        margine_effettivo += float(record.fields['effectivemargin']['value']) if record.fields['effectivemargin']['value'] else 0
+
+    # NUOVO MODO DI FORMATTARE I NUMERI
+    # Formatta con la virgola come separatore delle migliaia e il punto per i decimali (standard USA)
+    # Esempio: 1234.56 -> "1,234.56"
+    formatted_venduto_usa = f"{venduto:,.2f}"
+    formatted_margine_usa = f"{margine_effettivo:,.2f}"
+
+    # Sostituisci i separatori per ottenere il formato italiano
+    # Esempio: "1,234.56" -> "1.234,56"
+    formatted_venduto = formatted_venduto_usa.replace(",", "TEMP").replace(".", ",").replace("TEMP", ".")
+    formatted_margine = formatted_margine_usa.replace(",", "TEMP").replace(".", ",").replace("TEMP", ".")
+
+    aggregatefunctions = [
+        {"title": "Venduto", "value": formatted_venduto},
+        {"title": "Margine effettivo", "value": formatted_margine}
+    ]
+    
+    # Costruisci l'oggetto completo della colonna
+    column_data = {
+        "id": col_def['id'],
+        "title": column_title,
+        "color": col_def['color'],
+        "order": index,
+        "editable": col_def['editable'],
+        "tasks": tasks_list,
+        "aggregatefunctions": aggregatefunctions
+    }
+    
+    response_data["columns"].append(column_data)
 
 
     return JsonResponse(response_data)
