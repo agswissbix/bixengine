@@ -809,7 +809,7 @@ def send_order(request):
         return JsonResponse({"success": False, "error": "Metodo non consentito"}, status=405)
 
 
-def belotti_conferma_ricezione(request):
+def conferma_ricezione(request):
     try:
         data = json.loads(request.body)
         recordid = data.get('recordid', None)
@@ -824,5 +824,30 @@ def belotti_conferma_ricezione(request):
 
         return JsonResponse({"success": True, "message": "Stato aggiornato a 'Merce Ricevuta'", "record": record.values})
 
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
+    
+
+def get_form_types(request):
+    try:
+        username = Helper.get_username(request)
+
+        group = HelpderDB.sql_query_value(
+            f"SELECT gruppo FROM user_sync_adiuto_utenti WHERE utentebixdata = '{username}'",
+            'gruppo'
+        )
+
+        if not group:
+            return JsonResponse({"success": False, "error": "Utente non trovato o gruppo non assegnato"}, status=404)
+        
+        formtypes = HelpderDB.sql_query_value(
+            f"SELECT formulari FROM user_sync_adiuto_formularigruppo WHERE gruppo = '{group}'",
+            'formulari'
+        )
+        if not formtypes:
+            return JsonResponse({"success": False, "error": "Nessun formulario trovato per il gruppo dell'utente"}, status=404)
+        
+        array_formtypes = [ft.strip() for ft in formtypes.split(',') if ft.strip()]
+        return JsonResponse({'formtypes': array_formtypes})
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=500)
