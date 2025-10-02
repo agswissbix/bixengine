@@ -797,7 +797,8 @@ def send_order(request):
                 record_riga.values['sph'] = sph
                 diametro= order_row.get('diametro', "")
                 record_riga.values['diametro'] = diametro
-                record_riga.values['dettagli'] = f"Colore: {colore}, BoxDL: {boxdl}, Referenza: {referenza}, Raggio: {raggio}, SPH: {sph}, Diametro: {diametro}"
+                if colore != "" or boxdl != "" or referenza != "" or raggio != "" or sph != "" or diametro != "":
+                    record_riga.values['dettagli'] = f"Colore: {colore}, BoxDL: {boxdl}, Referenza: {referenza}, Raggio: {raggio}, SPH: {sph}, Diametro: {diametro}"
                 record_riga.save()
             return JsonResponse({"success": True, "recordid_richiesta": recordid_richiesta})
 

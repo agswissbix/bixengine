@@ -428,7 +428,11 @@ class UserRecord:
             }
             # Sovrascrivi con le impostazioni dal DB
             insert_field['settings'].update(current_field_settings)
-            
+
+            #TODO rendere dinamico dai settings
+            if fieldid=='unitprice' or fieldid=='quantity' or fieldid=='unitexpectedcost':
+                insert_field['hasDependencies']=True
+
             fieldtype='Parola'
             if not Helper.isempty(field['keyfieldlink']):
                 fieldtype='linkedmaster'

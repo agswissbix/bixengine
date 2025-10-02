@@ -6,6 +6,12 @@ from django.db import connection
 import psutil, shutil
 from commonapp.bixmodels.user_record import UserRecord
 from commonapp.utils.email_sender import EmailSender
+from django.conf import settings
+from commonapp.bixmodels.helper_db import HelpderDB
+import xml.etree.ElementTree as ET
+import json
+from django.http import JsonResponse
+
 
 
 # ritorna dei contatori (ad esempio: numero di stabili, numero di utenti, ecc.)
@@ -294,34 +300,42 @@ def printing_katun_xml_extract_rows(request):
 
             try:
                 if xml_check is None:
-                    tree = ET.parse(file_path)
-                    root = tree.getroot()
-
-                    invoice_rows = []
-                    # Cerca i nodi invoiceRow sotto invoiceRows
-                    invoice_rows_container = root.find('InvoiceRows')
-                    if invoice_rows_container is not None:
-                        invoice_rows = invoice_rows_container.findall('InvoiceRow')
-                    
-                    company_name = root.find('RecipientDescription').text 
-                    company = HelpderDB.sql_query_row(f"SELECT * FROM user_company WHERE companyname='{company_name}'")
-                    if not company:
-                        recordidcompany = '00000000000000000000000000000394'
-                    else:
-                        recordidcompany = company['recordid_']
-
                     printing_invoice = UserRecord('printinginvoice')
-                    printing_invoice.values['recordidcompany_'] = recordidcompany
-                    printing_invoice.values['title'] = company_name
-                    printing_invoice.values['totalnet'] = root.find('Total').text
-                    printing_invoice.values['date'] = root.find('IssueDate').text
-                    printing_invoice.values['status'] = 'Creata'
-                    printing_invoice.values['katunid'] = root.find('Id').text
-                    printing_invoice.values['filename'] = filename
+                else:
+                    invoice_recordid = xml_check['recordid_']
+                    printing_invoice = UserRecord('printinginvoice',invoice_recordid)
+
+                tree = ET.parse(file_path)
+                root = tree.getroot()
+
+                invoice_rows = []
+                # Cerca i nodi invoiceRow sotto invoiceRows
+                invoice_rows_container = root.find('InvoiceRows')
+                if invoice_rows_container is not None:
+                    invoice_rows = invoice_rows_container.findall('InvoiceRow')
+                
+                company_name = root.find('RecipientDescription').text 
+                company = HelpderDB.sql_query_row(f"SELECT * FROM user_company WHERE companyname='{company_name}'")
+                if not company:
+                    recordidcompany = '00000000000000000000000000000394'
+                else:
+                    recordidcompany = company['recordid_']
+
+                
+                printing_invoice.values['recordidcompany_'] = recordidcompany
+                printing_invoice.values['title'] = company_name
+                printing_invoice.values['totalnet'] = root.find('SubTotal').text
+                printing_invoice.values['totalgross'] = root.find('Total').text
+                printing_invoice.values['date'] = root.find('IssueDate').text
+                printing_invoice.values['status'] = 'Creata'
+                printing_invoice.values['katunid'] = root.find('Id').text
+                printing_invoice.values['filename'] = filename
 
 
-                    printing_invoice.save()
+                printing_invoice.save()
 
+
+                if xml_check is None:
                     invoice_recordid = printing_invoice.recordid
 
                     for row in invoice_rows:
@@ -343,10 +357,7 @@ def printing_katun_xml_extract_rows(request):
 
                         invoiceline.save()
 
-                else:
-                    invoice_recordid = xml_check['recordid_']
-                    printing_invoice = UserRecord('printinginvoice',invoice_recordid)
-
+                
 
                 folder_path_updated = os.path.join(folder_path, invoice_recordid)
 

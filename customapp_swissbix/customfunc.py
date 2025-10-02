@@ -100,16 +100,17 @@ def save_record_fields(tableid,recordid):
             dealline_record.values['recordidproject_'] = project_recordid
 
             dealline_actualcost = dealline_unitactualcost * dealline_quantity
-            product_record = UserRecord('product', product_recordid)
             product_fixedprice = 'No'
-            if not isempty(product_record.recordid):
-                product_fixedprice = product_record.values['fixedprice']
+            if product_recordid and product_recordid != '':
+                product_record = UserRecord('product', product_recordid)
+                if not Helper.isempty(product_record.recordid):
+                    product_fixedprice = product_record.values['fixedprice']
             if not dealline_record_dict['expectedhours']:
                 dealline_record_dict['expectedhours'] = 0
             deal_expectedhours = deal_expectedhours + dealline_record_dict['expectedhours']
             if product_fixedprice == 'Si':
                 deal_record.values['fixedprice'] = 'Si'
-                if isempty(dealline_record.values['expectedhours']):
+                if Helper.isempty(dealline_record.values['expectedhours']):
                     dealline_record.values['expectedhours'] = dealline_price / 140
                 if deal_usedhours != 0:
                     dealline_record.values['usedhours'] = deal_usedhours
@@ -122,7 +123,7 @@ def save_record_fields(tableid,recordid):
             dealline_record.values['effectivecost'] = dealline_actualcost
             dealline_record.values['margin_actual'] = dealline_actualmargin
 
-            if not isempty(dealline_frequency):
+            if not Helper.isempty(dealline_frequency):
                 dealline_record.values['annualprice'] = dealline_price * multiplier
                 if dealline_actualcost != 0:
                     dealline_record.values['annualcost'] = dealline_actualcost * multiplier
@@ -191,8 +192,8 @@ def save_record_fields(tableid,recordid):
 
     # ---DEALLINE
     if tableid == 'dealline':
-        dealline_record = Record('dealline', recordid)
-        save_record_fields(request, tableid='deal', recordid=dealline_record.fields['recordiddeal_'])
+        dealline_record = UserRecord('dealline', recordid)
+        save_record_fields(tableid='deal', recordid=dealline_record.values['recordiddeal_'])
 
 
 
@@ -240,6 +241,8 @@ def printing_katun_bexio_api_set_invoice(request):
         for invoiceline in bixdata_invoicelines:
             invoiceline_unitprice= invoiceline['unitprice']
             invoiceline_quantity= invoiceline['quantity']
+            if invoiceline_quantity == "0.00":
+                invoiceline_quantity="0.0001"
             invoiceline_description= invoiceline['description']
             invoiceline_description_html = invoiceline_description.replace('\n', '<br>')
 
@@ -312,5 +315,18 @@ def printing_katun_bexio_api_set_invoice(request):
         response = requests.request("POST", url, data=payload_invoice, headers=headers)
 
         status_code = response.status_code
+        invoice_record = UserRecord('printinginvoice', invoice['recordid_'])
+        if status_code == 201:
+            response_data = response.json()
+            bexio_invoice_id = response_data.get('id', )
+            bexio_document_nr = response_data.get('document_nr', None)
+            invoice_record.values['bexioinvoicenr'] = bexio_document_nr
+            invoice_record.values['bexioinvoiceid'] = bexio_invoice_id
+            invoice_record.values['status'] = 'Caricata'
+            invoice_record.save()
+        else:
+            print(f"Errore nella creazione della fattura su Bexio. Status code: {status_code}, Response: {response.text}")
+            invoice_record.values['status'] = 'Errore Bexio'
+            invoice_record.save()
     return JsonResponse({'status': status_code, 'message': response.json()})
 

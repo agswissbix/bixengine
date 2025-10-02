@@ -1001,6 +1001,12 @@ def stampa_offerta(request):
 def deal_update_status(request):
     print('test')
     data = json.loads(request.body)
-    recordid = data.get('recordid')
-    response={ "test": "test"}
+    params = data.get('params')
+    recordid = params.get('recordid')
+    status= params.get('status')
+    stage= params.get('stage')
+    deal_record=UserRecord('deal',recordid)
+    deal_record.values['dealstage']=stage
+    deal_record.values['dealstatus']=status
+    response={ "status": "ok"}
     return JsonResponse(response)
