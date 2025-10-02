@@ -178,6 +178,10 @@ QR_FERNET_KEY = os.getenv("QR_FERNET_KEY")
 if not QR_FERNET_KEY:
     raise RuntimeError("QR_FERNET_KEY non impostata nell'ambiente (.env)")
 
+HASHEDID_FERNET_KEY = os.getenv("HASHEDID_FERNET_KEY")
+if not HASHEDID_FERNET_KEY:
+    raise RuntimeError("HASHEDID_FERNET_KEY non impostata nell'ambiente (.env)")
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework.authentication.SessionAuthentication',

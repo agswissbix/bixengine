@@ -12,6 +12,7 @@ from commonapp.helper import *
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view
 from datetime import datetime, date
+from customapp_belotti.utils.crypto import get_hashedid_from_recordid, get_recordid_from_hashedid
 
 # Initialize environment variables
 env = environ.Env()
@@ -758,6 +759,7 @@ def send_order(request):
             print("Dati ricevuti dal frontend:", data)  # <-- stampa in console
 
 
+
             formType = data.get('formType', "")
             username = Helper.get_username(request)
             userid = Helper.get_userid(request)
@@ -775,6 +777,12 @@ def send_order(request):
             print("Record richiesta salvato:", record_richiesta.values)
 
             recordid_richiesta = record_richiesta.recordid
+            
+            hashed_id_string = get_hashedid_from_recordid(recordid_richiesta)
+            
+            record_richiesta.values['recordid_hash'] = hashed_id_string
+            record_richiesta.save()
+
 
             for order_row in data.get('items', []):
                 record_riga = UserRecord('richieste_righedettaglio')
@@ -812,9 +820,12 @@ def send_order(request):
 def conferma_ricezione(request):
     try:
         data = json.loads(request.body)
-        recordid = data.get('recordid', None)
-        if not recordid:
+        recordidhashed = data.get('recordid', None)
+        if not recordidhashed:
             return JsonResponse({"success": False, "error": "recordid mancante"}, status=400)
+        recordid = get_recordid_from_hashedid(recordidhashed)
+        if not recordid:
+            return JsonResponse({"success": False, "error": "recordid non valido"}, status=400)
         record = UserRecord('richieste', recordid=recordid)
         if not record:
             return JsonResponse({"success": False, "error": "Record non trovato"}, status=404)
