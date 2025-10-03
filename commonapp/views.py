@@ -4137,6 +4137,53 @@ def get_dashboard_blocks(request):
     return JsonResponse(context, safe=False)
 
 
+@login_required(login_url='/login/')
+def get_chart_data(request):
+    request_data = json.loads(request.body)
+    chart_id = request_data.get("chart_id")
+    viewid = request_data.get('viewid', '')
+    userid = Helper.get_userid(request)
+
+    if not chart_id:
+        return JsonResponse({"error": "chart_id is required"}, status=400)
+
+    try:
+        chart = HelpderDB.sql_query_row(
+            f"SELECT * FROM sys_chart WHERE id='{chart_id}'"
+        )
+
+        if not chart:
+            return JsonResponse({"error": "Chart not found"}, status=404)
+
+        # Recupero config e layout
+        chart_name = chart["name"]
+        chart_layout = chart["layout"]
+        chart_config = chart["config"]
+        if isinstance(chart_config, str):
+            chart_config = json.loads(chart_config)
+
+        # Eseguo query dinamica in base al chart
+        query_conditions = ""
+        if viewid:
+            view = HelpderDB.sql_query_row(f"SELECT * FROM sys_view WHERE id='{viewid}'")
+            query_conditions = view["query_conditions"].replace("$userid$", str(userid))
+
+        chart_data = get_dynamic_chart_data(request, chart_id, query_conditions)
+        chart_data_json=json.dumps(chart_data)
+
+
+        return JsonResponse({
+            "id": chart_id,
+            "name": chart_name,
+            "type": chart_layout.lower() if chart_layout else "value",
+            "chart_data": chart_data_json,
+            "config": chart_config,
+        })
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
 
 from django.db import connection
 # Assuming HelpderDB is a custom helper you have.

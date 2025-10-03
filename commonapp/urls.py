@@ -75,6 +75,7 @@ urlpatterns = [
     path('get_users/', get_users, name='get_users'),
     path('calculate_dependent_fields/', calculate_dependent_fields, name='calculate_dependent_fields'),
     path('get_filter_options/', get_filter_options, name='get_filter_options'),
+    path('get_chart_data/', get_chart_data, name='get_chart_data'),
     
     
 ]
