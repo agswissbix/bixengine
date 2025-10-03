@@ -16,7 +16,7 @@ def get_recordid_from_hashedid(hashed_id_string):
     try:
         hashed_id_bytes = hashed_id_string.encode()
         decrypted_bytes = fernet.decrypt(hashed_id_bytes)
-        original_record_id = int(decrypted_bytes.decode())
+        original_record_id = decrypted_bytes.decode()
         return original_record_id
     except Exception as e:
         return None

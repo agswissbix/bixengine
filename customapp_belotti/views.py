@@ -820,10 +820,12 @@ def send_order(request):
 def conferma_ricezione(request):
     try:
         data = json.loads(request.body)
-        recordidhashed = data.get('recordid', None)
-        if not recordidhashed:
-            return JsonResponse({"success": False, "error": "recordid mancante"}, status=400)
-        recordid = get_recordid_from_hashedid(recordidhashed)
+        recordidhashed = data.get('recordid_hashed', None)
+        recordid = data.get('recordid', None)
+        if not recordidhashed and not recordid:
+            return JsonResponse({"success": False, "error": "recordid_hashed o recordid richiesto"}, status=400)
+        if recordidhashed is not None:
+            recordid = get_recordid_from_hashedid(recordidhashed)
         if not recordid:
             return JsonResponse({"success": False, "error": "recordid non valido"}, status=400)
         record = UserRecord('richieste', recordid=recordid)
