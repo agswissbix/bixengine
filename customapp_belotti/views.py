@@ -713,8 +713,8 @@ def sync_richieste_bixdataadiuto(request):
         for row in rows:
             
             merge_sql = f"""
-                INSERT INTO dbo.T_BIXDATA_RICHIESTE (recordid_, tiporichiesta, datarichiesta, utentebixdata, utenteadiuto, idrichiesta)
-                SELECT {sql_safe(row['recordid_'])}, {sql_safe(row['tiporichiesta'])}, {sql_safe(row['data'])}, {sql_safe(row['utentebixdata'])}, {sql_safe(row['utenteadiuto'])}, {sql_safe(row['id'])}
+                INSERT INTO dbo.T_BIXDATA_RICHIESTE (recordid_, tiporichiesta, datarichiesta, utentebixdata, utenteadiuto, idrichiesta, recordid_hash)
+                SELECT {sql_safe(row['recordid_'])}, {sql_safe(row['tiporichiesta'])}, {sql_safe(row['data'])}, {sql_safe(row['utentebixdata'])}, {sql_safe(row['utenteadiuto'])}, {sql_safe(row['id'])}, {sql_safe(row['recordid_hash'])}
                 WHERE NOT EXISTS (
                     SELECT 1 FROM dbo.T_BIXDATA_RICHIESTE WHERE recordid_ = {sql_safe(row['recordid_'])}
                 )
@@ -730,8 +730,8 @@ def sync_richieste_bixdataadiuto(request):
             )
             for row_dettaglio in rows_dettagli:
                 merge_sql_righe = f"""
-                    INSERT INTO dbo.T_BIXDATA_RICHIESTE_DETTAGLI (recordid_, recordidrichieste_, codice, descrizione, quantita, categoria, dettagli)
-                    SELECT {sql_safe(row_dettaglio['recordid_'])}, {sql_safe(row_dettaglio['recordidrichieste_'])}, {sql_safe(row_dettaglio['codice'])}, {sql_safe(row_dettaglio['prodotto'])}, {sql_safe(row_dettaglio['quantita'])}, {sql_safe(row_dettaglio['categoria'])}, {sql_safe(row_dettaglio['dettagli'])}
+                    INSERT INTO dbo.T_BIXDATA_RICHIESTE_DETTAGLI (recordid_, recordidrichieste_, codice, descrizione, quantita, categoria, dettagli, formulario)
+                    SELECT {sql_safe(row_dettaglio['recordid_'])}, {sql_safe(row_dettaglio['recordidrichieste_'])}, {sql_safe(row_dettaglio['codice'])}, {sql_safe(row_dettaglio['prodotto'])}, {sql_safe(row_dettaglio['quantita'])}, {sql_safe(row_dettaglio['categoria'])}, {sql_safe(row_dettaglio['dettagli'])}, {sql_safe(row_dettaglio['formulario'])}
                     WHERE NOT EXISTS (
                         SELECT 1 FROM dbo.T_BIXDATA_RICHIESTE_DETTAGLI WHERE recordid_ = {sql_safe(row_dettaglio['recordid_'])}
                     )
@@ -807,6 +807,8 @@ def send_order(request):
                 record_riga.values['diametro'] = diametro
                 if colore != "" or boxdl != "" or referenza != "" or raggio != "" or sph != "" or diametro != "":
                     record_riga.values['dettagli'] = f"Colore: {colore}, BoxDL: {boxdl}, Referenza: {referenza}, Raggio: {raggio}, SPH: {sph}, Diametro: {diametro}"
+                
+                record_riga.values['formulario'] = order_row.get('formType', "")
                 record_riga.save()
             return JsonResponse({"success": True, "recordid_richiesta": recordid_richiesta})
 
