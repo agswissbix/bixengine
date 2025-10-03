@@ -1,11 +1,15 @@
 from datetime import date, datetime
 import os
 import subprocess
+from django.http import JsonResponse
 from django_q.models import Schedule, Task
 from django.db import connection
 import psutil, shutil
+
+import requests
 from commonapp.bixmodels.user_record import UserRecord
 from commonapp.utils.email_sender import EmailSender
+from commonapp.bixmodels.helper_db import *
 from django.conf import settings
 from commonapp.bixmodels.helper_db import HelpderDB
 import xml.etree.ElementTree as ET
@@ -382,3 +386,66 @@ def printing_katun_xml_extract_rows(request):
             except ET.ParseError as e:
                 print("errore")
     return JsonResponse({'status': 'success', 'message': 'Rows extracted successfully.'})
+
+# Gets feedbacks
+def get_satisfaction():
+    try: 
+        url = "https://www.swissbix.ch/sync/get_feedback.php"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+        }
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+
+        tableid = 'ticketfeedback'
+        results = []        
+
+        for feedback in data:
+            ticketid = feedback.get("ticketid")
+            level = feedback.get("level")
+            comment = feedback.get("comment", "")
+            technician = feedback.get("technician")
+            dateinsert_str = feedback.get("dateinsert")
+
+            try:
+                dateinsert = datetime.strptime(dateinsert_str, "%Y-%m-%d")
+            except:
+                dateinsert = None
+
+            # Check if record (ticket) already exists
+            existing = HelpderDB.sql_query_row(
+                f"SELECT id FROM user_ticketfeedback WHERE ticketid = '{ticketid}'"
+            )
+
+            if existing:
+                # If record exists, update record
+                recordid = existing['id']
+                record = UserRecord(tableid, recordid)
+                record.values['level'] = level
+                record.values['comment'] = comment
+                record.values['technician'] = technician
+                record.values['dateinsert'] = dateinsert
+                record.save()
+                created = False
+            else:
+                # If record does not exists, create record
+                new_record = UserRecord(tableid)
+                new_record.values['ticketid'] = ticketid
+                new_record.values['level'] = level
+                new_record.values['comment'] = comment
+                new_record.values['dateinsert'] = dateinsert
+                new_record.save()
+                created = True
+            
+                
+        results.append({
+            "ticketid": ticketid,
+            "created": created,
+            "level": level,
+            "comment": comment,
+        })
+
+        return JsonResponse(results, safe=False)
+    except requests.RequestException as e:  
+        return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
