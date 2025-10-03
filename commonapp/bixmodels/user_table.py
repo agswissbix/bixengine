@@ -77,8 +77,17 @@ class UserTable:
             if not field_id or not filter_value:
                 continue
                 
-            # Gestione del tipo 'Parola' e 'Text'
-            if filter_type in ['Parola', 'Text']:
+            if filter_type in ['lookup', 'Utente']:
+                filter_values = json.loads(filter_value)
+                
+                if isinstance(filter_values, list) and filter_values:
+                    conditions = []
+                    for id in filter_values:
+                        if str(id):
+                            conditions.append(f"{field_id}='{id}'")
+                    if conditions:
+                        conditions_list.append(f"({' OR '.join(conditions)})")
+            elif filter_type in ['Parola', 'Text']:
                 # La stringa è già il valore da usare per la clausola LIKE.
                 # NOTA: Usiamo LIKE per una ricerca più flessibile, ma possiamo anche usare '=' per "Valore esatto".
                 # Per ora, come richiesto, ci concentriamo su 'Valore esatto'
@@ -139,18 +148,6 @@ class UserTable:
                 except (json.JSONDecodeError, ValueError):
                     print(f"Errore di decodifica JSON o valore non valido per il filtro data {field_id}: {filter_value}")
                     continue
-
-            # Gestione del tipo 'Utente'
-            elif filter_type == 'Utente':
-                filter_values = json.loads(filter_value)
-                
-                if isinstance(filter_values, list) and filter_values:
-                    user_conditions = []
-                    for user_id in filter_values:
-                        if str(user_id).isdigit():
-                            user_conditions.append(f"{field_id}='{user_id}'")
-                    if user_conditions:
-                        conditions_list.append(f"({' OR '.join(user_conditions)})")
         
         # --- Fine del blocco di gestione filtri ---
 
@@ -179,9 +176,9 @@ class UserTable:
             
             if column.get('fieldtypeid') == 'Utente':
                 for record_data in raw_records_data:
-                    user_id = record_data.get(fieldid)
-                    if user_id:
-                        ids_to_fetch['sys_user'].add(user_id)
+                    id = record_data.get(fieldid)
+                    if id:
+                        ids_to_fetch['sys_user'].add(id)
 
             elif column.get('keyfieldlink') and column.get('tablelink'):
                 table_link = column.get('tablelink')

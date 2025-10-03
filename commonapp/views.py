@@ -464,8 +464,9 @@ def get_table_filters(request):
     query = f"""
         SELECT 
             T1.fieldid, 
-            T1.fieldtypeid, 
-            T1.description 
+            T1.fieldtypewebid, 
+            T1.description,
+            T1.lookuptableid 
         FROM 
             sys_field T1
         JOIN 
@@ -483,12 +484,20 @@ def get_table_filters(request):
         print(f"Errore nella query SQL per i filtri: {e}")
         return JsonResponse({"success": False, "error": "Database error"}, status=500)
 
-    # Prepara la risposta nel formato desiderato dal frontend
+
+    for f in filters_data:
+        f['lookups'] = []
+        lookuptableid = f['lookuptableid']
+        if lookuptableid:
+            sql = f'SELECT itemcode, itemdesc FROM sys_lookup_table_item WHERE lookuptableid="{lookuptableid}"'
+            f['lookups'] = HelpderDB.sql_query(sql)
+
     response_filters = [
         {
             "fieldid": f['fieldid'],
-            "type": f['fieldtypeid'],
-            "label": f['description']
+            "type": f['fieldtypewebid'],
+            "label": f['description'],
+            'lookups': f['lookups']
         }
         for f in filters_data
     ]
