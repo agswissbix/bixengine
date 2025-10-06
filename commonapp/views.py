@@ -464,8 +464,9 @@ def get_table_filters(request):
     query = f"""
         SELECT 
             T1.fieldid, 
-            T1.fieldtypeid, 
-            T1.description 
+            T1.fieldtypewebid, 
+            T1.description,
+            T1.lookuptableid 
         FROM 
             sys_field T1
         JOIN 
@@ -483,12 +484,20 @@ def get_table_filters(request):
         print(f"Errore nella query SQL per i filtri: {e}")
         return JsonResponse({"success": False, "error": "Database error"}, status=500)
 
-    # Prepara la risposta nel formato desiderato dal frontend
+
+    for f in filters_data:
+        f['lookups'] = []
+        lookuptableid = f['lookuptableid']
+        if lookuptableid:
+            sql = f'SELECT itemcode, itemdesc FROM sys_lookup_table_item WHERE lookuptableid="{lookuptableid}"'
+            f['lookups'] = HelpderDB.sql_query(sql)
+
     response_filters = [
         {
             "fieldid": f['fieldid'],
-            "type": f['fieldtypeid'],
-            "label": f['description']
+            "type": f['fieldtypewebid'],
+            "label": f['description'],
+            'lookups': f['lookups']
         }
         for f in filters_data
     ]
@@ -2235,11 +2244,11 @@ def save_record_fields(request):
     # ---ATTACHMENT---
     if tableid == 'attachment':
         attachment_record = UserRecord('attachment', recordid)
-        dipendente_record = UserRecord('dipendente', attachment_record.values['recordiddipendente_'])
-        allegati= HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordiddipendente_='{attachment_record.values['recordiddipendente_']}' AND deleted_='N'")
-        nrallegati=len(allegati) 
-        dipendente_record.values['nrallegati'] = nrallegati
-        dipendente_record.save()
+        #dipendente_record = UserRecord('dipendente', attachment_record.values['recordiddipendente_'])
+        #allegati= HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordiddipendente_='{attachment_record.values['recordiddipendente_']}' AND deleted_='N'")
+        #nrallegati=len(allegati) 
+        #dipendente_record.values['nrallegati'] = nrallegati
+        #dipendente_record.save()
 
 
 
@@ -2394,7 +2403,11 @@ def save_record_fields(request):
                 dataset={}
                 dataset['label']=field_descriptions.get(field, field)
                 if operation=='Somma':
-                    dataset['expression']=f"SUM({field})"
+                    #TODO custom wegolf
+                    if raggruppamento=='recordidgolfclub_':
+                        dataset['expression']=f"SUM(t1.{field})"
+                    else:
+                        dataset['expression']=f"SUM({field})"
                 else:
                     dataset['expression']=f"COUNT({field})"
                 dataset['alias']=field
@@ -2441,7 +2454,7 @@ def save_record_fields(request):
                     datasets2.append(dataset2)
 
 
-
+            
             config_python = {
                 "from_table": "metrica_annuale",
                 "group_by_field": {
@@ -2452,6 +2465,9 @@ def save_record_fields(request):
                 "datasets2": datasets2,
                 "order_by": "anno ASC"
             }
+            #TODO custom wegolf
+            if raggruppamento=='recordidgolfclub_':
+                config_python['group_by_field']["lookup"]= {"on_key": "recordid_", "from_table": "golfclub", "display_field": "nome_club"}
         status='Bozza'
         config_json_string = json.dumps(config_python, indent=4)
             
@@ -2462,6 +2478,9 @@ def save_record_fields(request):
                 chart_record.values['reportid'] = chartid
                 chart_record.save()
                 sql=f"INSERT INTO sys_dashboard_block (name, userid, viewid, chartid) VALUES ('{title}',1,53,'{chartid}')"
+                #TODO custom wegolf
+                if raggruppamento=='recordidgolfclub_':
+                    sql=f"INSERT INTO sys_dashboard_block (name, userid, viewid, chartid, category) VALUES ('{title}',1,53,'{chartid}','benchmark')"
                 HelpderDB.sql_execute(sql)
 
 
@@ -3694,9 +3713,13 @@ def download_offerta(request):
 
 def get_dashboard_data(request):
     userid = request.user.id
-    if userid is None:
-        return JsonResponse({'error': 'User not authenticated'}, status=401)
-    dashboards = HelpderDB.sql_query(f"SELECT dashboardid AS id, name from v_user_dashboard_block WHERE bixid={userid}")
+    data = json.loads(request.body)
+    dashboardCategory = data.get('dashboardCategory', '')   
+
+    if dashboardCategory!='':
+        dashboards = HelpderDB.sql_query(f"SELECT  id, name from sys_dashboard WHERE category='{dashboardCategory}'")
+    else:
+        dashboards = HelpderDB.sql_query(f"SELECT  id, name from sys_dashboard")
 
     return JsonResponse({
         'dashboards': dashboards
@@ -4063,7 +4086,7 @@ def get_dashboard_blocks(request):
                     block['gsh'] = data['gsh']
                     block['viewid'] = results['viewid']
                     block['widgetid'] = results['widgetid']
-
+                    block_category=results['category']
                     # if they are null set default values
                     if block['gsw'] == None or block['gsw'] == '':
                         block['gsw'] = 3
@@ -4108,7 +4131,7 @@ def get_dashboard_blocks(request):
 
                         #TODO custom wegolf. abilitare queste condizioni e gestire recordid in modo che sia dinamico dal frontend sia in bixdata che wegolf
                         if cliente_id == 'wegolf':
-                            if results['chartid'] != 31:
+                            if block_category != 'benchmark':
                                 recordid_golfclub=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_golfclub WHERE utente='{userid}'","recordid_")
                                 query_conditions = query_conditions+" AND recordidgolfclub_='{recordid_golfclub}'".format(recordid_golfclub=recordid_golfclub)
                             selected_years=request_data.get('selectedYears', [])
