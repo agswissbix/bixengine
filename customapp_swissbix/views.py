@@ -605,3 +605,9 @@ def deal_update_status(request):
     deal_record.values['dealstatus']=status
     response={ "status": "ok"}
     return JsonResponse(response)
+
+
+def get_satisfation(request):
+    from customapp_swissbix.script import get_satisfaction
+    return get_satisfaction()
+    
