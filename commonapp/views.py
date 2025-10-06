@@ -5350,3 +5350,109 @@ def get_filter_options(request):
     }
 
     return JsonResponse(response)
+
+
+def get_calendar_data(request):
+    # TODO: load from db
+
+    responseDataDEV_python = {
+        'resources': [
+            {
+                'recordid': 'antonijevictoplica',
+                'name': 'Antonijevic Toplica'
+            },
+            {
+                'recordid': 'BasarabaTomislav',
+                'name': 'Basaraba Tomislav'
+            },
+            {
+                'recordid': 'BerishaBekim',
+                'name': 'Berisha Bekim'
+            },
+            {
+                'recordid': 'DokovicDorde',
+                'name': 'Dokovic Dorde'
+            },
+            {
+                'recordid': 'FazziLuca',
+                'name': 'Fazzi Luca'
+            },
+            {
+                'recordid': 'RossiMario',
+                'name': 'Rossi Mario'
+            },
+            {
+                'recordid': 'BianchiGiulia',
+                'name': 'Bianchi Giulia'
+            },
+            {
+                'recordid': 'VerdiPaolo',
+                'name': 'Verdi Paolo'
+            },
+            {
+                'recordid': 'GalliAnna',
+                'name': 'Galli Anna'
+            },
+            {
+                'recordid': 'ContiMarco',
+                'name': 'Conti Marco'
+            }
+        ],
+        'events': [
+            {
+                'recordid': '1',
+                'title': 'Pulizia completa Condominio Lucino',
+                'start': datetime.datetime(2025, 1, 7, 10, 0),
+                'end': datetime.datetime(2025, 1, 7, 11, 30),
+                'description': 'Pulizia completa Condominio Lucino',
+                'color': '#3b82f6',
+                'resourceId': 'antonijevictoplica'
+            },
+            {
+                'recordid': '2',
+                'title': 'Pulizia entrata Residenza Nettuno',
+                'start': datetime.datetime(2025, 1, 8, 14, 0),
+                'end': datetime.datetime(2025, 1, 8, 15, 0),
+                'description': 'Pulizia entrata Residenza Nettuno',
+                'color': '#10b981',
+                'resourceId': 'BasarabaTomislav'
+            },
+            {
+                'recordid': '3',
+                'title': 'Manutenzione giardino Villa Ada',
+                'start': datetime.datetime(2025, 1, 22, 9, 0),
+                'end': datetime.datetime(2025, 1, 22, 12, 0),
+                'description': 'Taglio erba e siepi',
+                'color': '#ef4444',
+                'resourceId': 'RossiMario'
+            }
+        ],
+        'unplannedEvents': [
+            {
+                'recordid': 'u1',
+                'title': 'Pulizia finestre Stabile fortuna',
+                'description': 'Note aggiuntive',
+                'color': '#f97316'
+            },
+            {
+                'recordid': 'u2',
+                'title': 'Pulizie finestre Lisano 1 Massagno',
+                'description': 'Note aggiuntive',
+                'color': '#8b5cf6'
+            }
+        ]
+    }
+
+    return JsonResponse(responseDataDEV_python)
+
+def save_calendar_event(request):
+    data = json.loads(request.body)
+
+    event = data.get('eventid')
+    start = data.get('startdate')
+    end = data.get('enddate')
+    resource = data.get('resourceid')
+
+    # TODO save data in db
+
+    return JsonResponse(data)

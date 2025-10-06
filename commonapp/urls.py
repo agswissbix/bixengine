@@ -76,6 +76,8 @@ urlpatterns = [
     path('calculate_dependent_fields/', calculate_dependent_fields, name='calculate_dependent_fields'),
     path('get_filter_options/', get_filter_options, name='get_filter_options'),
     path('get_chart_data/', get_chart_data, name='get_chart_data'),
+    path('get_calendar_data/', get_calendar_data, name='get_calendar_data'),
+    path('save_calendar_event/', save_calendar_event, name='save_calendar_event'),
     
     
 ]
