@@ -2244,11 +2244,11 @@ def save_record_fields(request):
     # ---ATTACHMENT---
     if tableid == 'attachment':
         attachment_record = UserRecord('attachment', recordid)
-        dipendente_record = UserRecord('dipendente', attachment_record.values['recordiddipendente_'])
-        allegati= HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordiddipendente_='{attachment_record.values['recordiddipendente_']}' AND deleted_='N'")
-        nrallegati=len(allegati) 
-        dipendente_record.values['nrallegati'] = nrallegati
-        dipendente_record.save()
+        #dipendente_record = UserRecord('dipendente', attachment_record.values['recordiddipendente_'])
+        #allegati= HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordiddipendente_='{attachment_record.values['recordiddipendente_']}' AND deleted_='N'")
+        #nrallegati=len(allegati) 
+        #dipendente_record.values['nrallegati'] = nrallegati
+        #dipendente_record.save()
 
 
 
@@ -2403,7 +2403,11 @@ def save_record_fields(request):
                 dataset={}
                 dataset['label']=field_descriptions.get(field, field)
                 if operation=='Somma':
-                    dataset['expression']=f"SUM({field})"
+                    #TODO custom wegolf
+                    if raggruppamento=='recordidgolfclub_':
+                        dataset['expression']=f"SUM(t1.{field})"
+                    else:
+                        dataset['expression']=f"SUM({field})"
                 else:
                     dataset['expression']=f"COUNT({field})"
                 dataset['alias']=field
@@ -2450,7 +2454,7 @@ def save_record_fields(request):
                     datasets2.append(dataset2)
 
 
-
+            
             config_python = {
                 "from_table": "metrica_annuale",
                 "group_by_field": {
@@ -2461,6 +2465,9 @@ def save_record_fields(request):
                 "datasets2": datasets2,
                 "order_by": "anno ASC"
             }
+            #TODO custom wegolf
+            if raggruppamento=='recordidgolfclub_':
+                config_python['group_by_field']["lookup"]= {"on_key": "recordid_", "from_table": "golfclub", "display_field": "nome_club"}
         status='Bozza'
         config_json_string = json.dumps(config_python, indent=4)
             
@@ -2471,6 +2478,9 @@ def save_record_fields(request):
                 chart_record.values['reportid'] = chartid
                 chart_record.save()
                 sql=f"INSERT INTO sys_dashboard_block (name, userid, viewid, chartid) VALUES ('{title}',1,53,'{chartid}')"
+                #TODO custom wegolf
+                if raggruppamento=='recordidgolfclub_':
+                    sql=f"INSERT INTO sys_dashboard_block (name, userid, viewid, chartid, category) VALUES ('{title}',1,53,'{chartid}','benchmark')"
                 HelpderDB.sql_execute(sql)
 
 
@@ -3703,9 +3713,13 @@ def download_offerta(request):
 
 def get_dashboard_data(request):
     userid = request.user.id
-    if userid is None:
-        return JsonResponse({'error': 'User not authenticated'}, status=401)
-    dashboards = HelpderDB.sql_query(f"SELECT dashboardid AS id, name from v_user_dashboard_block WHERE bixid={userid}")
+    data = json.loads(request.body)
+    dashboardCategory = data.get('dashboardCategory', '')   
+
+    if dashboardCategory!='':
+        dashboards = HelpderDB.sql_query(f"SELECT  id, name from sys_dashboard WHERE category='{dashboardCategory}'")
+    else:
+        dashboards = HelpderDB.sql_query(f"SELECT  id, name from sys_dashboard")
 
     return JsonResponse({
         'dashboards': dashboards
@@ -4072,7 +4086,7 @@ def get_dashboard_blocks(request):
                     block['gsh'] = data['gsh']
                     block['viewid'] = results['viewid']
                     block['widgetid'] = results['widgetid']
-
+                    block_category=results['category']
                     # if they are null set default values
                     if block['gsw'] == None or block['gsw'] == '':
                         block['gsw'] = 3
@@ -4117,7 +4131,7 @@ def get_dashboard_blocks(request):
 
                         #TODO custom wegolf. abilitare queste condizioni e gestire recordid in modo che sia dinamico dal frontend sia in bixdata che wegolf
                         if cliente_id == 'wegolf':
-                            if results['chartid'] != 31:
+                            if block_category != 'benchmark':
                                 recordid_golfclub=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_golfclub WHERE utente='{userid}'","recordid_")
                                 query_conditions = query_conditions+" AND recordidgolfclub_='{recordid_golfclub}'".format(recordid_golfclub=recordid_golfclub)
                             selected_years=request_data.get('selectedYears', [])
@@ -5330,3 +5344,109 @@ def get_filter_options(request):
     }
 
     return JsonResponse(response)
+
+
+def get_calendar_data(request):
+    # TODO: load from db
+
+    responseDataDEV_python = {
+        'resources': [
+            {
+                'recordid': 'antonijevictoplica',
+                'name': 'Antonijevic Toplica'
+            },
+            {
+                'recordid': 'BasarabaTomislav',
+                'name': 'Basaraba Tomislav'
+            },
+            {
+                'recordid': 'BerishaBekim',
+                'name': 'Berisha Bekim'
+            },
+            {
+                'recordid': 'DokovicDorde',
+                'name': 'Dokovic Dorde'
+            },
+            {
+                'recordid': 'FazziLuca',
+                'name': 'Fazzi Luca'
+            },
+            {
+                'recordid': 'RossiMario',
+                'name': 'Rossi Mario'
+            },
+            {
+                'recordid': 'BianchiGiulia',
+                'name': 'Bianchi Giulia'
+            },
+            {
+                'recordid': 'VerdiPaolo',
+                'name': 'Verdi Paolo'
+            },
+            {
+                'recordid': 'GalliAnna',
+                'name': 'Galli Anna'
+            },
+            {
+                'recordid': 'ContiMarco',
+                'name': 'Conti Marco'
+            }
+        ],
+        'events': [
+            {
+                'recordid': '1',
+                'title': 'Pulizia completa Condominio Lucino',
+                'start': datetime.datetime(2025, 1, 7, 10, 0),
+                'end': datetime.datetime(2025, 1, 7, 11, 30),
+                'description': 'Pulizia completa Condominio Lucino',
+                'color': '#3b82f6',
+                'resourceId': 'antonijevictoplica'
+            },
+            {
+                'recordid': '2',
+                'title': 'Pulizia entrata Residenza Nettuno',
+                'start': datetime.datetime(2025, 1, 8, 14, 0),
+                'end': datetime.datetime(2025, 1, 8, 15, 0),
+                'description': 'Pulizia entrata Residenza Nettuno',
+                'color': '#10b981',
+                'resourceId': 'BasarabaTomislav'
+            },
+            {
+                'recordid': '3',
+                'title': 'Manutenzione giardino Villa Ada',
+                'start': datetime.datetime(2025, 1, 22, 9, 0),
+                'end': datetime.datetime(2025, 1, 22, 12, 0),
+                'description': 'Taglio erba e siepi',
+                'color': '#ef4444',
+                'resourceId': 'RossiMario'
+            }
+        ],
+        'unplannedEvents': [
+            {
+                'recordid': 'u1',
+                'title': 'Pulizia finestre Stabile fortuna',
+                'description': 'Note aggiuntive',
+                'color': '#f97316'
+            },
+            {
+                'recordid': 'u2',
+                'title': 'Pulizie finestre Lisano 1 Massagno',
+                'description': 'Note aggiuntive',
+                'color': '#8b5cf6'
+            }
+        ]
+    }
+
+    return JsonResponse(responseDataDEV_python)
+
+def save_calendar_event(request):
+    data = json.loads(request.body)
+
+    event = data.get('eventid')
+    start = data.get('startdate')
+    end = data.get('enddate')
+    resource = data.get('resourceid')
+
+    # TODO save data in db
+
+    return JsonResponse(data)

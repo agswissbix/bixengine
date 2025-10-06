@@ -76,13 +76,13 @@ urlpatterns = [
     path('calculate_dependent_fields/', calculate_dependent_fields, name='calculate_dependent_fields'),
     path('get_filter_options/', get_filter_options, name='get_filter_options'),
     path('get_chart_data/', get_chart_data, name='get_chart_data'),
-
-    # ------------------  Settings views --------------------------------- 
+    path('get_calendar_data/', get_calendar_data, name='get_calendar_data'),
+    path('save_calendar_event/', save_calendar_event, name='save_calendar_event'),
+    
+     # ------------------  Settings views --------------------------------- 
     path('get_users_and_groups_api/', get_users_and_groups, name='get_users_and_groups'),
     path('settings_table_usertables/', settings_table_usertables, name='settings_table_usertables'),
     path('settings_table_fields/', settings_table_fields, name='settings_table_fields'),
-    
-    
 ]
 
 
