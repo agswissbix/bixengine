@@ -4995,35 +4995,6 @@ def get_user_settings_api(request):
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=500)
 
-@login_required(login_url='/login/')
-def get_users_and_groups_api(request):
-    """
-    API per ottenere la lista di utenti e gruppi.
-    Restituisce un JSON con due liste separate.
-    """
-
-    try:
-        # Esegui la query una sola volta
-        all_sys_users = Helperdb.sql_query("SELECT id, username, description, bixid FROM sys_user")
-
-        users = []
-        groups = []
-
-        # Filtra e separa gli utenti e i gruppi
-        for user_data in all_sys_users:
-            if user_data.get('description') == 'Gruppo':
-                groups.append(user_data)
-            else:
-                users.append(user_data)
-        
-        # Restituisci i dati in formato JSON
-        return JsonResponse({
-            "success": True,
-            "users": users,
-            "groups": groups
-        })
-    except Exception as e:
-        return JsonResponse({"success": False, "error": str(e)}, status=500)
 
 @transaction.atomic
 def save_newuser(request):

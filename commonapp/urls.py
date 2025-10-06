@@ -3,6 +3,7 @@ from django.urls import path
 from django.conf.urls.static import static
 from django.conf import settings
 from commonapp.views import *
+from commonapp.settings import *
 from django.views.static import serve
 from django.views.decorators.cache import never_cache
 from bixscheduler import views
@@ -69,13 +70,17 @@ urlpatterns = [
     path('get_custom_functions/', get_custom_functions, name='get_custom_functions'),
     path('get_table_records_kanban/', get_table_records_kanban, name='get_table_records_kanban'),
     path('save_newuser/', save_newuser, name='save_newuser'),
-    path('get_users_and_groups_api/', get_users_and_groups_api, name='get_users_and_groups_api'),
     path('get_user_settings_api/', get_user_settings_api, name='get_user_settings_api'),
     path('save_user_settings_api/', save_user_settings_api, name='save_user_settings_api'),
     path('get_users/', get_users, name='get_users'),
     path('calculate_dependent_fields/', calculate_dependent_fields, name='calculate_dependent_fields'),
     path('get_filter_options/', get_filter_options, name='get_filter_options'),
     path('get_chart_data/', get_chart_data, name='get_chart_data'),
+
+    # ------------------  Settings views --------------------------------- 
+    path('get_users_and_groups_api/', get_users_and_groups, name='get_users_and_groups'),
+    path('settings_table_usertables/', settings_table_usertables, name='settings_table_usertables'),
+    path('settings_table_fields/', settings_table_fields, name='settings_table_fields'),
     
     
 ]
