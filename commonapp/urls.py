@@ -83,6 +83,12 @@ urlpatterns = [
     path('get_users_and_groups_api/', get_users_and_groups, name='get_users_and_groups'),
     path('settings_table_usertables/', settings_table_usertables, name='settings_table_usertables'),
     path('settings_table_fields/', settings_table_fields, name='settings_table_fields'),
+    path('settings_table_settings/', settings_table_settings, name='settings_table_settings'),
+    path('settings_table_fields_settings_save/', settings_table_fields_settings_save, name='settings_table_fields_settings_save'),
+    path('settings_table_fields_settings_block/', settings_table_fields_settings_block, name='settings_table_fields_settings_block'),
+    path('settings_table_usertables_save/', settings_table_usertables_save, name='settings_table_usertables_save'),
+    path('settings_table_tablefields_save/', settings_table_tablefields_save, name='settings_table_tablefields_save'),
+    path('settings_table_fields_new_field/', settings_table_fields_new_field, name='settings_table_fields_new_field'),
 ]
 
 
