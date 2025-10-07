@@ -540,7 +540,7 @@ def get_users(request):
 
 @timing_decorator
 def get_table_records(request):
-    print('Function: get_table_records_refactored')
+    print('Function: get_table_records')
     data = json.loads(request.body)
     tableid = data.get("tableid")
     viewid = data.get("view")
@@ -548,6 +548,13 @@ def get_table_records(request):
     master_tableid = data.get("masterTableid")
     master_recordid = data.get("masterRecordid")
     filtersList = data.get("filtersList", []) # <-- Recupera la filtersList
+    pagination= data.get("pagination", {"page": 1, "limit": 10})
+    pagination_page= pagination.get("page", 1)
+    pagination_limit= pagination.get("limit", 100)
+    pagination_offset= (pagination_page-1)*pagination_limit
+    order=data.get("order", {"fieldid": "recordid_", "direction": "desc"})
+    order_fieldid= order.get("fieldid", "recordid_")
+    order_direction= order.get("direction", "desc")
 
     table = UserTable(tableid, Helper.get_userid(request))
 
@@ -558,12 +565,20 @@ def get_table_records(request):
     print(filtersList)
     # 1. Ottieni gli oggetti UserRecord GIA' PROCESSATI
     # Passa i filtri a get_table_records_obj
+    if not order_fieldid:
+        order_fieldid = 'recordid_'
+    if not order_direction:
+        order_direction = 'desc'
+
     record_objects = table.get_table_records_obj(
         viewid=viewid,
         searchTerm=searchTerm,
         master_tableid=master_tableid,
         master_recordid=master_recordid,
-        filters_list=filtersList
+        filters_list=filtersList,
+        offset=pagination_offset,
+        limit=pagination_limit,
+        orderby=f"{order_fieldid} {order_direction}"
     )
     
     counter = table.get_total_records_count()
@@ -641,11 +656,20 @@ def get_table_records(request):
         rows.append(row)
 
     # --- Risposta Finale (invariata) ---
-    final_columns = [{'fieldtypeid': c['fieldtypeid'], 'desc': c['description']} for c in table_columns]
+    final_columns = [{'fieldtypeid': c['fieldtypeid'], 'desc': c['description'], 'fieldid': c['fieldid']} for c in table_columns]
+    totalPages= (counter + pagination_limit - 1) // pagination_limit  
     response_data = {
         "counter": counter,
         "rows": rows,
-        "columns": final_columns
+        "columns": final_columns,
+        "pagination": {
+            "currentPage": pagination_page,
+            "totalPages": totalPages
+        },
+        "order": {
+            "fieldid": order_fieldid,
+            "direction": order_direction
+        }
     }
     return JsonResponse(response_data)
 

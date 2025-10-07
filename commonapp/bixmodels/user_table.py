@@ -267,7 +267,7 @@ class UserTable:
                 fieldid = column.get('fieldid')
                 if not fieldid:
                     continue
-                
+                fieldtypeid = column.get('fieldtypeid')
                 # NOTA: Per unire le tabelle in base al recordid_ del campo collegato
                 # l'approccio migliore è estrarre l'ID della tabella collegata
                 # dal nome del campo (es. recordidclienti_)
@@ -290,6 +290,16 @@ class UserTable:
                     searchTerm_conditions.append(
                         f"user_{self.tableid}.{fieldid} LIKE '%{sanitized_term}%'"
                     )
+
+                if fieldtypeid == 'Utente':
+                    user_alias = f"user_{fieldid.replace('_', '')}" 
+                    from_clauses.append(
+                        f"LEFT JOIN sys_user AS {user_alias} ON user_{self.tableid}.{fieldid} = {user_alias}.id "
+                    )
+                    searchTerm_conditions.append(
+                        f"({user_alias}.firstname LIKE '%{sanitized_term}%' OR {user_alias}.lastname LIKE '%{sanitized_term}%')"
+                    )
+                
             
             if searchTerm_conditions:
                 where_clauses.append(f"({' OR '.join(searchTerm_conditions)})")
