@@ -455,7 +455,7 @@ def get_satisfaction():
     except requests.RequestException as e:  
         return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
     
-def update_deals(request):
+def update_deals():
     result_status = 'error'
     result_value = {}
 
