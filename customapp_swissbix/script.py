@@ -1,7 +1,8 @@
 from datetime import date, datetime
 import os
+import pprint
 import subprocess
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django_q.models import Schedule, Task
 from django.db import connection
 import psutil, shutil
@@ -10,11 +11,14 @@ import requests
 from commonapp.bixmodels.user_record import UserRecord
 from commonapp.utils.email_sender import EmailSender
 from commonapp.bixmodels.helper_db import *
+from commonapp.bixmodels.user_table import *
 from django.conf import settings
 from commonapp.bixmodels.helper_db import HelpderDB
 import xml.etree.ElementTree as ET
 import json
 from django.http import JsonResponse
+
+import pyodbc
 
 
 
@@ -449,3 +453,116 @@ def get_satisfaction():
         return JsonResponse(results, safe=False)
     except requests.RequestException as e:  
         return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
+    
+def update_deals(request):
+    # Aggiornamento dello stato dal server di Adiuto
+    driver = "SQL Server"
+    server = os.environ.get('ADIUTO_DB_SERVER')
+    database = os.environ.get('ADIUTO_DB_NAME')
+    username =  os.environ.get('ADIUTO_DB_USER')
+    password =  os.environ.get('ADIUTO_DB_PASSWORD')
+    
+    connection_string = f'DRIVER={driver};SERVER={server};DATABASE={database};UID={username};PWD={password}'
+
+    try:
+        cnxn = pyodbc.connect(connection_string)
+        print("Connessione riuscita.")
+        cursor = cnxn.cursor()
+        
+        deal_table=UserTable('deal')
+        condition_list=[]
+        condition_list.append("sync_adiuto='Si'")
+        condition_list.append("dealstatus='Vinta'")
+        condition_list.append("dealstage IS NULL OR (dealstage!='Progetto fatturato'  and dealstage!='Invoiced')")
+        deals=deal_table.get_records(conditions_list=condition_list)
+        sorted_deals = sorted(deals, key=lambda deal: deal['recordid_'])
+        
+        # Numero di record da aggiornare
+        deals_count = len(sorted_deals)
+        print(f"Trattative da aggiornare: {deals_count}")
+
+        for deal in sorted_deals:
+            fields = {}
+            print(f"{deal["id"]} - {deal["dealname"]}")
+            recordid_deal = deal["recordid_"]
+
+            stmt = cursor.execute(f"SELECT * FROM VA1028 WHERE F1052='{recordid_deal}' AND FENA=-1")
+            rows = stmt.fetchall()
+            print(f"Fetched Rows: {len(rows)}")
+
+            for row in rows:
+                if (row):
+                    updated_status = row.F1033
+                    project = row.F1162
+                    tech_adiutoid = row.F1067
+                    fields['adiuto_tech'] = tech_adiutoid
+
+                    bixdata_tech = HelpderDB.sql_query_row(f"SELECT * FROM sys_user WHERE adiutoid='{tech_adiutoid}'")
+
+                    if (bixdata_tech):
+                        fields['project_asignedto'] = bixdata_tech["id"]
+
+                    fields["dealstage"] = updated_status
+
+                    if ((updated_status == "Progetto in corso") | (updated_status == "Ordine materiale")): 
+                        fields["synch_project"] = "Si"
+                    
+                    print(updated_status)
+
+            # Aggiornamento dealline
+            print("Righe dettaglio: ")
+            
+            deal_lines_table=UserTable('dealline')
+            condition_list=[]
+            condition_list.append(f"recordiddeal_='{recordid_deal}' AND deleted_='N'")
+            deal_lines=deal_lines_table.get_records(conditions_list=condition_list)
+            
+
+            for deal_line in deal_lines:
+                fields_dealline = {}
+                recordid_dealline = deal_line['recordid_']
+                dealline_name = deal_line['name']
+                print(dealline_name)
+
+                stmt = cursor.execute(f"SELECT * FROM VA1029 WHERE F1062='{recordid_dealline}' AND FENA=-1")
+                rows = stmt.fetchall()
+
+                for row in rows:
+                    if (row):
+                        dealline_uniteffectivecost = row.F1043
+                        fields_dealline['uniteffectivecost'] = dealline_uniteffectivecost
+
+                
+                print("UPDATE dealline:")
+                pprint.pprint(fields_dealline)
+
+                # TODO: update record $this->Sys_model->update_record("dealline",1,$fields_dealline,"recordid_='$recordid_dealline'");
+            
+            print("UPDARE deal: ")
+            pprint.pprint(fields)
+
+            # TODO: update record $this->Sys_model->update_record('deal',1,$fields,"recordid_='$recordid_deal'");
+
+            # TODO: $this->custom_update('deal', $recordid_deal);
+
+        # Aggiornamento data apertura progetto
+        fields = {}
+        condition_list=[]
+        condition_list.append("sync_project='Si' and (projectopendate is null)")
+        deals = deal_table.get_records(conditions_list=condition_list)
+        for deal in deals:
+            recordid_deal = deal['recordid_']
+            project = HelpderDB.sql_query_row(f"SELECT * FROM user_project WHERE recordiddeal_='{recordid_deal}'")
+
+            if (project):
+                projectopendate = project['creation_']
+                fields['projectopendate'] = projectopendate
+
+                # TODO: $this->Sys_model->update_record('deal',1,$fields,"recordid_='$recordid_deal'");
+
+        cnxn.close()
+    except pyodbc.Error as ex:
+        sqlstate = ex.args[0]
+        print(f"Connessione non riuscita: {sqlstate}")
+
+    return HttpResponse()

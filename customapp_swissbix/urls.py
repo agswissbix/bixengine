@@ -22,7 +22,7 @@ urlpatterns = [
     path('printing_katun_xml_extract_rows/', printing_katun_xml_extract_rows, name='printing_katun_xml_extract_rows'),
     path('printing_katun_bexio_api_set_invoice/', printing_katun_bexio_api_set_invoice, name='printing_katun_bexio_api_set_invoice'),
     path('get_satisfation/', get_satisfation, name='get_satisfation'),
-    
+    path('update_deals/', update_deals, name='update_deals'),
     
     
 ]
