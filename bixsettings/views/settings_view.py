@@ -7,6 +7,8 @@ from .businesslogic.models.record import *
 from .businesslogic.models.field_settings import *
 from django.contrib.auth.models import User
 from .helpers.helperdb import *
+from commonapp.views import dictfetchall
+
 from django.views.decorators.csrf import csrf_exempt
 
 
