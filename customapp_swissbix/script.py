@@ -456,6 +456,9 @@ def get_satisfaction():
         return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
     
 def update_deals(request):
+    result_status = 'error'
+    result_value = {}
+
     # Aggiornamento dello stato dal server di Adiuto
     driver = "SQL Server"
     server = os.environ.get('ADIUTO_DB_SERVER')
@@ -547,11 +550,17 @@ def update_deals(request):
 
 
             save_record_fields('deal', recordid_deal)
-
+        
 
         cnxn.close()
+        result_status = 'success'
+        result_value = {"message": "Trattative aggiornate"}
+
     except pyodbc.Error as ex:
         sqlstate = ex.args[0]
+        result_status = 'Errore connessione'
         print(f"Connessione non riuscita: {sqlstate}")
 
-    return HttpResponse()
+    
+
+    return {"status": result_status, "value": result_value, "type": "update"}
