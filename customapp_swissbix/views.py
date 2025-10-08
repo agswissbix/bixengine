@@ -603,6 +603,7 @@ def deal_update_status(request):
     deal_record=UserRecord('deal',recordid)
     deal_record.values['dealstage']=stage
     deal_record.values['dealstatus']=status
+    deal_record.save()
     response={ "status": "ok"}
     return JsonResponse(response)
 
