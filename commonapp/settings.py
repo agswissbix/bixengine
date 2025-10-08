@@ -6,6 +6,9 @@ from django.db.models.query import QuerySet
 from bixsettings.views.businesslogic.models.table_settings import TableSettings
 from bixsettings.views.businesslogic.models.field_settings import *
 from bixsettings.views.helpers.helperdb import *
+from django.db import transaction
+from django.db.models.functions import Coalesce
+from django.db.models import F, OuterRef, Subquery, IntegerField
 
 
 def get_users_and_groups(request):
@@ -55,10 +58,25 @@ def settings_table_usertables(request):
     return JsonResponse(workspaces)
 
 
+type_preference_options = [
+    "view_fields",
+    "insert_fields",
+    "search_results_fields",
+    "linked_columns",
+    "search_fields",
+    "badge_fields",
+    "report_fields",
+    "kanban_fields",
+]
+
 def settings_table_fields(request):
     data = json.loads(request.body)
     tableid = data.get('tableid')
     userid = data.get('userid')
+    typepreference = data.get('typepreference', None)
+
+    if typepreference is None or typepreference not in type_preference_options:
+        return JsonResponse({"error": "typepreference is required"}, status=400)
 
     fields = list(SysField.objects.filter(tableid=tableid).values())
 
@@ -68,11 +86,11 @@ def settings_table_fields(request):
             fields.remove(field)
             continue
 
-        # Recupera l'ordine dell'utente per questo campo
         user_field_conf = SysUserFieldOrder.objects.filter(
             tableid=tableid,
             fieldid=field['id'],
-            userid=userid
+            userid=userid,
+            typepreference=typepreference
         ).first()
 
         # Aggiungi solo l'order (None se non esiste)
@@ -99,15 +117,9 @@ def settings_table_fields_settings_save(request):
     tableid = data.get('tableid')
 
     tablesettings_obj = TableSettings(tableid=tableid, userid=1)
-    # esempio fieldsettings_obj.settings['obbligatorio']['value']=True
-    # esempio fieldsettings_obj.save()
-    # dict con tutt i i settings. vedi te come compilarlo fieldsettings_obj.settings
 
     for setting in settings_list:
-        old_value = tablesettings_obj.settings[setting['name']]['value']
-        new_value = setting['value']
-        if new_value != old_value:
-            old_value = new_value
+        tablesettings_obj.settings[setting['name']]['value'] = setting['value']
 
     tablesettings_obj.save()
 
@@ -151,6 +163,11 @@ def settings_table_tablefields_save(request):
     tableid = data.get('tableid')
     userid = data.get('userid')
     fields = data.get('fields', [])
+    typepreference = data.get('typepreference', None)
+
+    if typepreference is None or typepreference not in type_preference_options:
+        return JsonResponse({"error": "typepreference is required"}, status=400)
+
 
     for field in fields:
         fieldid = field.get("id")
@@ -165,19 +182,100 @@ def settings_table_tablefields_save(request):
             userid=userid,
             tableid=tableid,
             fieldid=fieldid,
-        ).all()
+            typepreference=typepreference
+        ).first()
 
         if user_table_order is None:
             return JsonResponse({'success': False, 'error': f'Table with id {tableid} not found for user {userid}'})
         
-        for t in user_table_order:
-            if t.fieldorder == order_value:
-                continue
+        if user_table_order.fieldorder == order_value:
+            continue
 
-            t.fieldorder = order_value
-            t.save()
+        user_table_order.fieldorder = order_value
+        user_table_order.save()
 
     return JsonResponse({'success': True})
+
+
+@transaction.atomic
+def settings_table_fields_settings_fields_save(request):
+    data = json.loads(request.body)
+    settings_list = data.get('settings', {})
+    userid = data.get('userid')
+    tableid = data.get('tableid')
+    fieldid = data.get('fieldid')
+    record_field = data.get('record')
+    items = data.get('items', [])
+
+    field_description = record_field.get('description')
+    field_label = record_field.get('label')
+
+    # Aggiorna descrizione e label del campo
+    field_record = SysField.objects.filter(tableid=tableid, id=fieldid).first()
+    if not field_record:
+        return JsonResponse({"success": False, "error": "Campo non trovato"}, status=404)
+
+    field_record.description = str(field_description)
+    field_record.label = str(field_label)
+    field_record.save()
+
+    lookuptableid = field_record.lookuptableid.tableid
+    if not lookuptableid:
+        items = []
+
+    # --- Gestione Lookup Items ---
+    new_items = [item for item in items if item.get("status") == "new"]
+    deleted_items = [item for item in items if item.get("status") == "deleted"]
+    changed_items = [item for item in items if item.get("status") == "changed"]
+
+    if deleted_items:
+        SysLookupTableItem.objects.filter(
+            lookuptableid=lookuptableid,
+            itemcode__in=[item["itemcode"] for item in deleted_items if item.get("itemcode")]
+        ).delete()
+
+    for item in changed_items:
+        SysLookupTableItem.objects.filter(
+            lookuptableid=lookuptableid,
+            itemcode=item.get("itemcode")
+        ).update(
+            itemcode=item.get("itemdesc", ""), 
+            itemdesc=item.get("itemdesc", "")
+        )
+
+    new_lookup_items = [
+        SysLookupTableItem(
+            lookuptableid=lookuptableid,
+            itemcode=item.get("itemcode") or f"new_{i}",
+            itemdesc=item.get("itemdesc", "")
+        )
+        for i, item in enumerate(new_items)
+    ]
+    if new_lookup_items:
+        SysLookupTableItem.objects.bulk_create(new_lookup_items)
+
+    # Gestione settings personalizzati
+    # Se esiste già → aggiorna, altrimenti crea
+    fieldsettings_obj = FieldSettings(tableid=tableid, fieldid=field_record.fieldid, userid=1)
+
+    # Aggiorna le chiavi presenti nel dizionario settings
+    settings_dict = fieldsettings_obj.settings or {}
+
+    for key, value in settings_list.items():
+        # Ogni valore è un dict con {"type": "...", "value": "..."}
+        if key not in settings_dict:
+            settings_dict[key] = {}
+        settings_dict[key].update(value)
+
+    fieldsettings_obj.settings = settings_dict
+    fieldsettings_obj.save()
+
+    return JsonResponse({
+        'success': True, 
+        'fieldsettings': fieldsettings_obj.get_settings(), 
+        'record': {"label": field_record.label, "description": field_record.description},
+        'items': list(SysLookupTableItem.objects.filter(lookuptableid=lookuptableid).values())
+    })
 
 
 def settings_table_fields_new_field(request):
@@ -255,7 +353,12 @@ def settings_table_fields_settings_block(request):
     tableid = data.get('tableid')
     fieldid = data.get('fieldid')
     userid = int(data.get('userid'))
-    fieldsettings_obj = FieldSettings(tableid=tableid, fieldid=fieldid, userid=userid)
+
+    field_record = SysField.objects.filter(tableid=tableid, id=fieldid).first()
+    if not field_record:
+        return JsonResponse({"error": "Field not found"}, status=404)
+
+    fieldsettings_obj = FieldSettings(tableid=tableid, fieldid=field_record.fieldid, userid=userid)
 
     with connection.cursor() as cursor:
         cursor.execute(
@@ -287,9 +390,7 @@ def settings_table_fields_settings_block(request):
     #         items = dictfetchall(cursor)
 
     record = record
-    if items:
-        items = items
-    else:
+    if not items:
         items = ''
 
     return JsonResponse({
@@ -301,4 +402,34 @@ def settings_table_fields_settings_block(request):
         #     "groups": bl.get_groups_hierarchy(),
         #     "user": bl.get_user_hierarchy(userid),
         # }
+    })
+
+
+def settings_table_linkedtables(request):
+    data = json.loads(request.body)
+    tableid = data.get('tableid')
+    userid = data.get('userid')
+
+    # Subquery per prendere il fieldorder dell'utente se esiste
+    user_order_subquery = SysUserOrder.objects.filter(
+        tableid=OuterRef('tableid'),
+        fieldid=OuterRef('tablelinkid'),
+        userid=userid
+    ).values('fieldorder')[:1]
+
+    # Query ORM equivalente al tuo LEFT JOIN
+    linked_tables_qs = (
+        SysTableLink.objects.filter(tableid=tableid)
+        .annotate(
+            fieldorder=Subquery(user_order_subquery, output_field=IntegerField())
+        )
+        .order_by(Coalesce('fieldorder', 9999))  # metti quelli null in fondo
+    )
+
+    # Serializziamo i risultati in una lista di dict
+    linked_tables = list(linked_tables_qs.values())
+
+    return JsonResponse({
+        "success": True,
+        "linked_tables": linked_tables
     })
