@@ -5336,10 +5336,12 @@ def calculate_dependent_fields(request):
         if recordidproduct:
             product=UserRecord('product',recordidproduct)
             if product:
-                unitprice=product.values.get('price',0)
-                updated_fields['unitprice']=unitprice
-                unitexpectedcost=product.values.get('cost',0)
-                updated_fields['unitexpectedcost']=unitexpectedcost
+                if unitprice=='' or unitprice is None:
+                    unitprice=product.values.get('price',0)
+                    updated_fields['unitprice']=unitprice
+                if unitexpectedcost=='' or unitexpectedcost is None:
+                    unitexpectedcost=product.values.get('cost',0)
+                    updated_fields['unitexpectedcost']=unitexpectedcost
         
         if quantity == '' or quantity is None:
             quantity = 0
