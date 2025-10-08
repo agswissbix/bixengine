@@ -431,7 +431,7 @@ class UserRecord:
             insert_field['settings'].update(current_field_settings)
 
             #TODO rendere dinamico dai settings
-            if fieldid=='unitprice' or fieldid=='quantity' or fieldid=='unitexpectedcost':
+            if fieldid=='unitprice' or fieldid=='quantity' or fieldid=='unitexpectedcost' or fieldid=='recordidproduct_':
                 insert_field['hasDependencies']=True
 
             fieldtype=field['fieldtypeid']
