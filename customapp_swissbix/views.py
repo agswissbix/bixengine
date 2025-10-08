@@ -611,4 +611,8 @@ def deal_update_status(request):
 def get_satisfation(request):
     from customapp_swissbix.script import get_satisfaction
     return get_satisfaction()
+
+def update_deals(request):
+    from customapp_swissbix.script import update_deals
+    return update_deals(request)
     
