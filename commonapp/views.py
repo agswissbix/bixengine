@@ -5326,11 +5326,23 @@ def calculate_dependent_fields(request):
     updated_fields = {}
     recordid=data.get('recordid')
     tableid=data.get('tableid')
+    #TODO spostare in parte customapp_siwssbix
     if tableid=='dealline':
         fields= data.get('fields')
         quantity = fields.get('quantity', 0)
         unitprice = fields.get('unitprice', 0)
         unitexpectedcost = fields.get('unitexpectedcost', 0)
+        recordidproduct=fields.get('recordidproduct_',None)
+        if recordidproduct:
+            product=UserRecord('product',recordidproduct)
+            if product:
+                if unitprice=='' or unitprice is None:
+                    unitprice=product.values.get('price',0)
+                    updated_fields['unitprice']=unitprice
+                if unitexpectedcost=='' or unitexpectedcost is None:
+                    unitexpectedcost=product.values.get('cost',0)
+                    updated_fields['unitexpectedcost']=unitexpectedcost
+        
         if quantity == '' or quantity is None:
             quantity = 0
         if unitprice == '' or unitprice is None:
