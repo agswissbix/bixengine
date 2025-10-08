@@ -577,6 +577,8 @@ def printing_katun_bexio_api_set_invoice(request):
         invoice_record = UserRecord('printinginvoice', invoice['recordid_'])
         if status_code == 201:
             response_data = response.json()
+            response_data_json_str= json.dumps(response_data)
+            invoice_record.values['bexio_output'] = response_data_json_str
             bexio_invoice_id = response_data.get('id', )
             bexio_document_nr = response_data.get('document_nr', None)
             invoice_record.values['bexioinvoicenr'] = bexio_document_nr
