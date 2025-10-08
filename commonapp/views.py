@@ -540,7 +540,7 @@ def get_users(request):
 
 @timing_decorator
 def get_table_records(request):
-    print('Function: get_table_records_refactored')
+    print('Function: get_table_records')
     data = json.loads(request.body)
     tableid = data.get("tableid")
     viewid = data.get("view")
@@ -548,6 +548,13 @@ def get_table_records(request):
     master_tableid = data.get("masterTableid")
     master_recordid = data.get("masterRecordid")
     filtersList = data.get("filtersList", []) # <-- Recupera la filtersList
+    pagination= data.get("pagination", {"page": 1, "limit": 10})
+    pagination_page= pagination.get("page", 1)
+    pagination_limit= pagination.get("limit", 100)
+    pagination_offset= (pagination_page-1)*pagination_limit
+    order=data.get("order", {"fieldid": "recordid_", "direction": "desc"})
+    order_fieldid= order.get("fieldid", "recordid_")
+    order_direction= order.get("direction", "desc")
 
     table = UserTable(tableid, Helper.get_userid(request))
 
@@ -558,12 +565,20 @@ def get_table_records(request):
     print(filtersList)
     # 1. Ottieni gli oggetti UserRecord GIA' PROCESSATI
     # Passa i filtri a get_table_records_obj
+    if not order_fieldid:
+        order_fieldid = 'recordid_'
+    if not order_direction:
+        order_direction = 'desc'
+
     record_objects = table.get_table_records_obj(
         viewid=viewid,
         searchTerm=searchTerm,
         master_tableid=master_tableid,
         master_recordid=master_recordid,
-        filters_list=filtersList
+        filters_list=filtersList,
+        offset=pagination_offset,
+        limit=pagination_limit,
+        orderby=f"{order_fieldid} {order_direction}"
     )
     
     counter = table.get_total_records_count()
@@ -641,11 +656,20 @@ def get_table_records(request):
         rows.append(row)
 
     # --- Risposta Finale (invariata) ---
-    final_columns = [{'fieldtypeid': c['fieldtypeid'], 'desc': c['description']} for c in table_columns]
+    final_columns = [{'fieldtypeid': c['fieldtypeid'], 'desc': c['description'], 'fieldid': c['fieldid']} for c in table_columns]
+    totalPages= (counter + pagination_limit - 1) // pagination_limit  
     response_data = {
         "counter": counter,
         "rows": rows,
-        "columns": final_columns
+        "columns": final_columns,
+        "pagination": {
+            "currentPage": pagination_page,
+            "totalPages": totalPages
+        },
+        "order": {
+            "fieldid": order_fieldid,
+            "direction": order_direction
+        }
     }
     return JsonResponse(response_data)
 
@@ -5009,35 +5033,6 @@ def get_user_settings_api(request):
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=500)
 
-@login_required(login_url='/login/')
-def get_users_and_groups_api(request):
-    """
-    API per ottenere la lista di utenti e gruppi.
-    Restituisce un JSON con due liste separate.
-    """
-
-    try:
-        # Esegui la query una sola volta
-        all_sys_users = Helperdb.sql_query("SELECT id, username, description, bixid FROM sys_user")
-
-        users = []
-        groups = []
-
-        # Filtra e separa gli utenti e i gruppi
-        for user_data in all_sys_users:
-            if user_data.get('description') == 'Gruppo':
-                groups.append(user_data)
-            else:
-                users.append(user_data)
-        
-        # Restituisci i dati in formato JSON
-        return JsonResponse({
-            "success": True,
-            "users": users,
-            "groups": groups
-        })
-    except Exception as e:
-        return JsonResponse({"success": False, "error": str(e)}, status=500)
 
 @transaction.atomic
 def save_newuser(request):
@@ -5331,11 +5326,23 @@ def calculate_dependent_fields(request):
     updated_fields = {}
     recordid=data.get('recordid')
     tableid=data.get('tableid')
+    #TODO spostare in parte customapp_siwssbix
     if tableid=='dealline':
         fields= data.get('fields')
         quantity = fields.get('quantity', 0)
         unitprice = fields.get('unitprice', 0)
         unitexpectedcost = fields.get('unitexpectedcost', 0)
+        recordidproduct=fields.get('recordidproduct_',None)
+        if recordidproduct:
+            product=UserRecord('product',recordidproduct)
+            if product:
+                if unitprice=='' or unitprice is None:
+                    unitprice=product.values.get('price',0)
+                    updated_fields['unitprice']=unitprice
+                if unitexpectedcost=='' or unitexpectedcost is None:
+                    unitexpectedcost=product.values.get('cost',0)
+                    updated_fields['unitexpectedcost']=unitexpectedcost
+        
         if quantity == '' or quantity is None:
             quantity = 0
         if unitprice == '' or unitprice is None:

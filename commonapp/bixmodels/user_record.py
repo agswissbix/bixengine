@@ -315,6 +315,7 @@ class UserRecord:
             current_datetime=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             sqlinsert=f"INSERT INTO user_{self.tableid} (recordid_,creatorid_,creation_,id) VALUES ('{next_recordid}',{self.userid},'{current_datetime}',{next_id}) "
             HelpderDB.sql_execute(sqlinsert)
+            self.values['id']=next_id
             self.recordid=next_recordid
             self.save()
         
@@ -430,7 +431,7 @@ class UserRecord:
             insert_field['settings'].update(current_field_settings)
 
             #TODO rendere dinamico dai settings
-            if fieldid=='unitprice' or fieldid=='quantity' or fieldid=='unitexpectedcost':
+            if fieldid=='unitprice' or fieldid=='quantity' or fieldid=='unitexpectedcost' or fieldid=='recordidproduct_':
                 insert_field['hasDependencies']=True
 
             fieldtype=field['fieldtypeid']

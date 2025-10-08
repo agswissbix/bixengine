@@ -3,6 +3,7 @@ from django.urls import path
 from django.conf.urls.static import static
 from django.conf import settings
 from commonapp.views import *
+from commonapp.settings import *
 from django.views.static import serve
 from django.views.decorators.cache import never_cache
 from bixscheduler import views
@@ -69,7 +70,6 @@ urlpatterns = [
     path('get_custom_functions/', get_custom_functions, name='get_custom_functions'),
     path('get_table_records_kanban/', get_table_records_kanban, name='get_table_records_kanban'),
     path('save_newuser/', save_newuser, name='save_newuser'),
-    path('get_users_and_groups_api/', get_users_and_groups_api, name='get_users_and_groups_api'),
     path('get_user_settings_api/', get_user_settings_api, name='get_user_settings_api'),
     path('save_user_settings_api/', save_user_settings_api, name='save_user_settings_api'),
     path('get_users/', get_users, name='get_users'),
@@ -79,7 +79,18 @@ urlpatterns = [
     path('get_calendar_data/', get_calendar_data, name='get_calendar_data'),
     path('save_calendar_event/', save_calendar_event, name='save_calendar_event'),
     
-    
+     # ------------------  Settings views --------------------------------- 
+    path('get_users_and_groups_api/', get_users_and_groups, name='get_users_and_groups'),
+    path('settings_table_usertables/', settings_table_usertables, name='settings_table_usertables'),
+    path('settings_table_fields/', settings_table_fields, name='settings_table_fields'),
+    path('settings_table_settings/', settings_table_settings, name='settings_table_settings'),
+    path('settings_table_fields_settings_save/', settings_table_fields_settings_save, name='settings_table_fields_settings_save'),
+    path('settings_table_fields_settings_block/', settings_table_fields_settings_block, name='settings_table_fields_settings_block'),
+    path('settings_table_usertables_save/', settings_table_usertables_save, name='settings_table_usertables_save'),
+    path('settings_table_tablefields_save/', settings_table_tablefields_save, name='settings_table_tablefields_save'),
+    path('settings_table_fields_new_field/', settings_table_fields_new_field, name='settings_table_fields_new_field'),
+    path('settings_table_fields_settings_fields_save/', settings_table_fields_settings_fields_save, name='settings_table_fields_settings_fields_save'),
+    path('settings_table_linkedtables/', settings_table_linkedtables, name='settings_table_linkedtables'),
 ]
 
 

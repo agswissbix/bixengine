@@ -23,9 +23,268 @@ env = environ.Env()
 environ.Env.read_env()
 
 def save_record_fields(tableid,recordid):
+
     # ---TIMESHEET---
-    if tableid=='timesheet':
-        print("save_record_fields timesheet")
+    if tableid == 'timesheet':
+        # recupero informazioni necessarie
+        servicecontract_table = UserTable(tableid='servicecontract')
+        timesheet_record = UserRecord('timesheet', recordid)
+        company_record = UserRecord('company', timesheet_record.values['recordidcompany_'])
+        project_record = UserRecord('project', timesheet_record.values['recordidproject_'])
+        ticket_record = UserRecord('ticket', timesheet_record.values['recordidticket_'])
+        servicecontract_record = UserRecord('servicecontract', timesheet_record.values['recordidservicecontract_'])
+        service = timesheet_record.values['service']
+        invoiceoption = timesheet_record.values['invoiceoption']
+        invoicestatus = timesheet_record.values['invoicestatus']
+        if Helper.isempty(invoicestatus):
+            invoicestatus = ''
+        worktime = timesheet_record.values['worktime']
+        traveltime = timesheet_record.values['traveltime']
+
+        # inizializzo campi
+        productivity = ''
+        worktime_decimal = 0
+        travel_time_decimal = 0
+        totaltime_decimal = 0
+        workprice = 0
+        travelprice = 0
+        totalprice = 0
+        timesheet_record.values['worktime_decimal'] = ''
+        timesheet_record.values['traveltime_decimal'] = ''
+        timesheet_record.values['totaltime_decimal'] = ''
+        timesheet_record.values['workprice'] = ''
+        timesheet_record.values['travelprice'] = ''
+        timesheet_record.values['totalprice'] = ''
+        timesheet_record.values['recordidservicecontract_'] = ''
+        timesheet_record.values['print_type'] = 'Normale'
+        timesheet_record.values['print_hourprice'] = ''
+        timesheet_record.values['print_travel'] = ''
+        # aggiorno dati a prescindere
+
+        if not Helper.isempty(worktime):
+            hours, minutes = map(int, worktime.split(':'))
+            worktime_decimal = hours + minutes / 60
+            if not Helper.isempty(traveltime):
+                hours, minutes = map(int, traveltime.split(':'))
+                travel_time_decimal = hours + minutes / 60
+            totaltime_decimal = worktime_decimal + travel_time_decimal
+            timesheet_record.values['worktime_decimal'] = worktime_decimal
+            timesheet_record.values['traveltime_decimal'] = travel_time_decimal
+            timesheet_record.values['totaltime_decimal'] = totaltime_decimal
+
+        # inizio valutazione invoice status
+
+
+        if invoicestatus != 'Invoiced':
+            invoicestatus = 'To Process'
+
+        # valutazione del tipo di servizio se produttivo o meno
+        if invoicestatus == 'To Process':
+            if service == 'Amministrazione' or service == 'Commerciale' or service == 'Formazione Apprendista' or service == 'Formazione e Test' or service == 'Interno' or service == 'Riunione':
+                invoicestatus = 'Attività non fatturabile'
+                productivity = 'Senza ricavo'
+
+        # valutazione delle option
+        if invoicestatus == 'To Process':
+            if invoiceoption == 'Under Warranty' or invoiceoption == 'Commercial support' or invoiceoption == 'Swisscom incident' or invoiceoption == 'Swisscom ServiceNow' or invoiceoption == 'To check':
+                invoicestatus = invoiceoption
+                productivity = 'Senza ricavo'
+                timesheet_record.values['print_type'] = 'Garanzia'
+                timesheet_record.values['print_hourprice'] = 'Garanzia'
+                timesheet_record.values['print_travel'] = 'Garanzia'
+
+        # valutazione eventuale project
+        if invoicestatus == 'To Process' and (
+                (not Helper.isempty(project_record.recordid)) and invoiceoption != 'Out of contract'):
+            timesheet_record.values['print_type'] = 'Progetto N. ' + str(project_record.values['id'])
+            if project_record.values['fixedprice'] == 'Si':
+                invoicestatus = 'Fixed price Project'
+                productivity = 'Ricavo indiretto'
+                timesheet_record.values['print_hourprice'] = 'Compreso nel progetto'
+                timesheet_record.values['print_travel'] = 'Inclusa'
+            if invoiceoption == 'Monte ore':
+                timesheet_record.values['print_type'] = ''
+                invoicestatus = 'To Process'
+                productivity = ''
+                timesheet_record.values['print_hourprice'] = ''
+                timesheet_record.values['print_travel'] = ''
+
+
+        # valutazione flat service contract
+        if invoicestatus == 'To Process':
+            if not Helper.isempty(timesheet_record.values['worktime']) and invoiceoption != 'Out of contract':
+                flat_service_contract = None
+                if service == 'Assistenza PBX':
+                    if ((travel_time_decimal == 0 and worktime_decimal == 0.25) or invoiceoption == 'In contract'):
+                        flat_service_contract = servicecontract_table.get_records(
+                            conditions_list=[f"recordidcompany_='{timesheet_record.values['recordidcompany_']}'",
+                                             "(type='Manutenzione PBX')"])
+
+                if service == 'Assistenza IT':
+                    if travel_time_decimal == 0 or invoiceoption == 'In contract':
+                        flat_service_contract = servicecontract_table.get_records(
+                            conditions_list=[f"recordidcompany_='{timesheet_record.values['recordidcompany_']}'",
+                                             "(type='BeAll (All-inclusive)')"])
+
+                if service == 'Printing':
+                    flat_service_contract = servicecontract_table.get_records(
+                        conditions_list=[f"recordidcompany_='{timesheet_record.values['recordidcompany_']}'",
+                                         "(type='Manutenzione Printing')"])
+
+                if service == 'Assistenza Web Hosting':
+                    flat_service_contract = servicecontract_table.get_records(
+                        conditions_list=[f"recordidcompany_='{timesheet_record.values['recordidcompany_']}'",
+                                         "(service='Assistenza Web Hosting')"])
+
+                if flat_service_contract:
+                    servicecontract_record = UserRecord('servicecontract', flat_service_contract[0]['recordid_'])
+                    timesheet_record.values['recordidservicecontract_'] = servicecontract_record.recordid
+                    invoicestatus = 'Service Contract: ' + servicecontract_record.values['type']
+                    productivity = 'Ricavo indiretto'
+                    timesheet_record.values['print_type'] = 'Contratto di servizio'
+                    timesheet_record.values['print_hourprice'] = 'Compreso nel contratto di servizio'
+                    timesheet_record.values['print_travel'] = 'Compresa nel contratto di servizio'
+                if invoiceoption == 'Monte ore':
+                    timesheet_record.values['recordidservicecontract_'] = ''
+                    invoicestatus = 'To Process'
+                    productivity = ''
+                    timesheet_record.values['print_type'] = ''
+                    timesheet_record.values['print_hourprice'] = ''
+                    timesheet_record.values['print_travel'] = ''
+        # valutazione monte ore pbx
+        if ((invoicestatus == 'To Process' or invoicestatus == 'Under Warranty' or invoicestatus == 'Commercial support') and invoiceoption != 'Out of contract' and travel_time_decimal == 0):
+            service_contracts = servicecontract_table.get_records(
+                conditions_list=[f"recordidcompany_='{timesheet_record.values['recordidcompany_']}'",
+                                 "type='Monte Ore Remoto PBX'", "status='In Progress'"])
+            if service_contracts:
+                timesheet_record.values['recordidservicecontract_'] = service_contracts[0]['recordid_']
+                servicecontract_record = UserRecord('servicecontract', service_contracts[0]['recordid_'])
+                if invoicestatus == 'To Process':
+                    invoicestatus = 'Service Contract: Monte Ore Remoto PBX'
+                    productivity = 'Ricavo diretto'
+                if invoicestatus == 'Under Warranty':
+                    invoicestatus = 'Under Warranty'
+                    productivity = 'Senza ricavo'
+                if invoicestatus == 'Commercial support':
+                    invoicestatus = 'Commercial support'
+                    productivity = 'Senza ricavo'
+                timesheet_record.values['print_type'] = 'Monte Ore Remoto PBX'
+                timesheet_record.values['print_hourprice'] = 'Scalato dal monte ore'
+                if servicecontract_record.values['excludetravel']:
+                    timesheet_record.values['print_travel'] = 'Non scalata dal monte ore e non fatturata'
+        # valutazione monte ore
+        if ((
+                invoicestatus == 'To Process' or invoicestatus == 'Under Warranty' or invoicestatus == 'Commercial support') and invoiceoption != 'Out of contract'):
+            service_contracts = servicecontract_table.get_records(
+                conditions_list=[f"recordidcompany_='{timesheet_record.values['recordidcompany_']}'",
+                                 "type='Monte Ore'", "status='In Progress'"])
+            if service_contracts:
+                timesheet_record.values['recordidservicecontract_'] = service_contracts[0]['recordid_']
+                servicecontract_record = UserRecord('servicecontract', service_contracts[0]['recordid_'])
+                if invoicestatus == 'To Process':
+                    invoicestatus = 'Service Contract: Monte Ore'
+                    productivity = 'Ricavo diretto'
+                if invoicestatus == 'Under Warranty':
+                    invoicestatus = 'Under Warranty'
+                    productivity = 'Senza ricavo'
+                if invoicestatus == 'Commercial support':
+                    invoicestatus = 'Commercial support'
+                    productivity = 'Senza ricavo'
+                timesheet_record.values['print_type'] = 'Monte Ore'
+                timesheet_record.values['print_hourprice'] = 'Scalato dal monte ore'
+                if servicecontract_record.values['excludetravel']:
+                    timesheet_record.values['print_travel'] = 'Non scalata dal monte ore e non fatturata'
+
+        # da fatturare quando chiusi
+        if invoicestatus == 'To Process':
+            productivity = 'Ricavo diretto'
+            hourprice = 140
+            travelstandardprice = None
+            timesheet_record.values['print_travel'] = 'Da fatturare'
+
+            if not Helper.isempty(company_record.values['ictpbx_price']):
+                hourprice = company_record.values['ictpbx_price']
+                travelstandardprice = company_record.values['travel_price']
+
+            timesheet_record.values['print_hourprice'] = 'Fr.' + str(hourprice) + '.--'
+
+            if not Helper.isempty(project_record.recordid):
+                if project_record.values['completed'] != 'Si':
+                    invoicestatus = 'To invoice when Project Completed'
+
+            if not Helper.isempty(ticket_record.recordid):
+                if ticket_record.values['vtestatus'] != 'Closed':
+                    invoicestatus = 'To invoice when Ticket Closed'
+            timesheet_record.values['hourprice'] = hourprice
+            workprice = hourprice * worktime_decimal
+            timesheet_record.values['workprice'] = workprice
+            if travel_time_decimal:
+                if travel_time_decimal > 0:
+                    if travelstandardprice:
+                        travelprice = travelstandardprice;
+                    else:
+                        travelprice = hourprice * travel_time_decimal;
+                    timesheet_record.values['travelprice'] = travelprice
+            timesheet_record.values['totalprice'] = workprice + travelprice
+            if invoicestatus == 'To Process':
+                invoicestatus = 'To Invoice'
+
+        timesheet_record.values['invoicestatus'] = invoicestatus
+        timesheet_record.values['productivity'] = productivity
+        if service == 'Assistenza IT' or service == 'Assistenza PBX' or service == 'Assistenza SW' or service == 'Assistenza Web Hosting' or service == 'Printing':
+            if timesheet_record.values['validated'] != 'Si':
+                timesheet_record.values['validated'] = 'No'
+
+        timesheet_record.save()
+
+        if not Helper.isempty(servicecontract_record.recordid):
+            custom_save_record(tableid='servicecontract', recordid=servicecontract_record.recordid)
+
+        if not Helper.isempty(project_record.recordid):
+            custom_save_record(tableid='project', recordid=project_record.recordid)
+
+    # ---SERVICE CONTRACT
+    if tableid == 'servicecontract':
+        servicecontract_table = UserTable(tableid='servicecontract')
+        servicecontract_record = UserRecord('servicecontract', recordid)
+        salesorderline_record = UserRecord('salesorderline', servicecontract_record.values['recordidsalesorderline_'])
+
+        # recupero campi
+        contracthours = servicecontract_record.values['contracthours']
+        if contracthours == None:
+            contracthours = 0
+        previousresidual = servicecontract_record.values['previousresidual']
+        if previousresidual == None:
+            previousresidual = 0
+        excludetravel = servicecontract_record.values['excludetravel']
+
+        # inizializzo campi
+        usedhours = 0
+        progress = 0
+        residualhours = contracthours
+
+        timesheet_linkedrecords = servicecontract_record.get_linkedrecords_dict(linkedtable='timesheet')
+        for timesheet_linkedrecord in timesheet_linkedrecords:
+            if timesheet_linkedrecord['invoiceoption'] != 'Under Warranty' and timesheet_linkedrecord[
+                'invoiceoption'] != 'Commercial support':
+                usedhours = usedhours + timesheet_linkedrecord['worktime_decimal']
+                if excludetravel != '1' and excludetravel != 'Si':
+                    if not Helper.isempty(timesheet_linkedrecord['traveltime_decimal']):
+                        usedhours = usedhours + timesheet_linkedrecord['traveltime_decimal']
+        residualhours = contracthours + previousresidual - usedhours
+        if contracthours + previousresidual != 0:
+            progress = (usedhours / (contracthours + previousresidual)) * 100
+
+        if Helper.isempty(servicecontract_record.values['status']):
+            servicecontract_record.values['status'] = 'In Progress'
+
+        servicecontract_record.values['usedhours'] = usedhours
+        servicecontract_record.values['residualhours'] = residualhours
+        servicecontract_record.values['progress'] = progress
+        servicecontract_record.save()
+
+        if not Helper.isempty(salesorderline_record.recordid):
+            custom_save_record( tableid='salesorderline', recordid=salesorderline_record.recordid)
 
     # ---DEAL---
     if tableid == 'deal':
