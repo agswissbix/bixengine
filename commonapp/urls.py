@@ -89,6 +89,8 @@ urlpatterns = [
     path('settings_table_usertables_save/', settings_table_usertables_save, name='settings_table_usertables_save'),
     path('settings_table_tablefields_save/', settings_table_tablefields_save, name='settings_table_tablefields_save'),
     path('settings_table_fields_new_field/', settings_table_fields_new_field, name='settings_table_fields_new_field'),
+    path('settings_table_fields_settings_fields_save/', settings_table_fields_settings_fields_save, name='settings_table_fields_settings_fields_save'),
+    path('settings_table_linkedtables/', settings_table_linkedtables, name='settings_table_linkedtables'),
 ]
 
 
