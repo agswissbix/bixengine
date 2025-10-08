@@ -104,6 +104,15 @@ class TableSettings:
             ],
             'value': 'Fields'
         },
+        "card_default_size": {
+            "type": "select",
+            "options": ["min", "max"],
+            "value": "min"
+        },
+        "card_min_size": {
+            "type": "parola",
+            "value": "w-2/6"
+        },
         'scheda_active_tab': {
             'type': 'select',
             'options': ['Campi', 'Collegati', 'Allegati', 'Analitica', 'Storico'],
@@ -281,6 +290,11 @@ class TableSettings:
             'options': ['true', 'false', ''],
             'value': 'true'
         },
+        'default_orderby': {
+            'type': 'select',
+            'options': [],
+            'value': 'recordid'
+        },
         'default_save': {
             'type': 'select',
             'options': ['salva', 'salva e chiudi', 'salva e nuovo', 'salva e nuovo-salva e chiudi',
@@ -340,6 +354,19 @@ class TableSettings:
 
     def get_settings(self):
         settings_copy = {key: value.copy() for key, value in self.settings.items()}
+
+        fields = SysField.objects.filter(tableid=self.tableid).all()
+    
+        # LOGICA PER 'default_orderby'
+        if fields:
+            orderby_options = []
+            for field in fields:
+                orderby_options.append(str(field.fieldid)) 
+            
+            settings_copy['default_orderby']['options'] = orderby_options
+            
+            if orderby_options and settings_copy['default_orderby']['value'] == '':
+                settings_copy['default_orderby']['value'] = orderby_options[0]
 
         sql = f"SELECT settingid, value FROM sys_user_table_settings WHERE tableid='{self.tableid}' AND userid='{self.userid}'"
         rows = self.db_helper.sql_query(sql)

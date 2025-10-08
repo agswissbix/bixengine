@@ -173,6 +173,9 @@ def settings_table_tablefields_save(request):
         fieldid = field.get("id")
         order = field.get("order")
 
+        if fieldid == 15:
+            print(order)
+
         if not fieldid:
             continue  # skip campi non validi
 
@@ -188,8 +191,8 @@ def settings_table_tablefields_save(request):
         if user_table_order is None:
             return JsonResponse({'success': False, 'error': f'Table with id {tableid} not found for user {userid}'})
         
-        if user_table_order.fieldorder == order_value:
-            continue
+        # if user_table_order.fieldorder == order_value:
+        #     continue
 
         user_table_order.fieldorder = order_value
         user_table_order.save()
@@ -417,17 +420,23 @@ def settings_table_linkedtables(request):
         userid=userid
     ).values('fieldorder')[:1]
 
-    # Query ORM equivalente al tuo LEFT JOIN
-    linked_tables_qs = (
-        SysTableLink.objects.filter(tableid=tableid)
-        .annotate(
-            fieldorder=Subquery(user_order_subquery, output_field=IntegerField())
-        )
-        .order_by(Coalesce('fieldorder', 9999))  # metti quelli null in fondo
+    linked_qs = (
+        SysTableLink.objects
+        .filter(tableid=tableid)
+        .select_related('tablelinkid')  # segue FK per accedere alla descrizione
+        .annotate(fieldorder=Subquery(user_order_subquery, output_field=IntegerField()))
+        .order_by(Coalesce('fieldorder', 9999))
     )
 
-    # Serializziamo i risultati in una lista di dict
-    linked_tables = list(linked_tables_qs.values())
+    # Costruiamo la lista per React nel formato richiesto
+    linked_tables = [
+        {
+            "tablelinkid": link.tablelinkid.id if hasattr(link.tablelinkid, 'id') else link.tablelinkid,
+            "description": getattr(link.tablelinkid, 'description', ''),
+            "fieldorder": link.fieldorder,
+        }
+        for link in linked_qs
+    ]
 
     return JsonResponse({
         "success": True,
