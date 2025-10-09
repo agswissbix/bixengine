@@ -198,7 +198,7 @@ class UserRecord:
 
     def get_record_badge_fields(self):
         return_fields=[]
-        sql = f"SELECT sys_field.* FROM sys_field join sys_user_order on sys_field.fieldid=sys_user_order.fieldid WHERE sys_field.tableid='{self.tableid}' AND sys_user_order.userid=1 AND sys_user_order.tableid='{self.tableid}' AND typePreference='campiFissi' ORDER BY fieldorder asc"
+        sql = f"SELECT sys_field.* FROM sys_field join sys_user_order on sys_field.fieldid=sys_user_order.fieldid WHERE sys_field.tableid='{self.tableid}' AND sys_user_order.userid=1 AND sys_user_order.tableid='{self.tableid}' AND typePreference='campiFissi' AND fieldorder IS NOT NULL ORDER BY fieldorder asc"
         fields = HelpderDB.sql_query(sql)
         for field in fields:
             fieldid = field['fieldid']
@@ -211,7 +211,7 @@ class UserRecord:
     @timing_decorator
     def get_record_results_fields(self):
         return_fields=[]
-        sql = f"SELECT sys_field.* FROM sys_field join sys_user_field_order on sys_field.id=sys_user_field_order.fieldid WHERE sys_field.tableid='{self.tableid}' AND sys_user_field_order.userid=1 AND sys_user_field_order.tableid='{self.tableid}' AND typePreference='search_results_fields' ORDER BY fieldorder asc"
+        sql = f"SELECT sys_field.* FROM sys_field join sys_user_field_order on sys_field.id=sys_user_field_order.fieldid WHERE sys_field.tableid='{self.tableid}' AND sys_user_field_order.userid=1 AND sys_user_field_order.tableid='{self.tableid}' AND typePreference='search_results_fields' AND fieldorder IS NOT NULL ORDER BY fieldorder asc"
         fields = HelpderDB.sql_query(sql)
         for field in fields:
             fieldid = field['fieldid']
@@ -322,7 +322,7 @@ class UserRecord:
 
 
     def get_linked_tables(self):
-        sql=f"SELECT sys_table.id as tableid,sys_table.description  FROM sys_user_order LEFT JOIN sys_table ON sys_user_order.fieldid=sys_table.id  WHERE sys_user_order.tableid='{self.tableid}' AND typepreference='keylabel' AND userid={self.userid} order by fieldorder asc"
+        sql=f"SELECT sys_table.id as tableid,sys_table.description  FROM sys_user_order LEFT JOIN sys_table ON sys_user_order.fieldid=sys_table.id  WHERE sys_user_order.tableid='{self.tableid}' AND typepreference='keylabel' AND fieldorder IS NOT NULL AND userid={self.userid} order by fieldorder asc"
 
         linked_tables=HelpderDB.sql_query(sql)
         for linked_table in linked_tables:
@@ -344,7 +344,7 @@ class UserRecord:
                 SELECT f.*
                 FROM sys_user_field_order AS fo LEFT JOIN sys_field AS f ON fo.tableid=f.tableid AND fo.fieldid=f.id
 
-                WHERE fo.tableid='{self.tableid}' AND typepreference='badge_fields' AND fo.userid={self.userid} ORDER BY fieldorder
+                WHERE fo.tableid='{self.tableid}' AND typepreference='badge_fields' AND fo.fieldorder IS NOT NULL AND fo.userid={self.userid} ORDER BY fieldorder
             """
             fields=HelpderDB.sql_query(sql)
             
@@ -385,7 +385,7 @@ class UserRecord:
             SELECT f.*
             FROM sys_user_field_order AS fo LEFT JOIN sys_field AS f ON fo.tableid=f.tableid AND fo.fieldid=f.id
 
-            WHERE fo.tableid='{self.tableid}' AND typepreference='insert_fields' AND fo.userid=1 ORDER BY fo.fieldorder
+            WHERE fo.tableid='{self.tableid}' AND typepreference='insert_fields' AND fo.fieldorder IS NOT NULL AND fo.userid=1 ORDER BY fo.fieldorder
         """
         fields=HelpderDB.sql_query(sql)
         insert_fields=[]

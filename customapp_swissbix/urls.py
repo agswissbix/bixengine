@@ -23,6 +23,8 @@ urlpatterns = [
     path('printing_katun_bexio_api_set_invoice/', printing_katun_bexio_api_set_invoice, name='printing_katun_bexio_api_set_invoice'),
     path('get_satisfation/', get_satisfation, name='get_satisfation'),
     path('update_deals/', update_deals, name='update_deals'),
+    path('sync_freshdesk_tickets/', sync_freshdesk_tickets, name='sync_freshdesk_tickets'),
+    
     
     
 ]

@@ -397,7 +397,7 @@ class UserTable:
             sql_order = f"""
                 SELECT fieldid, fieldorder, typepreference
                 FROM sys_user_field_order
-                WHERE tableid='{self.tableid}' AND userid='{str(self.userid)}' AND fieldid IN ({field_ids_str})
+                WHERE tableid='{self.tableid}' AND userid='{str(self.userid)}' AND fieldid IN ({field_ids_str}) AND fieldorder IS NOT NULL
                 ORDER BY typepreference, fieldorder
             """
             all_orders_list = HelpderDB.sql_query(sql_order)
@@ -434,6 +434,7 @@ class UserTable:
             WHERE sys_user_field_order.typepreference = 'search_results_fields'
             AND sys_user_field_order.tableid = '{self.tableid}'
             AND sys_user_field_order.userid = 1
+            AND sys_user_field_order.fieldorder IS NOT NULL
             ORDER BY sys_user_field_order.fieldorder
             """
         columns=HelpderDB.sql_query(sql)

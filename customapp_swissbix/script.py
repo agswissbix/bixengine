@@ -564,3 +564,275 @@ def update_deals():
     
 
     return {"status": result_status, "value": result_value, "type": "update"}
+
+
+
+
+def sync_freshdesk_tickets(request):
+    api_key = os.environ.get('FRESHDESK_APIKEY')
+    password = "x"
+
+    url = f"https://swissbix.freshdesk.com/api/v2/tickets?include=requester,description,stats&updated_since=2025-10-01&per_page=10"
+
+    response = requests.get(url, auth=(api_key, password))
+
+    headers = response.headers
+    response = json.loads(response.text)
+
+    for ticket in response:
+        field = Helperdb.sql_query_row(f"select * from user_freshdesk_tickets WHERE ticket_id='{ticket['id']}'")
+        if not field:
+            new_record = Record(tableid='freshdesk_tickets')
+            new_record.fields['ticket_id'] = ticket['id']
+            new_record.fields['subject'] = ticket['subject']
+            new_record.fields['description'] = ticket['description_text']
+            new_record.fields['created_at'] = ticket['created_at']
+            new_record.fields['closed_at'] = ticket['stats']['closed_at']
+            new_record.fields['requester_id'] = ticket['requester']['id']
+            new_record.fields['requester_name'] = ticket['requester']['name']
+            new_record.fields['requester_email'] = ticket['requester']['email']
+            new_record.fields['responder_id'] = ticket['responder_id']
+            new_record.fields['status'] = ticket['status']
+
+            #new_record.save()
+        else:
+            record = Record(tableid='freshdesk_tickets', recordid=field['recordid_'])
+            record.fields['subject'] = ticket['subject']
+            record.fields['description'] = ticket['description_text']
+            record.fields['closed_at'] = ticket['stats']['closed_at']
+            record.fields['status'] = ticket['status']
+            record.fields['responder_id'] = ticket['responder_id']
+
+            #record.save()
+
+
+    return JsonResponse(response, safe=False)
+
+
+def get_bexio_contacts(request):
+    url = "https://api.bexio.com/2.0/contact/"
+    accesstoken=os.environ.get('BEXIO_ACCESSTOKEN')
+    headers = {
+        'Accept': "application/json",
+        'Content-Type': "application/json",
+        'Authorization': f"Bearer {accesstoken}",
+    }
+
+    response = requests.request("GET", url, headers=headers)
+    response = json.loads(response.text)
+
+    for contact in response:
+        field = Helperdb.sql_query_row(f"select * from user_bexio_contact WHERE bexio_id='{contact['id']}'")
+        if not field:
+            record = Record(tableid="bexio_contact")
+
+        else:
+            record = Record(tableid="bexio_contact", recordid=field['recordid_'])
+
+        record.fields['bexio_id'] = contact['id']
+        record.fields['nr'] = contact['nr']
+        record.fields['nr'] = contact['nr']
+        record.fields['contact_type_id'] = contact['contact_type_id']
+        record.fields['name_1'] = contact['name_1']
+        record.fields['name_2'] = contact['name_2']
+        record.fields['address'] = contact['address']
+        record.fields['postcode'] = contact['postcode']
+        record.fields['city'] = contact['city']
+        record.fields['country_id'] = contact['country_id']
+        record.fields['mail'] = contact['mail']
+        record.fields['mail_second'] = contact['mail_second']
+        record.fields['phone_fixed'] = contact['phone_fixed']
+        record.fields['phone_mobile'] = contact['phone_mobile']
+        record.fields['contact_group_ids'] = contact['contact_group_ids']
+        record.fields['contact_branch_ids'] = contact['contact_branch_ids']
+        record.fields['user_id'] = contact['user_id']
+        record.fields['owner_id'] = contact['owner_id']
+        # record.fields['status'] = contact['status']
+
+
+        record.save()
+
+    return JsonResponse(response, safe=False)
+
+def get_bexio_orders(request):
+    url = "https://api.bexio.com/2.0/kb_order/search/?order_by=id_desc&limit=100&offset=0"
+    accesstoken=os.environ.get('BEXIO_ACCESSTOKEN')
+    headers = {
+        'Accept': "application/json",
+        'Content-Type': "application/json",
+        'Authorization': f"Bearer {accesstoken}",
+    }
+
+    payload = """
+    [
+        {
+            "field": "kb_item_status_id",
+            "value": "5",
+            "criteria": "="
+        }
+    ]
+    """
+
+    response = requests.request("POST", url, data=payload, headers=headers)
+    response = json.loads(response.text)
+
+    for order in response:
+        field = Helperdb.sql_query_row(f"select * from user_bexio_orders WHERE bexio_id='{order['id']}'")
+        if not field:
+            record = Record(tableid="bexio_orders")
+
+        else:
+            record = Record(tableid="bexio_orders", recordid=field['recordid_'])
+
+
+        record.fields['bexio_id'] = order['id']
+        record.fields['document_nr'] = order['document_nr']
+        record.fields['document_nr'] = order['document_nr']
+        record.fields['title'] = order['title']
+        record.fields['contact_id'] = order['contact_id']
+        record.fields['user_id'] = order['user_id']
+        record.fields['total_gross'] = order['total_gross']
+        record.fields['total_net'] = order['total_net']
+        record.fields['total_taxes'] = order['total_taxes']
+        record.fields['total'] = order['total']
+        record.fields['is_valid_from'] = order['is_valid_from']
+        record.fields['contact_address'] = order['contact_address']
+        record.fields['delivery_address'] = order['delivery_address']
+        record.fields['is_recurring'] = order['is_recurring']
+        record.fields['is_recurring'] = order['is_recurring']
+        # record.fields['taxs_percentage'] = order['taxs']['percentage']
+        # record.fields['taxs_value'] = order['taxs']['value']
+
+        record.save()
+
+        get_bexio_positions(request, 'kb_order', order['id'])
+
+    return JsonResponse(response, safe=False)
+
+
+def get_bexio_positions_example(request, bexioid):
+    return get_bexio_positions(request,'kb_order',bexioid)
+
+
+def get_bexio_positions(request,bexiotable,bexioid):
+    url = f"https://api.bexio.com/2.0/{bexiotable}/{bexioid}/kb_position_custom"
+    accesstoken=os.environ.get('BEXIO_ACCESSTOKEN')
+    headers = {
+        'Accept': "application/json",
+        'Content-Type': "application/json",
+        'Authorization': f"Bearer {accesstoken}",
+    }
+
+    response = requests.request("GET", url, headers=headers)
+    response = json.loads(response.text)
+
+    for position in response:
+        field = Helperdb.sql_query_row(f"select * from user_bexio_positions WHERE bexio_id='{position['id']}'")
+        if not field:
+            record = Record(tableid="bexio_positions")
+        else:
+            record = Record(tableid="bexio_positions", recordid=field['recordid_'])
+
+
+        if bexiotable == 'kb_order':
+            type='order'
+        else:
+            type='invoice'
+
+        record.fields['bexio_id'] = position['id']
+        record.fields['type'] = type
+        record.fields['amount'] = position['amount']
+        record.fields['unit_id'] = position['unit_id']
+        record.fields['account_id'] = position['account_id']
+        record.fields['unit_name'] = position['unit_name']
+        record.fields['tax_id'] = position['tax_id']
+        record.fields['tax_value'] = position['tax_value']
+        record.fields['text'] = position['text']
+        record.fields['unit_price'] = position['unit_price']
+        record.fields['discount_in_percent'] = position['discount_in_percent']
+        record.fields['position_total'] = position['position_total']
+        record.fields['pos'] = position['pos']
+        record.fields['internal_pos'] = position['internal_pos']
+        record.fields['parent_id'] = position['parent_id']
+        record.fields['is_optional'] = position['is_optional']
+
+        record.save()
+
+    return JsonResponse(response, safe=False)
+
+
+def get_bexio_invoices(request):
+    url = "https://api.bexio.com/2.0/kb_invoice?order_by=id_desc&limit=100&offset=0"
+    accesstoken=os.environ.get('BEXIO_ACCESSTOKEN')
+    headers = {
+        'Accept': "application/json",
+        'Content-Type': "application/json",
+        'Authorization': f"Bearer {accesstoken}",
+    }
+
+    response = requests.request("GET", url, headers=headers)
+    response = json.loads(response.text)
+
+    for invoice in response:
+        field = Helperdb.sql_query_row(f"select * from user_bexio_invoices WHERE bexio_id='{invoice['id']}'")
+        if not field:
+            record = Record(tableid="bexio_invoices")
+        else:
+            record = Record(tableid="bexio_invoices", recordid=field['recordid_'])
+
+        record.fields['bexio_id'] = invoice['id']
+        record.fields['document_nr'] = invoice['document_nr']
+        record.fields['title'] = invoice['title']
+        record.fields['contact_id'] = invoice['contact_id']
+        record.fields['user_id'] = invoice['user_id']
+        record.fields['total_gross'] = invoice['total_gross']
+        record.fields['total_net'] = invoice['total_net']
+        record.fields['total_taxes'] = invoice['total_taxes']
+        record.fields['total_received_payments'] = invoice['total_received_payments']
+        record.fields['total_remaining_payments'] = invoice['total_remaining_payments']
+        record.fields['total'] = invoice['total']
+        record.fields['is_valid_from'] = invoice['is_valid_from']
+        record.fields['is_valid_to'] = invoice['is_valid_to']
+        record.fields['contact_address'] = invoice['contact_address']
+
+
+        record.save()
+
+        get_bexio_positions(request, 'kb_invoice', invoice['id'])
+
+
+    return JsonResponse(response, safe=False)
+
+def syncdata(request,tableid):
+    sync_table=Helperdb.db_get_value('sys_table','sync_table',f"id='{tableid}'")
+    sync_field=Helperdb.db_get_value('sys_table','sync_field',f"id='{tableid}'")
+    sync_condition=Helperdb.db_get_value('sys_table','sync_condition',f"id='{tableid}'")
+    sync_order=Helperdb.db_get_value('sys_table','sync_order',f"id='{tableid}'")
+    bixdata_fields=dict()
+    rows=Helperdb.db_get('sys_field','*',f"tableid='{tableid}' AND sync_fieldid is not null AND sync_fieldid<>'' ")
+    for row in rows:
+        bixdata_fields[row['sync_fieldid']]=row['fieldid']
+    if sync_condition:
+        condition=sync_condition
+    else:
+        condition='true'
+
+    if sync_order:
+        order=f"ORDER BY {sync_order}"
+    else:
+        order=''
+    sql=f"""
+        SELECT *
+        FROM {sync_table}
+        WHERE {condition}
+        {order}
+    """
+    syncrows=Helperdb.sql_query(sql)
+    for syncrow in syncrows:
+        sync_fields=dict()
+        for key, field in syncrow.items():
+            if key in bixdata_fields:
+                sync_fields[bixdata_fields[key]]=field
+    bixdata_sync_field=bixdata_fields[sync_field]
+    print(sync_fields)
+
