@@ -16,10 +16,10 @@ from functools import wraps
 
 from bixsettings.views.helpers.helperdb import Helperdb
 from commonapp.bixmodels import helper_db   
-from .bixmodels.sys_table import *
 from .bixmodels.user_record import *
 from .bixmodels.user_table import *
-from commonapp.models import SysCustomFunction, SysUser, SysUserSettings
+from commonapp.models import SysCustomFunction, SysUser, SysUserSettings, SysTable
+from django.db.models import F, OuterRef, Subquery, IntegerField
 
 import pyotp
 import qrcode
@@ -230,10 +230,11 @@ def get_examplepost(request):
 
     return JsonResponse({'error': 'Invalid request method'}, status=405)
 
+
 @login_required_api  
 def get_sidebarmenu_items(request):
     print("Function: get_sidebarmenu_items")
-    tables=SysTable.get_user_tables(1)
+    tables= SysTable.get_user_tables(1)
     workspaces_tables=dict()
     userid =Helper.get_userid(request)
     for table in tables:
@@ -244,10 +245,12 @@ def get_sidebarmenu_items(request):
             workspaces_tables[workspace]["id"]=table['workspace']
             workspaces_tables[workspace]["title"]=table['workspace']
             workspaces_tables[workspace]["icon"]='Home'
+            workspaces_tables[workspace]["order"]=table['workspace_order']
         subitem={}
         subitem['id']=table['id']
         subitem['title']=table['description']
         subitem['href']="#"
+        subitem['order']=table['table_order']
         if "subItems" not in workspaces_tables[workspace]:
             workspaces_tables[workspace]['subItems']=[]
         workspaces_tables[workspace]["subItems"].append(subitem)
