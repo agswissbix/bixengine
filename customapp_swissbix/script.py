@@ -572,7 +572,7 @@ def sync_freshdesk_tickets(request):
     api_key = os.environ.get('FRESHDESK_APIKEY')
     password = "x"
 
-    url = f"https://swissbix.freshdesk.com/api/v2/tickets?include=requester,description,stats&updated_since=2025-10-01&per_page=10"
+    url = f"https://swissbix.freshdesk.com/api/v2/tickets?include=requester,description,stats&updated_since=2025-01-01&per_page=10"
 
     response = requests.get(url, auth=(api_key, password))
 
@@ -580,7 +580,7 @@ def sync_freshdesk_tickets(request):
     response = json.loads(response.text)
 
     for ticket in response:
-        field = Helperdb.sql_query_row(f"select * from user_freshdesk_tickets WHERE ticket_id='{ticket['id']}'")
+        field = HelpderDB.sql_query_row(f"select * from user_freshdesk_tickets WHERE ticket_id='{ticket['id']}'")
         if not field:
             new_record = Record(tableid='freshdesk_tickets')
             new_record.fields['ticket_id'] = ticket['id']
@@ -610,7 +610,7 @@ def sync_freshdesk_tickets(request):
 
 
 def get_bexio_contacts(request):
-    url = "https://api.bexio.com/2.0/contact/"
+    url = "https://api.bexio.com/2.0/contact?order_by=id_desc&limit=100&offset=0"
     accesstoken=os.environ.get('BEXIO_ACCESSTOKEN')
     headers = {
         'Accept': "application/json",
@@ -622,7 +622,7 @@ def get_bexio_contacts(request):
     response = json.loads(response.text)
 
     for contact in response:
-        field = Helperdb.sql_query_row(f"select * from user_bexio_contact WHERE bexio_id='{contact['id']}'")
+        field = HelpderDB.sql_query_row(f"select * from user_bexio_contact WHERE bexio_id='{contact['id']}'")
         if not field:
             record = Record(tableid="bexio_contact")
 
@@ -655,7 +655,7 @@ def get_bexio_contacts(request):
     return JsonResponse(response, safe=False)
 
 def get_bexio_orders(request):
-    url = "https://api.bexio.com/2.0/kb_order/search/?order_by=id_desc&limit=100&offset=0"
+    url = "https://api.bexio.com/2.0/kb_order/search/?order_by=id_desc&limit=10&offset=0"
     accesstoken=os.environ.get('BEXIO_ACCESSTOKEN')
     headers = {
         'Accept': "application/json",
@@ -677,7 +677,7 @@ def get_bexio_orders(request):
     response = json.loads(response.text)
 
     for order in response:
-        field = Helperdb.sql_query_row(f"select * from user_bexio_orders WHERE bexio_id='{order['id']}'")
+        field = HelpderDB.sql_query_row(f"select * from user_bexio_orders WHERE bexio_id='{order['id']}'")
         if not field:
             record = Record(tableid="bexio_orders")
 
@@ -727,7 +727,7 @@ def get_bexio_positions(request,bexiotable,bexioid):
     response = json.loads(response.text)
 
     for position in response:
-        field = Helperdb.sql_query_row(f"select * from user_bexio_positions WHERE bexio_id='{position['id']}'")
+        field = HelpderDB.sql_query_row(f"select * from user_bexio_positions WHERE bexio_id='{position['id']}'")
         if not field:
             record = Record(tableid="bexio_positions")
         else:
@@ -762,7 +762,7 @@ def get_bexio_positions(request,bexiotable,bexioid):
 
 
 def get_bexio_invoices(request):
-    url = "https://api.bexio.com/2.0/kb_invoice?order_by=id_desc&limit=100&offset=0"
+    url = "https://api.bexio.com/2.0/kb_invoice?order_by=id_desc&limit=10&offset=0"
     accesstoken=os.environ.get('BEXIO_ACCESSTOKEN')
     headers = {
         'Accept': "application/json",
@@ -774,7 +774,7 @@ def get_bexio_invoices(request):
     response = json.loads(response.text)
 
     for invoice in response:
-        field = Helperdb.sql_query_row(f"select * from user_bexio_invoices WHERE bexio_id='{invoice['id']}'")
+        field = HelpderDB.sql_query_row(f"select * from user_bexio_invoices WHERE bexio_id='{invoice['id']}'")
         if not field:
             record = Record(tableid="bexio_invoices")
         else:
@@ -804,12 +804,12 @@ def get_bexio_invoices(request):
     return JsonResponse(response, safe=False)
 
 def syncdata(request,tableid):
-    sync_table=Helperdb.db_get_value('sys_table','sync_table',f"id='{tableid}'")
-    sync_field=Helperdb.db_get_value('sys_table','sync_field',f"id='{tableid}'")
-    sync_condition=Helperdb.db_get_value('sys_table','sync_condition',f"id='{tableid}'")
-    sync_order=Helperdb.db_get_value('sys_table','sync_order',f"id='{tableid}'")
+    sync_table=HelpderDB.db_get_value('sys_table','sync_table',f"id='{tableid}'")
+    sync_field=HelpderDB.db_get_value('sys_table','sync_field',f"id='{tableid}'")
+    sync_condition=HelpderDB.db_get_value('sys_table','sync_condition',f"id='{tableid}'")
+    sync_order=HelpderDB.db_get_value('sys_table','sync_order',f"id='{tableid}'")
     bixdata_fields=dict()
-    rows=Helperdb.db_get('sys_field','*',f"tableid='{tableid}' AND sync_fieldid is not null AND sync_fieldid<>'' ")
+    rows=HelpderDB.db_get('sys_field','*',f"tableid='{tableid}' AND sync_fieldid is not null AND sync_fieldid<>'' ")
     for row in rows:
         bixdata_fields[row['sync_fieldid']]=row['fieldid']
     if sync_condition:
@@ -827,7 +827,7 @@ def syncdata(request,tableid):
         WHERE {condition}
         {order}
     """
-    syncrows=Helperdb.sql_query(sql)
+    syncrows=HelpderDB.sql_query(sql)
     for syncrow in syncrows:
         sync_fields=dict()
         for key, field in syncrow.items():
