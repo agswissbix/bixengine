@@ -168,13 +168,11 @@ def settings_table_tablefields_save(request):
     if typepreference is None or typepreference not in type_preference_options:
         return JsonResponse({"error": "typepreference is required"}, status=400)
 
+    errors = []
 
     for field in fields:
         fieldid = field.get("id")
         order = field.get("order")
-
-        if fieldid == 15:
-            print(order)
 
         if not fieldid:
             continue  # skip campi non validi
@@ -189,7 +187,8 @@ def settings_table_tablefields_save(request):
         ).first()
 
         if user_table_order is None:
-            return JsonResponse({'success': False, 'error': f'Table with id {tableid} not found for user {userid}'})
+            errors.append(f"Record not found for fieldid={fieldid}")
+            continue
         
         # if user_table_order.fieldorder == order_value:
         #     continue
@@ -197,7 +196,7 @@ def settings_table_tablefields_save(request):
         user_table_order.fieldorder = order_value
         user_table_order.save()
 
-    return JsonResponse({'success': True})
+    return JsonResponse({'success': True, 'errors': errors})
 
 
 @transaction.atomic
