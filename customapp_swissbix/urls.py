@@ -30,7 +30,7 @@ urlpatterns = [
     path('sync_bexio_positions/', sync_bexio_positions, name='sync_bexio_positions'),
     path('sync_bexio_invoices/', sync_bexio_invoices, name='sync_bexio_invoices'),
     path('syncdata/', syncdata, name='syncdata'),
-    
+    path('get_scheduler_logs/', get_scheduler_logs, name='get_scheduler_logs'),
     
     
 ]

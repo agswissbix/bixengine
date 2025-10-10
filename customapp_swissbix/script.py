@@ -841,3 +841,52 @@ def syncdata(request,tableid):
     bixdata_sync_field=bixdata_fields[sync_field]
     print(sync_fields)
 
+def get_scheduler_logs(request):
+    try: 
+        url = "https://bixdata.swissbix.com/get_scheduler_logs.php"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+        }
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+
+        formato = "%Y-%m-%d %H:%M:%S"
+
+        for log in data:
+            id = log.get("id")
+            oggetto_datetime = datetime.strptime(log.get('date'), formato)
+            date = oggetto_datetime.date()
+            ora = oggetto_datetime.time()
+
+            monitoring_table=UserTable('monitoring')
+            condition_list=[]
+            condition_list.append(f"id={id}")
+            field=monitoring_table.get_records(conditions_list=condition_list)
+
+            if not field:
+                new_record = UserRecord('monitoring') 
+                new_record.values['id'] = log.get('id')
+                new_record.values['data'] = date
+                new_record.values['ora'] = ora
+                new_record.values['funzione'] = log.get('function')
+                new_record.values['client_id'] = log.get('client')
+                new_record.values['output'] = log.get('date')
+                new_record.values['calls_counter'] = log.get('calls_number')
+
+                # new_record.save()
+            else:
+                record = UserRecord('monitoring', id) 
+                record.values['id'] = log.get('id')
+                record.values['data'] = date
+                record.values['ora'] = ora
+                record.values['funzione'] = log.get('function')
+                record.values['client_id'] = log.get('client')
+                record.values['output'] = log.get('date')
+                record.values['calls_counter'] = log.get('calls_number')
+
+                # record.save()
+
+        return JsonResponse(data, safe=False)
+    except requests.RequestException as e:  
+        return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
