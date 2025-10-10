@@ -561,9 +561,6 @@ def get_table_records(request):
 
     table = UserTable(tableid, Helper.get_userid(request))
 
-    if not viewid:
-        viewid = table.get_default_viewid()
-
     # Costruisci la clausola WHERE dai filtri
     print(filtersList)
     # 1. Ottieni gli oggetti UserRecord GIA' PROCESSATI
@@ -647,7 +644,7 @@ def get_table_records(request):
             field_data = {
                 "recordid": record.recordid,
                 "css": ' '.join(field_css_map.get(str(fieldid), [])),
-                "type": field_definition.get("fieldtypeid", "standard"),
+                "type": field_definition.get("fieldtypewebid", "standard"),
                 "value": field_definition.get("convertedvalue", field_definition.get("value")), # Usa il valore convertito
                 "fieldid": fieldid,
                 
