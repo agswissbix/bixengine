@@ -142,7 +142,7 @@ def settings_table_fields_settings_save(request):
     return HttpResponse({'success': True})
 
 
-
+@transaction.atomic
 def settings_table_usertables_save(request):
     data = json.loads(request.body)
     userid = data.get('userid')
@@ -340,6 +340,26 @@ def settings_table_fields_new_field(request):
         length=255,
     )
 
+    sql_column_type = "VARCHAR(255)"
+    if fieldtype == "Data":
+        sql_column_type = "DATE"
+    elif fieldtype == "Numero":
+        sql_column_type = "INT"
+    elif fieldtype == "Checkbox":
+        sql_column_type = "VARCHAR(10)"
+    elif fieldtype == "LongText":
+        sql_column_type = "LONGTEXT"
+
+    user_table_name = f"user_{tableid}"
+    alter_sql = f'ALTER TABLE {user_table_name} ADD COLUMN {fieldid} {sql_column_type} NULL'
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(alter_sql)
+    except Exception as e:
+        transaction.set_rollback(True)
+        return JsonResponse({"success": False, "error": f"Errore SQL: {e}"}, status=500)
+
     # Se è un campo Categoria → crea lookup table e relative opzioni
     if fieldtype == "Categoria":
         lookuptableid = f"{fieldid}_{tableid}"
@@ -352,14 +372,16 @@ def settings_table_fields_new_field(request):
         )
 
         values = data.get("valuesArray", [])
-        for v in values:
-            desc = v.get("description")
-            if desc:
-                SysLookupTableItem.objects.create(
-                    lookuptableid=lookuptableid,
-                    itemcode=desc,
-                    itemdesc=desc
-                )
+        items = [
+            SysLookupTableItem(
+                lookuptableid=lookuptableid,
+                itemcode=v["description"],
+                itemdesc=v["description"]
+            )
+            for v in values if v.get("description")
+        ]
+        if items:
+            SysLookupTableItem.objects.bulk_create(items)
 
     # Se è un Checkbox → crea lookup Si/No
     elif fieldtype == "Checkbox":
@@ -375,6 +397,8 @@ def settings_table_fields_new_field(request):
             SysLookupTableItem(lookuptableid=lookuptableid, itemcode="Si", itemdesc="Si"),
             SysLookupTableItem(lookuptableid=lookuptableid, itemcode="No", itemdesc="No"),
         ])
+    elif fieldtype == "Linked":
+        pass
 
     return JsonResponse({"success": True})
 
