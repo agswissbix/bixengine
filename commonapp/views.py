@@ -5486,3 +5486,54 @@ def save_calendar_event(request):
     # TODO save data in db
 
     return JsonResponse(data)
+
+
+
+#TODO spostare sotto customapp_wegolf
+def get_benchmark_filters(request):
+    data = json.loads(request.body)
+    userid = Helper.get_userid(request)
+
+    
+    response_data = {
+            'filterOptions': [
+                {'field': 'members_total', 'label': 'Membri totali'},
+                {'field': 'green_fees_total', 'label': 'Green fees totali'},
+                {'field': 'revenue_total', 'label': 'Ricavi totali'}
+            ],
+            'availableClubs': [
+                'Club A', 
+                'Club B', 
+                'Club C', 
+                'Club D'
+            ]
+        }
+        
+    # Restituisce il dizionario completo come risposta JSON
+    # 'safe=True' (default) è corretto perché stiamo restituendo un dizionario
+    return JsonResponse(response_data)
+
+def get_filtered_clubs(request):
+    data = json.loads(request.body)
+    userid = Helper.get_userid(request)
+    filters = data.get('filters', {})
+
+    
+
+    clubs = ["Club Sviluppo A", "Club Sviluppo B", "Club Sviluppo C2"]
+    return JsonResponse({'availableClubs': clubs}, safe=False)
+
+
+
+def fieldsupdate(request):
+    data = json.loads(request.body)
+    params = data.get('params',{})
+    tableid= params.get('tableid',None)
+    recordid= params.get('recordid',None)
+    for param, value in params.items():
+        if param in ['tableid','recordid']:
+            continue
+        value=str(value).replace("'","''")
+        HelpderDB.sql_execute(f"UPDATE user_{tableid} SET {param}='{value}' WHERE recordid_='{recordid}' ")
+    fields= params
+    return JsonResponse({'status': 'ok', 'message': 'Fields updated successfully.'})

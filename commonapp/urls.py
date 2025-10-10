@@ -78,6 +78,8 @@ urlpatterns = [
     path('get_chart_data/', get_chart_data, name='get_chart_data'),
     path('get_calendar_data/', get_calendar_data, name='get_calendar_data'),
     path('save_calendar_event/', save_calendar_event, name='save_calendar_event'),
+    path('fieldsupdate/', fieldsupdate, name='fieldsupdate'),
+    
     
      # ------------------  Settings views --------------------------------- 
     path('get_users_and_groups_api/', get_users_and_groups, name='get_users_and_groups'),
@@ -91,6 +93,10 @@ urlpatterns = [
     path('settings_table_fields_new_field/', settings_table_fields_new_field, name='settings_table_fields_new_field'),
     path('settings_table_fields_settings_fields_save/', settings_table_fields_settings_fields_save, name='settings_table_fields_settings_fields_save'),
     path('settings_table_linkedtables/', settings_table_linkedtables, name='settings_table_linkedtables'),
+    path('get_filtered_clubs/', get_filtered_clubs, name='get_filtered_clubs'),
+    path('get_benchmark_filters/', get_benchmark_filters, name='get_benchmark_filters'),
+    
+    
 ]
 
 
