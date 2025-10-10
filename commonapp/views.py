@@ -5505,10 +5505,10 @@ def get_benchmark_filters(request):
                 {'field': 'revenue_total', 'label': 'Ricavi totali'}
             ],
             'availableClubs': [
-                'Club A', 
-                'Club B', 
-                'Club C', 
-                'Club D'
+                {'title': 'Club A', 'recordid': 'recA'},
+                {'title': 'Club B', 'recordid': 'recB'},
+                {'title': 'Club C', 'recordid': 'recC'},
+                {'title': 'Club D', 'recordid': 'recD'}
             ]
         }
         
@@ -5519,11 +5519,16 @@ def get_benchmark_filters(request):
 def get_filtered_clubs(request):
     data = json.loads(request.body)
     userid = Helper.get_userid(request)
-    filters = data.get('filters', {})
+    #filters = data.get('filters', {})
 
     
 
-    clubs = ["Club Sviluppo A", "Club Sviluppo B", "Club Sviluppo C2"]
+    clubs = [
+                {'title': 'Club A 2', 'recordid': 'recA'},
+                {'title': 'Club B 2', 'recordid': 'recB'},
+                {'title': 'Club C 2', 'recordid': 'recC'},
+                {'title': 'Club D 2', 'recordid': 'recD'}
+            ]
     return JsonResponse({'availableClubs': clubs}, safe=False)
 
 
