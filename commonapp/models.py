@@ -10,6 +10,7 @@ from django.contrib.auth.models import User
 import pyotp
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.db.models import F, OuterRef, Subquery
 
 
 class AuthUser(models.Model):
@@ -387,6 +388,31 @@ class SysTable(models.Model):
     class Meta:
         db_table = 'sys_table'
 
+    @classmethod
+    def get_user_tables(cls, userid):
+    # Subquery per prendere info dal workspace in base al nome
+        workspace_qs = SysTableWorkspace.objects.filter(name=OuterRef('workspace'))
+
+        rows = (
+            cls.objects
+            .filter(sysusertableorder__userid=userid)
+            .annotate(
+                workspace_order=Subquery(workspace_qs.values('order')[:1]),
+                workspace_icon=Subquery(workspace_qs.values('icon')[:1]),
+                table_order=F('sysusertableorder__tableorder'),
+            )
+            .values(
+                'id',
+                'description',
+                'workspace',
+                'workspace_order',
+                'workspace_icon',
+                'sysusertableorder__userid',
+                'table_order',
+            )
+            .order_by('workspace_order', 'table_order', 'id')
+        )
+        return rows
 
 class SysTableFeature(models.Model):
     tableid = models.CharField(primary_key=True, max_length=32)  # The composite primary key (tableid, featureid) found, that is not supported. The first column is selected.

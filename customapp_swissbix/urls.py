@@ -24,6 +24,12 @@ urlpatterns = [
     path('get_satisfation/', get_satisfation, name='get_satisfation'),
     path('update_deals/', update_deals, name='update_deals'),
     path('sync_freshdesk_tickets/', sync_freshdesk_tickets, name='sync_freshdesk_tickets'),
+    path('sync_bexio_contacts/', sync_bexio_contacts, name='sync_bexio_contacts'),
+    path('sync_bexio_orders/', sync_bexio_orders, name='sync_bexio_orders'),
+    path('sync_bexio_positions_example/', sync_bexio_positions_example, name='sync_bexio_positions_example'),
+    path('sync_bexio_positions/', sync_bexio_positions, name='sync_bexio_positions'),
+    path('sync_bexio_invoices/', sync_bexio_invoices, name='sync_bexio_invoices'),
+    path('syncdata/', syncdata, name='syncdata'),
     
     
     

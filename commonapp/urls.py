@@ -97,6 +97,8 @@ urlpatterns = [
     path('get_benchmark_filters/', get_benchmark_filters, name='get_benchmark_filters'),
     
     
+    path('settings_table_linkedtables_save/', settings_table_linkedtables_save, name='settings_table_linkedtables_save'),
+    path('save_new_table/', save_new_table, name='save_new_table'),
 ]
 
 

@@ -582,34 +582,33 @@ def sync_freshdesk_tickets(request):
     for ticket in response:
         field = HelpderDB.sql_query_row(f"select * from user_freshdesk_tickets WHERE ticket_id='{ticket['id']}'")
         if not field:
-            new_record = Record(tableid='freshdesk_tickets')
-            new_record.fields['ticket_id'] = ticket['id']
-            new_record.fields['subject'] = ticket['subject']
-            new_record.fields['description'] = ticket['description_text']
-            new_record.fields['created_at'] = ticket['created_at']
-            new_record.fields['closed_at'] = ticket['stats']['closed_at']
-            new_record.fields['requester_id'] = ticket['requester']['id']
-            new_record.fields['requester_name'] = ticket['requester']['name']
-            new_record.fields['requester_email'] = ticket['requester']['email']
-            new_record.fields['responder_id'] = ticket['responder_id']
-            new_record.fields['status'] = ticket['status']
+            new_record = UserRecord('freshdesk_tickets')
+            new_record.values['ticket_id'] = ticket['id']
+            new_record.values['subject'] = ticket['subject']
+            new_record.values['description'] = ticket['description_text']
+            new_record.values['created_at'] = ticket['created_at']
+            new_record.values['closed_at'] = ticket['stats']['closed_at']
+            new_record.values['requester_id'] = ticket['requester']['id']
+            new_record.values['requester_name'] = ticket['requester']['name']
+            new_record.values['requester_email'] = ticket['requester']['email']
+            new_record.values['responder_id'] = ticket['responder_id']
+            new_record.values['status'] = ticket['status']
 
-            #new_record.save()
+            new_record.save()
         else:
-            record = Record(tableid='freshdesk_tickets', recordid=field['recordid_'])
-            record.fields['subject'] = ticket['subject']
-            record.fields['description'] = ticket['description_text']
-            record.fields['closed_at'] = ticket['stats']['closed_at']
-            record.fields['status'] = ticket['status']
-            record.fields['responder_id'] = ticket['responder_id']
-
-            #record.save()
+            record = UserRecord('freshdesk_tickets', field['recordid_'])
+            record.values['subject'] = ticket['subject']
+            record.values['description'] = ticket['description_text']
+            record.values['closed_at'] = ticket['stats']['closed_at']
+            record.values['status'] = ticket['status']
+            record.values['responder_id'] = ticket['responder_id']
+            record.save()
 
 
     return JsonResponse(response, safe=False)
 
 
-def get_bexio_contacts(request):
+def sync_bexio_contacts(request):
     url = "https://api.bexio.com/2.0/contact?order_by=id_desc&limit=100&offset=0"
     accesstoken=os.environ.get('BEXIO_ACCESSTOKEN')
     headers = {
@@ -624,37 +623,36 @@ def get_bexio_contacts(request):
     for contact in response:
         field = HelpderDB.sql_query_row(f"select * from user_bexio_contact WHERE bexio_id='{contact['id']}'")
         if not field:
-            record = Record(tableid="bexio_contact")
+            record = UserRecord("bexio_contact")
 
         else:
-            record = Record(tableid="bexio_contact", recordid=field['recordid_'])
+            record = UserRecord("bexio_contact", field['recordid_'])
 
-        record.fields['bexio_id'] = contact['id']
-        record.fields['nr'] = contact['nr']
-        record.fields['nr'] = contact['nr']
-        record.fields['contact_type_id'] = contact['contact_type_id']
-        record.fields['name_1'] = contact['name_1']
-        record.fields['name_2'] = contact['name_2']
-        record.fields['address'] = contact['address']
-        record.fields['postcode'] = contact['postcode']
-        record.fields['city'] = contact['city']
-        record.fields['country_id'] = contact['country_id']
-        record.fields['mail'] = contact['mail']
-        record.fields['mail_second'] = contact['mail_second']
-        record.fields['phone_fixed'] = contact['phone_fixed']
-        record.fields['phone_mobile'] = contact['phone_mobile']
-        record.fields['contact_group_ids'] = contact['contact_group_ids']
-        record.fields['contact_branch_ids'] = contact['contact_branch_ids']
-        record.fields['user_id'] = contact['user_id']
-        record.fields['owner_id'] = contact['owner_id']
-        # record.fields['status'] = contact['status']
-
+        record.values['bexio_id'] = contact['id']
+        record.values['nr'] = contact['nr']
+        record.values['nr'] = contact['nr']
+        record.values['contact_type_id'] = contact['contact_type_id']
+        record.values['name_1'] = contact['name_1']
+        record.values['name_2'] = contact['name_2']
+        record.values['address'] = contact['address']
+        record.values['postcode'] = contact['postcode']
+        record.values['city'] = contact['city']
+        record.values['country_id'] = contact['country_id']
+        record.values['mail'] = contact['mail']
+        record.values['mail_second'] = contact['mail_second']
+        record.values['phone_fixed'] = contact['phone_fixed']
+        record.values['phone_mobile'] = contact['phone_mobile']
+        record.values['contact_group_ids'] = contact['contact_group_ids']
+        record.values['contact_branch_ids'] = contact['contact_branch_ids']
+        record.values['user_id'] = contact['user_id']
+        record.values['owner_id'] = contact['owner_id']
+        # record.fields['status'] = contact['status']: Status field does not exists in contact
 
         record.save()
 
     return JsonResponse(response, safe=False)
 
-def get_bexio_orders(request):
+def sync_bexio_orders(request):
     url = "https://api.bexio.com/2.0/kb_order/search/?order_by=id_desc&limit=10&offset=0"
     accesstoken=os.environ.get('BEXIO_ACCESSTOKEN')
     headers = {
@@ -679,42 +677,44 @@ def get_bexio_orders(request):
     for order in response:
         field = HelpderDB.sql_query_row(f"select * from user_bexio_orders WHERE bexio_id='{order['id']}'")
         if not field:
-            record = Record(tableid="bexio_orders")
+            record = UserRecord("bexio_orders")
 
         else:
-            record = Record(tableid="bexio_orders", recordid=field['recordid_'])
+            record = UserRecord("bexio_orders", field['recordid_'])
 
 
-        record.fields['bexio_id'] = order['id']
-        record.fields['document_nr'] = order['document_nr']
-        record.fields['document_nr'] = order['document_nr']
-        record.fields['title'] = order['title']
-        record.fields['contact_id'] = order['contact_id']
-        record.fields['user_id'] = order['user_id']
-        record.fields['total_gross'] = order['total_gross']
-        record.fields['total_net'] = order['total_net']
-        record.fields['total_taxes'] = order['total_taxes']
-        record.fields['total'] = order['total']
-        record.fields['is_valid_from'] = order['is_valid_from']
-        record.fields['contact_address'] = order['contact_address']
-        record.fields['delivery_address'] = order['delivery_address']
-        record.fields['is_recurring'] = order['is_recurring']
-        record.fields['is_recurring'] = order['is_recurring']
-        # record.fields['taxs_percentage'] = order['taxs']['percentage']
-        # record.fields['taxs_value'] = order['taxs']['value']
+        record.values['bexio_id'] = order['id']
+        record.values['document_nr'] = order['document_nr']
+        record.values['document_nr'] = order['document_nr']
+        record.values['title'] = order['title']
+        record.values['contact_id'] = order['contact_id']
+        record.values['user_id'] = order['user_id']
+        record.values['total_gross'] = order['total_gross']
+        record.values['total_net'] = order['total_net']
+        record.values['total_taxes'] = order['total_taxes']
+        record.values['total'] = order['total']
+        record.values['is_valid_from'] = order['is_valid_from']
+        record.values['contact_address'] = order['contact_address']
+        record.values['delivery_address'] = order['delivery_address']
+        record.values['is_recurring'] = order['is_recurring']
+        record.values['is_recurring'] = order['is_recurring']
+
+        order_taxs = order['taxs']
+        record.values['taxs_percentage'] = order_taxs[0]['percentage']
+        record.values['taxs_value'] = order_taxs[0]['value']
 
         record.save()
 
-        get_bexio_positions(request, 'kb_order', order['id'])
+        sync_bexio_positions(request, 'kb_order', order['id'])
 
     return JsonResponse(response, safe=False)
 
 
-def get_bexio_positions_example(request, bexioid):
-    return get_bexio_positions(request,'kb_order',bexioid)
+def sync_bexio_positions_example(request, bexioid):
+    return sync_bexio_positions(request,'kb_order',bexioid)
 
 
-def get_bexio_positions(request,bexiotable,bexioid):
+def sync_bexio_positions(request,bexiotable,bexioid):
     url = f"https://api.bexio.com/2.0/{bexiotable}/{bexioid}/kb_position_custom"
     accesstoken=os.environ.get('BEXIO_ACCESSTOKEN')
     headers = {
@@ -729,9 +729,9 @@ def get_bexio_positions(request,bexiotable,bexioid):
     for position in response:
         field = HelpderDB.sql_query_row(f"select * from user_bexio_positions WHERE bexio_id='{position['id']}'")
         if not field:
-            record = Record(tableid="bexio_positions")
+            record = UserRecord("bexio_positions")
         else:
-            record = Record(tableid="bexio_positions", recordid=field['recordid_'])
+            record = UserRecord("bexio_positions", field['recordid_'])
 
 
         if bexiotable == 'kb_order':
@@ -739,29 +739,29 @@ def get_bexio_positions(request,bexiotable,bexioid):
         else:
             type='invoice'
 
-        record.fields['bexio_id'] = position['id']
-        record.fields['type'] = type
-        record.fields['amount'] = position['amount']
-        record.fields['unit_id'] = position['unit_id']
-        record.fields['account_id'] = position['account_id']
-        record.fields['unit_name'] = position['unit_name']
-        record.fields['tax_id'] = position['tax_id']
-        record.fields['tax_value'] = position['tax_value']
-        record.fields['text'] = position['text']
-        record.fields['unit_price'] = position['unit_price']
-        record.fields['discount_in_percent'] = position['discount_in_percent']
-        record.fields['position_total'] = position['position_total']
-        record.fields['pos'] = position['pos']
-        record.fields['internal_pos'] = position['internal_pos']
-        record.fields['parent_id'] = position['parent_id']
-        record.fields['is_optional'] = position['is_optional']
+        record.values['bexio_id'] = position['id']
+        record.values['type'] = type
+        record.values['amount'] = position['amount']
+        record.values['unit_id'] = position['unit_id']
+        record.values['account_id'] = position['account_id']
+        record.values['unit_name'] = position['unit_name']
+        record.values['tax_id'] = position['tax_id']
+        record.values['tax_value'] = position['tax_value']
+        record.values['text'] = position['text']
+        record.values['unit_price'] = position['unit_price']
+        record.values['discount_in_percent'] = position['discount_in_percent']
+        record.values['position_total'] = position['position_total']
+        record.values['pos'] = position['pos']
+        record.values['internal_pos'] = position['internal_pos']
+        record.values['parent_id'] = position['parent_id']
+        record.values['is_optional'] = position['is_optional']
 
         record.save()
 
     return JsonResponse(response, safe=False)
 
 
-def get_bexio_invoices(request):
+def sync_bexio_invoices(request):
     url = "https://api.bexio.com/2.0/kb_invoice?order_by=id_desc&limit=10&offset=0"
     accesstoken=os.environ.get('BEXIO_ACCESSTOKEN')
     headers = {
@@ -776,42 +776,46 @@ def get_bexio_invoices(request):
     for invoice in response:
         field = HelpderDB.sql_query_row(f"select * from user_bexio_invoices WHERE bexio_id='{invoice['id']}'")
         if not field:
-            record = Record(tableid="bexio_invoices")
+            record = UserRecord("bexio_invoices")
         else:
-            record = Record(tableid="bexio_invoices", recordid=field['recordid_'])
+            record = UserRecord("bexio_invoices", field['recordid_'])
 
-        record.fields['bexio_id'] = invoice['id']
-        record.fields['document_nr'] = invoice['document_nr']
-        record.fields['title'] = invoice['title']
-        record.fields['contact_id'] = invoice['contact_id']
-        record.fields['user_id'] = invoice['user_id']
-        record.fields['total_gross'] = invoice['total_gross']
-        record.fields['total_net'] = invoice['total_net']
-        record.fields['total_taxes'] = invoice['total_taxes']
-        record.fields['total_received_payments'] = invoice['total_received_payments']
-        record.fields['total_remaining_payments'] = invoice['total_remaining_payments']
-        record.fields['total'] = invoice['total']
-        record.fields['is_valid_from'] = invoice['is_valid_from']
-        record.fields['is_valid_to'] = invoice['is_valid_to']
-        record.fields['contact_address'] = invoice['contact_address']
-
+        record.values['bexio_id'] = invoice['id']
+        record.values['document_nr'] = invoice['document_nr']
+        record.values['title'] = invoice['title']
+        record.values['contact_id'] = invoice['contact_id']
+        record.values['user_id'] = invoice['user_id']
+        record.values['total_gross'] = invoice['total_gross']
+        record.values['total_net'] = invoice['total_net']
+        record.values['total_taxes'] = invoice['total_taxes']
+        record.values['total_received_payments'] = invoice['total_received_payments']
+        record.values['total_remaining_payments'] = invoice['total_remaining_payments']
+        record.values['total'] = invoice['total']
+        record.values['is_valid_from'] = invoice['is_valid_from']
+        record.values['is_valid_to'] = invoice['is_valid_to']
+        record.values['contact_address'] = invoice['contact_address']
 
         record.save()
 
-        get_bexio_positions(request, 'kb_invoice', invoice['id'])
+        sync_bexio_positions(request, 'kb_invoice', invoice['id'])
 
 
     return JsonResponse(response, safe=False)
 
+# DO NOT EXECUTE
 def syncdata(request,tableid):
-    sync_table=HelpderDB.db_get_value('sys_table','sync_table',f"id='{tableid}'")
-    sync_field=HelpderDB.db_get_value('sys_table','sync_field',f"id='{tableid}'")
-    sync_condition=HelpderDB.db_get_value('sys_table','sync_condition',f"id='{tableid}'")
-    sync_order=HelpderDB.db_get_value('sys_table','sync_order',f"id='{tableid}'")
+    sync_table = HelpderDB.sql_query_value(f"SELECT * FROM sys_table WHERE id='{tableid}'", 'sync_table')
+    sync_field = HelpderDB.sql_query_value(f"SELECT * FROM sys_table WHERE id='{tableid}'", 'sync_field')
+    sync_condition = HelpderDB.sql_query_value(f"SELECT * FROM sys_table WHERE id='{tableid}'", 'sync_condition')
+    sync_order = HelpderDB.sql_query_value(f"SELECT * FROM sys_table WHERE id='{tableid}'", 'sync_order')
+
     bixdata_fields=dict()
-    rows=HelpderDB.db_get('sys_field','*',f"tableid='{tableid}' AND sync_fieldid is not null AND sync_fieldid<>'' ")
+
+    rows = HelpderDB.sql_query(f"SELECT * FROM sys_field WHERE tableid='{tableid}' AND sync_fieldid is not null AND sync_fieldid<>'' ")
+
     for row in rows:
         bixdata_fields[row['sync_fieldid']]=row['fieldid']
+
     if sync_condition:
         condition=sync_condition
     else:
@@ -821,6 +825,7 @@ def syncdata(request,tableid):
         order=f"ORDER BY {sync_order}"
     else:
         order=''
+
     sql=f"""
         SELECT *
         FROM {sync_table}
@@ -828,6 +833,7 @@ def syncdata(request,tableid):
         {order}
     """
     syncrows=HelpderDB.sql_query(sql)
+
     for syncrow in syncrows:
         sync_fields=dict()
         for key, field in syncrow.items():

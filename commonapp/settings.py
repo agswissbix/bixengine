@@ -9,6 +9,7 @@ from bixsettings.views.helpers.helperdb import *
 from django.db import transaction
 from django.db.models.functions import Coalesce
 from django.db.models import F, OuterRef, Subquery, IntegerField
+from django.utils import timezone
 
 
 def get_users_and_groups(request):
@@ -103,7 +104,8 @@ def settings_table_fields(request):
 
 def settings_table_settings(request):
     tableid = json.loads(request.body).get('tableid')
-    tablesettings_obj = TableSettings(tableid=tableid, userid=1)
+    userid = json.loads(request.body).get('userid')
+    tablesettings_obj = TableSettings(tableid=tableid, userid=userid)
     tablesettings = tablesettings_obj.get_settings()
 
     return JsonResponse({"tablesettings": tablesettings})
@@ -116,7 +118,7 @@ def settings_table_fields_settings_save(request):
     userid = data.get('userid')
     tableid = data.get('tableid')
 
-    tablesettings_obj = TableSettings(tableid=tableid, userid=1)
+    tablesettings_obj = TableSettings(tableid=tableid, userid=userid)
 
     for setting in settings_list:
         tablesettings_obj.settings[setting['name']]['value'] = setting['value']
@@ -132,6 +134,12 @@ def settings_table_usertables_save(request):
     userid = data.get('userid')
     workspaces = data.get('workspaces', {})
 
+    user = SysUser.objects.filter(id=userid).first()
+    if not user:
+        return JsonResponse({"error": "User not found"}, status=404)
+
+    errors = []
+
     for workspace_key, workspace_data in workspaces.items():
         tables = workspace_data.get('tables', [])
         for table in tables:
@@ -139,25 +147,25 @@ def settings_table_usertables_save(request):
             order = table.get('order')
 
             if table_id is None:
-                continue  # Salta eventuali tabelle senza id
+                continue
+
+            table = SysTable.objects.filter(id=table_id).first()
+            if not table:
+                errors.append({"error": "Table not found", "table_id": table_id})
+                continue
 
             # Recupera o crea il record esistente
-            user_table_order = SysUserTableOrder.objects.filter(
-                userid=userid,
-                tableid=table_id
-            ).first()
-
-            if user_table_order is None:
-                return JsonResponse({'success': False, 'error': f'Table with id {table_id} not found for user {userid}'})
-            
-            if user_table_order.tableorder == order:
-                continue
+            user_table_order, created = SysUserTableOrder.objects.get_or_create(
+                userid=user,
+                tableid=table
+            )
 
             user_table_order.tableorder = order
             user_table_order.save()
 
-    return JsonResponse({'success': True})
+    return JsonResponse({'success': True, 'errors': errors})
 
+@transaction.atomic
 def settings_table_tablefields_save(request):
     data = json.loads(request.body)
     tableid = data.get('tableid')
@@ -168,35 +176,38 @@ def settings_table_tablefields_save(request):
     if typepreference is None or typepreference not in type_preference_options:
         return JsonResponse({"error": "typepreference is required"}, status=400)
 
-    errors = []
+    user = SysUser.objects.filter(id=userid).first()
+    if not user:
+        return JsonResponse({"error": "User not found"}, status=404)
+    
+    table = SysTable.objects.filter(id=tableid).first()
+    if not table:
+        return JsonResponse({"error": "Table not found"}, status=404)
 
     for field in fields:
         fieldid = field.get("id")
         order = field.get("order")
 
         if not fieldid:
-            continue  # skip campi non validi
+            continue
+
+        field = SysField.objects.filter(tableid=table.id, id=fieldid).first()
+        if not field:
+            continue
 
         order_value = order if order is not None else None
 
-        user_table_order = SysUserFieldOrder.objects.filter(
-            userid=userid,
-            tableid=tableid,
-            fieldid=fieldid,
-            typepreference=typepreference
-        ).first()
-
-        if user_table_order is None:
-            errors.append(f"Record not found for fieldid={fieldid}")
-            continue
-        
-        # if user_table_order.fieldorder == order_value:
-        #     continue
+        user_table_order, created = SysUserFieldOrder.objects.get_or_create(
+            userid=user,
+            tableid=table,
+            fieldid=field,
+            typepreference=typepreference,
+        )
 
         user_table_order.fieldorder = order_value
         user_table_order.save()
 
-    return JsonResponse({'success': True, 'errors': errors})
+    return JsonResponse({'success': True})
 
 
 @transaction.atomic
@@ -221,8 +232,11 @@ def settings_table_fields_settings_fields_save(request):
     field_record.label = str(field_label)
     field_record.save()
 
-    lookuptableid = field_record.lookuptableid.tableid
-    if not lookuptableid:
+    lookuptableid = None
+    if field_record.lookuptableid:
+        lookuptableid = field_record.lookuptableid.tableid
+        
+    if lookuptableid is None:
         items = []
 
     # --- Gestione Lookup Items ---
@@ -258,7 +272,7 @@ def settings_table_fields_settings_fields_save(request):
 
     # Gestione settings personalizzati
     # Se esiste già → aggiorna, altrimenti crea
-    fieldsettings_obj = FieldSettings(tableid=tableid, fieldid=field_record.fieldid, userid=1)
+    fieldsettings_obj = FieldSettings(tableid=tableid, fieldid=field_record.fieldid, userid=userid)
 
     # Aggiorna le chiavi presenti nel dizionario settings
     settings_dict = fieldsettings_obj.settings or {}
@@ -268,6 +282,9 @@ def settings_table_fields_settings_fields_save(request):
         if key not in settings_dict:
             settings_dict[key] = {}
         settings_dict[key].update(value)
+
+    # for setting in settings_list:
+        # fieldsettings_obj.settings[setting['name']]['value'] = setting['value']
 
     fieldsettings_obj.settings = settings_dict
     fieldsettings_obj.save()
@@ -300,16 +317,14 @@ def settings_table_fields_new_field(request):
     tableid_obj = SysTable.objects.filter(id=tableid).first()
 
     # Caso base
-    new_field = SysField(
-        tableid=tableid_obj,
+    new_field = SysField.objects.create(
+        tableid=tableid_obj.id,
         fieldid=fieldid,
         description=fielddescription,
         fieldtypewebid=fieldtype,
         label=label,
         length=255,
     )
-
-    new_field.save()
 
     # Se è un campo Categoria → crea lookup table e relative opzioni
     if fieldtype == "Categoria":
@@ -441,3 +456,142 @@ def settings_table_linkedtables(request):
         "success": True,
         "linked_tables": linked_tables
     })
+
+@transaction.atomic
+def settings_table_linkedtables_save(request):
+    data = json.loads(request.body)
+    tableid = data.get('tableid')
+    userid = data.get('userid')
+    fields = data.get('fields')
+
+    if not all([tableid, userid, fields]):
+        return JsonResponse({'success': False, 'error': 'Missing parameters'}, status=400)
+
+    errors = []
+
+    user = SysUser.objects.filter(id=userid).first()
+    if not user:
+        return JsonResponse({"error": "User not found"}, status=404)
+    
+    table = SysTable.objects.filter(id=tableid).first()
+    if not table:
+        return JsonResponse({"error": "Table not found"}, status=404)
+
+    for field in fields:
+        fieldid = field.get("tablelinkid")
+        order = field.get("fieldorder")
+
+        if not fieldid:
+            continue
+
+        field = SysTable.objects.filter(id=fieldid).first()
+        if not field:
+            errors.append({"error": "Linked table not found", "tablelinkid": fieldid})
+            continue
+
+        order_value = order if order is not None else None
+
+        user_table_order, created = SysUserOrder.objects.get_or_create(
+            userid=user,
+            tableid=table,
+            fieldid=fieldid,
+            typepreference='keylabel'
+        )
+
+        user_table_order.fieldorder = order_value
+        user_table_order.save()
+
+    return JsonResponse({'success': True})
+
+
+from django.db import connection, transaction
+from django.http import JsonResponse
+from .models import *
+
+def save_new_table(request):
+    data = json.loads(request.body)
+    tableid = data.get('tableid')
+    userid = data.get('userid')
+    description = data.get('description')
+    workspace = data.get('workspace', 'ALTRO')
+
+    table_exists = SysTable.objects.filter(id=tableid).first() is not None
+    if table_exists:
+        return JsonResponse({'success': False, 'error': 'Table ID already exists'}, status=400)
+    
+    # Inserisci la nuova riga in sys_table (ORM)
+    table = SysTable.objects.create(
+        id=tableid,
+        description=description,
+        workspace=workspace,
+        creationdate=timezone.now(),
+        tabletypeid='0',
+        dbtypeid='0',
+        totpages=0,
+        namefolder='000',
+        numfilesfolder='0'
+    )
+
+    # Creazione della tabella fisica sul DB (SQL raw)
+    # Non si può fare con ORM, quindi rimane raw SQL
+    with connection.cursor() as cursor:
+        cursor.execute(
+            f"""
+            CREATE TABLE user_{tableid} (
+                recordid_ CHAR(32) PRIMARY KEY,
+                creatorid_ INT(11) NOT NULL,
+                creation_ DATETIME NOT NULL,
+                lastupdaterid_ INT(11),
+                lastupdate_ DATETIME,
+                totpages_ INT(11),
+                firstpagefilename_ VARCHAR(255),
+                recordstatus_ VARCHAR(255),
+                deleted_ CHAR(1) DEFAULT 'N',
+                id INT(11)
+            ) CHARACTER SET utf8 COLLATE utf8_general_ci
+            """
+        )
+
+    with transaction.atomic():
+        # Inserisci il campo di sistema "id" in sys_field (ORM)
+        field = SysField.objects.create(
+            tableid=tableid,
+            fieldid='id',
+            fieldtypeid='Seriale',
+            label='Sistema',
+            description='ID'
+        )
+
+        user = SysUser.objects.filter(id=userid).first()
+        if not user:
+            return JsonResponse({'success': False, 'error': 'User not found'}, status=404)
+        print(type(user))
+
+
+        # Imposta l'ordine dei campi per l'utente (ORM)
+        preferences = ['search_results_fields', 'insert_fields', 'search_fields']
+        for pref in preferences:
+            SysUserFieldOrder.objects.create(
+                userid=user,
+                tableid=table,
+                fieldid=field,
+                fieldorder=0,
+                typepreference=pref
+            )
+
+        # Crea la vista "Tutti" (ORM)
+        view = SysView.objects.create(
+            name='Tutti',
+            userid=user,
+            tableid=table,
+            query_conditions='true'
+        )
+
+        # Imposta le impostazioni utente della tabella (ORM)
+        SysUserTableSettings.objects.bulk_create([
+            SysUserTableSettings(userid=user, tableid=table, settingid='default_viewid', value=view.id),
+            SysUserTableSettings(userid=user, tableid=table, settingid='default_recordtab', value='Fields'),
+        ])
+
+    # Risposta JSON
+    return JsonResponse({'success': True})
