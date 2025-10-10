@@ -1,31 +1,7 @@
-from django.contrib.sessions.models import Session
 import os
-from django.shortcuts import render, redirect
-from django.http import JsonResponse
-from django.contrib.auth import login, authenticate, logout
-from django.contrib.auth.models import User
-from django.core.mail import send_mail, BadHeaderError, EmailMessage
-from django.http import HttpResponse
-from django.template.loader import render_to_string
-import requests
-import json
-import datetime
-from django.contrib.auth.decorators import login_required
-import time
-from django.contrib.auth.decorators import user_passes_test
-from django.contrib import messages
-from django.db import connection, connections
-from django.http import JsonResponse
-from django.contrib.auth.models import Group, Permission, User, Group
-from django_user_agents.utils import get_user_agent
-#from bixdata_app.models import MyModel
-from django import template
-from bs4 import BeautifulSoup
-from django.db.models import OuterRef, Subquery
 from commonapp.bixmodels.helper_db import *
 from commonapp.bixmodels.helper_sys import *
 from commonapp.helper import *
-from commonapp.bixmodels.sys_field import SysField  # Import SysField if it exists in this module
 from datetime import date
 
 bixdata_server = os.environ.get('BIXDATA_SERVER')
@@ -434,7 +410,7 @@ class UserRecord:
             if fieldid=='unitprice' or fieldid=='quantity' or fieldid=='unitexpectedcost' or fieldid=='recordidproduct_':
                 insert_field['hasDependencies']=True
 
-            fieldtype=field['fieldtypeid']
+            fieldtype=field['fieldtypewebid']
             if not Helper.isempty(field['keyfieldlink']):
                 fieldtype='linkedmaster'
                 if(field['tablelink']==self.master_tableid):
@@ -450,7 +426,7 @@ class UserRecord:
                     linked_key=HelpderDB.sql_query_value(sql,field['keyfieldlink'])
                     insert_field['value']={"code": linked_recordid, "value": linked_key}
 
-            if field['fieldtypeid'] == 'Data':
+            if field['fieldtypewebid'] == 'Data':
                 fieldtype='Data'
                 #defaultvalue=self.fields[fieldid]['defaultvalue']
                 #if defaultvalue == '$today$':
@@ -464,7 +440,7 @@ class UserRecord:
                 defaultcode = datetime.datetime.now().strftime("%H:%M")
                 defaultvalue = datetime.datetime.now().strftime("%H:%M")
 
-            if field['fieldtypeid'] == 'Utente':
+            if field['fieldtypewebid'] == 'Utente':
                 fieldtype='Utente'
                 lookupitemsusers=[]
                 users=HelperSys.get_users()
@@ -481,10 +457,10 @@ class UserRecord:
                 defaultcode=self.userid
                 defaultvalue=self.userid
 
-            if field['fieldtypeid'] == 'Memo':
+            if field['fieldtypewebid'] == 'Memo':
                 fieldtype='Memo'
-                if field['fieldtypewebid'] == 'html':
-                    fieldtype='LongText'
+            if field['fieldtypewebid'] == 'html':
+                fieldtype='LongText'
 
             
 

@@ -558,6 +558,7 @@ def save_new_table(request):
             tableid=tableid,
             fieldid='id',
             fieldtypeid='Seriale',
+            fieldtypewebid='Seriale',
             label='Sistema',
             description='ID'
         )
