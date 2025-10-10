@@ -4044,6 +4044,10 @@ def update_user_profile_pic(request):
 def get_dashboard_blocks(request):
     userid=Helper.get_userid(request)
     request_data = json.loads(request.body)
+    #TODO custom wegolf
+    filters=request_data.get('filters', None)
+    if filters:
+        selected_clubs=filters.get('selectedClubs', [])
     cliente_id = Helper.get_cliente_id()
     #dashboard_id = data.get('dashboardid')
     dashboard_id = request_data.get('dashboardid')  # Default to 1 if not provided
@@ -4158,6 +4162,16 @@ def get_dashboard_blocks(request):
                             if block_category != 'benchmark':
                                 recordid_golfclub=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_golfclub WHERE utente='{userid}'","recordid_")
                                 query_conditions = query_conditions+" AND recordidgolfclub_='{recordid_golfclub}'".format(recordid_golfclub=recordid_golfclub)
+
+                            if block_category == 'benchmark' and len(selected_clubs)>0:
+                                selected_clubs_conditions = ''
+                                for selected_club in selected_clubs:
+                                    if selected_clubs_conditions != '':
+                                        selected_clubs_conditions = selected_clubs_conditions + " OR "
+                                    selected_clubs_conditions = selected_clubs_conditions + "  recordidgolfclub_='{selected_club}'".format(selected_club=selected_club)
+                                if selected_clubs_conditions != '':
+                                    query_conditions = query_conditions + " AND (" + selected_clubs_conditions + ")"
+
                             selected_years=request_data.get('selectedYears', [])
                             selected_years_conditions = ''
                             for selected_year in selected_years:
@@ -5494,19 +5508,18 @@ def get_benchmark_filters(request):
     data = json.loads(request.body)
     userid = Helper.get_userid(request)
 
-    
+    golfclub_table=UserTable('golfclub')
+    golfclubs=golfclub_table.get_records(conditions_list=[])
+    clubs=[]
+    for golfclub in golfclubs:
+        clubs.append({'title': golfclub.get('nome_club',''), 'recordid': golfclub.get('recordid_','')})
     response_data = {
             'filterOptions': [
                 {'field': 'members_total', 'label': 'Membri totali'},
                 {'field': 'green_fees_total', 'label': 'Green fees totali'},
                 {'field': 'revenue_total', 'label': 'Ricavi totali'}
             ],
-            'availableClubs': [
-                {'title': 'Club A', 'recordid': 'recA'},
-                {'title': 'Club B', 'recordid': 'recB'},
-                {'title': 'Club C', 'recordid': 'recC'},
-                {'title': 'Club D', 'recordid': 'recD'}
-            ]
+            'availableClubs': clubs
         }
         
     # Restituisce il dizionario completo come risposta JSON
@@ -5521,10 +5534,8 @@ def get_filtered_clubs(request):
     
 
     clubs = [
-                {'title': 'Club A 2', 'recordid': 'recA'},
-                {'title': 'Club B 2', 'recordid': 'recB'},
-                {'title': 'Club C 2', 'recordid': 'recC'},
-                {'title': 'Club D 2', 'recordid': 'recD'}
+                {'title': 'Lugano', 'recordid': '00000000000000000000000000000015'},
+                {'title': 'Ascona', 'recordid': '00000000000000000000000000000009'},
             ]
     return JsonResponse({'availableClubs': clubs}, safe=False)
 

@@ -615,4 +615,7 @@ def get_satisfation(request):
 def update_deals(request):
     from customapp_swissbix.script import update_deals
     return update_deals(request)
-    
+
+def get_scheduler_logs(request):
+    from customapp_swissbix.script import get_scheduler_logs
+    return get_scheduler_logs(request)
