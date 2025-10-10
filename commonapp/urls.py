@@ -93,12 +93,13 @@ urlpatterns = [
     path('settings_table_fields_new_field/', settings_table_fields_new_field, name='settings_table_fields_new_field'),
     path('settings_table_fields_settings_fields_save/', settings_table_fields_settings_fields_save, name='settings_table_fields_settings_fields_save'),
     path('settings_table_linkedtables/', settings_table_linkedtables, name='settings_table_linkedtables'),
-    path('get_filtered_clubs/', get_filtered_clubs, name='get_filtered_clubs'),
-    path('get_benchmark_filters/', get_benchmark_filters, name='get_benchmark_filters'),
-    
-    
     path('settings_table_linkedtables_save/', settings_table_linkedtables_save, name='settings_table_linkedtables_save'),
     path('save_new_table/', save_new_table, name='save_new_table'),
+    path('get_master_linked_tables/', get_master_linked_tables, name='get_master_linked_tables'),
+    
+    
+    path('get_filtered_clubs/', get_filtered_clubs, name='get_filtered_clubs'),
+    path('get_benchmark_filters/', get_benchmark_filters, name='get_benchmark_filters'),
 ]
 
 

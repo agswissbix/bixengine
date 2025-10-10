@@ -75,9 +75,13 @@ def settings_table_fields(request):
     tableid = data.get('tableid')
     userid = data.get('userid')
     typepreference = data.get('typepreference', None)
+    master_table_id = data.get('mastertableid', None)
 
     if typepreference is None or typepreference not in type_preference_options:
         return JsonResponse({"error": "typepreference is required"}, status=400)
+
+    if typepreference == "linked_columns" and master_table_id is None:
+        return JsonResponse({"fields": []})
 
     fields = list(SysField.objects.filter(tableid=tableid).values())
 
@@ -91,7 +95,8 @@ def settings_table_fields(request):
             tableid=tableid,
             fieldid=field['id'],
             userid=userid,
-            typepreference=typepreference
+            typepreference=typepreference,
+            master_tableid=master_table_id
         ).first()
 
         # Aggiungi solo l'order (None se non esiste)
@@ -100,6 +105,15 @@ def settings_table_fields(request):
     return JsonResponse({
         "fields": fields
     })
+
+
+def get_master_linked_tables(request):
+    data = json.loads(request.body)
+    tableid = data.get('tableid')
+
+    linked_tables = list(SysTableLink.objects.filter(tablelinkid=tableid).values())
+
+    return JsonResponse({"linked_tables": linked_tables})
 
 
 def settings_table_settings(request):
