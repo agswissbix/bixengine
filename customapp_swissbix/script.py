@@ -20,6 +20,7 @@ import json
 from django.http import JsonResponse
 
 import pyodbc
+from cryptography.fernet import Fernet, InvalidToken
 
 
 
@@ -853,11 +854,26 @@ def get_scheduler_logs(request):
 
         formato = "%Y-%m-%d %H:%M:%S"
 
+        # key = os.environ.get('')
+        # f = Fernet(key)
+
         for log in data:
             id = log.get("id")
+
             oggetto_datetime = datetime.strptime(log.get('date'), formato)
             date = oggetto_datetime.date()
             ora = oggetto_datetime.time()
+
+            funzione = log.get('function')
+            # funzione = f.decrypt(log.get('function').encode())
+
+            cliente = log.get('client')
+            # cliente = f.decrypt(log.get('function').encode())
+
+            output = log.get('output')
+            # output = f.decrypt(log.get('output').encode())
+
+            numero_chiamate = log.get('calls_number')
 
             monitoring_table=UserTable('monitoring')
             condition_list=[]
@@ -866,24 +882,24 @@ def get_scheduler_logs(request):
 
             if not field:
                 new_record = UserRecord('monitoring') 
-                new_record.values['id'] = log.get('id')
+                new_record.values['id'] = id
                 new_record.values['data'] = date
                 new_record.values['ora'] = ora
-                new_record.values['funzione'] = log.get('function')
-                new_record.values['client_id'] = log.get('client')
-                new_record.values['output'] = log.get('date')
-                new_record.values['calls_counter'] = log.get('calls_number')
+                new_record.values['funzione'] = funzione
+                new_record.values['client_id'] = cliente
+                new_record.values['output'] = output
+                new_record.values['calls_counter'] = numero_chiamate
 
                 # new_record.save()
             else:
                 record = UserRecord('monitoring', id) 
-                record.values['id'] = log.get('id')
+                record.values['id'] = id
                 record.values['data'] = date
                 record.values['ora'] = ora
-                record.values['funzione'] = log.get('function')
-                record.values['client_id'] = log.get('client')
-                record.values['output'] = log.get('date')
-                record.values['calls_counter'] = log.get('calls_number')
+                record.values['funzione'] = funzione
+                record.values['client_id'] = cliente
+                record.values['output'] = output
+                record.values['calls_counter'] = numero_chiamate
 
                 # record.save()
 
