@@ -246,11 +246,9 @@ def settings_table_fields_settings_fields_save(request):
     field_record.label = str(field_label)
     field_record.save()
 
-    lookuptableid = None
-    if field_record.lookuptableid:
-        lookuptableid = field_record.lookuptableid.tableid
-        
-    if lookuptableid is None:
+    lookuptableid = field_record.lookuptableid or None
+
+    if not lookuptableid:
         items = []
 
     # --- Gestione Lookup Items ---
@@ -276,7 +274,7 @@ def settings_table_fields_settings_fields_save(request):
     new_lookup_items = [
         SysLookupTableItem(
             lookuptableid=lookuptableid,
-            itemcode=item.get("itemcode") or f"new_{i}",
+            itemcode=item.get("itemcode") or item.get('itemdesc') or f"new_{i}",
             itemdesc=item.get("itemdesc", "")
         )
         for i, item in enumerate(new_items)

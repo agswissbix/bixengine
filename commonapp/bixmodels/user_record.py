@@ -409,6 +409,9 @@ class UserRecord:
             #TODO rendere dinamico dai settings
             if fieldid=='unitprice' or fieldid=='quantity' or fieldid=='unitexpectedcost' or fieldid=='recordidproduct_':
                 insert_field['hasDependencies']=True
+            
+            if self.tableid=='assenze' and fieldid=='giorni':
+                insert_field['hasDependencies']=True
 
             fieldtype=field['fieldtypewebid']
             if not Helper.isempty(field['keyfieldlink']):
