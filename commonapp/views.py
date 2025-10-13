@@ -2259,15 +2259,18 @@ def save_record_fields(request):
 
     # ---DIPENDENTE---
     if tableid == 'dipendente':
-        dipendente_record = UserRecord('dipendente', recordid)
-        allegati= HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordiddipendente_='{recordid}' AND deleted_='N'")
-        nrallegati=len(allegati) 
-        dipendente_record.values['nrallegati'] = nrallegati
-        dipendente_record.save()
+         #TODO pitservice spostare nella zona custom
+        if Helper.get_cliente_id()=='pitservice':
+            dipendente_record = UserRecord('dipendente', recordid)
+            allegati= HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordiddipendente_='{recordid}' AND deleted_='N'")
+            nrallegati=len(allegati) 
+            dipendente_record.values['nrallegati'] = nrallegati
+            dipendente_record.save()
 
     # ---ATTACHMENT---
     if tableid == 'attachment':
         attachment_record = UserRecord('attachment', recordid)
+        #TODO pitservice sistemare per pitservice
         #dipendente_record = UserRecord('dipendente', attachment_record.values['recordiddipendente_'])
         #allegati= HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordiddipendente_='{attachment_record.values['recordiddipendente_']}' AND deleted_='N'")
         #nrallegati=len(allegati) 
