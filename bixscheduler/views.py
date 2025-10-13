@@ -75,10 +75,10 @@ def lista_schedule_get(request):
     available_tasks = get_available_tasks()
     data = []
 
-    sql = f"SELECT MAX(id) as max_id, output FROM user_scheduler_log WHERE function='{s.func}' AND deleted_='N'"
-    output=HelpderDB.sql_query_value(sql, 'output')
 
     for s in schedules:
+        sql = f"SELECT MAX(id) as max_id, output FROM user_scheduler_log WHERE function='{s.func}' AND deleted_='N'"
+        output=HelpderDB.sql_query_value(sql, 'output')
         data.append({
             "id": s.id,
             "name": s.name,
