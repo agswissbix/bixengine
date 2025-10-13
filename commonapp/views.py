@@ -2291,16 +2291,18 @@ def save_record_fields(request):
     # ---ASSENZE---
     if tableid == 'assenze':
         assenza_record = UserRecord('assenze', recordid)
-        ore_assenza= Helper.safe_float(assenza_record.values['ore'])
-        giorni_assenza = ore_assenza / 8
-        dipendente_recordid = assenza_record.values['recordiddipendente_']
-        dipendente_record = UserRecord('dipendente', dipendente_recordid)
-        saldovacanze_attuale=Helper.safe_float(dipendente_record.values['saldovacanze'])
-        if not saldovacanze_attuale:
-            saldovacanze_attuale=0
-        saldovacanze=saldovacanze_attuale-giorni_assenza
-        dipendente_record.values['saldovacanze'] = saldovacanze
-        dipendente_record.save()
+        tipo_assenza=assenza_record.values['tipo_assenza']
+        if tipo_assenza!='Malattia':
+            ore_assenza= Helper.safe_float(assenza_record.values['ore'])
+            giorni_assenza = ore_assenza / 8
+            dipendente_recordid = assenza_record.values['recordiddipendente_']
+            dipendente_record = UserRecord('dipendente', dipendente_recordid)
+            saldovacanze_attuale=Helper.safe_float(dipendente_record.values['saldovacanze'])
+            if not saldovacanze_attuale:
+                saldovacanze_attuale=0
+            saldovacanze=saldovacanze_attuale-giorni_assenza
+            dipendente_record.values['saldovacanze'] = saldovacanze
+            dipendente_record.save()
 
     # ---RISCALDAMENTO---
     if tableid == 'riscaldamento':
