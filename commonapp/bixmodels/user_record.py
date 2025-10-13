@@ -434,6 +434,11 @@ class UserRecord:
                 if self.tableid == 'telefonate' and fieldid == 'data': 
                     defaultcode=date.today().strftime('%Y-%m-%d')
                     defaultvalue=date.today().strftime('%Y-%m-%d')
+                
+                default_value=insert_field['settings'].get('default','')
+                if default_value == '$today$':
+                    defaultcode=date.today().strftime('%Y-%m-%d')
+                    defaultvalue=date.today().strftime('%Y-%m-%d')
                     
             #TODO RENDERE DINAMICO CON I SETTINGS
             if self.tableid == 'telefonate' and fieldid == 'ora_inizio':
