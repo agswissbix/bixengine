@@ -570,7 +570,7 @@ def stampa_offerta(request):
         "azienda": companyname,
         "titolo": dealname,
         "venditore": user,
-        "data_chiusura_vendita": closedata,
+        "data_chiusura_vendita": closedata.strftime("%d/%m/%Y") if isinstance(closedata, datetime.date) else closedata,
         "data_attuale": datetime.datetime.now().strftime("%d/%m/%Y"),
         'items': items,
     }
@@ -615,4 +615,7 @@ def get_satisfation(request):
 def update_deals(request):
     from customapp_swissbix.script import update_deals
     return update_deals(request)
-    
+
+def get_scheduler_logs(request):
+    from customapp_swissbix.script import get_scheduler_logs
+    return get_scheduler_logs(request)
