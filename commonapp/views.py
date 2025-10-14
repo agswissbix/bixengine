@@ -3225,6 +3225,7 @@ def export_excel(request):
             tableid = data.get('tableid', 'export')
             searchTerm = data.get('searchTerm')
             viewid = data.get('view')
+            filters = data.get('filters', {})
         
             table = UserTable(tableid)
             if viewid == '':
@@ -3232,29 +3233,47 @@ def export_excel(request):
 
             records: List[UserRecord]
             conditions_list=list()
-            records=table.get_table_records_obj(viewid=viewid,searchTerm=searchTerm, conditions_list=conditions_list, limit=10000)
+            records=table.get_table_records_obj(viewid=viewid,searchTerm=searchTerm, conditions_list=conditions_list, filters_list=filters, limit=10000)
             counter=table.get_total_records_count()
             table_columns=table.get_results_columns()
             rows=[]
             for record in records:
-                row={}
-                row['recordid']=record.recordid
-                row['css']= "#"
-                row['fields']=[]
-                fields=record.get_record_results_fields()
-                for field in fields:
-                    row['fields'].append({'recordid':'','css':cssClass,'type':field['type'],'value':field['value'],'fieldid':field['fieldid']})
-                rows.append(row)
-        
-                columns=[]
+                row = {
+                    'recordid': record.recordid,
+                    'css': '#',
+                    'fields': []
+                }
+
+                # Dizionario dei campi effettivi nel record
+                fields = record.fields or {}
+
+                # Cicla su tutte le colonne previste dalla tabella
                 for table_column in table_columns:
-                    columns.append({'fieldtypeid':table_column['fieldtypeid'],'desc':table_column['description']})
+                    fieldid = table_column.get('fieldid')
+                    field = fields.get(fieldid, {})  # Prendi il campo se esiste, altrimenti dict vuoto
 
+                    value = field.get('convertedvalue', field.get('value', ''))
+                    fieldtype = field.get('fieldtypewebid', 'standard')
+                    cssClass = ''
 
+                    # Crea la cella
+                    field_data = {
+                        'recordid': record.recordid,
+                        'css': cssClass,
+                        'type': fieldtype,
+                        'value': value,
+                        'fieldid': fieldid
+                    }
 
+                    row['fields'].append(field_data)
 
+                rows.append(row)
 
-
+            # (Opzionale) Costruisci anche la lista colonne
+            columns = [
+                {'fieldtypeid': col['fieldtypeid'], 'desc': col['description']}
+                for col in table_columns
+            ]
 
             # Prepara i dati ristrutturati per il DataFrame
 
@@ -5577,3 +5596,45 @@ def fieldsupdate(request):
         HelpderDB.sql_execute(f"UPDATE user_{tableid} SET {param}='{value}' WHERE recordid_='{recordid}' ")
     fields= params
     return JsonResponse({'status': 'ok', 'message': 'Fields updated successfully.'})
+
+
+
+def update_club_settings(request):
+    try:
+        data = json.loads(request.body)
+        club_id = data.get("id")
+
+        if not club_id:
+            return JsonResponse({"error": "ID club mancante"}, status=400)
+
+        # Recupera o crea il record
+        club = UserRecord('golfclub', club_id)
+
+        # Aggiorna i campi
+        club.nome_club = data.get("nome_club", club.nome_club)
+        club.paese = data.get("paese", club.paese)
+        club.indirizzo = data.get("indirizzo", club.indirizzo)
+        club.email = data.get("email", club.email)
+        club.note = data.get("note", club.note)
+        club.utente = data.get("utente", club.utente)
+        club.anno_fondazione = data.get("anno_fondazione", club.anno_fondazione)
+        club.direttore = data.get("direttore", club.direttore)
+        club.territorio_circostante = data.get("territorio_circostante", club.territorio_circostante)
+        club.infrastrutture_turistiche = data.get("infrastrutture_turistiche", club.infrastrutture_turistiche)
+        club.colelgamenti_pubblici = data.get("colegamenti_pubblici", club.colelgamenti_pubblici)
+        club.tipo_gestione = data.get("tipo_gestione", club.tipo_gestione)
+        club.strutture_complementari = data.get("strutture_complementari", club.strutture_complementari)
+        club.pacchetti_golf = data.get("pacchetti_golf", club.pacchetti_golf)
+
+        # Salva nel DB
+        club.save()
+
+        return JsonResponse({
+            "success": True,
+            "message": "Impostazioni del club aggiornate correttamente."
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Formato JSON non valido"}, status=400)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
