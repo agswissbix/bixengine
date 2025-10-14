@@ -8,6 +8,7 @@ from django_q.tasks import async_task
 from bixscheduler.utils import get_available_tasks
 from rest_framework.decorators import api_view
 from commonapp.bixmodels.user_record import *
+from bixscheduler.models import ScheduleExtra
 
 
 HOOK_PATH = 'bixscheduler.hooks.on_task_success'
@@ -68,7 +69,7 @@ def delete_scheduler(request):
 
 @login_required(login_url='/login/')
 def lista_schedule_get(request):
-    schedules = Schedule.objects.all().order_by('id')
+    schedules = Schedule.objects.all().select_related('extra').order_by('id')
     for s in schedules:
         restart_schedule(s)
 
@@ -76,8 +77,10 @@ def lista_schedule_get(request):
     data = []
 
 
+
     for s in schedules:
-        sql = f"SELECT MAX(id) as max_id, output FROM user_scheduler_log WHERE function='{s.func}' AND deleted_='N'"
+        extra = getattr(s, "extra", None)
+        sql = f"SELECT output FROM user_scheduler_log WHERE function='{s.func}' AND deleted_='N' ORDER BY creation_ DESC LIMIT 1"
         output=HelpderDB.sql_query_value(sql, 'output')
         data.append({
             "id": s.id,
@@ -90,6 +93,7 @@ def lista_schedule_get(request):
             "repeats": s.repeats,
             "hook": s.hook,
             "output": output if output else "",
+            "send_to_endpoint": getattr(extra, "send_to_endpoint", False)
         })
 
     return JsonResponse({"schedules": data, "available_tasks": available_tasks})
@@ -138,6 +142,11 @@ def lista_schedule_post(request):
         dt = parse_datetime(next_run_str)
         if dt:
             schedule_obj.next_run = dt - timedelta(hours=2)
+
+    send_to_endpoint = schedule_data.get('send_to_endpoint', False)
+    extra, created = ScheduleExtra.objects.get_or_create(schedule=schedule_obj)
+    extra.send_to_endpoint = bool(send_to_endpoint)
+    extra.save()
 
     schedule_obj.save()
     return JsonResponse({"success": True})

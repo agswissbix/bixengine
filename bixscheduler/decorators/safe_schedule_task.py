@@ -20,6 +20,6 @@ def safe_schedule_task(stop_on_error=False):
                 # Se richiesto, stoppa lo Schedule associato
                 if stop_on_error:
                     from django_q.models import Schedule
-                    Schedule.objects.filter(func=f"{func.__module__}.{func.__name__}").update(repeats=0)
+                    Schedule.objects.filter(func=f"{func.__module__}.{func.__name__}").update(next_run=None)
         return wrapper
     return decorator
