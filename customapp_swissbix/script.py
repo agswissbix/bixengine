@@ -854,8 +854,8 @@ def get_scheduler_logs(request):
 
         formato = "%Y-%m-%d %H:%M:%S"
 
-        # key = os.environ.get('')
-        # f = Fernet(key)
+        key = os.environ.get('LOGS_ENCRYPTION_KEY')
+        f = Fernet(key)
 
         for log in data:
             id = log.get("id")
@@ -864,14 +864,14 @@ def get_scheduler_logs(request):
             date = oggetto_datetime.date()
             ora = oggetto_datetime.time()
 
-            funzione = log.get('function')
-            # funzione = f.decrypt(log.get('function').encode())
+            funzione_criptata = log.get('function')
+            funzione = f.decrypt(funzione_criptata.encode())
 
-            cliente = log.get('client')
-            # cliente = f.decrypt(log.get('function').encode())
+            cliente_criptato = log.get('client')
+            cliente = f.decrypt(cliente_criptato.encode())
 
-            output = log.get('output')
-            # output = f.decrypt(log.get('output').encode())
+            output_criptato = log.get('output')
+            output = f.decrypt(output_criptato.encode())
 
             numero_chiamate = log.get('calls_number')
 
