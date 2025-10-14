@@ -174,7 +174,7 @@ class UserRecord:
 
     def get_record_badge_fields(self):
         return_fields=[]
-        sql = f"SELECT sys_field.* FROM sys_field join sys_user_order on sys_field.fieldid=sys_user_order.fieldid WHERE sys_field.tableid='{self.tableid}' AND sys_user_order.userid=1 AND sys_user_order.tableid='{self.tableid}' AND typePreference='campiFissi' AND fieldorder IS NOT NULL ORDER BY fieldorder asc"
+        sql = f"SELECT sys_field.* FROM sys_field join sys_user_field_order on sys_field.fieldid=sys_user_field_order.fieldid WHERE sys_field.tableid='{self.tableid}' AND sys_user_field_order.userid=1 AND sys_user_field_order.tableid='{self.tableid}' AND typePreference='campiFissi' AND sys_user_field_order.fieldorder IS NOT NULL ORDER BY sys_user_field_order.fieldorder asc"
         fields = HelpderDB.sql_query(sql)
         for field in fields:
             fieldid = field['fieldid']
@@ -187,7 +187,7 @@ class UserRecord:
     @timing_decorator
     def get_record_results_fields(self):
         return_fields=[]
-        sql = f"SELECT sys_field.* FROM sys_field join sys_user_field_order on sys_field.id=sys_user_field_order.fieldid WHERE sys_field.tableid='{self.tableid}' AND sys_user_field_order.userid=1 AND sys_user_field_order.tableid='{self.tableid}' AND typePreference='search_results_fields' AND fieldorder IS NOT NULL ORDER BY fieldorder asc"
+        sql = f"SELECT sys_field.* FROM sys_field join sys_user_field_order on sys_field.id=sys_user_field_order.fieldid WHERE sys_field.tableid='{self.tableid}' AND sys_user_field_order.userid=1 AND sys_user_field_order.tableid='{self.tableid}' AND typePreference='search_results_fields' AND sys_user_field_order.fieldorder IS NOT NULL ORDER BY sys_user_field_order.fieldorder asc"
         fields = HelpderDB.sql_query(sql)
         for field in fields:
             fieldid = field['fieldid']

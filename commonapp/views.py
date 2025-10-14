@@ -478,6 +478,8 @@ def get_table_filters(request):
             T2.tableid = '{tableid}' 
         AND 
             T2.typepreference = 'search_fields'
+        AND
+            T2.fieldorder IS NOT NULL
     """
     
     # Esegui la query
@@ -3241,21 +3243,7 @@ def export_excel(request):
                 row['fields']=[]
                 fields=record.get_record_results_fields()
                 for field in fields:
-                        #TODO
-                        cssClass=''
-                        if tableid=='serviceandasset':
-                            if field['fieldid'] == 'status' and field['value'] == 'Active':
-                                cssClass='bg-emerald-50'
-                            if field['fieldid'] == 'status' and field['value'] == 'Closed':
-                                cssClass='bg-gray-50'
-                            if field['fieldid'] == 'status' and field['value'] == 'Disabled':
-                                cssClass='bg-yellow-50'
-                            if field['fieldid'] == 'status' and field['value'] == 'CHECK':
-                                cssClass='bg-red-100'
-                            if field['fieldid'] == 'status' and field['value'] == 'CHECK - DNS':
-                                cssClass='bg-yellow-100'
-                            
-                        row['fields'].append({'recordid':'','css':cssClass,'type':field['type'],'value':field['value'],'fieldid':field['fieldid']})
+                    row['fields'].append({'recordid':'','css':cssClass,'type':field['type'],'value':field['value'],'fieldid':field['fieldid']})
                 rows.append(row)
         
                 columns=[]
