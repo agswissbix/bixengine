@@ -98,8 +98,11 @@ urlpatterns = [
     path('get_master_linked_tables/', get_master_linked_tables, name='get_master_linked_tables'),
     
     
+    # ------------------  WeGolf views ---------------------------------
     path('get_filtered_clubs/', get_filtered_clubs, name='get_filtered_clubs'),
     path('get_benchmark_filters/', get_benchmark_filters, name='get_benchmark_filters'),
+    path('update_club_settings/', update_club_settings, name='update_club_settings'),
+    path('get_settings_data/', get_settings_data, name='get_settings_data'),
 ]
 
 

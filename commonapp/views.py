@@ -5581,33 +5581,83 @@ def fieldsupdate(request):
     return JsonResponse({'status': 'ok', 'message': 'Fields updated successfully.'})
 
 
+def get_settings_data(request):
+    try:
+        userid = Helper.get_userid(request)
+
+        recordidgolfclub = HelpderDB.sql_query_value(
+            f"SELECT recordid_ FROM user_golfclub WHERE utente = {userid}", 
+            "recordid_"
+        )
+
+        if not recordidgolfclub:
+            return JsonResponse({"error": "Nessun golf club associato all'utente"}, status=404)
+
+        club_data = HelpderDB.sql_query_row(
+            f"SELECT * FROM user_golfclub WHERE recordid_ = '{recordidgolfclub}'"
+        )
+
+        if not club_data:
+            return JsonResponse({"error": "Dati del golf club non trovati"}, status=404)
+
+        settings = {
+            "id": str(recordidgolfclub),
+            "nome": club_data.get("nome_club", ""),
+            "paese": club_data.get("paese", ""),
+            "indirizzo": club_data.get("indirizzo", ""),
+            "email": club_data.get("email", ""),
+            "annoFondazione": int(club_data.get("anno_fondazione", 0) or 0),
+            "collegamentiPubblici": club_data.get("colelgamenti_pubblici", ""),
+            "direttore": club_data.get("direttore", ""),
+            "infrastruttureTuristiche": club_data.get("infrastrutture_turistiche", ""),
+            "pacchettiGolf": club_data.get("pacchetti_golf", ""),
+            "struttureComplementari": club_data.get("strutture_complementari", ""),
+            "territorioCircostante": club_data.get("territorio_circostante", ""),
+            "tipoGestione": club_data.get("tipo_gestione", ""),
+            "note": club_data.get("note", "")
+        }
+
+        response = {
+            "settings": settings
+        }
+
+        return JsonResponse(response, safe=False, status=200)
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
 
 def update_club_settings(request):
     try:
         data = json.loads(request.body)
-        club_id = data.get("id")
 
-        if not club_id:
-            return JsonResponse({"error": "ID club mancante"}, status=400)
+        userid = Helper.get_userid(request)
+
+        recordidgolfclub = HelpderDB.sql_query_value(
+            f"SELECT recordid_ FROM user_golfclub WHERE utente = {userid}", 
+            "recordid_"
+        )
+
+        if not recordidgolfclub:
+            return JsonResponse({"error": "Nessun golf club associato all'utente"}, status=404)
 
         # Recupera o crea il record
-        club = UserRecord('golfclub', club_id)
+        club = UserRecord('golfclub', recordidgolfclub)
 
         # Aggiorna i campi
-        club.nome_club = data.get("nome_club", club.nome_club)
-        club.paese = data.get("paese", club.paese)
-        club.indirizzo = data.get("indirizzo", club.indirizzo)
-        club.email = data.get("email", club.email)
-        club.note = data.get("note", club.note)
-        club.utente = data.get("utente", club.utente)
-        club.anno_fondazione = data.get("anno_fondazione", club.anno_fondazione)
-        club.direttore = data.get("direttore", club.direttore)
-        club.territorio_circostante = data.get("territorio_circostante", club.territorio_circostante)
-        club.infrastrutture_turistiche = data.get("infrastrutture_turistiche", club.infrastrutture_turistiche)
-        club.colelgamenti_pubblici = data.get("colegamenti_pubblici", club.colelgamenti_pubblici)
-        club.tipo_gestione = data.get("tipo_gestione", club.tipo_gestione)
-        club.strutture_complementari = data.get("strutture_complementari", club.strutture_complementari)
-        club.pacchetti_golf = data.get("pacchetti_golf", club.pacchetti_golf)
+        club.values['nome_club'] = data.get("nome", club.values['nome_club'])
+        club.values['paese'] = data.get("paese", club.values['paese'])
+        club.values['indirizzo'] = data.get("indirizzo", club.values['indirizzo'])
+        club.values['email'] = data.get("email", club.values['email'])
+        club.values['anno_fondazione'] = data.get("annoFondazione", club.values['anno_fondazione'])
+        club.values['colelgamenti_pubblici'] = data.get("collegamentiPubblici", club.values['colelgamenti_pubblici'])
+        club.values['direttore'] = data.get("direttore", club.values['direttore'])
+        club.values['infrastrutture_turistiche'] = data.get("infrastruttureTuristiche", club.values['infrastrutture_turistiche'])
+        club.values['pacchetti_golf'] = data.get("pacchettiGolf", club.values['pacchetti_golf'])
+        club.values['strutture_complementari'] = data.get("struttureComplementari", club.values['strutture_complementari'])
+        club.values['territorio_circostante'] = data.get("territorioCircostante", club.values['territorio_circostante'])
+        club.values['tipo_gestione'] = data.get("tipoGestione", club.values['tipo_gestione'])
+        club.values['note'] = data.get("note", club.values['note'])
 
         # Salva nel DB
         club.save()
