@@ -388,7 +388,7 @@ def save_record_fields(tableid,recordid):
                     dealline_record.values['annualcost'] = dealline_actualcost * multiplier
                 else:
                     dealline_record.values['annualcost'] = dealline_expectedcost * multiplier
-                dealline_record.values['annualmargin'] = dealline_record.values['annualprice'] - dealline_record.fields['annualcost']
+                dealline_record.values['annualmargin'] = dealline_record.values['annualprice'] - dealline_record.values['annualcost']
                 deal_annualprice = deal_annualprice + dealline_record.values['annualprice']
                 deal_annualcost = deal_annualcost + dealline_record.values['annualcost']
                 deal_annualmargin = deal_annualmargin + dealline_record.values['annualmargin']
