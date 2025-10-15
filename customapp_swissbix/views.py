@@ -593,6 +593,25 @@ def stampa_offerta(request):
     return response
 
 
+def get_fields_swissbix_deal(request):
+    data = json.loads(request.body)
+    tableid= data.get("tableid")
+    recordid= data.get("recordid")
+    master_tableid= data.get("mastertableid")
+    master_recordid= data.get("masterrecordid")
+
+    record=UserRecord(tableid,recordid,Helper.get_userid(request),master_tableid,master_recordid)
+    card_fields=record.get_record_card_fields()
+
+    record=UserRecord(tableid,recordid)
+    linkedTables=record.get_linked_tables()
+
+
+
+    response={ "fields": card_fields, "recordid": recordid, "linkedTables": linkedTables}
+    return JsonResponse(response)
+
+
 def deal_update_status(request):
     print('test')
     data = json.loads(request.body)
