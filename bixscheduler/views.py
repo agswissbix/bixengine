@@ -1,3 +1,4 @@
+import importlib
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from datetime import datetime, timedelta
@@ -219,3 +220,42 @@ def aggiungi_scheduler(request):
         repeats=1,
     )
     return JsonResponse({"success": True})
+
+
+def run_function(request):
+    data = json.loads(request.body)
+    func_name = data.get('func')
+    if not func_name:
+        return JsonResponse({"error": "Missing function name"}, status=400)
+    available_tasks = get_available_tasks()
+
+    allowed_func_names = [task[0] for task in available_tasks]
+    
+    # Check if the requested func_name is in the list of allowed function names
+    if func_name not in allowed_func_names:
+        # The function must be the full path in the tasks list
+        return JsonResponse({"error": "Function not allowed or full path is incorrect"}, status=403)
+    
+    try:
+        module_path, function_name = func_name.rsplit('.', 1)
+    except ValueError:
+        return JsonResponse({"error": "Invalid function path format"}, status=400)
+
+    # 3. Importa dinamicamente il modulo e ottieni la funzione
+    try:
+        module = importlib.import_module(module_path)
+        
+        task_function = getattr(module, function_name)
+    except ImportError:
+        return JsonResponse({"error": f"Module '{module_path}' not found"}, status=500)
+    except AttributeError:
+        return JsonResponse({"error": f"Function '{function_name}' not found in module"}, status=500)
+
+    # 4. Esegui la funzione in Python
+    try:
+        result = task_function() 
+        return JsonResponse({"success": True, "result": str(result)})
+    except Exception as e:
+        # Cattura eventuali errori durante l'esecuzione della funzione
+        return JsonResponse({"error": f"Error running function: {str(e)}"}, status=500)
+    

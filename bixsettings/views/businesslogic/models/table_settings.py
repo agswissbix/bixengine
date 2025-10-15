@@ -101,6 +101,7 @@ class TableSettings:
                 {'name': 'Allegati', 'selected': True},
                 {'name': 'Analitica', 'selected': True},
                 {'name': 'Storico', 'selected': True},
+                {'name': 'Custom', 'selected': True},
             ],
             'value': 'Fields'
         },
@@ -115,7 +116,7 @@ class TableSettings:
         },
         'scheda_active_tab': {
             'type': 'select',
-            'options': ['Campi', 'Collegati', 'Allegati', 'Analitica', 'Storico'],
+            'options': ['Campi', 'Collegati', 'Allegati', 'Analitica', 'Storico','Custom'],
             'value': 'fields'
         },
         'table_tabs': {

@@ -9,5 +9,6 @@ urlpatterns = [
     path('run/', views.run_scheduler_now, name='run_scheduler_now'),
     path('toggle/', views.toggle_scheduler, name='toggle_scheduler'),
     path('save/', views.lista_schedule_post, name='lista_schedule_post'),  # Reusing lista_schedule for save
+    path('run_function/', views.run_function, name='run_function'),
     
 ]

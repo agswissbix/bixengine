@@ -1,5 +1,6 @@
 import functools
 import traceback
+from django.http import JsonResponse
 
 def safe_schedule_task(stop_on_error=False):
     """
@@ -21,5 +22,6 @@ def safe_schedule_task(stop_on_error=False):
                 if stop_on_error:
                     from django_q.models import Schedule
                     Schedule.objects.filter(func=f"{func.__module__}.{func.__name__}").update(next_run=None)
+                return JsonResponse({"error": str(e)}, status=500)
         return wrapper
     return decorator
