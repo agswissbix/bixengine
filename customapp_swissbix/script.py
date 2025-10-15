@@ -18,6 +18,7 @@ from commonapp.bixmodels.helper_db import HelpderDB
 import xml.etree.ElementTree as ET
 import json
 from django.http import JsonResponse
+from bixscheduler.decorators.safe_schedule_task import safe_schedule_task
 
 import pyodbc
 from cryptography.fernet import Fernet, InvalidToken
@@ -456,6 +457,8 @@ def get_satisfaction():
     except requests.RequestException as e:  
         return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
     
+
+@safe_schedule_task(stop_on_error=True)
 def update_deals():
     result_status = 'error'
     result_value = {}
