@@ -41,6 +41,7 @@ class SettingsBusinessLogic:
         for workspace_row in workspace_rows:
             workspaces[workspace_row.name]=dict()
             workspaces[workspace_row.name]['name']=workspace_row.name
+            workspaces[workspace_row.name]['groupOrder']=workspace_row.order
             workspace_name=workspace_row.name
             tablesdict=SysTable.objects.annotate(order=Subquery(subquery)).filter(workspace=workspace_name).order_by('workspace','order').values('id','description','workspace','order')
             print(tablesdict.query) 

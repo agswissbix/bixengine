@@ -103,6 +103,9 @@ urlpatterns = [
     path('get_benchmark_filters/', get_benchmark_filters, name='get_benchmark_filters'),
     path('update_club_settings/', update_club_settings, name='update_club_settings'),
     path('get_settings_data/', get_settings_data, name='get_settings_data'),
+    path('settings_table_steps/', settings_table_steps, name='settings_table_steps'),
+    path('settings_table_newstep/', settings_table_newstep, name='settings_table_newstep'),
+    path('settings_table_steps_save/', settings_table_steps_save, name='settings_table_steps_save'),
 ]
 
 

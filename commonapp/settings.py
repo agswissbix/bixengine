@@ -155,6 +155,12 @@ def settings_table_usertables_save(request):
     errors = []
 
     for workspace_key, workspace_data in workspaces.items():
+        group_order = workspace_data.get('groupOrder', None)
+        ws = SysTableWorkspace.objects.filter(name=workspace_key).first()
+        if ws:
+            ws.order = group_order
+            ws.save()
+
         tables = workspace_data.get('tables', [])
         for table in tables:
             table_id = table.get('id')
@@ -632,3 +638,293 @@ def save_new_table(request):
 
     # Risposta JSON
     return JsonResponse({'success': True})
+
+
+def settings_table_newstep(request):
+    """
+    Crea un nuovo Step per una tabella specifica (es. timesheet)
+    """
+    data = json.loads(request.body)
+    tableid = data.get('tableid')
+    userid = data.get('userid')
+    step_name = data.get('step_name')
+    step_type = data.get('step_type', None)
+
+    if not tableid or not step_name:
+        return JsonResponse({'success': False, 'error': 'Parametri mancanti'}, status=400)
+
+    try:
+        table = SysTable.objects.get(id=tableid)
+    except SysTable.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Tabella non trovata'}, status=404)
+
+    try:
+        user = SysUser.objects.get(id=userid)
+    except SysUser.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Utente non trovato'}, status=404)
+
+    step, created = SysStep.objects.get_or_create(
+        name=step_name,
+        defaults={'type': step_type}
+    )
+
+    # Calcola l'ordine successivo
+    last_order = SysStepTable.objects.filter(table=table).aggregate(models.Max('order'))['order__max'] or 0
+    step = SysStepTable.objects.create(
+        step=step,
+        table=table,
+        user=user,
+        order=last_order + 1
+    )
+
+    step = {
+        'id': step.step.id,
+        'name': step.step.name,
+        'type': step.step.type,
+        'order': step.order,
+    }
+
+
+
+    return JsonResponse({
+        'success': True,
+        'message': f"Step '{step_name}' creato con successo.",
+        'step': step
+    })
+
+def settings_table_steps(request):
+    """
+    Restituisce tutti gli step di una tabella.
+    - Se lo step è di tipo 'campi', carica i campi della tabella e i loro ordini.
+    - Se lo step è di tipo 'collegate', carica le linked tables e i loro ordini.
+    Tutti i dati vengono restituiti nel formato 'items'.
+    """
+    data = json.loads(request.body)
+    tableid = data.get('tableid')
+    userid = data.get('userid')
+
+    if not tableid or not userid:
+        return JsonResponse({'success': False, 'error': 'Parametri mancanti'}, status=400)
+
+    # --- Recupera gli step e il loro ordine
+    step_links = (
+        SysStep.objects
+        .annotate(
+            order=Subquery(
+                SysStepTable.objects.filter(
+                    table_id=tableid,
+                    step_id=OuterRef('id')
+                ).values('order')[:1],
+                output_field=IntegerField()
+            )
+        )
+        .order_by('order')  # prima per ordine, poi per id
+    )
+
+    # --- Recupera tutti i campi della tabella
+    fields = list(SysField.objects.filter(tableid=tableid).values())
+    fields = [f for f in fields if not f['fieldid'].endswith('_')]
+
+    # --- Step di tipo 'campi': legami utente per i campi
+    user_field_orders = SysUserFieldOrder.objects.filter(
+        tableid=tableid,
+        userid=userid,
+        typepreference='steps_fields'
+    )
+
+    user_field_map = {
+        (ufo.fieldid.id, ufo.step_name_id): ufo.fieldorder
+        for ufo in user_field_orders
+    }
+
+    # --- Step di tipo 'collegate': definizione subquery per ordine utente
+    user_order_subquery = SysUserOrder.objects.filter(
+        tableid=OuterRef('tableid'),
+        fieldid=OuterRef('tablelinkid'),
+        userid=userid
+    ).values('fieldorder')[:1]
+
+    linked_qs = (
+        SysTableLink.objects
+        .filter(tableid=tableid)
+        .select_related('tablelinkid')
+        .annotate(fieldorder=Subquery(user_order_subquery, output_field=IntegerField()))
+        .order_by(Coalesce('fieldorder', 9999))
+    )
+
+    linked_tables_all = [
+        {
+            "tablelinkid": link.tablelinkid.id if hasattr(link.tablelinkid, 'id') else link.tablelinkid,
+            "description": getattr(link.tablelinkid, 'description', ''),
+            "fieldorder": link.fieldorder,
+            "visible": True
+        }
+        for link in linked_qs
+    ]
+
+    # --- Trova l'ultimo step di tipo campi
+    campi_steps = [step for step in step_links if step.type == 'campi']
+    last_campi_step_id = campi_steps[-1].id if campi_steps else None
+
+    # --- Costruzione risposta finale
+    steps_data = []
+
+    for step in step_links:
+        step_data = {
+            "id": step.id,
+            "name": step.name,
+            "type": step.type,
+            "order": step.order,
+            "items": []
+        }
+
+        # 🔹 Caso 1: step di tipo 'campi'
+        if step.type == 'campi':
+            step_fields = []
+            for f in fields:
+                order = user_field_map.get((f['id'], step.id))
+                if order is not None:
+                    step_fields.append({
+                        "id": f["id"],
+                        "description": f["description"],
+                        "order": order,
+                        "visible": f.get("visible", True),
+                        "fieldid": f["fieldid"],
+                        "fieldtypeid": f.get("fieldtypeid"),
+                        "label": f.get("label", f["description"])
+                    })
+            step_fields.sort(key=lambda x: (x["order"] is None, x["order"]))
+            step_data["items"] = step_fields
+
+        # 🔹 Caso 2: step di tipo 'collegate'
+        elif step.type == 'collegate':
+            step_data["items"] = [
+                {
+                    "id": t["tablelinkid"],
+                    "description": t["description"],
+                    "order": t["fieldorder"] or None,
+                    "visible": t["visible"] or None
+                }
+                for t in linked_tables_all
+            ]
+
+        steps_data.append(step_data)
+
+    # 🔸 Assegna campi non presenti in SysUserFieldOrder all’ultimo step campi
+    if last_campi_step_id:
+        assigned_field_ids = {
+            f["id"]
+            for s in steps_data if s["type"] == "campi"
+            for f in s["items"]
+        }
+
+        remaining_fields = [f for f in fields if f["id"] not in assigned_field_ids]
+
+        if remaining_fields:
+            for s in steps_data:
+                if s["id"] == last_campi_step_id:
+                    s["items"].extend([
+                        {
+                            "id": f["id"],
+                            "description": f["description"],
+                            "order": None,
+                            "visible": f.get("visible", False),
+                            "fieldid": f["fieldid"],
+                            "fieldtypeid": f.get("fieldtypeid"),
+                            "label": f.get("label", f["description"])
+                        }
+                        for f in remaining_fields
+                    ])
+                    break
+
+    return JsonResponse({
+        "success": True,
+        "steps": steps_data
+    })
+
+def settings_table_steps_save(request):
+    """
+    Salva l’ordine degli step e l’ordine dei loro items (campi o tabelle collegate)
+    """
+    data = json.loads(request.body)
+    tableid = data.get("tableid")
+    userid = data.get("userid")
+    steps = data.get("steps", [])
+
+    if not tableid or not userid or not steps:
+        return JsonResponse({
+            "success": False,
+            "error": "Parametri mancanti o steps vuoti."
+        }, status=400)
+
+    try:
+        table = SysTable.objects.get(id=tableid)
+        user = SysUser.objects.get(id=userid)
+    except (SysTable.DoesNotExist, SysUser.DoesNotExist):
+        return JsonResponse({
+            "success": False,
+            "error": "Tabella o utente non trovati."
+        }, status=404)
+
+    # 🔹 1️⃣ Salvataggio ordine degli step
+    for index, step_data in enumerate(steps):
+        step_id = step_data.get("id")
+        order = step_data.get('order', None)
+        if not step_id:
+            continue
+
+        # try:
+        #     step = SysStep.objects.filter(id=step_id).first()
+        # except (SysStep.DoesNotExist):
+        #     continue
+
+        SysStepTable.objects.update_or_create(
+            step_id=step_id,
+            table=table,
+            defaults={"order": order}
+        )
+
+        # 🔹 2️⃣ Se lo step ha items, aggiorna anche il loro ordine
+        items = step_data.get("items", [])
+        step_type = step_data.get("type")
+
+        # --- Caso 1: step di tipo campi
+        if step_type == "campi":
+            for order_index, item in enumerate(items):
+                field_id = item.get("id")
+                order = item.get('order', None)
+                if not field_id:
+                    continue
+
+                try:
+                    field = SysField.objects.filter(id=field_id).first()
+                except (SysField.DoesNotExist):
+                    continue
+
+                SysUserFieldOrder.objects.update_or_create(
+                    tableid=table,
+                    userid=user,
+                    fieldid=field,
+                    step_name_id=step_id,
+                    typepreference="steps_fields",
+                    defaults={"fieldorder": order}
+                )
+
+        # --- Caso 2: step di tipo collegate
+        elif step_type == "collegate":
+            for order_index, item in enumerate(items):
+                tablelinkid = item.get("id")
+                if not tablelinkid:
+                    continue
+
+                SysUserOrder.objects.update_or_create(
+                    tableid=table,
+                    userid=user,
+                    fieldid=tablelinkid,
+                    defaults={"fieldorder": order_index}
+                )
+
+    return JsonResponse({
+        "success": True,
+        "message": "Ordine di steps e items salvato correttamente."
+    })

@@ -330,8 +330,7 @@ class UserRecord:
                 badge_fields.append({"fieldid":fieldid,"value":value})
         return badge_fields
     
-    def get_record_card_fields(self):
-
+    def get_record_card_fields(self, typepreference='insert_fields', step_name_id=''):
         #TODO
         if self.tableid=='pitticket' and self.master_tableid=='telefonate' and self.recordid=='':
             record_telefonate=UserRecord('telefonate',self.master_recordid)
@@ -341,6 +340,7 @@ class UserRecord:
             self.values['personariferimento'] = (record_telefonate.values.get('chi') or '') + " " + (record_telefonate.values.get('telefono') or '')
             self.values['richiesta']=(record_telefonate.values.get('motivo_chiamata','') or '')
         
+
         # 1. Carica tutte le impostazioni per la tabella e l'utente in una sola volta
         sql_settings = f"""
             SELECT fieldid, settingid, value
@@ -357,11 +357,20 @@ class UserRecord:
                 field_settings_map[fieldid] = {}
             field_settings_map[fieldid][setting['settingid']] = setting['value']
             
-        sql=f"""
-            SELECT f.*
-            FROM sys_user_field_order AS fo LEFT JOIN sys_field AS f ON fo.tableid=f.tableid AND fo.fieldid=f.id
+        step_condition = ""
+        if step_name_id:
+            step_condition = f"AND fo.step_name_id='{step_name_id}'"
 
-            WHERE fo.tableid='{self.tableid}' AND typepreference='insert_fields' AND fo.fieldorder IS NOT NULL AND fo.userid=1 ORDER BY fo.fieldorder
+        sql = f"""
+            SELECT f.*
+            FROM sys_user_field_order AS fo
+            LEFT JOIN sys_field AS f ON fo.tableid=f.tableid AND fo.fieldid=f.id
+            WHERE fo.tableid='{self.tableid}'
+            AND fo.typepreference='{typepreference}'
+            {step_condition}
+            AND fo.fieldorder IS NOT NULL
+            AND fo.userid=1
+            ORDER BY fo.fieldorder
         """
         fields=HelpderDB.sql_query(sql)
         insert_fields=[]

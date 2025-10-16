@@ -562,6 +562,7 @@ class SysUserFieldOrder(models.Model):
     fieldorder = models.IntegerField(blank=True, null=True)
     typepreference = models.CharField(max_length=32, blank=True, null=True)
     master_tableid = models.ForeignKey(SysTable, models.DO_NOTHING, db_column='master_tableid', related_name='sysuserfieldorder_master_tableid_set', blank=True, null=True)
+    step_name = models.ForeignKey('SysStep', on_delete=models.CASCADE, blank=True, null=True)
 
     class Meta:
         db_table = 'sys_user_field_order'
@@ -758,3 +759,50 @@ class SysChart(models.Model):
     def __str__(self):
         return f"{self.name} ({self.layout})"
 
+
+
+class SysStep(models.Model):
+    STEP_TYPES = [
+        ('campi', 'Campi'),
+        ('allegati', 'Allegati'),
+        ('collegate', 'Tabelle collegate'),
+        ('aggiuntivi', 'Campi aggiuntivi'),
+    ]
+
+    name = models.CharField(max_length=100, unique=True)
+    type = models.CharField(max_length=50, choices=STEP_TYPES, blank=True, null=True)
+
+    tables = models.ManyToManyField(
+        SysTable,
+        through='SysStepTable',
+        related_name='steps'
+    )
+
+    class Meta:
+        db_table = 'sys_steps'
+        verbose_name = 'Step di sistema'
+        verbose_name_plural = 'Steps di sistema'
+
+    def __str__(self):
+        return self.name
+    
+    def get_table_order(self, table_name):
+        rel = self.tables.through.objects.filter(step=self, table__name=table_name).first()
+        return rel.order if rel else None
+
+
+class SysStepTable(models.Model):
+    step = models.ForeignKey(SysStep, on_delete=models.CASCADE)
+    table = models.ForeignKey(SysTable, on_delete=models.CASCADE)
+    user = models.ForeignKey(SysUser, on_delete=models.CASCADE, default=1)
+    order = models.IntegerField(blank=True, null=True)
+
+    class Meta:
+        db_table = 'sys_steps_tables'
+        verbose_name = 'Associazione Step-Tabella'
+        verbose_name_plural = 'Associazioni Step-Tabella'
+        unique_together = ('step', 'table')
+        ordering = ['order']
+
+    def __str__(self):
+        return f"{self.table.name} - {self.step.name} (ordine: {self.order})"

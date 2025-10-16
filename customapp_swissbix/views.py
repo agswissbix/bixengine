@@ -592,24 +592,78 @@ def stampa_offerta(request):
     response['Content-Disposition'] = 'attachment; filename="documento_trattativa_generato.docx"'
     return response
 
-
+from commonapp.models import *
+from django.db.models.functions import Coalesce
+from django.db.models import IntegerField
 def get_fields_swissbix_deal(request):
+    """
+    Restituisce tutti gli step di una tabella, includendo:
+      - fields per gli step di tipo "campi"
+      - linked_tables per gli step di tipo "collegate"
+    Senza formattazione FE (ritorna i dati grezzi).
+    """
     data = json.loads(request.body)
-    tableid= data.get("tableid")
+    tableid = data.get('tableid')
     recordid= data.get("recordid")
     master_tableid= data.get("mastertableid")
     master_recordid= data.get("masterrecordid")
 
-    record=UserRecord(tableid,recordid,Helper.get_userid(request),master_tableid,master_recordid)
-    card_fields=record.get_record_card_fields()
+    userid = 1
 
-    record=UserRecord(tableid,recordid)
-    linkedTables=record.get_linked_tables()
+    if not tableid:
+        return JsonResponse({
+            "success": False,
+            "error": "Parametri mancanti."
+        }, status=400)
 
+    try:
+        table = SysTable.objects.get(id=tableid)
+        user = SysUser.objects.get(id=userid)
+    except (SysTable.DoesNotExist, SysUser.DoesNotExist):
+        return JsonResponse({
+            "success": False,
+            "error": "Tabella o utente non trovati."
+        }, status=404)
 
+    # 🔹 1️⃣ Recupero tutti gli step associati alla tabella (con l'ordine)
+    step_tables = (
+        SysStepTable.objects
+        .filter(table=table)
+        .select_related('step')
+        .order_by(Coalesce('order', 9999))
+    )
 
-    response={ "fields": card_fields, "recordid": recordid, "linkedTables": linkedTables}
-    return JsonResponse(response)
+    steps_data = []
+
+    for st in step_tables:
+        step = st.step
+        step_data = {
+            "id": step.id,
+            "name": step.name,
+            "type": step.type,
+            "order": st.order,
+        }
+
+        # 🔹 2️⃣ Se lo step è di tipo "campi"
+        if step.type == "campi":
+            record=UserRecord(tableid,recordid,Helper.get_userid(request),master_tableid,master_recordid)
+            card_fields=record.get_record_card_fields(typepreference='steps_fields', step_name_id=step.id)
+
+            step_data["fields"] = card_fields
+
+        # 🔹 3️⃣ Se lo step è di tipo "collegate"
+        elif step.type == "collegate":
+            record=UserRecord(tableid,recordid)
+            linked_tables=record.get_linked_tables()
+
+            step_data["linked_tables"] = linked_tables
+
+        steps_data.append(step_data)
+
+    return JsonResponse({
+        "success": True,
+        "steps": steps_data
+    })
 
 
 def deal_update_status(request):
