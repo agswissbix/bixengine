@@ -12,6 +12,8 @@ from commonapp.bixmodels.user_table import *
 from commonapp.helper import *
 import pyodbc
 
+from django.utils.dateparse import parse_datetime
+
 # Create your views here.
 
 @csrf_exempt
@@ -293,9 +295,6 @@ def sync_plesk_adiuto(request):
 
     return HttpResponse("<br>".join(results))
 
-
-
-
 def sql_safe(value):
     if value is None:
         return "NULL"
@@ -311,3 +310,46 @@ def sql_safe(value):
     return f"'{cleaned}'"
 
 
+def save_service_man(request):
+    if request.method != 'POST':
+        return HttpResponse({
+            'success': False,
+            'message': 'Metodo non permesso. Utilizza POST.'
+        }, status=405)
+
+    try:
+        data=json.loads(request.body)
+
+        tableid = "serviceman"
+
+        new_record = UserRecord(tableid)
+        new_record.values['nome'] = data.get('nome','')
+        new_record.values['cognome'] = data.get('cognome','')
+        new_record.values['telefono'] = data.get('telefono','')
+        new_record.values['email'] = data.get('email','')
+        new_record.values['targa'] = data.get('targa','')
+        new_record.values['telaio'] = data.get('telaio','')
+        new_record.values['modello'] = data.get('modello','')
+
+        data_string_iso = data.get('data', None)
+
+        dt_object = parse_datetime(data_string_iso)
+
+        if dt_object: 
+            new_record.data = dt_object.date()
+            new_record.ora = dt_object.time()
+
+        new_record.values['nomeutente'] = data.get('utente', '')
+
+        new_record.save()
+
+        return HttpResponse({
+            'success': True,
+            'message': 'Dati ricevuti e processati con successo.'
+        }, status=200)
+
+    except Exception as e:
+        return HttpResponse({
+            'success': False,
+            'message': f'Si è verificato un errore inatteso: {str(e)}'
+        }, status=500)

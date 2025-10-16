@@ -12,6 +12,6 @@ urlpatterns = [
     path('sync_plesk_adiuto/', sync_plesk_adiuto, name='sync_plesk_adiuto'),
     
     
-
+    path('save_service_man/', save_service_man, name='save_service_man'),
     
 ]
