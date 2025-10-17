@@ -1,4 +1,5 @@
 import os
+from re import match
 from commonapp.bixmodels.helper_db import *
 from commonapp.bixmodels.helper_sys import *
 from commonapp.helper import *
@@ -330,7 +331,7 @@ class UserRecord:
                 badge_fields.append({"fieldid":fieldid,"value":value})
         return badge_fields
     
-    def get_record_card_fields(self, typepreference='insert_fields', step_name_id=''):
+    def get_record_card_fields(self, typepreference='insert_fields', step_id=''):
         #TODO
         if self.tableid=='pitticket' and self.master_tableid=='telefonate' and self.recordid=='':
             record_telefonate=UserRecord('telefonate',self.master_recordid)
@@ -358,8 +359,8 @@ class UserRecord:
             field_settings_map[fieldid][setting['settingid']] = setting['value']
             
         step_condition = ""
-        if step_name_id:
-            step_condition = f"AND fo.step_name_id='{step_name_id}'"
+        if step_id:
+            step_condition = f"AND fo.step_id='{step_id}'"
 
         sql = f"""
             SELECT f.*
@@ -369,10 +370,24 @@ class UserRecord:
             AND fo.typepreference='{typepreference}'
             {step_condition}
             AND fo.fieldorder IS NOT NULL
-            AND fo.userid=1
+            AND fo.userid={self.userid}
             ORDER BY fo.fieldorder
         """
         fields=HelpderDB.sql_query(sql)
+        if not fields:
+            sql = f"""
+                SELECT f.*
+                FROM sys_user_field_order AS fo
+                LEFT JOIN sys_field AS f ON fo.tableid=f.tableid AND fo.fieldid=f.id
+                WHERE fo.tableid='{self.tableid}'
+                AND fo.typepreference='{typepreference}'
+                {step_condition}
+                AND fo.fieldorder IS NOT NULL
+                AND fo.userid=1
+                ORDER BY fo.fieldorder
+            """
+            fields = HelpderDB.sql_query(sql)
+
         insert_fields=[]
         for field in fields:
             defaultcode=''
@@ -382,6 +397,10 @@ class UserRecord:
             if fieldid.startswith("_"):
                 fieldid= fieldid[1:] + "_"
             value=self.values.get(fieldid, '')
+            if fieldid == 'date':
+                if not value:
+                    value = date.today().strftime('%Y-%m-%d')
+                value = value.isoformat()
             
             #if self.recordid=='':
              #   value=""

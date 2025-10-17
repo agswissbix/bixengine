@@ -562,7 +562,7 @@ class SysUserFieldOrder(models.Model):
     fieldorder = models.IntegerField(blank=True, null=True)
     typepreference = models.CharField(max_length=32, blank=True, null=True)
     master_tableid = models.ForeignKey(SysTable, models.DO_NOTHING, db_column='master_tableid', related_name='sysuserfieldorder_master_tableid_set', blank=True, null=True)
-    step_name = models.ForeignKey('SysStep', on_delete=models.CASCADE, blank=True, null=True)
+    step = models.ForeignKey('SysStep', on_delete=models.CASCADE, blank=True, null=True)
 
     class Meta:
         db_table = 'sys_user_field_order'
@@ -801,7 +801,7 @@ class SysStepTable(models.Model):
         db_table = 'sys_steps_tables'
         verbose_name = 'Associazione Step-Tabella'
         verbose_name_plural = 'Associazioni Step-Tabella'
-        unique_together = ('step', 'table')
+        unique_together = ('step', 'table', 'user')
         ordering = ['order']
 
     def __str__(self):

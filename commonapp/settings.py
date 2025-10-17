@@ -127,19 +127,30 @@ def settings_table_settings(request):
 
 def settings_table_fields_settings_save(request):
     data = json.loads(request.body)
-
     settings_list = data.get('settings')
     userid = data.get('userid')
     tableid = data.get('tableid')
 
     tablesettings_obj = TableSettings(tableid=tableid, userid=userid)
+    current_settings = tablesettings_obj.get_settings()
+
+    updated = False
 
     for setting in settings_list:
-        tablesettings_obj.settings[setting['name']]['value'] = setting['value']
+        name = setting['name']
+        new_value = setting['value']
+        old_value = current_settings.get(name, {}).get('value')
 
-    tablesettings_obj.save()
+        # confronto: aggiorno solo se è cambiato
+        if new_value is not None and str(new_value).strip() != '' and new_value != old_value:
+            tablesettings_obj.settings[name]['value'] = new_value
+            updated = True
 
-    return HttpResponse({'success': True})
+    # salvo solo se è cambiato qualcosa
+    if updated:
+        tablesettings_obj.save()
+
+    return JsonResponse({'success': True, 'updated': updated})
 
 
 @transaction.atomic
@@ -733,7 +744,7 @@ def settings_table_steps(request):
     )
 
     user_field_map = {
-        (ufo.fieldid.id, ufo.step_name_id): ufo.fieldorder
+        (ufo.fieldid.id, ufo.step.id): ufo.fieldorder
         for ufo in user_field_orders
     }
 
@@ -881,6 +892,7 @@ def settings_table_steps_save(request):
         SysStepTable.objects.update_or_create(
             step_id=step_id,
             table=table,
+            user=user,
             defaults={"order": order}
         )
 
@@ -905,15 +917,16 @@ def settings_table_steps_save(request):
                     tableid=table,
                     userid=user,
                     fieldid=field,
-                    step_name_id=step_id,
+                    step_id=step_id,
                     typepreference="steps_fields",
                     defaults={"fieldorder": order}
                 )
 
         # --- Caso 2: step di tipo collegate
         elif step_type == "collegate":
-            for order_index, item in enumerate(items):
+            for index, item in enumerate(items):
                 tablelinkid = item.get("id")
+                order = item.get('order', None)
                 if not tablelinkid:
                     continue
 
@@ -921,7 +934,8 @@ def settings_table_steps_save(request):
                     tableid=table,
                     userid=user,
                     fieldid=tablelinkid,
-                    defaults={"fieldorder": order_index}
+                    typepreference='keylabel',
+                    defaults={"fieldorder": order}
                 )
 
     return JsonResponse({

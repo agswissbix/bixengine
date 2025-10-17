@@ -608,8 +608,6 @@ def get_fields_swissbix_deal(request):
     master_tableid= data.get("mastertableid")
     master_recordid= data.get("masterrecordid")
 
-    userid = 1
-
     if not tableid:
         return JsonResponse({
             "success": False,
@@ -618,20 +616,28 @@ def get_fields_swissbix_deal(request):
 
     try:
         table = SysTable.objects.get(id=tableid)
-        user = SysUser.objects.get(id=userid)
+        user = SysUser.objects.get(id=Helper.get_userid(request))
     except (SysTable.DoesNotExist, SysUser.DoesNotExist):
         return JsonResponse({
             "success": False,
             "error": "Tabella o utente non trovati."
         }, status=404)
 
-    # 🔹 1️⃣ Recupero tutti gli step associati alla tabella (con l'ordine)
     step_tables = (
         SysStepTable.objects
-        .filter(table=table)
+        .filter(table=table, user=user)
         .select_related('step')
         .order_by(Coalesce('order', 9999))
     )
+
+    if not step_tables.exists():
+        step_tables = (
+            SysStepTable.objects
+            .filter(table=table, user_id=1)
+            .select_related('step')
+            .order_by(Coalesce('order', 9999))
+        )
+
 
     steps_data = []
 
@@ -644,14 +650,12 @@ def get_fields_swissbix_deal(request):
             "order": st.order,
         }
 
-        # 🔹 2️⃣ Se lo step è di tipo "campi"
         if step.type == "campi":
             record=UserRecord(tableid,recordid,Helper.get_userid(request),master_tableid,master_recordid)
-            card_fields=record.get_record_card_fields(typepreference='steps_fields', step_name_id=step.id)
+            card_fields=record.get_record_card_fields(typepreference='steps_fields', step_id=step.id)
 
             step_data["fields"] = card_fields
 
-        # 🔹 3️⃣ Se lo step è di tipo "collegate"
         elif step.type == "collegate":
             record=UserRecord(tableid,recordid)
             linked_tables=record.get_linked_tables()

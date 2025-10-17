@@ -103,7 +103,7 @@ class TableSettings:
                 {'name': 'Storico', 'selected': True},
                 {'name': 'Custom', 'selected': True},
             ],
-            'value': 'Fields'
+            'value': 'Campi, Collegati'
         },
         "card_default_size": {
             "type": "select",
@@ -131,7 +131,7 @@ class TableSettings:
                 {'name': 'Planner', 'selected': True},
                 {'name': 'Gallery', 'selected': True},
             ],
-            'value': 'Fields'
+            'value': 'Tabella'
         },
         'table_active_tab': {
             'type': 'select',
