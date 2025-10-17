@@ -8,7 +8,7 @@ environ.Env.read_env()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 UPLOADS_URL = '/uploads/'
-UPLOADS_ROOT = os.path.join(BASE_DIR, '..', 'uploads')
+UPLOADS_ROOT = os.path.join(BASE_DIR, '..', 'uploads') #in teoria non serve perchè se uso default_storage usa MEDIA_ROOT
 MEDIA_ROOT = os.path.join(BASE_DIR, '..', 'uploads')
 STATIC_ROOT = os.path.join(BASE_DIR, '..', 'bixengine', 'commonapp', 'static')
 

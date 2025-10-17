@@ -2094,15 +2094,17 @@ def save_record_fields(request):
         else:
             clean_key = file_key
 
+        _, ext = os.path.splitext(uploaded_file.name)
+        record_path = f"{tableid}/{recordid}/{clean_key}{ext}"
+        file_path = os.path.join(tableid, recordid, f"{clean_key}{ext}")
+
         if tableid =='attachment':
             original_filename = uploaded_file.name
-            record_path = f"{tableid}/{recordid}/{original_filename}"
-            file_path = os.path.join(tableid, recordid, original_filename)
+            record.values['filename'] = original_filename
+            #record_path = f"{tableid}/{recordid}/{original_filename}"
+            #file_path = os.path.join(tableid, recordid, original_filename)
 
-        else:
-            _, ext = os.path.splitext(uploaded_file.name)
-            record_path = f"{tableid}/{recordid}/{clean_key}{ext}"
-            file_path = os.path.join(tableid, recordid, f"{clean_key}{ext}")
+            
 
 
         # Salvataggio tramite default_storage (usa MEDIA_ROOT)

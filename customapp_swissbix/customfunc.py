@@ -478,6 +478,42 @@ def save_record_fields(tableid,recordid):
             timetracking_record.values['start'] =  datetime.now().strftime("%H:%M")
         timetracking_record.save()
 
+    # ------
+    if tableid == 'attachment':
+        attachment_record = UserRecord('attachment', recordid)
+        filename= attachment_record.values['filename']
+        file_relative_path = attachment_record.values['file']
+        recordiddeal = attachment_record.values['recordiddeal_']
+        if not Helper.isempty(recordiddeal):
+            adiuto_uplodad=attachment_record.values['adiuto_uploaded']
+            if  adiuto_uplodad!='Si':
+                filename_adiuto= f"deal_{recordiddeal}_{filename}"
+                
+                # 1. Definisci il path di destinazione (sempre relativo a MEDIA_ROOT)
+                dest_relative_path = f"Adiuto/{filename_adiuto}"
+
+                try:
+                    # 2. Apri il file sorgente usando default_storage
+                    # 'with' garantisce che il file venga chiuso correttamente
+                    with default_storage.open(file_relative_path, 'rb') as source_file:
+                        
+                        # 3. Salva il contenuto letto in una nuova posizione
+                        # default_storage.save riceve il path relativo e l'oggetto File
+                        # e gestisce automaticamente la scrittura.
+                        new_path = default_storage.save(dest_relative_path, source_file)
+                        attachment_record.values['adiuto_uploaded'] = "Si"
+                        attachment_record.save()
+                        # (Opzionale) 'new_path' contiene il percorso esatto del file salvato
+                        # (potrebbe avere un hash se il file esisteva già)
+                        print(f"File copiato con successo in: {new_path}")
+
+                except FileNotFoundError:
+                    print(f"ERRORE: Impossibile copiare. File sorgente non trovato in: {file_relative_path}")
+                except Exception as e:
+                    # Gestisci altri possibili errori (es. permessi)
+                    print(f"ERRORE durante la copia del file: {e}")
+        
+
 
 
 def card_task_pianificaperoggi(recordid):
