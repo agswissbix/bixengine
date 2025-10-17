@@ -13,5 +13,6 @@ urlpatterns = [
     
     
     path('save_service_man/', save_service_man, name='save_service_man'),
+    path('get_service_man/', get_service_man, name='get_service_man'),
     
 ]
