@@ -353,3 +353,23 @@ def save_service_man(request):
             'success': False,
             'message': f'Si è verificato un errore inatteso: {str(e)}'
         }, status=500)
+    
+def get_service_man(request):
+    results = []
+
+    tableid = 'serviceman'
+    table = UserTable(tableid)
+    rows = table.get_records()
+
+    for row in rows:
+
+        cliente = f'{row["nome"]} {row["cognome"]}'
+
+        results.append({
+            "id": row["id"],
+            "cliente": cliente,
+            "data": row["data"],
+            "highlight": False
+        })
+
+    return JsonResponse({"serviceMen": results}, safe=False)
