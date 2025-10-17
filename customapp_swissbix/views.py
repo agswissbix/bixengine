@@ -521,8 +521,8 @@ def get_record_badge_swissbix_project(request):
 
 def stampa_offerta(request):
     data = json.loads(request.body)
-    recordid = data.get('recordid')
-    recordid_deal=recordid
+    recordid_deal = data.get('recordid')
+    
 
     tableid= 'deal'
   
@@ -530,20 +530,25 @@ def stampa_offerta(request):
     base_dir = os.path.dirname(os.path.abspath(__file__))
     template_path = os.path.join(base_dir, 'templates', 'template.docx')
 
+
     if not os.path.exists(template_path):
         return HttpResponse("File non trovato", status=404)
 
     
     deal_record = UserRecord(tableid, recordid_deal)
+    reference = deal_record.values.get('reference', 'N/A')
     dealname = deal_record.values.get('dealname', 'N/A')
     dealuser1 = deal_record.values.get('dealuser1', 'N/A')
     closedata = deal_record.values.get('closedate', 'N/A')
+    
+    filename = reference if reference else f"offerta_{recordid_deal}"
 
     companyid = deal_record.values.get('recordidcompany_')
     if companyid:
         company_record = UserRecord('company', deal_record.values.get('recordidcompany_'))
         companyname = company_record.values.get('companyname', 'N/A')
         address = company_record.values.get('address', 'N/A')
+        cap = company_record.values.get('cap', 'N/A')
         city = company_record.values.get('city', 'N/A')
 
     user_record=HelpderDB.sql_query_row(f"SELECT * FROM sys_user WHERE id ='{dealuser1}'")
@@ -566,7 +571,7 @@ def stampa_offerta(request):
         })
 
     dati_trattativa = {
-        "indirizzo": f"{address}, {city}",
+        "indirizzo": f"{address}, {cap} {city}",
         "azienda": companyname,
         "titolo": dealname,
         "venditore": user,
@@ -589,7 +594,7 @@ def stampa_offerta(request):
         buffer.getvalue(),
         content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     )
-    response['Content-Disposition'] = 'attachment; filename="documento_trattativa_generato.docx"'
+    response['Content-Disposition'] = f'attachment; filename="{filename}.docx"'
     return response
 
 from commonapp.models import *
@@ -658,7 +663,7 @@ def get_fields_swissbix_deal(request):
 
         elif step.type == "collegate":
             record=UserRecord(tableid,recordid)
-            linked_tables=record.get_linked_tables()
+            linked_tables=record.get_linked_tables(typepreference='keylabel_steps', step_id=step.id)
 
             step_data["linked_tables"] = linked_tables
 

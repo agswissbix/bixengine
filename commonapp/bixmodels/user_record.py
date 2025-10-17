@@ -1,5 +1,6 @@
 import os
 from re import match
+from commonapp.models import *
 from commonapp.bixmodels.helper_db import *
 from commonapp.bixmodels.helper_sys import *
 from commonapp.helper import *
@@ -298,18 +299,64 @@ class UserRecord:
         
 
 
-    def get_linked_tables(self):
-        sql=f"SELECT sys_table.id as tableid,sys_table.description  FROM sys_user_order LEFT JOIN sys_table ON sys_user_order.fieldid=sys_table.id  WHERE sys_user_order.tableid='{self.tableid}' AND typepreference='keylabel' AND fieldorder IS NOT NULL AND userid={self.userid} order by fieldorder asc"
+    def get_linked_tables(self, typepreference='keylabel', step_id=None):
+        """
+        Restituisce le linked tables ordinate per fieldorder, includendo step_id e il numero di record correlati.
+        """
 
-        linked_tables=HelpderDB.sql_query(sql)
-        for linked_table in linked_tables:
-            linked_tableid=linked_table['tableid']
-            #todo (controllo aggiunto perchè in alcune situazioni mi arrivava linked_tableid vuoto. in particolare nel caso di servicecontract)
+        user_orders_qs = (
+            SysUserOrder.objects.filter(
+                tableid=self.tableid,
+                typepreference=typepreference,
+                userid=self.userid,
+                fieldorder__isnull=False
+            )
+            .order_by('fieldorder')
+        )
+
+        # Se passo uno step_id, filtro anche per quello
+        if step_id:
+            user_orders_qs = user_orders_qs.filter(step_id=step_id)
+
+        # Recupera tutti gli ID di tabelle collegate (stringhe)
+        linked_ids = [uo.fieldid for uo in user_orders_qs if uo.fieldid]
+
+        # --- Recupera tutte le SysTable corrispondenti
+        tables_map = {
+            str(t.id): t for t in SysTable.objects.filter(id__in=linked_ids)
+        }
+
+        linked_tables = []
+
+        for uo in user_orders_qs:
+            linked_tableid = uo.fieldid  # è una stringa!
+            linked_table = tables_map.get(linked_tableid)
+
+            if not linked_table:
+                continue  # evita errori se manca corrispondenza
+
+            description = linked_table.description
+            step = uo.step_id
+            order = uo.fieldorder
+
+            # Conta record collegati nella tabella dinamica user_<linked_tableid>
+            counter = 0
             if linked_tableid:
-                sql=f"SELECT count(recordid_) as counter FROM user_{linked_tableid} WHERE recordid{self.tableid}_='{self.recordid}' AND deleted_='N'"
-                counter=HelpderDB.sql_query_value(sql,'counter')
-                linked_table['rowsCount']=counter
-    
+                table_name = f"user_{linked_tableid}"
+                sql = f"""
+                    SELECT COUNT(recordid_) AS counter
+                    FROM {table_name}
+                    WHERE recordid{self.tableid}_ = {self.recordid} AND deleted_ = 'N'
+                """
+                counter = HelpderDB.sql_query_value(sql, 'counter')
+
+            linked_tables.append({
+                "tableid": linked_tableid,
+                "description": description,
+                "step_id": step,
+                "rowsCount": counter,
+                "order": order
+            })
 
         return linked_tables
     
@@ -397,10 +444,6 @@ class UserRecord:
             if fieldid.startswith("_"):
                 fieldid= fieldid[1:] + "_"
             value=self.values.get(fieldid, '')
-            if fieldid == 'date':
-                if not value:
-                    value = date.today().strftime('%Y-%m-%d')
-                value = value.isoformat()
             
             #if self.recordid=='':
              #   value=""
