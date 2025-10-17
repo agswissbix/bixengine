@@ -397,10 +397,7 @@ class UserRecord:
             if fieldid.startswith("_"):
                 fieldid= fieldid[1:] + "_"
             value=self.values.get(fieldid, '')
-            if fieldid == 'date':
-                if not value:
-                    value = date.today().strftime('%Y-%m-%d')
-                value = value.isoformat()
+  
             
             #if self.recordid=='':
              #   value=""
