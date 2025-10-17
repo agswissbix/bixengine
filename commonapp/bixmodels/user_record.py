@@ -346,7 +346,7 @@ class UserRecord:
                 sql = f"""
                     SELECT COUNT(recordid_) AS counter
                     FROM {table_name}
-                    WHERE recordid{self.tableid}_ = {self.recordid} AND deleted_ = 'N'
+                    WHERE recordid{self.tableid}_ = '{self.recordid}' AND deleted_ = 'N'
                 """
                 counter = HelpderDB.sql_query_value(sql, 'counter')
 

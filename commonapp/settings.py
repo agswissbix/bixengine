@@ -376,8 +376,10 @@ def settings_table_fields_new_field(request):
         return JsonResponse({"success": False, "error": f"Errore SQL: {e}"}, status=500)
 
     # Se è un campo Categoria → crea lookup table e relative opzioni
-    if fieldtype == "Categoria":
+    if fieldtype == "lookup" or fieldtype == "Categoria":
         lookuptableid = f"{fieldid}_{tableid}"
+        new_field.lookuptableid = lookuptableid
+        new_field.save()
         lookup_table = SysLookupTable.objects.create(
             description=fieldid,
             tableid=lookuptableid,
