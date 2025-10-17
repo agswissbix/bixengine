@@ -487,7 +487,7 @@ def save_record_fields(tableid,recordid):
         if not Helper.isempty(recordiddeal):
             adiuto_uplodad=attachment_record.values['adiuto_uploaded']
             if  adiuto_uplodad!='Si':
-                filename_adiuto= f"deal_{recordiddeal}_{filename}"
+                filename_adiuto= f"deal_{recordiddeal}_{recordid}_{filename}"
                 
                 # 1. Definisci il path di destinazione (sempre relativo a MEDIA_ROOT)
                 dest_relative_path = f"Adiuto/{filename_adiuto}"

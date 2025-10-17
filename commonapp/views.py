@@ -2101,6 +2101,7 @@ def save_record_fields(request):
         if tableid =='attachment':
             original_filename = uploaded_file.name
             record.values['filename'] = original_filename
+            record.save()
             #record_path = f"{tableid}/{recordid}/{original_filename}"
             #file_path = os.path.join(tableid, recordid, original_filename)
 
