@@ -491,7 +491,6 @@ def update_deals():
         print(f"Trattative da aggiornare: {deals_count}")
 
         for deal in sorted_deals:
-            fields = {}
             print(f"{deal['id']} - {deal['dealname']}") 
             recordid_deal = deal["recordid_"]
             deal_record=UserRecord('deal', recordid_deal)
@@ -505,15 +504,18 @@ def update_deals():
                     project = row.F1162
                     tech_adiutoid = row.F1067
                     deal_record.values['adiuto_tech'] = tech_adiutoid
+                    
+                    bixdata_tech = None
+                    if tech_adiutoid is not None:
 
-                    bixdata_tech = HelpderDB.sql_query_row(f"SELECT * FROM sys_user WHERE adiutoid='{tech_adiutoid}'")
+                        bixdata_tech = HelpderDB.sql_query_row(f"SELECT * FROM sys_user WHERE adiutoid='{tech_adiutoid}'")
 
                     if (bixdata_tech):
                         deal_record.values['project_assignedto'] = bixdata_tech["id"]
 
                     deal_record.values["dealstage"] = updated_status
 
-                    if ((updated_status == "Progetto in corso") | (updated_status == "Ordine materiale")): 
+                    if ((updated_status == "Progetto in corso") or (updated_status == "Ordine materiale")): 
                         deal_record.values["sync_project"] = "Si"
                     
                     deal_record.save()
@@ -529,7 +531,6 @@ def update_deals():
             
 
             for deal_line in deal_lines:
-                fields_dealline = {}
                 recordid_dealline = deal_line['recordid_']
                 dealline_record=UserRecord('dealline', recordid_dealline)
                 dealline_name = deal_line['name']
@@ -545,11 +546,9 @@ def update_deals():
                         dealline_record.save()
                 
                 print("UPDATE dealline:")
-                pprint.pprint(fields_dealline)
 
             
             print("UPDATE deal: ")
-            pprint.pprint(fields)
 
 
             save_record_fields('deal', recordid_deal)

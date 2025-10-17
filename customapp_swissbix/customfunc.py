@@ -290,7 +290,10 @@ def save_record_fields(tableid,recordid):
     if tableid == 'deal':
         deal_record = UserRecord('deal', recordid)
         company_record = UserRecord('company', deal_record.values['recordidcompany_'])
-        reference = str(deal_record.values['id']) + ' - ' + company_record.values['companyname'] + ' - ' + deal_record.values['dealname']
+        val_id = str(deal_record.values.get('id') or '')
+        val_company = str(company_record.values.get('companyname') or '')
+        val_deal = str(deal_record.values.get('dealname') or '')
+        reference = f"{val_id} - {val_company} - {val_deal}"
         deal_record.values['reference'] = reference
 
         if deal_record.values['advancepayment'] == None:
@@ -300,10 +303,15 @@ def save_record_fields(tableid,recordid):
             deal_record.values['dealstatus']='Aperta'
         
 
-        creation = deal_record.values['creation_']
+        creation = deal_record.values.get('creation_')
+        if creation:
+            deal_record.values['opendate'] = creation.strftime("%Y-%m-%d")
         deal_record.values['opendate'] = creation.strftime("%Y-%m-%d")
         deal_user_record_dict =  HelpderDB.sql_query_row(f"select * from sys_user where id={deal_record.values['dealuser1']}")
-        deal_record.values['adiuto_dealuser'] = deal_user_record_dict['adiutoid']
+        if deal_user_record_dict:
+            deal_record.values['adiuto_dealuser'] = deal_user_record_dict.get('adiutoid')
+        else:
+            deal_record.values['adiuto_dealuser'] = None
         deal_project_record_dict = HelpderDB.sql_query_row(f"select * from user_project where recordiddeal_={recordid}")
         project_recordid = ''
         if deal_project_record_dict:
@@ -333,12 +341,11 @@ def save_record_fields(tableid,recordid):
         for dealline_record_dict in dealline_records:
             dealline_recordid = dealline_record_dict['recordid_']
             product_recordid = dealline_record_dict['recordidproduct_']
-            dealline_recordid = dealline_record_dict['recordid_']
-            dealline_quantity = dealline_record_dict['quantity']
-            dealline_price = dealline_record_dict['price']
-            dealline_expectedcost = dealline_record_dict['expectedcost']
-            dealline_expectedmargin = dealline_record_dict['expectedmargin']
-            dealline_unitactualcost = dealline_record_dict['uniteffectivecost']
+            dealline_quantity = dealline_record_dict['quantity'] or 0
+            dealline_price = dealline_record_dict['price'] or 0
+            dealline_expectedcost = dealline_record_dict['expectedcost'] or 0
+            dealline_expectedmargin = dealline_record_dict['expectedmargin'] or 0
+            dealline_unitactualcost = dealline_record_dict['uniteffectivecost'] or 0
             if not dealline_unitactualcost:
                 dealline_unitactualcost = 0
             dealline_frequency = dealline_record_dict['frequency']
@@ -348,13 +355,13 @@ def save_record_fields(tableid,recordid):
             if dealline_frequency == 'Semestrale':
                 multiplier = 2
             if dealline_frequency == 'Trimestrale':
-                multiplier = 3
+                multiplier = 4
             if dealline_frequency == 'Bimestrale':
                 multiplier = 6
             if dealline_frequency == 'Mensile':
                 multiplier = 12
             deal_price_sum = deal_price_sum + dealline_price
-            deal_expectedcost_sum = deal_expectedcost_sum + dealline_expectedcost
+            deal_expectedcost_sum = deal_expectedcost_sum + (dealline_expectedcost or 0)
             dealline_record = UserRecord('dealline', dealline_recordid)
             dealline_record.values['recordidproject_'] = project_recordid
 
@@ -399,7 +406,6 @@ def save_record_fields(tableid,recordid):
 
         if(len(dealline_records) > 0): 
             deal_price = deal_price_sum
-        if(len(dealline_records) > 0): 
             deal_expectedcost = deal_expectedcost_sum
         deal_expectedmargin = deal_price - deal_expectedcost
         if deal_actualcost == 0:

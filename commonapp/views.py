@@ -3335,19 +3335,18 @@ def get_record_attachments(request):
     recordid = data.get('recordid')
     response={ "attachments": []}
     #TODO sistemare dinamico
-    if tableid == 'bollettinitrasporto' or tableid == 'stabile' or tableid == 'dipendente':
-        attachments=HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordid{tableid}_='{recordid}' AND deleted_ = 'N'")
-        attachment_list=[]
-        for attachment in attachments:
-            recordid=attachment['recordid_']
-            file=attachment['file']
-            type=attachment['type']
-            note=attachment['note']
-            filename=note=attachment['filename']
-            attachment_list.append({'recordid':recordid,'file':file,'type':type, 'note':note, 'filename':filename})
-            
-        response={ "attachments": attachment_list}
-        print(response)
+    attachments=HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordid{tableid}_='{recordid}' AND deleted_ = 'N'")
+    attachment_list=[]
+    for attachment in attachments:
+        recordid=attachment['recordid_']
+        file=attachment['file']
+        type=attachment['type']
+        note=attachment['note']
+        filename=note=attachment['filename']
+        attachment_list.append({'recordid':recordid,'file':file,'type':type, 'note':note, 'filename':filename})
+        
+    response={ "attachments": attachment_list}
+    print(response)
     return JsonResponse(response)
     
 @csrf_exempt
