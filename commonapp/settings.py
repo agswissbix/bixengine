@@ -376,8 +376,10 @@ def settings_table_fields_new_field(request):
         return JsonResponse({"success": False, "error": f"Errore SQL: {e}"}, status=500)
 
     # Se è un campo Categoria → crea lookup table e relative opzioni
-    if fieldtype == "Categoria":
+    if fieldtype == "lookup" or fieldtype == "Categoria":
         lookuptableid = f"{fieldid}_{tableid}"
+        new_field.lookuptableid = lookuptableid
+        new_field.save()
         lookup_table = SysLookupTable.objects.create(
             description=fieldid,
             tableid=lookuptableid,
@@ -749,33 +751,42 @@ def settings_table_steps(request):
     }
 
     # --- Step di tipo 'collegate': definizione subquery per ordine utente
-    user_order_subquery = SysUserOrder.objects.filter(
-        tableid=OuterRef('tableid'),
-        fieldid=OuterRef('tablelinkid'),
-        userid=userid
-    ).values('fieldorder')[:1]
+    linked_qs = SysTableLink.objects.filter(tableid=tableid).select_related('tablelinkid')
 
-    linked_qs = (
-        SysTableLink.objects
-        .filter(tableid=tableid)
-        .select_related('tablelinkid')
-        .annotate(fieldorder=Subquery(user_order_subquery, output_field=IntegerField()))
-        .order_by(Coalesce('fieldorder', 9999))
+    # Recupera gli ordini personalizzati in Python (non usando OuterRef su step)
+    user_orders = SysUserOrder.objects.filter(
+        tableid=tableid,
+        userid=userid,
+        typepreference='keylabel_steps'
     )
+    user_order_map = {
+        (uo.fieldid, uo.step_id): uo.fieldorder
+        for uo in user_orders
+    }
 
-    linked_tables_all = [
-        {
+    # Costruzione lista linked tables con ordine corretto per step
+    linked_tables_all = []
+    for link in linked_qs:
+        # user_order_map chiave: (fieldid, stepid)
+        order = None
+        # Se vuoi associare all'ultimo step 'collegate' o match logico
+        for step in step_links.filter(type='collegate'):
+            key = (link.tablelinkid.id, step.id)
+            if key in user_order_map:
+                order = user_order_map[key]
+                break
+        linked_tables_all.append({
             "tablelinkid": link.tablelinkid.id if hasattr(link.tablelinkid, 'id') else link.tablelinkid,
             "description": getattr(link.tablelinkid, 'description', ''),
-            "fieldorder": link.fieldorder,
+            "fieldorder": order,
             "visible": True
-        }
-        for link in linked_qs
-    ]
+        })
 
     # --- Trova l'ultimo step di tipo campi
     campi_steps = [step for step in step_links if step.type == 'campi']
+    collegate_steps = [step for step in step_links if step.type == 'collegate']
     last_campi_step_id = campi_steps[-1].id if campi_steps else None
+    last_collegate_step_id = collegate_steps[-1].id if collegate_steps else None
 
     # --- Costruzione risposta finale
     steps_data = []
@@ -809,15 +820,18 @@ def settings_table_steps(request):
 
         # 🔹 Caso 2: step di tipo 'collegate'
         elif step.type == 'collegate':
-            step_data["items"] = [
-                {
+            step_links_items = []
+            for t in linked_tables_all:
+                key = (t["tablelinkid"], step.id)
+                order = user_order_map.get(key)
+                step_links_items.append({
                     "id": t["tablelinkid"],
                     "description": t["description"],
-                    "order": t["fieldorder"] or None,
-                    "visible": t["visible"] or None
-                }
-                for t in linked_tables_all
-            ]
+                    "order": order,
+                    "visible": order is None != True
+                })
+            step_links_items.sort(key=lambda x: (x["order"] is None, x["order"] or 9999))
+            step_data["items"] = step_links_items
 
         steps_data.append(step_data)
 
@@ -845,6 +859,30 @@ def settings_table_steps(request):
                             "label": f.get("label", f["description"])
                         }
                         for f in remaining_fields
+                    ])
+                    break
+
+    if last_collegate_step_id:
+        assigned_link_ids = {
+            t["id"]
+            for s in steps_data if s["type"] == "collegate"
+            for t in s["items"]
+        }
+        remaining_links = [
+            t for t in linked_tables_all
+            if t["tablelinkid"] not in assigned_link_ids
+        ]
+        if remaining_links:
+            for s in steps_data:
+                if s["id"] == last_collegate_step_id:
+                    s["items"].extend([
+                        {
+                            "id": t["tablelinkid"],
+                            "description": t["description"],
+                            "order": t["fieldorder"] or None,
+                            "visible": t["visible"] or None
+                        }
+                        for t in remaining_links
                     ])
                     break
 
@@ -934,7 +972,8 @@ def settings_table_steps_save(request):
                     tableid=table,
                     userid=user,
                     fieldid=tablelinkid,
-                    typepreference='keylabel',
+                    typepreference='keylabel_steps',
+                    step_id=step_id,
                     defaults={"fieldorder": order}
                 )
 

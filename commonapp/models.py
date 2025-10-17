@@ -587,6 +587,7 @@ class SysUserOrder(models.Model):
     fieldid = models.CharField(max_length=32, blank=True, null=True)
     fieldorder = models.IntegerField(blank=True, null=True)
     typepreference = models.CharField(max_length=32, blank=True, null=True)
+    step = models.ForeignKey('SysStep', on_delete=models.CASCADE, blank=True, null=True)
 
     class Meta:
         db_table = 'sys_user_order'
