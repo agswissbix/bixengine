@@ -373,3 +373,186 @@ def get_service_man(request):
         })
 
     return JsonResponse({"serviceMen": results}, safe=False)
+
+def save_checklist(request):
+    if request.method != 'POST':
+        return HttpResponse({
+            'success': False,
+            'message': 'Metodo non permesso. Utilizza POST.'
+        }, status=405)
+
+    try:
+        data=json.loads(request.body)
+
+        tableid = "checklist"
+
+        new_record = UserRecord(tableid)
+
+        return HttpResponse({
+            'success': True,
+            'message': 'Dati ricevuti e processati con successo.'
+        }, status=200)
+
+    except Exception as e:
+        return HttpResponse({
+            'success': False,
+            'message': f'Si è verificato un errore inatteso: {str(e)}'
+        }, status=500)
+    
+def save_nota_spesa(request):
+    if request.method != 'POST':
+        return HttpResponse({
+            'success': False,
+            'message': 'Metodo non permesso. Utilizza POST.'
+        }, status=405)
+
+    try:
+        data=json.loads(request.body)
+
+        return HttpResponse({
+            'success': True,
+            'message': 'Dati ricevuti e processati con successo.'
+        }, status=200)
+
+    except Exception as e:
+        return HttpResponse({
+            'success': False,
+            'message': f'Si è verificato un errore inatteso: {str(e)}'
+        }, status=500)
+    
+def save_preventivo_carrozzeria(request):
+    if request.method != 'POST':
+        return HttpResponse({
+            'success': False,
+            'message': 'Metodo non permesso. Utilizza POST.'
+        }, status=405)
+
+    try:
+        data=json.loads(request.body)
+
+        tableid = "preventivocarrozzeria"
+
+        new_record = UserRecord(tableid)
+        new_record.values['modello'] = data.get('modello','')
+        new_record.values['telaio'] = data.get('telaio','')
+        new_record.values['targa'] = data.get('targa','')
+        new_record.values['nomeutente'] = data.get('utente','')
+
+        # new_record.save()
+
+        return HttpResponse({
+            'success': True,
+            'message': 'Dati ricevuti e processati con successo.'
+        }, status=200)
+    except Exception as e:
+        return HttpResponse({
+            'success': False,
+            'message': f'Si è verificato un errore inatteso: {str(e)}'
+        }, status=500)
+    
+def save_nuova_auto(request):
+    if request.method != 'POST':
+        return HttpResponse({
+            'success': False,
+            'message': 'Metodo non permesso. Utilizza POST.'
+        }, status=405)
+
+    try:
+        data=json.loads(request.body)
+
+        tableid = "formautonuove"
+
+        new_record = UserRecord(tableid)
+        new_record.values['modello'] = data.get('modello', '')
+        new_record.values['telaio'] = data.get('telaio', '')
+        new_record.values['targa'] = data.get('targa', '')
+        new_record.values['nomeutente'] = data.get('utente', '')
+
+        # new_record.save()
+
+        return HttpResponse({
+            'success': True,
+            'message': 'Dati ricevuti e processati con successo.'
+        }, status=200)
+    except Exception as e:
+        return HttpResponse({
+            'success': False,
+            'message': f'Si è verificato un errore inatteso: {str(e)}'
+        }, status=500)
+    
+def save_prova_auto(request):
+    if request.method != 'POST':
+        return HttpResponse({
+            'success': False,
+            'message': 'Metodo non permesso. Utilizza POST.'
+        }, status=405)
+
+    try:
+        data=json.loads(request.body)
+
+        tableid = "proveauto"
+
+        new_record = UserRecord(tableid)
+        
+        new_record.values['barcode'] = data.get('barcode','')
+        new_record.values['telaio'] = data.get('telaio','')
+        new_record.values['modello'] = data.get('modello','')
+        new_record.values['targa'] = data.get('targa','')
+        new_record.values['cognome'] = data.get('cognome','')
+        new_record.values['nome'] = data.get('nome','')
+        new_record.values['email'] = data.get('email','')
+        new_record.values['via'] = data.get('via','')
+        new_record.values['cap'] = data.get('cap','')
+        new_record.values['citta'] = data.get('citta','')
+        new_record.values['telefono'] = data.get('telefono','')
+        new_record.values['kmpartenza'] = data.get('kmpartenza','')
+
+        if (data.get('datapartenza',None)):
+            new_record.values['datapartenza'] = parse_datetime(data.get('datapartenza',None)).date()
+
+        new_record.values['kmarrivo'] = data.get('kmarrivo','')
+
+        if (data.get('dataarrivo',None)):
+            new_record.values['dataarrivo'] = parse_datetime(data.get('dataarrivo',None)).date()
+        new_record.values['note'] = data.get('note','')
+
+        # new_record.save()
+
+        return HttpResponse({
+            'success': True,
+            'message': 'Dati ricevuti e processati con successo.'
+        }, status=200)
+    except Exception as e:
+        return HttpResponse({
+            'success': False,
+            'message': f'Si è verificato un errore inatteso: {str(e)}'
+        }, status=500)
+    
+def get_prove_auto(request): 
+    results = []
+
+    data=json.loads(request.body)
+
+    tableid = 'proveauto'
+    table = UserTable(tableid)
+    rows = table.get_records()
+
+    for row in rows:
+        cliente = f"{row['nome']} {row['nome']}"
+
+        results.append({
+            'id': row['id'],
+            'cliente': cliente,
+            'venditore': row['venditore'],
+            'data': row['datapartenza'],
+            'highlight': False,
+        })
+
+    return JsonResponse({"proveAuto": results}, safe=False)
+
+def search_scheda_auto(request): 
+    results = []
+
+    data=json.loads(request.body)
+
+    return JsonResponse({"proveAuto": results}, safe=False)
