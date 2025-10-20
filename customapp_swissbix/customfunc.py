@@ -460,6 +460,55 @@ def save_record_fields(tableid,recordid):
         save_record_fields(tableid='deal', recordid=dealline_record.values['recordiddeal_'])
 
 
+    # ---PROJECT
+    if tableid == 'project':
+        project_record = UserRecord('project', recordid)
+        completed = project_record.values['completed']
+        deal_record = UserRecord('deal', project_record.values['recordiddeal_'])
+        expectedhours = project_record.values['expectedhours']
+        usedhours = 0
+        residualhours = 0
+        fixedpricehours = 0
+        servicecontracthours = 0
+        bankhours = 0
+        invoicedhours = 0
+        timesheet_records_list = project_record.get_linkedrecords_dict('timesheet')
+        for timesheet_record_dict in timesheet_records_list:
+            usedhours = usedhours + timesheet_record_dict['totaltime_decimal'] or 0
+            if timesheet_record_dict['invoicestatus'] == 'Fixed Price Project':
+                fixedpricehours = fixedpricehours + timesheet_record_dict['totaltime_decimal'] or 0
+            if timesheet_record_dict['invoicestatus'] == 'Service Contract: Monte Ore':
+                bankhours = bankhours + timesheet_record_dict['totaltime_decimal'] or 0
+            if timesheet_record_dict['invoicestatus'] == 'Invoiced':
+                invoicedhours = invoicedhours + timesheet_record_dict['totaltime_decimal'] or 0
+        if expectedhours:
+            residualhours = expectedhours - usedhours
+        project_record.values['usedhours'] = usedhours
+        project_record.values['residualhours'] = residualhours
+        project_record.save()
+
+
+        #collegamento allegati del deal al progetto
+        attachment_records = deal_record.get_linkedrecords_dict(linkedtable='attachment')
+        for attachment_record_dict in attachment_records:
+            attachment_record = UserRecord('attachment', attachment_record_dict['recordid_'])
+            attachment_record.values['recordidproject_'] = project_record.recordid
+            attachment_record.save()
+
+        #aggiornamento deal
+        #TODO valutare se ha senso aggiornarlo qui o meglio spostare direttamente nel save del deal
+        if not isempty(deal_record.recordid):
+            deal_record.values['usedhours'] = usedhours
+            deal_record.values['fixedpricehours'] = fixedpricehours
+            deal_record.values['servicecontracthours'] = servicecontracthours
+            deal_record.values['bankhours'] = bankhours
+            deal_record.values['invoicedhours'] = invoicedhours
+            deal_record.values['residualhours'] = residualhours
+            deal_record.values['projectcompleted'] = completed
+            deal_record.save()
+            save_record_fields(tableid='deal', recordid=deal_record.recordid)
+
+
     # ---TIMETRACKING---
     if tableid == 'timetracking':
         timetracking_record = UserRecord('timetracking', recordid)
