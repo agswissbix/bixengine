@@ -336,8 +336,8 @@ def save_service_man(request):
         dt_object = parse_datetime(data_string_iso)
 
         if dt_object: 
-            new_record.data = dt_object.date()
-            new_record.ora = dt_object.time()
+            new_record.values['data'] = dt_object.date()
+            new_record.values['ora'] = dt_object.time().strftime("%H:%M:%S.%f")
 
         new_record.values['nomeutente'] = data.get('utente', '')
 
