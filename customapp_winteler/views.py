@@ -413,12 +413,23 @@ def save_checklist(request):
 
         new_record.values['pneumatici_antsx_mm'] = pneumatici.get('antSx').get('mm')
         new_record.values['pneumatici_antdx_mm'] = pneumatici.get('antDx').get('mm')
-        new_record.values['pneumatici_antsx_data'] = pneumatici.get('antSx').get('data')
-        new_record.values['pneumatici_antdx_data'] = pneumatici.get('antDx').get('data')
+
+        pneumatici_antsx_data =  parse_datetime(pneumatici.get('antSx').get('data'))
+        pneumatici_antdx_data = parse_datetime(pneumatici.get('antDx').get('data'))
+        if pneumatici_antdx_data:
+            new_record.values['pneumatici_antsx_data'] = pneumatici_antsx_data.date()
+        if pneumatici_antdx_data:
+            new_record.values['pneumatici_antdx_data'] = pneumatici_antdx_data.date()
+
         new_record.values['pneumatici_postsx_mm'] = pneumatici.get('postSx').get('mm')
         new_record.values['pneumatici_postdx_mm'] = pneumatici.get('postDx').get('mm')
-        new_record.values['pneumatici_postsx_data'] = pneumatici.get('postSx').get('data')
-        new_record.values['pneumatici_postdx_data'] = pneumatici.get('postDx').get('data')
+
+        pneumatici_postsx_data =  parse_datetime(pneumatici.get('postSx').get('data'))
+        pneumatici_postdx_data = parse_datetime(pneumatici.get('postDx').get('data'))
+        if pneumatici_postsx_data:
+            new_record.values['pneumatici_postsx_data'] = pneumatici_postsx_data.date()
+        if pneumatici_postdx_data:
+            new_record.values['pneumatici_postdx_data'] = pneumatici_postdx_data.date()
 
         # Cerchi
         cerchi = controlloOfficina.get('cerchi')
@@ -642,6 +653,14 @@ def get_prove_auto(request):
 
     data=json.loads(request.body)
 
+    filter = data.get('filter')
+
+    if (filter == 'precompilate') :
+        print(filter)
+
+    if (filter == 'in corso') :
+        print(filter)
+
     tableid = 'proveauto'
     table = UserTable(tableid)
     rows = table.get_records()
@@ -692,15 +711,14 @@ def get_venditori(request):
     # rows = table.get_records()
 
     # for row in rows:
-    #     cliente = f"{row['nome']} {row['nome']}"
-
     #     results.append({
     #         'id': row['id'],
-    #         'cliente': cliente,
-    #         'venditore': row['venditore'],
-    #         'data': row['datapartenza'],
-    #         'highlight': False,
+    #         'label': row['nome'],
     #     })
+
+    results.append({ 'value': 'Giulio Verdi', 'label': 'Giulio Verdi' })
+    results.append({ 'value': 'Anna Rossi', 'label': 'Anna Rossi' })
+    results.append({ 'value': 'Mario Bianchi', 'label': 'Mario Bianchi' })
 
     return JsonResponse({"venditori": results}, safe=False)
 
@@ -709,21 +727,33 @@ def get_scheda_auto(request):
 
     data=json.loads(request.body)
 
-    # tableid = 'proveauto'
+    id = data.get('id')
+
+    if not id:
+        return JsonResponse(
+            {'messaggio': 'Id non valido'}, 
+            status=400 
+        )
+
+    # tableid = 'schedeauto'
     # table = UserTable(tableid)
-    # rows = table.get_records()
+    
+    results.append({
+        'id': '12345',
+        'dati': {
+            'barcode': '12345',
+            'modello': 'GLA',
+            'libro_auto': '113200',
+            'numero_wb': '0157100091',
+            'telaio': 'W1N2477541J3074666',
+            'designazione':'Mercedes-AMG GLA 45 S 4MATIC+',
+        },
+        'documento_principale': {
+            'titolo': 'Documento Principale',
+            'path': 'il_mio_file.pdf',
+        },
+        'allegati': [],
+        'collegati': [],
+    })
 
-    # for row in rows:
-    #     cliente = f"{row['nome']} {row['nome']}"
-
-    #     results.append({
-    #         'id': row['id'],
-    #         'cliente': cliente,
-    #         'venditore': row['venditore'],
-    #         'data': row['datapartenza'],
-    #         'highlight': False,
-    #     })
-
-    return JsonResponse({"scheda_auto": results}, safe=False)
-
-
+    return JsonResponse({"scheda_auto": results[0]}, safe=False)
