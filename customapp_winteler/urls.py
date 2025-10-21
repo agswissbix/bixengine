@@ -21,5 +21,6 @@ urlpatterns = [
     path('save_prova_auto/', save_prova_auto, name='save_prova_auto'),
     path('get_prove_auto/', get_prove_auto, name='get_prove_auto'),
     path('search_scheda_auto/', search_scheda_auto, name='search_scheda_auto'),
-    
+    path('get_venditori/', get_venditori, name='get_venditori'),
+    path('get_scheda_auto/', get_scheda_auto, name='get_scheda_auto'),
 ]

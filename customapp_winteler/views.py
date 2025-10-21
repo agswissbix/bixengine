@@ -508,11 +508,21 @@ def save_nota_spesa(request):
     try:
         data=json.loads(request.body)
 
+        tableid = ''
+
+        # new_record = UserRecord(tableid)
+
+        # new_record.values('') = data.get('tipo', '')
+        # new_record.values('') = data.get('importo')
+        # new_record.values('') = data.get('pagamento', '')
+        # new_record.values('') = data.get('note')
+
+        # new_record.save()
+
         return HttpResponse({
             'success': True,
             'message': 'Dati ricevuti e processati con successo.'
         }, status=200)
-
     except Exception as e:
         return HttpResponse({
             'success': False,
@@ -654,9 +664,25 @@ def search_scheda_auto(request):
 
     data=json.loads(request.body)
 
-    return JsonResponse({"proveAuto": results}, safe=False)
+    barcode = data.get('barcode')
+    telaio = data.get('telaio')
 
-def get_vanditori(request): 
+    if not barcode and not telaio:
+        return JsonResponse(
+            {'messaggio': 'Nessun dato fortnito'}, 
+            status=400 
+        )
+
+    results.append({
+        'id': "12345",
+        'barcode': "12345",
+        'modello': "12345",
+        'telaio': "12345",
+    })
+
+    return JsonResponse({"scheda_auto": results[0]}, safe=False)
+
+def get_venditori(request): 
     results = []
 
     data=json.loads(request.body)
@@ -677,3 +703,27 @@ def get_vanditori(request):
     #     })
 
     return JsonResponse({"venditori": results}, safe=False)
+
+def get_scheda_auto(request):
+    results = []
+
+    data=json.loads(request.body)
+
+    # tableid = 'proveauto'
+    # table = UserTable(tableid)
+    # rows = table.get_records()
+
+    # for row in rows:
+    #     cliente = f"{row['nome']} {row['nome']}"
+
+    #     results.append({
+    #         'id': row['id'],
+    #         'cliente': cliente,
+    #         'venditore': row['venditore'],
+    #         'data': row['datapartenza'],
+    #         'highlight': False,
+    #     })
+
+    return JsonResponse({"scheda_auto": results}, safe=False)
+
+
