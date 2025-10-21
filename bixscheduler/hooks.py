@@ -128,7 +128,7 @@ def create_scheduler_log(task):
         scheduler_log.values['hour'] = lastupdate_date.strftime('%H:%M:%S')
 
         # Salva il record nel DB
-        scheduler_log.save()
+        scheduler_log.save_safe()
             
     except Exception as e:
         logger.error(f"[HOOK ERROR] Errore nel salvataggio: {e}")

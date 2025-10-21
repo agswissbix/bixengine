@@ -58,6 +58,13 @@ class HelpderDB:
         with connections['default'].cursor() as cursor:
             cursor.execute(sql)
         return True
+    
+    @classmethod 
+    def sql_execute_safe(cls,sql,params_list):
+        params_tuple = tuple(params_list)
+        with connections['default'].cursor() as cursor:
+            cursor.execute(sql,params_tuple)
+        return True
    
     @classmethod 
     def dictfetchall(cls,cursor):
