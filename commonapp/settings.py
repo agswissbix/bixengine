@@ -10,6 +10,7 @@ from django.db import transaction
 from django.db.models.functions import Coalesce
 from django.db.models import F, OuterRef, Subquery, IntegerField
 from django.utils import timezone
+from commonapp.helper import *
 
 
 def get_users_and_groups(request):
@@ -119,6 +120,10 @@ def get_master_linked_tables(request):
 def settings_table_settings(request):
     tableid = json.loads(request.body).get('tableid')
     userid = json.loads(request.body).get('userid')
+
+    if not userid:
+        userid = Helper.get_userid(request)
+
     tablesettings_obj = TableSettings(tableid=tableid, userid=userid)
     tablesettings = tablesettings_obj.get_settings()
 
