@@ -138,6 +138,41 @@ class TableSettings:
             'options': ['Tabella', 'Kanban', 'Pivot', 'Calendario','MatrixCalendar', 'Planner' , 'Gallery'],
             'value': 'Tabella'
         },
+        'table_planner_resource_field': {
+            'type': 'select',
+            'options': [],
+            'value': ''
+        },
+        'table_planner_title_field': {
+            'type': 'select',
+            'options': [],
+            'value': ''
+        },
+        'table_planner_date_from_field': {
+            'type': 'select',
+            'options': [],
+            'value': ''
+        },
+        'table_planner_date_to_field': {
+            'type': 'select',
+            'options': [],
+            'value': ''
+        },
+        'table_planner_time_from_field': {
+            'type': 'select',
+            'options': [],
+            'value': ''
+        },
+        'table_planner_time_to_field': {
+            'type': 'select',
+            'options': [],
+            'value': ''
+        },
+        'table_planner_default_view': {
+            'type': 'select',
+            'options': ['day', 'week', 'month'],
+            'value': 'week'
+        },
         'popup_layout': {
             'type': 'select',
             'options': ['standard_dati', 'standard_allegati', 'allargata'],
@@ -354,61 +389,105 @@ class TableSettings:
         self.settings = self.get_settings()
 
     def get_settings(self):
+        # Copia profonda delle impostazioni
         settings_copy = {key: value.copy() for key, value in self.settings.items()}
 
-        fields = SysField.objects.filter(tableid=self.tableid).all()
-    
-        # LOGICA PER 'default_orderby'
-        if fields:
-            orderby_options = []
-            for field in fields:
-                orderby_options.append(str(field.fieldid)) 
-            
-            settings_copy['default_orderby']['options'] = orderby_options
-            
-            if orderby_options and settings_copy['default_orderby']['value'] == '':
-                settings_copy['default_orderby']['value'] = orderby_options[0]
+        self._populate_field_options(settings_copy)
 
-        sql = f"SELECT settingid, value FROM sys_user_table_settings WHERE tableid='{self.tableid}' AND userid='{self.userid}'"
-        rows = self.db_helper.sql_query(sql)
+        # Carica le impostazioni utente dalla tabella sys_user_table_settings
+        user_settings = SysUserTableSettings.objects.filter(
+            tableid=self.tableid,
+            userid=self.userid
+        ).values('settingid', 'value')
 
-        for setting_id, setting_info in settings_copy.items():
-            for row in rows:
+        # Se non esistono impostazioni per l'utente, usa quelle dell'utente admin (1)
+        if not user_settings.exists():
+            user_settings = SysUserTableSettings.objects.filter(
+                tableid=self.tableid,
+                userid=1
+            ).values('settingid', 'value')
 
-                if setting_id == row['settingid']:
-                    for setting_id, setting_info in settings_copy.items():
-                        for row in rows:
-                            if setting_id == row['settingid']:
-
-                                if setting_info['type'] == 'multiselect':
-                                    # Splitto il valore per passare una lista direttamente al template
-                                    selected_values = row['value'].split(',') if row['value'] else []
-                                    setting_info['value'] = selected_values  # <-- IMPORTANTE
-                                    for opt in setting_info['options']:
-                                        opt['selected'] = str(opt['name']) in selected_values
-
-                                else:
-                                    setting_info['value'] = row['value']
-
-
-                    if row['settingid'] == 'default_viewid':
-                        with connection.cursor() as cursor:
-                            cursor.execute(f"SELECT * FROM sys_view WHERE tableid='{self.tableid}'")
-                            view_options = dictfetchall(cursor)
-
-                            # Inizializza 'options' come una lista di dizionari in 'setting_info'
-                            setting_info['options'] = []
-
-                            if view_options:
-                                for option in view_options:
-                                    setting_info['options'].append({
-                                        'name': str(option['name']),
-                                        'id': str(option['id'])
-                                    })
-                            else:
-                                setting_info['value'] = '0'
+        self._apply_user_settings(settings_copy, user_settings)
 
         return settings_copy
+
+
+    def _populate_field_options(self, settings_copy):
+        """Popola le opzioni dei campi planner e orderby nei settings."""
+        fields = SysField.objects.filter(tableid=self.tableid).all()
+        if not fields:
+            return
+
+        orderby_options = []
+        planner_date_options = []
+        planner_time_options = []
+        planner_resource_options = []
+        planner_title_options = []
+
+        for field in fields:
+            field_id_str = str(field.fieldid)
+            orderby_options.append(field_id_str)
+            planner_resource_options.append(field_id_str)
+            planner_title_options.append(field_id_str)
+
+            if field.fieldtypewebid == 'Data':
+                planner_date_options.append(field_id_str)
+            elif field.fieldtypewebid == 'Ora':
+                planner_time_options.append(field_id_str)
+
+        # Imposta le opzioni
+        settings_copy['default_orderby']['options'] = orderby_options
+        settings_copy['table_planner_title_field']['options'] = planner_title_options
+        settings_copy['table_planner_resource_field']['options'] = planner_resource_options
+        settings_copy['table_planner_date_from_field']['options'] = planner_date_options
+        settings_copy['table_planner_date_to_field']['options'] = planner_date_options
+        settings_copy['table_planner_time_from_field']['options'] = planner_time_options
+        settings_copy['table_planner_time_to_field']['options'] = planner_time_options
+
+        # Helper interno
+        def set_default_value(setting_key, options):
+            if options and settings_copy[setting_key]['value'] == '':
+                settings_copy[setting_key]['value'] = options[0]
+
+        set_default_value('table_planner_title_field', planner_title_options)
+        set_default_value('table_planner_date_from_field', planner_date_options)
+        set_default_value('table_planner_date_to_field', planner_date_options)
+        set_default_value('table_planner_time_from_field', planner_time_options)
+        set_default_value('table_planner_time_to_field', planner_time_options)
+        set_default_value('table_planner_resource_field', planner_resource_options)
+        set_default_value('default_orderby', orderby_options)
+
+
+    def _apply_user_settings(self, settings_copy, user_settings):
+        """Applica i valori delle impostazioni utente ai settings."""
+        for row in user_settings:
+            setting_id = row['settingid']
+            if setting_id not in settings_copy:
+                continue
+
+            setting_info = settings_copy[setting_id]
+
+            if setting_info['type'] == 'multiselect':
+                selected_values = row['value'].split(',') if row['value'] else []
+                setting_info['value'] = selected_values
+                for opt in setting_info['options']:
+                    opt['selected'] = str(opt['name']) in selected_values
+            else:
+                setting_info['value'] = row['value']
+
+            # Caso speciale per default_viewid
+            if setting_id == 'default_viewid':
+                with connection.cursor() as cursor:
+                    cursor.execute(f"SELECT * FROM sys_view WHERE tableid='{self.tableid}'")
+                    view_options = dictfetchall(cursor)
+
+                setting_info['options'] = [
+                    {'name': str(option['name']), 'id': str(option['id'])}
+                    for option in view_options
+                ] if view_options else []
+
+                if not view_options:
+                    setting_info['value'] = '0'
 
     def save(self):
         table_settings = self.settings

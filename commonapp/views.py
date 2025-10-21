@@ -1002,36 +1002,52 @@ def get_records_matrixcalendar(request):
         'resources': [],
         'events': [],
         'unplannedEvents': [],
-        'viewMode': 'Settimanale'
+        'viewMode': 'Settimanale',
+        'counter': len(record_objects),
     }
 
     processed_resources = set()
     
-    # Assegniamo un colore diverso per ogni tipo di assenza per chiarezza visiva
-    absence_colors = {
-        'Ferie': '#3b82f6',      # Blu
-        'Malattia': '#ef4444',   # Rosso
-        'Permesso': '#eab308',   # Giallo
-        'default': '#6b7280'     # Grigio per tipi non specificati
-    }
+    available_colors = [
+        '#3b82f6',  # Blu
+        '#ef4444',  # Rosso
+        '#eab308',  # Giallo
+        '#10b981',  # Verde
+        '#8b5cf6',  # Viola
+        '#f97316',  # Arancione
+        '#ec4899',  # Rosa
+        '#14b8a6',  # Turchese
+    ]
+
+    # Dizionario globale o definito prima del loop
+    dynamic_colors = {}
+
+    def get_color_for_title(title):
+        if title not in dynamic_colors:
+            if available_colors:
+                # Se ci sono ancora colori disponibili, prendine uno
+                color = available_colors.pop(0)
+            else:
+                # Se finiscono, genera un colore casuale (fallback)
+                color = "#{:06x}".format(random.randint(0, 0xFFFFFF))
+            dynamic_colors[title] = color
+        return dynamic_colors[title]
 
     tablesettings_obj = TableSettings(tableid=tableid, userid=userid)
     tablesettings = tablesettings_obj.get_settings()
 
     response_data_dev['viewMode'] = tablesettings.get('table_planner_default_view', 'week').get('value')
 
+    title_field = tablesettings.get('table_planner_title_field').get('value')
+    resource_field = tablesettings.get('table_planner_resource_field').get('value')
+    date_from_field = tablesettings.get('table_planner_date_from_field').get('value')
+    date_to_field = tablesettings.get('table_planner_date_to_field').get('value')
+    time_from_field = tablesettings.get('table_planner_time_from_field').get('value')
+    time_to_field = tablesettings.get('table_planner_time_to_field').get('value')
+    if not date_from_field:
+        return JsonResponse({"error": "Non è stato configurato alcun campo di tipo data."}, status=400)
+
     for record in record_objects:
-        # Estrae il campo risorsa dalle impostazioni della tabella
-
-        resource_field = tablesettings.get('table_planner_resource_field', 'recordiddipendente_').get('value')
-        date_from_field = tablesettings.get('table_planner_date_from_field').get('value')
-        date_to_field = tablesettings.get('table_planner_date_to_field').get('value')
-        time_from_field = tablesettings.get('table_planner_time_from_field').get('value')
-        time_to_field = tablesettings.get('table_planner_time_to_field').get('value')
-
-        if not date_from_field:
-            return JsonResponse({"error": "Non è stato configurato alcun campo di tipo data."}, status=400)
-
         # Estrae il valore della risorsa dal record corrente
         resource_id = record.fields[resource_field]['value']
         resource_value = record.fields[resource_field]['convertedvalue']
@@ -1047,11 +1063,11 @@ def get_records_matrixcalendar(request):
         # 3. Creazione degli Eventi (Assenze)
         record_id = record.recordid
         event_id = record.fields['id']['convertedvalue']
-        event_title = record.fields['tipo_assenza']['convertedvalue']
+        event_title = record.fields[title_field]['convertedvalue']
         start_date = record.fields[date_from_field]['convertedvalue'] if date_from_field else None
         end_date = record.fields[date_to_field]['convertedvalue'] if date_to_field else start_date
-        start_time = record.fields[time_from_field]['convertedvalue'] if time_from_field else datetime.time(0,0).strftime('%H:%M:%S')
-        end_time = record.fields[time_to_field]['convertedvalue'] if time_to_field else datetime.time(23,59).strftime('%H:%M:%S')
+        start_time = record.fields[time_from_field]['convertedvalue'] if time_from_field else datetime.time(8,0).strftime('%H:%M:%S')
+        end_time = record.fields[time_to_field]['convertedvalue'] if time_to_field else datetime.time(12,0).strftime('%H:%M:%S')
 
         
         print(f"Processing event for {resource_value}: {event_title} from {start_date} to {end_date}")
@@ -1063,7 +1079,7 @@ def get_records_matrixcalendar(request):
             'description': f"Assenza per {event_title} di {resource_value}",
             'start': Helper.to_iso_datetime(start_date, start_time),
             'end': Helper.to_iso_datetime(end_date, end_time),
-            'color': absence_colors.get(event_title, absence_colors['default']),
+            'color': get_color_for_title(event_title),
             'recordid': str(record_id),
         }
 
@@ -1076,33 +1092,96 @@ def get_records_matrixcalendar(request):
 
 
 def matrixcalendar_save_record(request):
-    print('Function: matrixcalendar_save_record')
+    """
+    Salva l'aggiornamento di un evento del calendario in una tabella dinamica.
+    Campi richiesti:
+        - tableid (obbligatorio)
+        - event.id (obbligatorio)
+        - event.startdate (obbligatorio)
+        - event.resourceid (obbligatorio)
+    Campi opzionali:
+        - event.enddate (usato se presente + campi planner associati configurati)
+        - time fields, date_to_field (se configurati in TableSettings)
+    """
+
+    # --- Parsing input JSON ---
     try:
         data = json.loads(request.body)
-        tableid = data.get("tableid")
-        event = data.get("event")
+    except json.JSONDecodeError:
+        return JsonResponse({"success": False, "detail": "JSON non valido"}, status=400)
 
-        if not event or not tableid:
-            return JsonResponse({"success": False, "detail": "recordid o tableid mancante"}, status=400)
+    tableid = data.get("tableid")
+    event = data.get("event")
 
-        record = UserRecord(tableid, event['id'])
-        if not record:
-            return JsonResponse({"success": False, "detail": "Record non trovato"}, status=404)
-        
-        print(record.values['dal'])
+    if not tableid or not event:
+        return JsonResponse({"success": False, "detail": "Parametri mancanti (tableid o event)"}, status=400)
 
-        # dt_obj = datetime.strptime('2025-08-26T00:00:00.000Z', '%Y-%m-%dT%H:%M:%S.%fZ')
-        # data_finale = (dt_obj + timedelta(days=1)).date()
-        record.values['dal'] = datetime.datetime.fromisoformat(event['startdate'].replace("Z", "+00:00")).date()
-        record.values['al'] = datetime.datetime.fromisoformat(event['enddate'].replace("Z", "+00:00")).date()
-        record.values['recordiddipendente_'] = event['resourceid']
+    record_id = event.get('id')
+    start_date_str = event.get('startdate')
+    end_date_str = event.get('enddate')
+    resource_id = event.get('resourceid')
+
+    # --- Validazioni minime ---
+    if not record_id:
+        return JsonResponse({"success": False, "detail": "ID record mancante"}, status=400)
+    # if not resource_id:
+        # return JsonResponse({"success": False, "detail": "Resource ID mancante"}, status=400)
+
+    # --- Recupero record dinamico ---
+    record = UserRecord(tableid, record_id)
+    if not record:
+        return JsonResponse({"success": False, "detail": "Record non trovato"}, status=404)
+
+    # --- Recupero impostazioni tabella ---
+    userid = Helper.get_userid(request)
+    tablesettings_obj = TableSettings(tableid=tableid, userid=userid)
+    tablesettings = tablesettings_obj.get_settings()
+
+    resource_field = tablesettings.get('table_planner_resource_field', {}).get('value')
+    date_from_field = tablesettings.get('table_planner_date_from_field', {}).get('value')
+    date_to_field = tablesettings.get('table_planner_date_to_field', {}).get('value')
+    time_from_field = tablesettings.get('table_planner_time_from_field', {}).get('value')
+    time_to_field = tablesettings.get('table_planner_time_to_field', {}).get('value')
+
+    # --- Validazione campi obbligatori configurati ---
+    if not resource_field or not date_from_field:
+        return JsonResponse({
+            "success": False,
+            "detail": "Campi planner obbligatori non configurati (resource_field o date_from_field)"
+        }, status=400)
+
+    # --- Parsing date ---
+    try:
+        start_dt = None
+        if start_date_str:
+            start_dt = datetime.datetime.fromisoformat(start_date_str.replace("Z", "+00:00")).date()
+        end_dt = None
+        if end_date_str:
+            end_dt = datetime.datetime.fromisoformat(end_date_str.replace("Z", "+00:00")).date()
+    except ValueError:
+        return JsonResponse({"success": False, "detail": "Formato data/ora non valido"}, status=400)
+
+    # --- Aggiornamento valori record ---
+    try:
+        if date_from_field:
+            record.values[date_from_field] = start_dt
+
+        if date_to_field:
+            record.values[date_to_field] = end_dt
+
+        # Campi opzionali: orari
+        if time_from_field:
+            record.values[time_from_field] = start_dt.strftime('%H:%M:%S')
+        if time_to_field and end_dt:
+            record.values[time_to_field] = end_dt.strftime('%H:%M:%S')
+
+        if resource_field and resource_id:
+            record.values[resource_field] = resource_id
+
         record.save()
 
         return JsonResponse({"success": True, "detail": "Record aggiornato con successo"})
-    
-    except json.JSONDecodeError:
-        return JsonResponse({"success": False, "detail": "JSON non valido"}, status=400)
-    
+
     except Exception as e:
         return JsonResponse({"success": False, "detail": f"Errore interno: {str(e)}"}, status=500)
 

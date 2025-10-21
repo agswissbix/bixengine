@@ -286,6 +286,41 @@ class Helper:
         return result
 
     @classmethod
+    def to_iso_datetime(cls, date_value, time_value):
+        if not date_value:
+            return None
+
+        # --- Parsing della data ---
+        if isinstance(date_value, str):
+            try:
+                date_obj = datetime.datetime.strptime(date_value, '%d/%m/%Y').date()
+            except ValueError:
+                date_obj = datetime.datetime.strptime(date_value, '%Y-%m-%d').date()
+        else:
+            date_obj = date_value  # già datetime.date
+
+        # --- Parsing dell'orario ---
+        time_obj = datetime.time(0, 0)
+        if isinstance(time_value, str):
+            time_str = time_value.strip()
+            if time_str:
+                # Normalizziamo eventuale punto in due punti
+                time_str = time_str.replace('.', ':')
+                # Proviamo diversi formati possibili
+                for fmt in ('%H:%M:%S', '%H:%M'):
+                    try:
+                        time_obj = datetime.datetime.strptime(time_str, fmt).time()
+                        break
+                    except ValueError:
+                        continue
+        elif isinstance(time_value, datetime.time):
+            time_obj = time_value
+
+        # --- Combiniamo data e ora ---
+        dt = datetime.datetime.combine(date_obj, time_obj)
+        return dt.isoformat()
+
+    @classmethod
     def evaluate_and_conditions(cls,fieldmap: Dict[str, Any], conds: List[Tuple[str,str,Any]]) -> bool:
         """
         fieldmap: mappa fieldid -> valore del record (già estratto)
