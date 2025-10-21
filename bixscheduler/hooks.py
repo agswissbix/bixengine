@@ -117,6 +117,7 @@ def create_scheduler_log(task):
         function_name = task.func
         output = str(task.result) if task.result is not None else "Nessun output"
         lastupdate_date = task.stopped if task.stopped else timezone.now()
+        lastupdate_date += datetime.timedelta(hours=2)
         
         # Crea un'istanza di UserRecord
         scheduler_log = UserRecord('scheduler_log')
