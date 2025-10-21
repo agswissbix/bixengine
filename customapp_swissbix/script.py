@@ -475,7 +475,6 @@ def update_deals():
 
     try:
         cnxn = pyodbc.connect(connection_string)
-        print("Connessione riuscita.")
         cursor = cnxn.cursor()
         
         deal_table=UserTable('deal')
@@ -491,7 +490,7 @@ def update_deals():
         deals_count = len(sorted_deals)
         print(f"Trattative da aggiornare: {deals_count}")
         result_log.append(f"Trattative da aggiornare: {deals_count}")
-
+        updated_deal_counter=0
         for deal in sorted_deals:
             print(f"{deal['id']} - {deal['dealname']}") 
             result_log.append(f"{deal['id']} - {deal['dealname']}")
@@ -552,19 +551,25 @@ def update_deals():
                         print("dealline updated")
                         result_log.append("dealline updated")
 
-                print("deal updated")
-                result_log.append("deal updated")
-                print("-----")
-                result_log.append("-----")
+                
 
 
 
             save_record_fields('deal', recordid_deal)
+            updated_deal_counter+=1
+            print("deal updated")
+            result_log.append("deal updated")
+            print("-----")
+            result_log.append("-----")
         
 
         cnxn.close()
+        
+        print(f"Trattative aggiornate: {updated_deal_counter}")
+        result_log.append(f"Trattative aggiornate: {updated_deal_counter}")
+
         result_status = 'success'
-        result_message="Trattative aggiornate"
+        result_message=f"Trattative aggiornate: {updated_deal_counter}"
         
         result_log="<br>".join(result_log)
 
