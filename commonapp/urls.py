@@ -26,6 +26,7 @@ urlpatterns = [
     path('get_table_filters/', get_table_filters, name='get_table_filters'),
     path('get_calendar_records/', get_calendar_records, name='get_calendar_records'),
     path('get_records_matrixcalendar/', get_records_matrixcalendar, name='get_records_matrixcalendar'),
+    path('matrixcalendar_save_record/', matrixcalendar_save_record, name='matrixcalendar_save_record'),
     path('get_pitservice_pivot_lavanderia/', get_pitservice_pivot_lavanderia, name='get_pitservice_pivot_lavanderia'),
     path('save_record_fields/', save_record_fields, name='save_record_fields'),
     path('get_table_views/', get_table_views, name='get_table_views'),
