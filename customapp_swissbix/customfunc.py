@@ -533,7 +533,7 @@ def save_record_fields(tableid,recordid):
             timetracking_record.values['start'] =  datetime.now().strftime("%H:%M")
         timetracking_record.save()
 
-    # ------
+    # ---ATTACHMENT---
     if tableid == 'attachment':
         attachment_record = UserRecord('attachment', recordid)
         filename= attachment_record.values['filename']
@@ -568,7 +568,21 @@ def save_record_fields(tableid,recordid):
                     # Gestisci altri possibili errori (es. permessi)
                     print(f"ERRORE durante la copia del file: {e}")
         
-
+    # ---ASSENZE---
+    if tableid == 'assenze':
+        assenza_record = UserRecord('assenze', recordid)
+        tipo_assenza=assenza_record.values['tipo_assenza']
+        if tipo_assenza!='Malattia':
+            ore_assenza= Helper.safe_float(assenza_record.values['ore'])
+            giorni_assenza = ore_assenza / 8
+            dipendente_recordid = assenza_record.values['recordiddipendente_']
+            dipendente_record = UserRecord('dipendente', dipendente_recordid)
+            saldovacanze_attuale=Helper.safe_float(dipendente_record.values['saldovacanze'])
+            if not saldovacanze_attuale:
+                saldovacanze_attuale=0
+            saldovacanze=saldovacanze_attuale-giorni_assenza
+            dipendente_record.values['saldovacanze'] = saldovacanze
+            dipendente_record.save()
 
 
 def card_task_pianificaperoggi(recordid):
