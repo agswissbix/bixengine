@@ -496,7 +496,7 @@ def save_checklist(request):
         new_record.values['osservazioni_carrozzeria'] = controlloCarrozzeria.get('osservazioni')
         new_record.values['stimacosti_carrozzeria'] = controlloCarrozzeria.get('stimaCosti')
 
-        # new_record.save()
+        new_record.save()
 
         return HttpResponse({
             'success': True,
@@ -530,6 +530,8 @@ def save_nota_spesa(request):
 
         # new_record.save()
 
+        # TODO: adapt to DB
+
         return HttpResponse({
             'success': True,
             'message': 'Dati ricevuti e processati con successo.'
@@ -557,8 +559,9 @@ def save_preventivo_carrozzeria(request):
         new_record.values['telaio'] = data.get('telaio','')
         new_record.values['targa'] = data.get('targa','')
         new_record.values['nomeutente'] = data.get('utente','')
+        # TODO: Check dove vanno messi i dati dei clienti (nome + cognome)
 
-        # new_record.save()
+        new_record.save()
 
         return HttpResponse({
             'success': True,
@@ -585,10 +588,10 @@ def save_nuova_auto(request):
         new_record = UserRecord(tableid)
         new_record.values['modello'] = data.get('modello', '')
         new_record.values['telaio'] = data.get('telaio', '')
-        new_record.values['targa'] = data.get('targa', '')
         new_record.values['nomeutente'] = data.get('utente', '')
+        # TODO: check targa (non presente in form)
 
-        # new_record.save()
+        new_record.save()
 
         return HttpResponse({
             'success': True,
@@ -629,14 +632,17 @@ def save_prova_auto(request):
 
         if (data.get('datapartenza',None)):
             new_record.values['datapartenza'] = parse_datetime(data.get('datapartenza',None)).date()
+            new_record.values['orapartenza'] = parse_datetime(data.get('datapartenza',None)).time().strftime("%H:%M:%S.%f")
 
         new_record.values['kmarrivo'] = data.get('kmarrivo','')
 
         if (data.get('dataarrivo',None)):
             new_record.values['dataarrivo'] = parse_datetime(data.get('dataarrivo',None)).date()
+            # new_record.values['oraarrivo'] = parse_datetime(data.get('datapartenza',None)).time().strftime("%H:%M:%S.%f")
+
         new_record.values['note'] = data.get('note','')
 
-        # new_record.save()
+        new_record.save()
 
         return HttpResponse({
             'success': True,
@@ -691,13 +697,26 @@ def search_scheda_auto(request):
             {'messaggio': 'Nessun dato fortnito'}, 
             status=400 
         )
+    
+    tableid = 'auto'
+    conditions = f""
 
-    results.append({
-        'id': "12345",
-        'barcode': "12345",
-        'modello': "12345",
-        'telaio': "12345",
-    })
+    # TODO: completare condizioni
+
+    auto = HelpderDB.sql_query_row(f"select * from user_{tableid} WHERE {conditions}")
+
+    if (auto):
+        results.append({
+            'id': auto["id"],
+            'barcode': auto["barcode"],
+            'modello': auto["modello"],
+            'telaio': auto["telaio"],
+        })
+    else:
+        return JsonResponse(
+            {'messaggio': 'Nessun dato trovato'}, 
+            status=404 
+        ) 
 
     return JsonResponse({"scheda_auto": results[0]}, safe=False)
 
@@ -735,25 +754,31 @@ def get_scheda_auto(request):
             status=400 
         )
 
-    # tableid = 'schedeauto'
-    # table = UserTable(tableid)
-    
-    results.append({
-        'id': '12345',
-        'dati': {
-            'barcode': '12345',
-            'modello': 'GLA',
-            'libro_auto': '113200',
-            'numero_wb': '0157100091',
-            'telaio': 'W1N2477541J3074666',
-            'designazione':'Mercedes-AMG GLA 45 S 4MATIC+',
-        },
-        'documento_principale': {
-            'titolo': 'Documento Principale',
-            'path': 'il_mio_file.pdf',
-        },
-        'allegati': [],
-        'collegati': [],
-    })
+    tableid = 'auto'
+    conditions = f"id = {id}"
+
+    auto = HelpderDB.sql_query_row(f"select * from user_{tableid} WHERE {conditions}")
+
+    if (auto):
+        results.append({
+            'id': auto["id"],
+            'dati': {
+                'barcode': auto["barcode"],
+                'modello': auto["modello"],
+                'libro_auto': '',
+                'numero_wb': auto["numerowb"],
+                'telaio': auto["telaio"],
+                'designazione':auto["designazione"],
+            },
+            'documento_principale': {
+            },
+            'allegati': [],
+            'collegati': [],
+        })
+    else:
+        return JsonResponse(
+            {'messaggio': 'Nessun dato trovato'}, 
+            status=404 
+        ) 
 
     return JsonResponse({"scheda_auto": results[0]}, safe=False)
