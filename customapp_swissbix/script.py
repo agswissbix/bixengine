@@ -566,7 +566,7 @@ def update_deals():
         result_status = 'success'
         result_message="Trattative aggiornate"
         
-        result_log=json.dumps(result_log, indent=4)
+        result_log="<br>".join(result_log)
 
     except pyodbc.Error as ex:
         sqlstate = ex.args[0]
