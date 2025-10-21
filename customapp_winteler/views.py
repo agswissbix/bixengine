@@ -382,11 +382,110 @@ def save_checklist(request):
         }, status=405)
 
     try:
-        data=json.loads(request.body)
+        data = json.loads(request.body)
+        checklist = data.get('checkList')
 
         tableid = "checklist"
 
         new_record = UserRecord(tableid)
+
+        # Dati cliente
+        daticliente = checklist.get('datiCliente')
+        new_record.values['nomedetentore'] = daticliente.get('nomedetentore')
+        new_record.values['via'] = daticliente.get('via')
+        new_record.values['telefono'] = daticliente.get('telefono')
+        new_record.values['email'] = daticliente.get('email')
+        new_record.values['venditore'] = daticliente.get('venditore', '')
+
+        # Dati vettura
+        datiVettura = checklist.get('datiVettura')
+        new_record.values['marca'] = datiVettura.get('marca')
+        new_record.values['modello'] = datiVettura.get('modello')
+        new_record.values['telaio'] = datiVettura.get('telaio')
+        new_record.values['targa'] = datiVettura.get('targa')
+        new_record.values['km'] = datiVettura.get('km')
+
+        # Controllo Officina
+        controlloOfficina = checklist.get('controlloOfficina')
+
+        # Pneumatici
+        pneumatici = controlloOfficina.get('pneumatici')
+
+        new_record.values['pneumatici_antsx_mm'] = pneumatici.get('antSx').get('mm')
+        new_record.values['pneumatici_antdx_mm'] = pneumatici.get('antDx').get('mm')
+        new_record.values['pneumatici_antsx_data'] = pneumatici.get('antSx').get('data')
+        new_record.values['pneumatici_antdx_data'] = pneumatici.get('antDx').get('data')
+        new_record.values['pneumatici_postsx_mm'] = pneumatici.get('postSx').get('mm')
+        new_record.values['pneumatici_postdx_mm'] = pneumatici.get('postDx').get('mm')
+        new_record.values['pneumatici_postsx_data'] = pneumatici.get('postSx').get('data')
+        new_record.values['pneumatici_postdx_data'] = pneumatici.get('postDx').get('data')
+
+        # Cerchi
+        cerchi = controlloOfficina.get('cerchi')
+        new_record.values['cerchi_antsx_stato'] = cerchi.get('antSx', '')
+        new_record.values['cerchi_antdx_stato'] = cerchi.get('antDx', '')
+        new_record.values['cerchi_postsx_stato'] = cerchi.get('postSx', '')
+        new_record.values['cerchi_postdx_stato'] = cerchi.get('postDx', '')
+
+        # Freni
+        freni = controlloOfficina.get('freni')
+        new_record.values['freni_antsx_perc'] = freni.get('antSx').get('perc')
+        new_record.values['freni_antdx_perc'] = freni.get('antDx').get('perc')
+        new_record.values['freni_antsx_stato'] = freni.get('antSx').get('stato', '')
+        new_record.values['freni_antdx_stato'] = freni.get('antDx').get('stato', '')
+        new_record.values['freni_postsx_perc'] = freni.get('postSx').get('perc')
+        new_record.values['freni_postdx_perc'] = freni.get('postDx').get('perc')
+        new_record.values['freni_postsx_stato'] = freni.get('postSx').get('stato', '')
+        new_record.values['freni_postdx_stato'] = freni.get('postDx').get('stato', '')
+
+        # Motore
+        motore = controlloOfficina.get('motore')
+        new_record.values['perditeolio'] = motore.get('olio').get('perdite', '')
+        new_record.values['perditeliquido'] = motore.get('liquido').get('perdite', '')
+        new_record.values['perditeolio_dove'] = motore.get('olio').get('dove')
+        new_record.values['perditeliquido_dove'] = motore.get('liquido').get('dove')
+
+        # Assale
+        assale = controlloOfficina.get('assale')
+        new_record.values['assale_anteriore'] = assale.get('anteriore').get('presente', '')
+        new_record.values['assale_posteriore'] = assale.get('posteriore').get('presente', '')
+        new_record.values['assale_anteriore_dove'] = assale.get('anteriore').get('dove', '')
+        new_record.values['assale_posteriore_dove'] = assale.get('posteriore').get('dove', '')
+
+        # Parabrezza
+        parabrezza = controlloOfficina.get('parabrezza')
+        new_record.values['parabrezza_danni'] = parabrezza.get('danni', '')
+        new_record.values['parabrezza_sostituzione'] = parabrezza.get('sostituzione', '')
+
+        # Batteria
+        batteria = controlloOfficina.get('batteria')
+        new_record.values['batteria_avviamento_stato'] = batteria.get('avviamento', '')
+        new_record.values['batteria_secondaria_stato'] = batteria.get('secondaria', '')
+
+        # Test Breve
+        new_record.values['test_breve'] = controlloOfficina.get('testBreve', '')
+
+        # MSI Plus
+        msiplus = controlloOfficina.get('msiPlus')
+        new_record.values['msi_plus'] = msiplus.get('presente', '')
+        new_record.values['msiplus_scadenza'] = msiplus.get('scadenza', '')
+
+        # Starclass
+        starclass = controlloOfficina.get('starclass')
+        new_record.values['starclass'] = starclass.get('presente', '')
+        new_record.values['starckass_scadenza'] = starclass.get('scadenza', '')
+
+        # Osservazioni officina
+        new_record.values['osservazioni_officina'] = controlloOfficina.get('osservazioni')
+        new_record.values['stimacosti_officina'] = controlloOfficina.get('stimaCosti')
+
+        # Controllo carrozzeria
+        controlloCarrozzeria = checklist.get('controlloCarrozzeria')
+        new_record.values['grandinata'] = controlloCarrozzeria.get('grandinata', '')
+        new_record.values['osservazioni_carrozzeria'] = controlloCarrozzeria.get('osservazioni')
+        new_record.values['stimacosti_carrozzeria'] = controlloCarrozzeria.get('stimaCosti')
+
+        # new_record.save()
 
         return HttpResponse({
             'success': True,
@@ -409,11 +508,21 @@ def save_nota_spesa(request):
     try:
         data=json.loads(request.body)
 
+        tableid = ''
+
+        # new_record = UserRecord(tableid)
+
+        # new_record.values('') = data.get('tipo', '')
+        # new_record.values('') = data.get('importo')
+        # new_record.values('') = data.get('pagamento', '')
+        # new_record.values('') = data.get('note')
+
+        # new_record.save()
+
         return HttpResponse({
             'success': True,
             'message': 'Dati ricevuti e processati con successo.'
         }, status=200)
-
     except Exception as e:
         return HttpResponse({
             'success': False,
@@ -555,4 +664,66 @@ def search_scheda_auto(request):
 
     data=json.loads(request.body)
 
-    return JsonResponse({"proveAuto": results}, safe=False)
+    barcode = data.get('barcode')
+    telaio = data.get('telaio')
+
+    if not barcode and not telaio:
+        return JsonResponse(
+            {'messaggio': 'Nessun dato fortnito'}, 
+            status=400 
+        )
+
+    results.append({
+        'id': "12345",
+        'barcode': "12345",
+        'modello': "12345",
+        'telaio': "12345",
+    })
+
+    return JsonResponse({"scheda_auto": results[0]}, safe=False)
+
+def get_venditori(request): 
+    results = []
+
+    data=json.loads(request.body)
+
+    # tableid = 'proveauto'
+    # table = UserTable(tableid)
+    # rows = table.get_records()
+
+    # for row in rows:
+    #     cliente = f"{row['nome']} {row['nome']}"
+
+    #     results.append({
+    #         'id': row['id'],
+    #         'cliente': cliente,
+    #         'venditore': row['venditore'],
+    #         'data': row['datapartenza'],
+    #         'highlight': False,
+    #     })
+
+    return JsonResponse({"venditori": results}, safe=False)
+
+def get_scheda_auto(request):
+    results = []
+
+    data=json.loads(request.body)
+
+    # tableid = 'proveauto'
+    # table = UserTable(tableid)
+    # rows = table.get_records()
+
+    # for row in rows:
+    #     cliente = f"{row['nome']} {row['nome']}"
+
+    #     results.append({
+    #         'id': row['id'],
+    #         'cliente': cliente,
+    #         'venditore': row['venditore'],
+    #         'data': row['datapartenza'],
+    #         'highlight': False,
+    #     })
+
+    return JsonResponse({"scheda_auto": results}, safe=False)
+
+

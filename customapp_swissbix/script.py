@@ -461,7 +461,8 @@ def get_satisfaction():
 @safe_schedule_task(stop_on_error=True)
 def update_deals():
     result_status = 'error'
-    result_value = {}
+    result_message = ''
+    result_log = []
 
     # Aggiornamento dello stato dal server di Adiuto
     driver = "SQL Server"
@@ -489,9 +490,11 @@ def update_deals():
         # Numero di record da aggiornare
         deals_count = len(sorted_deals)
         print(f"Trattative da aggiornare: {deals_count}")
+        result_log.append(f"Trattative da aggiornare: {deals_count}")
 
         for deal in sorted_deals:
             print(f"{deal['id']} - {deal['dealname']}") 
+            result_log.append(f"{deal['id']} - {deal['dealname']}")
             recordid_deal = deal["recordid_"]
             deal_record=UserRecord('deal', recordid_deal)
             stmt = cursor.execute(f"SELECT * FROM VA1028 WHERE F1052='{recordid_deal}' AND FENA=-1")
@@ -523,6 +526,7 @@ def update_deals():
 
             # Aggiornamento dealline
             print("Righe dettaglio: ")
+            result_log.append("Righe dettaglio: ")
             
             deal_lines_table=UserTable('dealline')
             condition_list=[]
@@ -535,6 +539,7 @@ def update_deals():
                 dealline_record=UserRecord('dealline', recordid_dealline)
                 dealline_name = deal_line['name']
                 print(dealline_name)
+                result_log.append(dealline_name)
 
                 stmt = cursor.execute(f"SELECT * FROM VA1029 WHERE F1062='{recordid_dealline}' AND FENA=-1")
                 rows = stmt.fetchall()
@@ -544,11 +549,14 @@ def update_deals():
                         dealline_uniteffectivecost = row.F1043
                         dealline_record.values['uniteffectivecost'] = dealline_uniteffectivecost
                         dealline_record.save()
-                
-                print("UPDATE dealline:")
+                        print("dealline updated")
+                        result_log.append("dealline updated")
 
-            
-            print("UPDATE deal: ")
+                print("deal updated")
+                result_log.append("deal updated")
+                print("-----")
+                result_log.append("-----")
+
 
 
             save_record_fields('deal', recordid_deal)
@@ -556,7 +564,9 @@ def update_deals():
 
         cnxn.close()
         result_status = 'success'
-        result_value = {"message": "Trattative aggiornate"}
+        result_message="Trattative aggiornate"
+        
+        result_log=json.dumps(result_log, indent=4)
 
     except pyodbc.Error as ex:
         sqlstate = ex.args[0]
@@ -565,7 +575,7 @@ def update_deals():
 
     
 
-    return {"status": result_status, "value": result_value, "type": "update"}
+    return {"type": "update", "status": result_status, "message": result_message, "log": result_log}
 
 
 

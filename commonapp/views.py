@@ -2320,15 +2320,7 @@ def save_record_fields(request):
         offerta_record.values['nrofferta'] = offerta_id
         offerta_record.save()
 
-    # ---DIPENDENTE---
-    if tableid == 'dipendente':
-         #TODO pitservice spostare nella zona custom
-        if Helper.get_cliente_id()=='pitservice':
-            dipendente_record = UserRecord('dipendente', recordid)
-            allegati= HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordiddipendente_='{recordid}' AND deleted_='N'")
-            nrallegati=len(allegati) 
-            dipendente_record.values['nrallegati'] = nrallegati
-            dipendente_record.save()
+    
 
     # ---ATTACHMENT---
     if tableid == 'attachment':
@@ -2342,30 +2334,9 @@ def save_record_fields(request):
 
 
 
-    # ---ORE MENSILI---
-    if tableid == 'oremensili':
-        oremensili_record = UserRecord('oremensili', recordid)
-        dipendente_recordid = oremensili_record.values['recordiddipendente_']
-        dipendente_record = UserRecord('dipendente', dipendente_recordid)
-        ruolo= dipendente_record.values['ruolo']
-        oremensili_record.values['ruolo'] = ruolo
-        oremensili_record.save()
+    
 
-    # ---ASSENZE---
-    if tableid == 'assenze':
-        assenza_record = UserRecord('assenze', recordid)
-        tipo_assenza=assenza_record.values['tipo_assenza']
-        if tipo_assenza!='Malattia':
-            ore_assenza= Helper.safe_float(assenza_record.values['ore'])
-            giorni_assenza = ore_assenza / 8
-            dipendente_recordid = assenza_record.values['recordiddipendente_']
-            dipendente_record = UserRecord('dipendente', dipendente_recordid)
-            saldovacanze_attuale=Helper.safe_float(dipendente_record.values['saldovacanze'])
-            if not saldovacanze_attuale:
-                saldovacanze_attuale=0
-            saldovacanze=saldovacanze_attuale-giorni_assenza
-            dipendente_record.values['saldovacanze'] = saldovacanze
-            dipendente_record.save()
+    
 
     # ---RISCALDAMENTO---
     if tableid == 'riscaldamento':

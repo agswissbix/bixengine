@@ -26,6 +26,8 @@ def save_record_fields(tableid,recordid):
 
     # ---TIMESHEET---
     if tableid == 'timesheet':
+        flat_service_contract = None
+        servicecontract_record = None
         # recupero informazioni necessarie
         servicecontract_table = UserTable(tableid='servicecontract')
         timesheet_record = UserRecord('timesheet', recordid)
@@ -113,7 +115,7 @@ def save_record_fields(tableid,recordid):
         # valutazione flat service contract
         if invoicestatus == 'To Process':
             if not Helper.isempty(timesheet_record.values['worktime']) and invoiceoption != 'Out of contract':
-                flat_service_contract = None
+                
                 if service == 'Assistenza PBX':
                     if ((travel_time_decimal == 0 and worktime_decimal == 0.25) or invoiceoption == 'In contract'):
                         flat_service_contract = servicecontract_table.get_records(
@@ -238,10 +240,11 @@ def save_record_fields(tableid,recordid):
         timesheet_record.save()
 
         if not Helper.isempty(servicecontract_record.recordid):
-            custom_save_record(tableid='servicecontract', recordid=servicecontract_record.recordid)
+            save_record_fields(tableid='servicecontract', recordid=servicecontract_record.recordid)
 
         if not Helper.isempty(project_record.recordid):
-            custom_save_record(tableid='project', recordid=project_record.recordid)
+            save_record_fields(tableid='project', recordid=project_record.recordid)
+
 
     # ---SERVICE CONTRACT
     if tableid == 'servicecontract':
@@ -284,7 +287,7 @@ def save_record_fields(tableid,recordid):
         servicecontract_record.save()
 
         if not Helper.isempty(salesorderline_record.recordid):
-            custom_save_record( tableid='salesorderline', recordid=salesorderline_record.recordid)
+            save_record_fields( tableid='salesorderline', recordid=salesorderline_record.recordid)
 
     # ---DEAL---
     if tableid == 'deal':
@@ -533,7 +536,7 @@ def save_record_fields(tableid,recordid):
             timetracking_record.values['start'] =  datetime.now().strftime("%H:%M")
         timetracking_record.save()
 
-    # ------
+    # ---ATTACHMENT---
     if tableid == 'attachment':
         attachment_record = UserRecord('attachment', recordid)
         filename= attachment_record.values['filename']
@@ -568,7 +571,21 @@ def save_record_fields(tableid,recordid):
                     # Gestisci altri possibili errori (es. permessi)
                     print(f"ERRORE durante la copia del file: {e}")
         
-
+    # ---ASSENZE---
+    if tableid == 'assenze':
+        assenza_record = UserRecord('assenze', recordid)
+        tipo_assenza=assenza_record.values['tipo_assenza']
+        if tipo_assenza!='Malattia':
+            ore_assenza= Helper.safe_float(assenza_record.values['ore'])
+            giorni_assenza = ore_assenza / 8
+            dipendente_recordid = assenza_record.values['recordiddipendente_']
+            dipendente_record = UserRecord('dipendente', dipendente_recordid)
+            saldovacanze_attuale=Helper.safe_float(dipendente_record.values['saldovacanze'])
+            if not saldovacanze_attuale:
+                saldovacanze_attuale=0
+            saldovacanze=saldovacanze_attuale-giorni_assenza
+            dipendente_record.values['saldovacanze'] = saldovacanze
+            dipendente_record.save()
 
 
 def card_task_pianificaperoggi(recordid):
