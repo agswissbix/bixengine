@@ -331,6 +331,18 @@ def settings_table_fields_settings_fields_save(request):
     })
 
 
+FIELDTYPES = {
+    "Parola": "VARCHAR(255)",
+    "Seriale": "VARCHAR(255)",
+    "Data": "DATE",
+    "Ora": "TIME",
+    "Numero": "INT",
+    "lookup": "VARCHAR(255)",
+    "Utente": "VARCHAR(255)",
+    "Memo": "TEXT",
+    "html": "LONGTEXT",
+}
+
 def settings_table_fields_new_field(request):
     data = json.loads(request.body)
 
@@ -347,6 +359,9 @@ def settings_table_fields_new_field(request):
     # Evita duplicati
     if SysField.objects.filter(tableid=tableid, fieldid=fieldid).first() is not None:
         return JsonResponse({"success": False, "error": "Campo già esistente"}, status=400)
+    
+    if fieldtype not in FIELDTYPES:
+        return JsonResponse({"success": False, "error": "Tipo di campo non valido"}, status=400)
 
     tableid_obj = SysTable.objects.filter(id=tableid).first()
 
@@ -360,15 +375,7 @@ def settings_table_fields_new_field(request):
         length=255,
     )
 
-    sql_column_type = "VARCHAR(255)"
-    if fieldtype == "Data":
-        sql_column_type = "DATE"
-    elif fieldtype == "Numero":
-        sql_column_type = "INT"
-    elif fieldtype == "Checkbox":
-        sql_column_type = "VARCHAR(10)"
-    elif fieldtype == "LongText":
-        sql_column_type = "LONGTEXT"
+    sql_column_type = FIELDTYPES.get(fieldtype, "VARCHAR(255)")
 
     user_table_name = f"user_{tableid}"
     alter_sql = f'ALTER TABLE {user_table_name} ADD COLUMN {fieldid} {sql_column_type} NULL'
