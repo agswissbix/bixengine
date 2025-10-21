@@ -26,6 +26,8 @@ def save_record_fields(tableid,recordid):
 
     # ---TIMESHEET---
     if tableid == 'timesheet':
+        flat_service_contract = None
+        servicecontract_record = None
         # recupero informazioni necessarie
         servicecontract_table = UserTable(tableid='servicecontract')
         timesheet_record = UserRecord('timesheet', recordid)
@@ -113,7 +115,7 @@ def save_record_fields(tableid,recordid):
         # valutazione flat service contract
         if invoicestatus == 'To Process':
             if not Helper.isempty(timesheet_record.values['worktime']) and invoiceoption != 'Out of contract':
-                flat_service_contract = None
+                
                 if service == 'Assistenza PBX':
                     if ((travel_time_decimal == 0 and worktime_decimal == 0.25) or invoiceoption == 'In contract'):
                         flat_service_contract = servicecontract_table.get_records(
@@ -238,10 +240,11 @@ def save_record_fields(tableid,recordid):
         timesheet_record.save()
 
         if not Helper.isempty(servicecontract_record.recordid):
-            custom_save_record(tableid='servicecontract', recordid=servicecontract_record.recordid)
+            save_record_fields(tableid='servicecontract', recordid=servicecontract_record.recordid)
 
         if not Helper.isempty(project_record.recordid):
-            custom_save_record(tableid='project', recordid=project_record.recordid)
+            save_record_fields(tableid='project', recordid=project_record.recordid)
+
 
     # ---SERVICE CONTRACT
     if tableid == 'servicecontract':
@@ -284,7 +287,7 @@ def save_record_fields(tableid,recordid):
         servicecontract_record.save()
 
         if not Helper.isempty(salesorderline_record.recordid):
-            custom_save_record( tableid='salesorderline', recordid=salesorderline_record.recordid)
+            save_record_fields( tableid='salesorderline', recordid=salesorderline_record.recordid)
 
     # ---DEAL---
     if tableid == 'deal':
