@@ -14,6 +14,7 @@ from django.core.files.storage import default_storage
 from django.contrib.auth.decorators import login_required
 from functools import wraps
 
+from bixsettings.views.businesslogic.models.table_settings import TableSettings
 from bixsettings.views.helpers.helperdb import Helperdb
 from commonapp.bixmodels import helper_db   
 from .bixmodels.user_record import *
@@ -980,7 +981,9 @@ def get_records_matrixcalendar(request):
     master_tableid = data.get("masterTableid")
     master_recordid = data.get("masterRecordid")
 
-    table = UserTable(tableid, Helper.get_userid(request))
+    userid = Helper.get_userid(request)
+
+    table = UserTable(tableid, userid)
 
     if not viewid:
         viewid = table.get_default_viewid()
@@ -997,10 +1000,12 @@ def get_records_matrixcalendar(request):
 
     response_data_dev = {
         'resources': [],
-        'events': []
+        'events': [],
+        'unplannedEvents': [],
+        'viewMode': 'Settimanale'
     }
 
-    processed_employees = set()
+    processed_resources = set()
     
     # Assegniamo un colore diverso per ogni tipo di assenza per chiarezza visiva
     absence_colors = {
@@ -1010,43 +1015,96 @@ def get_records_matrixcalendar(request):
         'default': '#6b7280'     # Grigio per tipi non specificati
     }
 
+    tablesettings_obj = TableSettings(tableid=tableid, userid=userid)
+    tablesettings = tablesettings_obj.get_settings()
+
+    response_data_dev['viewMode'] = tablesettings.get('table_planner_default_view', 'week').get('value')
+
     for record in record_objects:
-         # 1. Estrazione dei dati dall'oggetto record
-        employee_name = record.fields['recordiddipendente_']['convertedvalue']  # Assicurati che questo campo esista
-        
-        # 2. Gestione delle Risorse (Dipendenti)
-        # Crea un ID univoco per la risorsa rimuovendo gli spazi dal nome.
-        resource_id = "".join(employee_name.split())
-        
+        # Estrae il campo risorsa dalle impostazioni della tabella
+
+        resource_field = tablesettings.get('table_planner_resource_field', 'recordiddipendente_').get('value')
+        date_from_field = tablesettings.get('table_planner_date_from_field').get('value')
+        date_to_field = tablesettings.get('table_planner_date_to_field').get('value')
+        time_from_field = tablesettings.get('table_planner_time_from_field').get('value')
+        time_to_field = tablesettings.get('table_planner_time_to_field').get('value')
+
+        if not date_from_field:
+            return JsonResponse({"error": "Non è stato configurato alcun campo di tipo data."}, status=400)
+
+        # Estrae il valore della risorsa dal record corrente
+        resource_id = record.fields[resource_field]['value']
+        resource_value = record.fields[resource_field]['convertedvalue']
+                
         # Se il dipendente non è ancora stato processato, aggiungilo alla lista 'resources'.
-        if resource_id not in processed_employees:
+        if resource_id not in processed_resources:
             response_data_dev['resources'].append({
                 'id': resource_id,
-                'name': employee_name
+                'name': resource_value
             })
-            processed_employees.add(resource_id) # Aggiungi l'ID al set per non ripeterlo
+            processed_resources.add(resource_id) # Aggiungi l'ID al set per non ripeterlo
             
         # 3. Creazione degli Eventi (Assenze)
+        record_id = record.recordid
         event_id = record.fields['id']['convertedvalue']
         event_title = record.fields['tipo_assenza']['convertedvalue']
-        start_time = record.fields['dal']['value']
-        end_time = record.fields['al']['value']
+        start_date = record.fields[date_from_field]['convertedvalue'] if date_from_field else None
+        end_date = record.fields[date_to_field]['convertedvalue'] if date_to_field else start_date
+        start_time = record.fields[time_from_field]['convertedvalue'] if time_from_field else datetime.time(0,0).strftime('%H:%M:%S')
+        end_time = record.fields[time_to_field]['convertedvalue'] if time_to_field else datetime.time(23,59).strftime('%H:%M:%S')
+
         
-        print(f"Processing event for {employee_name}: {event_title} from {start_time} to {end_time}")
+        print(f"Processing event for {resource_value}: {event_title} from {start_date} to {end_date}")
         # Crea il dizionario per l'evento
         event_data = {
-            'id': str(event_id), # L'ID dell'evento
-            'resourceId': resource_id, # Associa l'evento alla risorsa corretta
+            'id': str(event_id),
+            'resourceId': resource_id,
             'title': event_title,
-            'description': f"Assenza per {event_title} di {employee_name}",
-            'start':  start_time.isoformat() if start_time else None, # Converte datetime in stringa formato ISO 8601
-            'end': end_time.isoformat() if end_time else None,
-            'color': absence_colors.get(event_title, absence_colors['default'])
+            'description': f"Assenza per {event_title} di {resource_value}",
+            'start': Helper.to_iso_datetime(start_date, start_time),
+            'end': Helper.to_iso_datetime(end_date, end_time),
+            'color': absence_colors.get(event_title, absence_colors['default']),
+            'recordid': str(record_id),
         }
-        
-        response_data_dev['events'].append(event_data)
-   
+
+        if event_data['start'] and event_data['end']:
+            response_data_dev['events'].append(event_data)
+        else:
+            response_data_dev['unplannedEvents'].append(event_data)
+
     return JsonResponse(response_data_dev)
+
+
+def matrixcalendar_save_record(request):
+    print('Function: matrixcalendar_save_record')
+    try:
+        data = json.loads(request.body)
+        tableid = data.get("tableid")
+        event = data.get("event")
+
+        if not event or not tableid:
+            return JsonResponse({"success": False, "detail": "recordid o tableid mancante"}, status=400)
+
+        record = UserRecord(tableid, event['id'])
+        if not record:
+            return JsonResponse({"success": False, "detail": "Record non trovato"}, status=404)
+        
+        print(record.values['dal'])
+
+        # dt_obj = datetime.strptime('2025-08-26T00:00:00.000Z', '%Y-%m-%dT%H:%M:%S.%fZ')
+        # data_finale = (dt_obj + timedelta(days=1)).date()
+        record.values['dal'] = datetime.datetime.fromisoformat(event['startdate'].replace("Z", "+00:00")).date()
+        record.values['al'] = datetime.datetime.fromisoformat(event['enddate'].replace("Z", "+00:00")).date()
+        record.values['recordiddipendente_'] = event['resourceid']
+        record.save()
+
+        return JsonResponse({"success": True, "detail": "Record aggiornato con successo"})
+    
+    except json.JSONDecodeError:
+        return JsonResponse({"success": False, "detail": "JSON non valido"}, status=400)
+    
+    except Exception as e:
+        return JsonResponse({"success": False, "detail": f"Errore interno: {str(e)}"}, status=500)
 
 @timing_decorator
 def get_table_recordsBAK(request):
@@ -5477,7 +5535,7 @@ def get_calendar_data(request):
             {
                 'recordid': '1',
                 'title': 'Pulizia completa Condominio Lucino',
-                'start': datetime.datetime(2025, 1, 7, 10, 0),
+                'start': datetime.datetime(2025, 1, 7, 10, 0).isoformat(),
                 'end': datetime.datetime(2025, 1, 7, 11, 30),
                 'description': 'Pulizia completa Condominio Lucino',
                 'color': '#3b82f6',
