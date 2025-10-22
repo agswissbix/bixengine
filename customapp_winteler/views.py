@@ -309,7 +309,6 @@ def sql_safe(value):
     cleaned = str(value).replace("'", "''")
     return f"'{cleaned}'"
 
-
 def save_service_man(request):
     if request.method != 'POST':
         return HttpResponse({
@@ -519,18 +518,16 @@ def save_nota_spesa(request):
     try:
         data=json.loads(request.body)
 
-        tableid = ''
+        tableid = 'notespese'
 
-        # new_record = UserRecord(tableid)
+        new_record = UserRecord(tableid)
 
-        # new_record.values('') = data.get('tipo', '')
-        # new_record.values('') = data.get('importo')
-        # new_record.values('') = data.get('pagamento', '')
-        # new_record.values('') = data.get('note')
+        new_record.values['tipo'] = data.get('tipo', '')
+        new_record.values['importo'] = data.get('importo')
+        new_record.values['pagamento'] = data.get('pagamento', '')
+        new_record.values['note'] = data.get('note')
 
-        # new_record.save()
-
-        # TODO: adapt to DB
+        new_record.save()
 
         return HttpResponse({
             'success': True,
@@ -559,7 +556,8 @@ def save_preventivo_carrozzeria(request):
         new_record.values['telaio'] = data.get('telaio','')
         new_record.values['targa'] = data.get('targa','')
         new_record.values['nomeutente'] = data.get('utente','')
-        # TODO: Check dove vanno messi i dati dei clienti (nome + cognome)
+        new_record.values['nome'] = data.get('nome')
+        new_record.values['cognome'] = data.get('cognome')
 
         new_record.save()
 
@@ -589,7 +587,6 @@ def save_nuova_auto(request):
         new_record.values['modello'] = data.get('modello', '')
         new_record.values['telaio'] = data.get('telaio', '')
         new_record.values['nomeutente'] = data.get('utente', '')
-        # TODO: check targa (non presente in form)
 
         new_record.save()
 
@@ -638,7 +635,7 @@ def save_prova_auto(request):
 
         if (data.get('dataarrivo',None)):
             new_record.values['dataarrivo'] = parse_datetime(data.get('dataarrivo',None)).date()
-            # new_record.values['oraarrivo'] = parse_datetime(data.get('datapartenza',None)).time().strftime("%H:%M:%S.%f")
+            new_record.values['oraarrivo'] = parse_datetime(data.get('datapartenza',None)).time().strftime("%H:%M:%S.%f")
 
         new_record.values['note'] = data.get('note','')
 
@@ -701,7 +698,10 @@ def search_scheda_auto(request):
     tableid = 'auto'
     conditions = f""
 
-    # TODO: completare condizioni
+    if barcode :
+        conditions = f"barcode = {barcode}"
+    else :
+        conditions = f"telaio = {telaio}"
 
     auto = HelpderDB.sql_query_row(f"select * from user_{tableid} WHERE {conditions}")
 
@@ -725,13 +725,14 @@ def get_venditori(request):
 
     data=json.loads(request.body)
 
-    # tableid = 'proveauto'
+    # tableid = 'venditori'
     # table = UserTable(tableid)
     # rows = table.get_records()
 
     # for row in rows:
+    #     label = f"{row['nome']} {row['cognome']}"
     #     results.append({
-    #         'id': row['id'],
+    #         'value': row['id'],
     #         'label': row['nome'],
     #     })
 
@@ -765,7 +766,7 @@ def get_scheda_auto(request):
             'dati': {
                 'barcode': auto["barcode"],
                 'modello': auto["modello"],
-                'libro_auto': '',
+                'libro_auto': auto["libroauto"],
                 'numero_wb': auto["numerowb"],
                 'telaio': auto["telaio"],
                 'designazione':auto["designazione"],
