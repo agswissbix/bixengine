@@ -360,6 +360,8 @@ def get_service_man(request):
     table = UserTable(tableid)
     rows = table.get_records()
 
+    # TODO: filtrare solo quelli in attesa di conferma
+
     for row in rows:
 
         cliente = f'{row["nome"]} {row["cognome"]}'
@@ -658,6 +660,8 @@ def get_prove_auto(request):
 
     filter = data.get('filter')
 
+    # TODO: filtrare i risultati
+
     if (filter == 'precompilate') :
         print(filter)
 
@@ -725,22 +729,21 @@ def get_venditori(request):
 
     data=json.loads(request.body)
 
-    # tableid = 'venditori'
-    # table = UserTable(tableid)
-    # rows = table.get_records()
+    try:
+        tableid = 'venditori'
+        table = UserTable(tableid)
+        rows = table.get_records()
 
-    # for row in rows:
-    #     label = f"{row['nome']} {row['cognome']}"
-    #     results.append({
-    #         'value': row['id'],
-    #         'label': row['nome'],
-    #     })
+        for row in rows:
+            label = f"{row['nome']} {row['cognome']}"
+            results.append({
+                'value': row['id'],
+                'label': label,
+            })
 
-    results.append({ 'value': 'Giulio Verdi', 'label': 'Giulio Verdi' })
-    results.append({ 'value': 'Anna Rossi', 'label': 'Anna Rossi' })
-    results.append({ 'value': 'Mario Bianchi', 'label': 'Mario Bianchi' })
-
-    return JsonResponse({"venditori": results}, safe=False)
+        return JsonResponse({"venditori": results}, safe=False)
+    except Exception as e:
+        return JsonResponse({"venditori": []}, safe=False)
 
 def get_scheda_auto(request):
     results = []
