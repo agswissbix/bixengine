@@ -1039,6 +1039,7 @@ def get_records_matrixcalendar(request):
     response_data_dev['viewMode'] = tablesettings.get('table_planner_default_view', 'week').get('value')
 
     title_field = tablesettings.get('table_planner_title_field').get('value')
+    color_field = tablesettings.get('table_planner_color_field').get('value')
     resource_field = tablesettings.get('table_planner_resource_field').get('value')
     date_from_field = tablesettings.get('table_planner_date_from_field').get('value')
     date_to_field = tablesettings.get('table_planner_date_to_field').get('value')
@@ -1064,6 +1065,7 @@ def get_records_matrixcalendar(request):
         record_id = record.recordid
         event_id = record.fields['id']['convertedvalue']
         event_title = record.fields[title_field]['convertedvalue']
+        event_color = record.fields[color_field]['convertedvalue']
         start_date = record.fields[date_from_field]['convertedvalue'] if date_from_field else None
         end_date = record.fields[date_to_field]['convertedvalue'] if date_to_field else start_date
         start_time = record.fields[time_from_field]['convertedvalue'] if time_from_field else datetime.time(8,0).strftime('%H:%M:%S')
@@ -1079,7 +1081,7 @@ def get_records_matrixcalendar(request):
             'description': f"Assenza per {event_title} di {resource_value}",
             'start': Helper.to_iso_datetime(start_date, start_time),
             'end': Helper.to_iso_datetime(end_date, end_time),
-            'color': get_color_for_title(event_title),
+            'color': get_color_for_title(event_color),
             'recordid': str(record_id),
         }
 

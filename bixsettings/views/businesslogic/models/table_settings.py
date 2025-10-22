@@ -143,6 +143,11 @@ class TableSettings:
             'options': [],
             'value': ''
         },
+        'table_planner_color_field': {
+            'type': 'select',
+            'options': [],
+            'value': ''
+        },
         'table_planner_title_field': {
             'type': 'select',
             'options': [],
@@ -418,44 +423,50 @@ class TableSettings:
         if not fields:
             return
 
-        orderby_options = []
-        planner_date_options = []
-        planner_time_options = []
-        planner_resource_options = []
-        planner_title_options = []
+        date_options = []
+        time_options = []
+        all_fields_options = []
 
         for field in fields:
             field_id_str = str(field.fieldid)
-            orderby_options.append(field_id_str)
-            planner_resource_options.append(field_id_str)
-            planner_title_options.append(field_id_str)
+            all_fields_options.append(field_id_str)
 
             if field.fieldtypewebid == 'Data':
-                planner_date_options.append(field_id_str)
+                date_options.append(field_id_str)
             elif field.fieldtypewebid == 'Ora':
-                planner_time_options.append(field_id_str)
+                time_options.append(field_id_str)
 
-        # Imposta le opzioni
-        settings_copy['default_orderby']['options'] = orderby_options
-        settings_copy['table_planner_title_field']['options'] = planner_title_options
-        settings_copy['table_planner_resource_field']['options'] = planner_resource_options
-        settings_copy['table_planner_date_from_field']['options'] = planner_date_options
-        settings_copy['table_planner_date_to_field']['options'] = planner_date_options
-        settings_copy['table_planner_time_from_field']['options'] = planner_time_options
-        settings_copy['table_planner_time_to_field']['options'] = planner_time_options
+        # Mapping delle opzioni ai settings
+        field_option_mappings = {
+            'all_fields': [
+                'default_orderby',
+                'table_planner_title_field',
+                'table_planner_color_field',
+                'table_planner_resource_field'
+            ],
+            'date_fields': [
+                'table_planner_date_from_field',
+                'table_planner_date_to_field'
+            ],
+            'time_fields': [
+                'table_planner_time_from_field',
+                'table_planner_time_to_field'
+            ]
+        }
 
-        # Helper interno
-        def set_default_value(setting_key, options):
-            if options and settings_copy[setting_key]['value'] == '':
-                settings_copy[setting_key]['value'] = options[0]
+        option_mapping = {
+            'all_fields': all_fields_options,
+            'date_fields': date_options,
+            'time_fields': time_options
+        }
 
-        set_default_value('table_planner_title_field', planner_title_options)
-        set_default_value('table_planner_date_from_field', planner_date_options)
-        set_default_value('table_planner_date_to_field', planner_date_options)
-        set_default_value('table_planner_time_from_field', planner_time_options)
-        set_default_value('table_planner_time_to_field', planner_time_options)
-        set_default_value('table_planner_resource_field', planner_resource_options)
-        set_default_value('default_orderby', orderby_options)
+        # Imposta le opzioni e i valori di default
+        for field_type, setting_keys in field_option_mappings.items():
+            options = option_mapping[field_type]
+            for setting_key in setting_keys:
+                settings_copy[setting_key]['options'] = options
+                if options and settings_copy[setting_key]['value'] == '':
+                    settings_copy[setting_key]['value'] = options[0]
 
 
     def _apply_user_settings(self, settings_copy, user_settings):
