@@ -267,6 +267,8 @@ class UserRecord:
                 if value!=None:  
                     if type(value)==str:
                         value = value.replace("'", "''")  
+                    if isinstance(value, list):
+                        value = ','.join(map(str, value))
                     sql=sql+f" {fieldid}='{value}' "
                 else:
                     sql=sql+f" {fieldid}=null "
@@ -597,6 +599,7 @@ class UserRecord:
                 insert_field['lookupitems']=items
                 if field['fieldtypewebid'] == 'multiselect':
                     insert_field['fieldtypewebid']='multiselect'
+                    fieldtype='multiselect'
 
             insert_field['fieldtype']=fieldtype
             

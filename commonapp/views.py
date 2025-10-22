@@ -2216,10 +2216,29 @@ def save_record_fields(request):
     recordid = request.POST.get('recordid')
     tableid = request.POST.get('tableid')
     saved_fields = request.POST.get('fields')
+
+    if not tableid or not saved_fields:
+        try:
+            data = json.loads(request.body)
+            recordid = data.get('recordid', recordid)
+            tableid = data.get('tableid', tableid)
+            saved_fields = data.get('fields', saved_fields)
+        except (json.JSONDecodeError, AttributeError):
+            return JsonResponse({'error': 'Invalid or missing data'}, status=400)
+
+    # 3. Parsing del campo fields
     try:
-        saved_fields_dict = json.loads(saved_fields)
+        if isinstance(saved_fields, dict):
+            saved_fields_dict = saved_fields
+        else:
+            saved_fields_dict = json.loads(saved_fields)
     except json.JSONDecodeError:
         saved_fields_dict = {}
+
+    if not tableid:
+        return JsonResponse({'error': 'Missing tableid'}, status=400)
+
+
     record = UserRecord(tableid, recordid)
     for saved_fieldid, saved_value in saved_fields_dict.items():
         record.values[saved_fieldid] = saved_value
@@ -2461,6 +2480,7 @@ def save_record_fields(request):
         layout=chart_record.values['type']
         raggruppamento=chart_record.values['raggruppamento']
         tiporaggruppamento=chart_record.values['tiporaggruppamento']
+        tabella=chart_record.values['tabella']
         fields=chart_record.values['campi']
         dynamicfield1=chart_record.values['dynamicfield1']
         dynamicfield1_label=chart_record.values['dynamicfield1_label']
@@ -2477,7 +2497,7 @@ def save_record_fields(request):
 
 
         #TODO customwegolf
-        sql = f"SELECT fieldid, description FROM sys_field WHERE tableid = 'metrica_annuale'"
+        sql = f"SELECT fieldid, description FROM sys_field WHERE tableid = '{tabella}'"
         
         # Assumiamo che HelpderDB.sql_query ritorni una lista di dizionari, es: [{'fieldid': 'A', 'description': 'Desc A'}]
         results = HelpderDB.sql_query(sql) 
@@ -2510,7 +2530,7 @@ def save_record_fields(request):
                 
                 config_python = {
                     "chart_type": "record_pivot",
-                    "from_table": "metrica_annuale", # Mantenuto come da codice originale
+                    "from_table": tabella, # Mantenuto come da codice originale
                     "aggregation": {
                         "function": "AVG"
                     },
@@ -2536,7 +2556,7 @@ def save_record_fields(request):
                 
                 config_python = {
                     "chart_type": "record_pivot",
-                    "from_table": "metrica_annuale",
+                    "from_table": tabella,
                     "aggregation": {
                         "function": "AVG"
                     },
@@ -2603,46 +2623,68 @@ def save_record_fields(request):
 
             
             config_python = {
-                "from_table": "metrica_annuale",
+                "from_table": tabella,
                 "group_by_field": {
                     "field": raggruppamento,
                     "alias": raggruppamento
                 },
                 "datasets": datasets,
                 "datasets2": datasets2,
-                "order_by": "anno ASC"
+                "order_by": raggruppamento + " ASC"
             }
             #TODO custom wegolf
             if raggruppamento=='recordidgolfclub_':
                 config_python['group_by_field']["lookup"]= {"on_key": "recordid_", "from_table": "golfclub", "display_field": "nome_club"}
-        status='Bozza'
-        config_json_string = json.dumps(config_python, indent=4)
             
-        
-        if not chartid:
-            chartid = HelpderDB.sql_query_value(f"SELECT id FROM sys_chart WHERE name='{title}' AND layout='{layout}'  AND userid={userid} ", 'id')
-            if chartid:
-                chart_record.values['reportid'] = chartid
-                chart_record.save()
-                sql=f"INSERT INTO sys_dashboard_block (name, userid, viewid, chartid) VALUES ('{title}',1,53,'{chartid}')"
-                #TODO custom wegolf
-                if raggruppamento=='recordidgolfclub_':
-                    sql=f"INSERT INTO sys_dashboard_block (name, userid, viewid, chartid, category) VALUES ('{title}',1,53,'{chartid}','benchmark')"
-                HelpderDB.sql_execute(sql)
 
+        user = SysUser.objects.filter(id=userid).first()
 
         if chartid and chartid != 'None':
-            sql=f"UPDATE sys_chart SET name='{title}', layout='{layout}', config='{config_json_string}', userid='{userid}' WHERE id='{chartid}'"
-            HelpderDB.sql_execute(sql)
-            sql=f"UPDATE sys_dashboard_block SET name='{title}' WHERE chartid='{chartid}'"
-            HelpderDB.sql_execute(sql)
-        else:
-            sql=f"INSERT INTO sys_chart (name, layout, config, userid) VALUES ('{title}','{layout}','{config_json_string}','{userid}')"
-            HelpderDB.sql_execute(sql)
+            SysChart.objects.filter(id=chartid).update(
+                name=title,
+                layout=layout,
+                config=config_python,
+                userid=user
+            )
             
-            #reportid=HelpderDB.sql_query_value("SELECT id FROM sys_chart WHERE name='{name}' AND layout='{layout}'  AND userid='{userid}' ", 'id')
-            #chart_record.values['reportid'] = reportid
-            #chart_record.save()
+            SysDashboardBlock.objects.filter(chartid=chartid).update(
+                name=title
+            )
+        else:
+            SysChart.objects.create(
+                name=title,
+                layout=layout,
+                config=config_python,
+                userid=user
+            )
+
+
+        if not chartid:
+            chartid = SysChart.objects.filter(
+                name=title,
+                layout=layout,
+                userid=user
+            ).values_list('id', flat=True).first()
+            
+            if chartid:
+                default_view = SysView.objects.filter(
+                    tableid=tabella,
+                    query_conditions='true'
+                ).first()
+                
+                chart_record.values['reportid'] = chartid
+                chart_record.save()
+                
+                # TODO custom wegolf
+                category = 'benchmark' if raggruppamento == 'recordidgolfclub_' else None
+                
+                SysDashboardBlock.objects.create(
+                    name=title,
+                    userid=user.id,
+                    viewid_id=default_view.id if default_view else None,
+                    chartid_id=chartid,
+                    category=category
+                )
         
         
    
@@ -2711,7 +2753,33 @@ def get_record_card_fields(request):
 
     record=UserRecord(tableid,recordid,Helper.get_userid(request),master_tableid,master_recordid)
     card_fields=record.get_record_card_fields()
+
     response={ "fields": card_fields, "recordid": recordid}
+    if tableid == "chart":
+        # Lookup per tabella sorgente
+        tables_qs = SysTable.objects.all().values("id", "description")
+        tables_lookup = [
+            {"value": str(t["id"]), "label": t["description"]} for t in tables_qs
+        ]
+
+        # Lookup per campi (organizzati per tableid)
+        fields_qs = SysField.objects.all().values("tableid", "fieldid", "description")
+        fields_lookup = {}
+        for f in fields_qs:
+            tid = str(f["tableid"])
+            if tid not in fields_lookup:
+                fields_lookup[tid] = []
+            fields_lookup[tid].append({
+                "value": f["fieldid"],
+                "label": f["description"]
+            })
+
+        # Inseriamo i lookup nella response
+        response["lookup"] = {
+            "table": tables_lookup,
+            "campi": fields_lookup
+        }
+
     return JsonResponse(response)
 
 def get_record_linked_tables(request):

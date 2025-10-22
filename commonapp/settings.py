@@ -88,7 +88,7 @@ def settings_table_fields(request):
 
     for field in fields[:]:  # usa [:] per evitare problemi durante la rimozione
         # Rimuovi i campi con fieldid che termina con "_"
-        if field['fieldid'].endswith('_'):
+        if str(field['id']).endswith('_'):
             fields.remove(field)
             continue
 
