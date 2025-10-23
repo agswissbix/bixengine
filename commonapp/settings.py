@@ -338,6 +338,7 @@ FIELDTYPES = {
     "Ora": "TIME",
     "Numero": "INT",
     "lookup": "VARCHAR(255)",
+    "multiselect": "VARCHAR(255)",
     "Utente": "VARCHAR(255)",
     "Memo": "TEXT",
     "html": "LONGTEXT",
@@ -385,10 +386,11 @@ def settings_table_fields_new_field(request):
             cursor.execute(alter_sql)
     except Exception as e:
         transaction.set_rollback(True)
+        print(f"Errore SQL durante l'aggiunta della colonna: {e}")
         return JsonResponse({"success": False, "error": f"Errore SQL: {e}"}, status=500)
 
     # Se è un campo Categoria → crea lookup table e relative opzioni
-    if fieldtype == "lookup" or fieldtype == "Categoria":
+    if fieldtype == "lookup" or fieldtype == "multiselect":
         lookuptableid = f"{fieldid}_{tableid}"
         new_field.lookuptableid = lookuptableid
         new_field.save()
@@ -993,3 +995,51 @@ def settings_table_steps_save(request):
         "success": True,
         "message": "Ordine di steps e items salvato correttamente."
     })
+
+
+def settings_get_dashboards_user(request):
+    data = json.loads(request.body)
+    userid = data.get('userid')
+
+    dashboards_user_ids = set(
+        SysUserDashboard.objects.filter(userid=userid).values_list('dashboardid', flat=True)
+    )
+
+    dashboards = list(
+        SysDashboard.objects.all().values('id', 'name').order_by('order_dashboard')
+    )
+
+    for dashboard in dashboards:
+        dashboard['enabled'] = dashboard['id'] in dashboards_user_ids
+
+    return JsonResponse({"dashboards": dashboards})
+
+
+def save_user_dashboard_setting(request):
+    data = json.loads(request.body)
+    userid = data.get('userid')
+    dashboardid = data.get('dashboardid')
+    enabled = data.get('enabled', True)
+
+    user = SysUser.objects.filter(id=userid).first()
+    if not user:
+        return JsonResponse({"error": "User not found"}, status=404)
+
+    dashboard = SysDashboard.objects.filter(id=dashboardid).first()
+    if not dashboard:
+        return JsonResponse({"error": "Dashboard not found"}, status=404)
+
+    if enabled:
+        # Aggiungi se non esiste
+        SysUserDashboard.objects.get_or_create(
+            userid=user,
+            dashboardid=dashboard
+        )
+    else:
+        # Rimuovi se esiste
+        SysUserDashboard.objects.filter(
+            userid=user,
+            dashboardid=dashboard
+        ).delete()
+
+    return JsonResponse({"success": True})

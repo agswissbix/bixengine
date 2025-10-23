@@ -385,6 +385,11 @@ class TableSettings:
             'type': 'parola',
             'value': '3'
         },
+        'workspace': {
+            'type': 'select',
+            'options': [],
+            'value': ''
+        }
     }
 
     def __init__(self, tableid, userid=1):
@@ -398,6 +403,8 @@ class TableSettings:
         settings_copy = {key: value.copy() for key, value in self.settings.items()}
 
         self._populate_field_options(settings_copy)
+
+        self._populate_workspace_options(settings_copy)
 
         # Carica le impostazioni utente dalla tabella sys_user_table_settings
         user_settings = SysUserTableSettings.objects.filter(
@@ -415,6 +422,25 @@ class TableSettings:
         self._apply_user_settings(settings_copy, user_settings)
 
         return settings_copy
+
+    def _populate_workspace_options(self, settings_copy):
+        """Popola le opzioni del workspace nei settings."""
+        workspaces = SysTableWorkspace.objects.all()
+        if not workspaces:
+            return
+
+        workspace_options = [
+            {'name': str(workspace.name)}
+            for workspace in workspaces
+        ]
+
+        settings_copy['workspace']['options'] = workspace_options
+
+        table_workspace = SysTable.objects.filter(id=self.tableid).values('workspace').first()
+        settings_copy['workspace']['value'] = table_workspace['workspace'] if table_workspace else ''
+        # Imposta il valore di default se non è già impostato
+        if workspace_options and settings_copy['workspace']['value'] == '':
+            settings_copy['workspace']['value'] = workspace_options[0]['name']
 
 
     def _populate_field_options(self, settings_copy):
@@ -508,6 +534,12 @@ class TableSettings:
         success = True
 
         for setting in table_settings:
+
+            if setting == 'workspace':
+                SysTable.objects.filter(id=self.tableid).update(
+                    workspace=table_settings[setting]['value']
+                )
+                continue
 
             sql_delete = f"DELETE FROM sys_user_table_settings WHERE tableid='{self.tableid}' AND settingid='{setting}' AND userid='{self.userid}' "
             self.db_helper.sql_execute(sql_delete)
