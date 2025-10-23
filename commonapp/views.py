@@ -2473,69 +2473,68 @@ def save_record_fields(request):
 
     #CUSTOM ---CHART---
     if tableid == 'chart':
+        # Carica record
         chart_record = UserRecord('chart', recordid)
-        name=chart_record.values['name']
-        title=chart_record.values['title']
-        userid=1
-        layout=chart_record.values['type']
-        raggruppamento=chart_record.values['raggruppamento']
-        tiporaggruppamento=chart_record.values['tiporaggruppamento']
-        tabella=chart_record.values['tabella']
-        fields=chart_record.values['campi']
-        dynamicfield1=chart_record.values['dynamicfield1']
-        dynamicfield1_label=chart_record.values['dynamicfield1_label']
-        operation=chart_record.values['operation']
-        dynamicfield1=chart_record.values['dynamicfield1']
-        fields2=chart_record.values['campi2']
-        dynamicfield2=chart_record.values['dynamicfield2']
-        dynamicfield2_label=chart_record.values['dynamicfield2_label']
-        operation2=chart_record.values['operation2']
-        operation2_total=chart_record.values['operation2_total']
-        dynamicfield2=chart_record.values['dynamicfield2']
-        chartid=chart_record.values['reportid']
+        name = chart_record.values['name']
+        title = chart_record.values['title']
+        userid = 1
+        layout = chart_record.values['type']
+        raggruppamento = chart_record.values['raggruppamento']
+        tiporaggruppamento = chart_record.values['tiporaggruppamento']
+        tabella = chart_record.values['tabella']
+        fields = chart_record.values['campi']
+        dynamicfield1 = chart_record.values['dynamicfield1']
+        dynamicfield1_label = chart_record.values['dynamicfield1_label']
+        operation = chart_record.values['operation']
+        fields2 = chart_record.values['campi2']
+        dynamicfield2 = chart_record.values['dynamicfield2']
+        dynamicfield2_label = chart_record.values['dynamicfield2_label']
+        operation2 = chart_record.values['operation2']
+        operation2_total = chart_record.values['operation2_total']
+        chartid = chart_record.values['reportid']
         pivot_total_field = chart_record.values.get('pivot_total_field')
 
+        # Nuove variabili per dashboard/view
+        dashboards_str = chart_record.values.get('dashboards', '')
+        views_str = chart_record.values.get('views', '')
+        dashboard_ids = [d for d in dashboards_str.split(',') if d.strip()]
+        view_ids = [v for v in views_str.split(',') if v.strip()]
 
-        #TODO customwegolf
+        # Preleva descrizioni dei campi
         sql = f"SELECT fieldid, description FROM sys_field WHERE tableid = '{tabella}'"
-        
-        # Assumiamo che HelpderDB.sql_query ritorni una lista di dizionari, es: [{'fieldid': 'A', 'description': 'Desc A'}]
-        results = HelpderDB.sql_query(sql) 
-        
-        # Crea un dizionario di ricerca: {'fieldid': 'description'}
+        results = HelpderDB.sql_query(sql)
         field_descriptions = {row['fieldid']: row['description'] for row in results}
-        
-        if tiporaggruppamento=='Pivot':
-            if pivot_total_field:
-                pivot_fields = []
-                part_field_aliases = []
 
-                # Aggiunge il campo totale alla lista dei campi da interrogare
-                pivot_fields.append({
+        # =======================
+        #   PIVOT CONFIG
+        # =======================
+        if tiporaggruppamento == 'Pivot':
+            if pivot_total_field:
+                # Pivot con totale
+                pivot_fields = [{
                     "alias": pivot_total_field,
                     "field": pivot_total_field,
                     "label": field_descriptions.get(pivot_total_field, pivot_total_field)
-                })
+                }]
+                part_field_aliases = []
 
-                # Aggiunge i campi parziali
                 if fields:
-                    for field in fields.split(';'):
-                        if field: # Evita stringhe vuote
+                    for field in fields.split(','):
+                        field = field.strip()
+                        if field:
                             part_field_aliases.append(field)
                             pivot_fields.append({
                                 "alias": field,
                                 "field": field,
                                 "label": field_descriptions.get(field, field)
                             })
-                
+
                 config_python = {
                     "chart_type": "record_pivot",
-                    "from_table": tabella, # Mantenuto come da codice originale
-                    "aggregation": {
-                        "function": "AVG"
-                    },
+                    "from_table": tabella,
+                    "aggregation": {"function": "AVG"},
                     "pivot_fields": pivot_fields,
-                    "dataset_label": name, # Usa il nome del grafico come etichetta
+                    "dataset_label": name,
                     "total_breakdown": {
                         "total_field_alias": pivot_total_field,
                         "part_field_aliases": part_field_aliases,
@@ -2544,84 +2543,88 @@ def save_record_fields(request):
                     }
                 }
 
-            # Caso 2: Pivot semplice (senza calcolo percentuale)
             else:
-                datasets=[]
-                for field in fields.split(';'):
-                    dataset={}
-                    dataset['label']=field_descriptions.get(field, field)
-                    dataset['alias']=field
-                    dataset['field']=field
-                    datasets.append(dataset)
-                
+                # Pivot semplice
+                datasets = [{
+                    "label": field_descriptions.get(field.strip(), field.strip()),
+                    "alias": field.strip(),
+                    "field": field.strip()
+                } for field in fields.split(',') if field.strip()]
+
                 config_python = {
                     "chart_type": "record_pivot",
                     "from_table": tabella,
-                    "aggregation": {
-                        "function": "AVG"
-                    },
+                    "aggregation": {"function": "AVG"},
                     "pivot_fields": datasets,
-                    "dataset_label": "Media " + field 
+                    "dataset_label": "Media " + field
                 }
 
-        if tiporaggruppamento!='Pivot':
-            datasets=[]
-            for field in fields.split(';'):
-                dataset={}
-                dataset['label']=field_descriptions.get(field, field)
-                if operation=='Somma':
-                    #TODO custom wegolf
-                    if raggruppamento=='recordidgolfclub_':
-                        dataset['expression']=f"SUM(t1.{field})"
-                    else:
-                        dataset['expression']=f"SUM({field})"
+        # =======================
+        #   NON PIVOT CONFIG
+        # =======================
+        else:
+            # Datasets principali
+            datasets = []
+            for field in fields.split(','):
+                field = field.strip()
+                if not field:
+                    continue
+                dataset = {
+                    "label": field_descriptions.get(field, field),
+                    "alias": field
+                }
+                if operation == 'Somma':
+                    expr = f"SUM(t1.{field})" if raggruppamento == 'recordidgolfclub_' else f"SUM({field})"
+                    dataset['expression'] = expr
                 else:
-                    dataset['expression']=f"COUNT({field})"
-                dataset['alias']=field
+                    dataset['expression'] = f"COUNT({field})"
                 datasets.append(dataset)
 
+            # Campo dinamico 1
             if dynamicfield1:
-                dataset={}
-                dataset['label']=dynamicfield1_label
-                dataset['expression']=dynamicfield1
-                dataset['alias']=dynamicfield1_label
-                datasets.append(dataset)
+                datasets.append({
+                    "label": dynamicfield1_label,
+                    "expression": dynamicfield1,
+                    "alias": dynamicfield1_label
+                })
 
-
-            datasets2=[]
-            if operation2_total and operation2_total=='Si':
-                if fields2 and fields2!='':
-                    for field2 in fields2.split(';'):
-                        if operation2=='Media':
-                            dataset2={}
-                            dataset2['alias']=field2
-                            dataset2['label']="Media" + field_descriptions.get(field2, field2)
-                            dataset2['post_calculation']={
+            # Datasets secondari
+            datasets2 = []
+            if operation2_total == 'Si':
+                # Post-calcolo media
+                for field2 in (fields2 or '').split(','):
+                    field2 = field2.strip()
+                    if not field2:
+                        continue
+                    if operation2 == 'Media':
+                        datasets2.append({
+                            "alias": field2,
+                            "label": "Media" + field_descriptions.get(field2, field2),
+                            "post_calculation": {
                                 "function": "AVG",
                                 "source_dataset_alias": field2
                             }
-                            datasets2.append(dataset2)
+                        })
             else:
-                if fields2 and fields2!='':
-                    for field2 in fields2.split(';'):
-                        dataset2={}
-                        dataset2['label']=field_descriptions.get(field2, field2)
-                        if operation2=='Somma':
-                            dataset2['expression']=f"SUM({field2})"
-                        else:
-                            dataset2['expression']=f"COUNT({field2})"
-                        dataset2['alias']=field2
-                        datasets2.append(dataset2)
-                    
-                if dynamicfield2:
-                    dataset2={}
-                    dataset2['label']=dynamicfield2_label
-                    dataset2['expression']=dynamicfield2
-                    dataset2['alias']=dynamicfield2_label
+                # Espressioni normali
+                for field2 in (fields2 or '').split(','):
+                    field2 = field2.strip()
+                    if not field2:
+                        continue
+                    dataset2 = {
+                        "label": field_descriptions.get(field2, field2),
+                        "alias": field2
+                    }
+                    dataset2['expression'] = f"SUM({field2})" if operation2 == 'Somma' else f"COUNT({field2})"
                     datasets2.append(dataset2)
 
+                if dynamicfield2:
+                    datasets2.append({
+                        "label": dynamicfield2_label,
+                        "expression": dynamicfield2,
+                        "alias": dynamicfield2_label
+                    })
 
-            
             config_python = {
                 "from_table": tabella,
                 "group_by_field": {
@@ -2632,11 +2635,18 @@ def save_record_fields(request):
                 "datasets2": datasets2,
                 "order_by": raggruppamento + " ASC"
             }
-            #TODO custom wegolf
-            if raggruppamento=='recordidgolfclub_':
-                config_python['group_by_field']["lookup"]= {"on_key": "recordid_", "from_table": "golfclub", "display_field": "nome_club"}
-            
 
+            # Lookup golf club
+            if raggruppamento == 'recordidgolfclub_':
+                config_python['group_by_field']["lookup"] = {
+                    "on_key": "recordid_",
+                    "from_table": "golfclub",
+                    "display_field": "nome_club"
+                }
+
+        # =======================
+        #   CHART SAVE
+        # =======================
         user = SysUser.objects.filter(id=userid).first()
 
         if chartid and chartid != 'None':
@@ -2646,49 +2656,84 @@ def save_record_fields(request):
                 config=config_python,
                 userid=user
             )
-            
-            SysDashboardBlock.objects.filter(chartid=chartid).update(
-                name=title
-            )
+            chart_obj = SysChart.objects.get(id=chartid)
         else:
-            SysChart.objects.create(
+            chart = SysChart.objects.create(
                 name=title,
                 layout=layout,
                 config=config_python,
                 userid=user
             )
 
+            # Salva l'ID del chart
+            chart_record.values['reportid'] = chart.id
+            chart_record.save()
 
-        if not chartid:
-            chartid = SysChart.objects.filter(
-                name=title,
-                layout=layout,
-                userid=user
-            ).values_list('id', flat=True).first()
-            
-            if chartid:
-                default_view = SysView.objects.filter(
-                    tableid=tabella,
-                    query_conditions='true'
-                ).first()
-                
-                chart_record.values['reportid'] = chartid
-                chart_record.save()
-                
-                # TODO custom wegolf
-                category = 'benchmark' if raggruppamento == 'recordidgolfclub_' else None
-                
-                SysDashboardBlock.objects.create(
-                    name=title,
-                    userid=user.id,
-                    viewid_id=default_view.id if default_view else None,
-                    chartid_id=chartid,
-                    category=category
-                )
-        
-        
-   
+        # =======================
+        #   DASHBOARD / VIEW
+        # =======================
+        # Se non specificate, fallback alla default_view
+        default_view = SysView.objects.filter(tableid=tabella, query_conditions='true').first()
+        if not view_ids and default_view:
+            view_ids = [str(default_view.id)]
 
+        # Combinazioni target (dashboardid, viewid)
+        target_combinations = set()
+        for dashboard_id in (dashboard_ids or [None]):
+            for view_id in view_ids:
+                target_combinations.add((dashboard_id, view_id))
+
+        # Combinazioni attuali
+        existing_blocks = SysDashboardBlock.objects.filter(chartid=chart_obj.id)
+        existing_combinations = set(
+            (str(block.dashboardid_id) if block.dashboardid_id else None, str(block.viewid_id) if block.viewid_id else None)
+            for block in existing_blocks
+        )
+
+        # Blocchi da rimuovere
+        to_delete = existing_combinations - target_combinations
+        for dashboard_id, view_id in to_delete:
+            blocks_to_delete = SysDashboardBlock.objects.filter(
+                chartid=chart_obj.id,
+                dashboardid_id=dashboard_id,
+                viewid_id=view_id
+            )
+
+            for block in blocks_to_delete:
+                # Prima elimina eventuali record figli
+                SysUserDashboardBlock.objects.filter(dashboard_block_id=block.id).delete()
+
+                # Poi elimina il blocco stesso
+                block.delete()
+
+        # Blocchi da creare o aggiornare
+        to_create = target_combinations - existing_combinations
+        to_update = target_combinations & existing_combinations
+
+        for dashboard_id, view_id in to_create:
+            dashboard_obj = SysDashboard.objects.filter(id=dashboard_id).first() if dashboard_id else None
+            view_obj = SysView.objects.filter(id=view_id).first() if view_id else None
+            final_name = f"{title} {(view_obj.name if view_obj else '')} {(dashboard_obj.name if dashboard_obj else '')}".strip()
+
+            SysDashboardBlock.objects.create(
+                name=final_name,
+                userid=user.id,
+                viewid_id=view_id if view_obj else (default_view.id if default_view else None),
+                chartid=chart_obj,
+                dashboardid_id=dashboard_id if dashboard_obj else None,
+                category='benchmark' if raggruppamento == 'recordidgolfclub_' else None
+            )
+
+        for dashboard_id, view_id in to_update:
+            dashboard_obj = SysDashboard.objects.filter(id=dashboard_id).first() if dashboard_id else None
+            view_obj = SysView.objects.filter(id=view_id).first() if view_id else None
+            final_name = f"{title} {(view_obj.name if view_obj else '')} {(dashboard_obj.name if dashboard_obj else '')}".strip()
+
+            SysDashboardBlock.objects.filter(
+                chartid=chart_obj.id,
+                dashboardid_id=dashboard_id,
+                viewid_id=view_id
+            ).update(name=final_name)
 
     custom_save_record_fields(tableid, recordid)
     return JsonResponse({"success": True, "detail": "Campi del record salvati con successo", "recordid": record.recordid})
@@ -2751,7 +2796,9 @@ def get_record_card_fields(request):
     master_tableid= data.get("mastertableid")
     master_recordid= data.get("masterrecordid")
 
-    record=UserRecord(tableid,recordid,Helper.get_userid(request),master_tableid,master_recordid)
+    userid = Helper.get_userid(request)
+
+    record=UserRecord(tableid,recordid,userid,master_tableid,master_recordid)
     card_fields=record.get_record_card_fields()
 
     response={ "fields": card_fields, "recordid": recordid}
@@ -2774,10 +2821,34 @@ def get_record_card_fields(request):
                 "label": f["description"]
             })
 
+        dashboards_user = SysUserDashboard.objects.filter(userid=userid).values("dashboardid")
+        dashboards_qs = SysDashboard.objects.filter(
+            id__in=[d["dashboardid"] for d in dashboards_user]
+        ).values("id", "name").order_by("order_dashboard")
+
+        dashboards_lookup = [
+            {"value": str(d["id"]), "label": d["name"]}
+            for d in dashboards_qs
+        ]
+
+        # Views per tableid
+        views_qs = SysView.objects.all().values("tableid", "name", "id")
+        views_lookup = {}
+        for v in views_qs:
+            tid = str(v["tableid"])
+            if tid not in views_lookup:
+                views_lookup[tid] = []
+            views_lookup[tid].append({
+                "value": str(v["id"]),
+                "label": v["name"]
+            })
+
         # Inseriamo i lookup nella response
         response["lookup"] = {
             "table": tables_lookup,
-            "campi": fields_lookup
+            "campi": fields_lookup,
+            "views": views_lookup,
+            "dashboards": dashboards_lookup,
         }
 
     return JsonResponse(response)
@@ -3931,14 +4002,22 @@ def download_offerta(request):
 
 
 def get_dashboard_data(request):
-    userid = request.user.id
+    userid = Helper.get_userid(request)
     data = json.loads(request.body)
     dashboardCategory = data.get('dashboardCategory', '')   
 
     if dashboardCategory!='':
         dashboards = HelpderDB.sql_query(f"SELECT  id, name from sys_dashboard WHERE category='{dashboardCategory}'")
     else:
-        dashboards = HelpderDB.sql_query(f"SELECT  id, name from sys_dashboard")
+        dashboards_user = SysUserDashboard.objects.filter(userid=userid).values("dashboardid")
+        dashboards_qs = SysDashboard.objects.filter(
+            id__in=[d["dashboardid"] for d in dashboards_user]
+        ).values("id", "name").order_by("order_dashboard")
+
+        dashboards = [
+            {"id": str(d["id"]), "name": d["name"]}
+            for d in dashboards_qs
+        ]
 
     return JsonResponse({
         'dashboards': dashboards
