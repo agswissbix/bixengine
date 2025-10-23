@@ -52,17 +52,19 @@ def save_record_fields(tableid,recordid):
         assenze_dict_list=dipendente_record.get_linkedrecords_dict('assenze')
         for assenza in assenze_dict_list:
             data_assenza_dal=assenza.get('dal')
-            if data_assenza_dal:
-                try:
-                    dal_date = date.fromisoformat(str(data_assenza_dal))
-                except Exception:
+            tipo_assenza=assenza.get('tipo_assenza')
+            if tipo_assenza == 'Vacanza':
+                if data_assenza_dal:
                     try:
-                        dal_date = datetime.strptime(str(data_assenza_dal), '%Y-%m-%d').date()
+                        dal_date = date.fromisoformat(str(data_assenza_dal))
                     except Exception:
-                        dal_date = None
-                if dal_date and dal_date > date(2025, 9, 30):
-                    giorni_assenza= Helper.safe_float(assenza.get('giorni'))
-                    saldovacanze=saldovacanze-giorni_assenza
+                        try:
+                            dal_date = datetime.strptime(str(data_assenza_dal), '%Y-%m-%d').date()
+                        except Exception:
+                            dal_date = None
+                    if dal_date and dal_date > date(2025, 9, 30):
+                        giorni_assenza= Helper.safe_float(assenza.get('giorni'))
+                        saldovacanze=saldovacanze-giorni_assenza
 
         dipendente_record.values['saldovacanze'] = saldovacanze
         dipendente_record.save()
