@@ -550,7 +550,7 @@ def get_table_records(request):
     data = json.loads(request.body)
     tableid = data.get("tableid")
     viewid = data.get("view")
-    searchTerm = data.get("searchTerm")
+    searchTerm = data.get("searchTerm", '')
     master_tableid = data.get("masterTableid")
     master_recordid = data.get("masterRecordid")
     filtersList = data.get("filtersList", []) # <-- Recupera la filtersList
@@ -2658,7 +2658,7 @@ def save_record_fields(request):
             )
             chart_obj = SysChart.objects.get(id=chartid)
         else:
-            chart = SysChart.objects.create(
+            chart_obj = SysChart.objects.create(
                 name=title,
                 layout=layout,
                 config=config_python,
@@ -2666,7 +2666,7 @@ def save_record_fields(request):
             )
 
             # Salva l'ID del chart
-            chart_record.values['reportid'] = chart.id
+            chart_record.values['reportid'] = chart_obj.id
             chart_record.save()
 
         # =======================
@@ -2684,7 +2684,7 @@ def save_record_fields(request):
                 target_combinations.add((dashboard_id, view_id))
 
         # Combinazioni attuali
-        existing_blocks = SysDashboardBlock.objects.filter(chartid=chart_obj.id)
+        existing_blocks = SysDashboardBlock.objects.filter(chartid=chart_obj)
         existing_combinations = set(
             (str(block.dashboardid_id) if block.dashboardid_id else None, str(block.viewid_id) if block.viewid_id else None)
             for block in existing_blocks
@@ -2694,7 +2694,7 @@ def save_record_fields(request):
         to_delete = existing_combinations - target_combinations
         for dashboard_id, view_id in to_delete:
             blocks_to_delete = SysDashboardBlock.objects.filter(
-                chartid=chart_obj.id,
+                chartid=chart_obj,
                 dashboardid_id=dashboard_id,
                 viewid_id=view_id
             )
@@ -2730,7 +2730,7 @@ def save_record_fields(request):
             final_name = f"{title} {(view_obj.name if view_obj else '')} {(dashboard_obj.name if dashboard_obj else '')}".strip()
 
             SysDashboardBlock.objects.filter(
-                chartid=chart_obj.id,
+                chartid=chart_obj,
                 dashboardid_id=dashboard_id,
                 viewid_id=view_id
             ).update(name=final_name)
@@ -4459,6 +4459,7 @@ def get_dashboard_blocks(request):
                                 selected_years_conditions = " AND (" + selected_years_conditions + ")"
                             query_conditions = query_conditions + selected_years_conditions
                         chart_data=get_dynamic_chart_data(request, results['chartid'],query_conditions)
+                        chart_data['datasets'][0]['view'] = viewid
                         chart_data_json=json.dumps(chart_data)
 
                         
@@ -4507,6 +4508,7 @@ def get_chart_data(request):
             query_conditions = view["query_conditions"].replace("$userid$", str(userid))
 
         chart_data = get_dynamic_chart_data(request, chart_id, query_conditions)
+        chart_data['datasets'][0]['view'] = viewid
         chart_data_json=json.dumps(chart_data)
 
 
@@ -4873,6 +4875,10 @@ def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
             image_relativepath = f"chart/{chart_recordid}/icona.png"
             if final_datasets1:
                 final_datasets1[0]['image'] = image_relativepath
+
+    if chart_record['layout'] == 'table':
+        final_datasets1[0]['tableid'] = config['from_table']
+        final_datasets1[0]['view'] = chart_record.get('viewid', '')
 
     # 6. Composizione del contesto finale
     context = {
