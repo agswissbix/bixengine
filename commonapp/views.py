@@ -5534,62 +5534,25 @@ def get_custom_functions(request):
 
 def calculate_dependent_fields(request):
     print("FUN:calculate_dependent_fields")
-    data = json.loads(request.body)
-    updated_fields = {}
-    recordid=data.get('recordid')
-    tableid=data.get('tableid')
-    #TODO spostare in parte customapp_siwssbix
-    if tableid=='dealline':
-        fields= data.get('fields')
-        quantity = fields.get('quantity', 0)
-        unitprice = fields.get('unitprice', 0)
-        unitexpectedcost = fields.get('unitexpectedcost', 0)
-        recordidproduct=fields.get('recordidproduct_',None)
-        if recordidproduct:
-            product=UserRecord('product',recordidproduct)
-            if product:
-                if unitprice=='' or unitprice is None:
-                    unitprice=product.values.get('price',0)
-                    updated_fields['unitprice']=unitprice
-                if unitexpectedcost=='' or unitexpectedcost is None:
-                    unitexpectedcost=product.values.get('cost',0)
-                    updated_fields['unitexpectedcost']=unitexpectedcost
-        
-        if quantity == '' or quantity is None:
-            quantity = 0
-        if unitprice == '' or unitprice is None:
-            unitprice = 0
-        if unitexpectedcost == '' or unitexpectedcost is None:
-            unitexpectedcost = 0
+    idcliente = Helper.get_cliente_id()
+    # Nome del modulo dinamico
+    module_name = f"customapp_{idcliente}.customfunc"
 
-        try:
-            quantity_num = float(quantity)
-        except (ValueError, TypeError):
-            quantity_num = 0
-        try:
-            unitprice_num = float(unitprice)
-        except (ValueError, TypeError):
-            unitprice_num = 0
-        try:
-            unitexpectedcost_num = float(unitexpectedcost)
-        except (ValueError, TypeError):
-            unitexpectedcost_num = 0
+    try:
+        # Import dinamico
+        customfunc = importlib.import_module(module_name)
 
-        updated_fields['price'] = round(quantity_num * unitprice_num, 2)
-        updated_fields['expectedcost'] = round(quantity_num * unitexpectedcost_num, 2)
-        updated_fields['expectedmargin'] = round(updated_fields['price'] - updated_fields['expectedcost'], 2)
-    
-    
-    if tableid=='assenze':
-        fields= data.get('fields')
-        giorni= Helper.safe_float(fields.get('giorni', 0))
-        ore= Helper.safe_float(fields.get('ore', 0))
-        if ore == '' or ore is None:
-            ore_updated=giorni * 8
-            updated_fields['ore']=ore_updated       
-        
-    
-    return JsonResponse({'status': 'success', 'updated_fields': updated_fields})
+        # Chiama la funzione se esiste
+        if hasattr(customfunc, "calculate_dependent_fields"):
+            return customfunc.calculate_dependent_fields(request)
+        else:
+            print(f"Funzione 'calculate_dependent_fields' non trovata in {module_name}")
+    except ModuleNotFoundError:
+        print(f"Modulo personalizzato {module_name} non trovato")
+    except Exception as e:
+        print(f"Errore durante l'importazione o l'esecuzione: {e}")
+
+
 
 
 def get_filter_options(request):
