@@ -97,6 +97,8 @@ urlpatterns = [
     path('settings_table_linkedtables_save/', settings_table_linkedtables_save, name='settings_table_linkedtables_save'),
     path('save_new_table/', save_new_table, name='save_new_table'),
     path('get_master_linked_tables/', get_master_linked_tables, name='get_master_linked_tables'),
+    path('settings_get_dashboards_user/', settings_get_dashboards_user, name='settings_get_dashboards_user'),
+    path('save_user_dashboard_setting/', save_user_dashboard_setting, name='save_user_dashboard_setting'),
     
     
     # ------------------  WeGolf views ---------------------------------
