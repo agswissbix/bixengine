@@ -32,6 +32,7 @@ urlpatterns = [
     path('syncdata/', syncdata, name='syncdata'),
     path('get_scheduler_logs/', get_scheduler_logs, name='get_scheduler_logs'),
     path('get_fields_swissbix_deal/', get_fields_swissbix_deal, name='get_fields_swissbix_deal'),
+    path('get_system_assurance_activemind/', get_system_assurance_activemind, name='get_system_assurance_activemind'),
     
     
 ]

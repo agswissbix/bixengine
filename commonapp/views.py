@@ -2821,10 +2821,7 @@ def get_record_card_fields(request):
                 "label": f["description"]
             })
 
-        dashboards_user = SysUserDashboard.objects.filter(userid=userid).values("dashboardid")
-        dashboards_qs = SysDashboard.objects.filter(
-            id__in=[d["dashboardid"] for d in dashboards_user]
-        ).values("id", "name").order_by("order_dashboard")
+        dashboards_qs = SysDashboard.objects.all().values("id", "name").order_by("order_dashboard")
 
         dashboards_lookup = [
             {"value": str(d["id"]), "label": d["name"]}

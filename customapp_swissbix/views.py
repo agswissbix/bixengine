@@ -31,6 +31,7 @@ from docx.enum.section import WD_SECTION
 from docxtpl import DocxTemplate
 from customapp_swissbix.mock.activeMind.products import products as products_data_mock
 from customapp_swissbix.mock.activeMind.services import services as services_data_mock
+from customapp_swissbix.customfunc import save_record_fields
 
 logger = logging.getLogger(__name__)
 
@@ -70,17 +71,64 @@ def save_activemind(request):
         request_body = json.loads(request.body)
         data=request_body.get('data', {})
         recordid_deal = data.get('recordIdTrattativa', None)
-        #section1
-        section1=data.get('section1', {})
-        selectdTier=section1.get('selectedTier', '')
-        price=section1.get('price', '')
-        record_dealline=UserRecord('dealline')
-        record_dealline.values['recordiddeal_']=recordid_deal
-        record_dealline.values['name']=selectdTier
-        record_dealline.values['price']=price
-        record_dealline.save()
 
-        #section2
+        if not recordid_deal:
+            return JsonResponse({
+                'success': False,
+                'message': 'recordIdTrattativa mancante.'
+            }, status=400)
+
+        # =====================
+        # 🔸 SECTION 1
+        # =====================
+        section1 = data.get('section1', {})
+        price = section1.get('price', '')
+        product_id = section1.get('selectedTier', '')
+
+        if product_id:
+            product = UserRecord('product', product_id)
+            if not product or not product.values:
+                return JsonResponse({
+                    'success': False,
+                    'message': f'Prodotto con ID {product_id} non trovato.'
+                }, status=404)
+
+            record_dealline = UserRecord('dealline')
+            record_dealline.values['recordiddeal_'] = recordid_deal
+            record_dealline.values['recordidproduct_'] = product.values.get('recordid_', '')
+            record_dealline.values['name'] = product.values.get('name', '')
+            record_dealline.values['unitprice'] = price
+            record_dealline.values['unitexpectedcost'] = 0
+            record_dealline.values['quantity'] = 1
+            record_dealline.save()
+
+            save_record_fields('dealline', record_dealline.recordid)
+
+        # =====================
+        # 🔸 SECTION 2 (prodotti multipli)
+        # =====================
+        section2_products = data.get('section2Products', {})
+
+        for product_key, product_data in section2_products.items():
+            quantity = product_data.get('quantity', 1)
+            unit_price = product_data.get('unitPrice', 0)
+
+            # Trova il recordid_ del prodotto
+            product = UserRecord('product', product_key)
+            if not product or not product.values:
+                # se non trova il prodotto → logga o salta
+                continue
+
+            record_dealline = UserRecord('dealline')
+            record_dealline.values['recordiddeal_'] = recordid_deal
+            record_dealline.values['recordidproduct_'] = product.values.get('recordid_', '')
+            record_dealline.values['name'] = product.values.get('name', '')
+            record_dealline.values['unitprice'] = unit_price
+            record_dealline.values['unitexpectedcost'] = 0
+            record_dealline.values['quantity'] = quantity
+            record_dealline.save()
+
+            save_record_fields('dealline', record_dealline.recordid)
 
         #section3
 
@@ -317,6 +365,45 @@ def link_callback(uri, rel):
 
     raise Exception(f"Immagine o file statico non trovato: {uri}")
 
+def get_system_assurance_activemind(request):
+    data = json.loads(request.body)
+    recordid_deal = data.get('trattativaid', None)
+
+    if not recordid_deal:
+        return JsonResponse({'error': 'Missing trattativaid'}, status=400)
+
+    tiers = []
+
+    with connection.cursor() as cursor:
+        # 1. Prendo i prodotti che iniziano con "System Assurance"
+        cursor.execute("""
+            SELECT recordid_, name, price
+            FROM user_product
+            WHERE name LIKE %s AND deleted_ = 'N'
+        """, ["System Assurance%"])
+        products = cursor.fetchall()  # [(id, name, price), ...]
+
+        # 2. Prendo i product_id selezionati nella trattativa
+        cursor.execute("""
+            SELECT recordidproduct_
+            FROM user_dealline
+            WHERE recordiddeal_ = %s AND deleted_ = 'N'
+        """, [recordid_deal])
+        selected_rows = cursor.fetchall()  # [(product_id,), ...]
+        selected_ids = {row[0] for row in selected_rows}
+
+        # 3. Costruisco i tiers
+        for product in products:
+            prod_id, name, price = product
+            tiers.append({
+                "id": str(prod_id),
+                "label": name.replace("System assurance - ", ""),
+                "price": float(price) if price is not None else 0.0,
+                "selected": prod_id in selected_ids
+            })
+
+    return JsonResponse({"tiers": tiers})
+
 def get_services_activemind(request):
     # print(services_data_mock)
     return JsonResponse({"services": services_data_mock}, safe=False)
@@ -345,8 +432,97 @@ def build_service_with_totals(service_id: str, quantity: int):
     }
 
 def get_products_activemind(request):
-    # print(products_data_mock)
-    return JsonResponse({"servicesCategory": products_data_mock}, safe=False)
+    data = json.loads(request.body)
+    recordid_deal = data.get('trattativaid', None)
+
+    if not recordid_deal:
+        return JsonResponse({'error': 'Missing trattativaid'}, status=400)
+
+    # 🔹 Pattern per mappare prodotti -> categorie
+    category_map = {
+        "data_security": ["RMM", "EDR", "Backup"],
+        "mobile_security": ["Safely Mobile"],
+        "infrastructure": ["Vulnerability"],
+        "sophos": ["Central E-mail", "Phish Threat"],
+        "firewall": ["XGS"],
+        "microsoft": ["Microsoft 365"]
+    }
+
+    # 🔹 Mappa icone già definite nel mock
+    icon_map = {
+        "RMM": "Monitor",
+        "EDR": "Shield",
+        "Backup": "Database",
+        "Safely Mobile": "Smartphone",
+        "Vulnerability": "Search",
+        "Central E-mail": "Mail",
+        "Phish Threat": "AlertTriangle",
+        "XGS": "Shield",
+        "Microsoft 365": "Cloud",
+    }
+
+    # 🔹 Creo un dizionario per accedere rapidamente alle macro-categorie
+    categories_dict = {c["id"]: c for c in products_data_mock}
+    # Svuoto i services per poi riempirli con dati reali
+    for cat in categories_dict.values():
+        cat["services"] = []
+
+    with connection.cursor() as cursor:
+        # 1. Prendo tutti i prodotti AM
+        cursor.execute("""
+            SELECT recordid_, name, description, note, price
+            FROM user_product
+            WHERE name LIKE 'AM - %' AND deleted_ = 'N'
+        """)
+        db_products = cursor.fetchall()
+
+        # 2. Prendo le quantità dalla trattativa
+        cursor.execute("""
+            SELECT recordidproduct_, quantity
+            FROM user_dealline
+            WHERE recordiddeal_ = %s AND deleted_ = 'N'
+        """, [recordid_deal])
+        deal_rows = cursor.fetchall()
+        quantity_map = {row[0]: row[1] for row in deal_rows}
+
+    # 3. Per ogni prodotto DB → mappo alla categoria mock
+    for recordid_, name, description, note, price in db_products:
+        matched_category_id = None
+        matched_icon = None
+
+        for cat_id, patterns in category_map.items():
+            for p in patterns:
+                if p.lower() in name.lower():
+                    matched_category_id = cat_id
+                    matched_icon = icon_map.get(p, None)
+                    break
+            if matched_category_id:
+                break
+
+        if not matched_category_id:
+            # se non matcha nessuna categoria → skip
+            continue
+
+        features = [f.strip() for f in note.split(",")] if note else []
+        quantity = quantity_map.get(recordid_, 0)
+
+        service = {
+            "id": str(recordid_),
+            "title": name.replace("AM - ", ""),
+            "unitPrice": float(price) if price else 0.0,
+            "icon": matched_icon,
+            "category": matched_category_id,
+            "description": description,
+            "monthlyPrice": float(price) if price else None,
+            "yearlyPrice": float(price) * 10.5 if price else None,
+            "features": features,
+            "quantity": quantity
+        }
+
+        categories_dict[matched_category_id]["services"].append(service)
+
+    # 4. Ritorno la struttura aggiornata
+    return JsonResponse({"servicesCategory": list(categories_dict.values())}, safe=False)
 
 def get_product_by_id(product_id: str):
     """Ritorna il dict del prodotto dal mock (in futuro DB)."""
