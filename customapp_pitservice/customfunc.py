@@ -62,7 +62,7 @@ def save_record_fields(tableid,recordid):
                             dal_date = datetime.strptime(str(data_assenza_dal), '%Y-%m-%d').date()
                         except Exception:
                             dal_date = None
-                    if dal_date and dal_date > date(2025, 9, 30):
+                    if dal_date and dal_date > date(2025, 8, 31):
                         giorni_assenza= Helper.safe_float(assenza.get('giorni'))
                         saldovacanze=saldovacanze-giorni_assenza
 
