@@ -435,14 +435,52 @@ class UserRecord:
             self.values['personariferimento'] = (record_telefonate.values.get('chi') or '') + " " + (record_telefonate.values.get('telefono') or '')
             self.values['richiesta']=(record_telefonate.values.get('motivo_chiamata','') or '')
         
-
+        
         # 1. Carica tutte le impostazioni per la tabella e l'utente in una sola volta
-        sql_settings = f"""
-            SELECT fieldid, settingid, value
-            FROM sys_user_field_settings
-            WHERE tableid = '{self.tableid}' AND userid = 1
+        # 1. Crea un dizionario per contenere le impostazioni finali.
+        #    La chiave sarà una tupla (fieldid, settingid) per garantire l'unicità.
+        merged_settings = {}
+
+        # 2. Carica prima le impostazioni di default (userid = 1)
+        sql_default = f"""
+        SELECT fieldid, settingid, value
+        FROM sys_user_field_settings
+        WHERE tableid = '{self.tableid}' AND userid = 1
         """
-        all_settings_raw = HelpderDB.sql_query(sql_settings)
+        default_settings_raw = HelpderDB.sql_query(sql_default)
+
+        # 3. Popola il dizionario con i valori di default
+        if not Helper.isempty(default_settings_raw):
+            for setting in default_settings_raw:
+                # Crea una chiave unica
+                key = (setting['fieldid'], setting['settingid'])
+                merged_settings[key] = setting
+
+        # 4. Ora carica le impostazioni specifiche dell'utente (self.userid)
+        #    Non serve controllare se l'utente è 1, il merge funziona comunque
+        sql_user = f"""
+        SELECT fieldid, settingid, value
+        FROM sys_user_field_settings
+        WHERE tableid = '{self.tableid}' AND userid = {self.userid}
+        """
+        user_settings_raw = HelpderDB.sql_query(sql_user)
+
+        # 5. Esegui l'override (merge)
+        #    Se l'utente ha una chiave, questa sovrascriverà quella di default.
+        if not Helper.isempty(user_settings_raw):
+            for setting in user_settings_raw:
+                key = (setting['fieldid'], setting['settingid'])
+                # Questa operazione sovrascrive il default se la chiave esiste,
+                # o aggiunge la nuova impostazione utente se non esiste.
+                merged_settings[key] = setting
+
+        # 6. Riconverti i valori del dizionario in una lista finale
+        #    Questo corrisponderà al formato che avevi nell'immagine.
+        all_settings_raw = list(merged_settings.values())
+
+        # Ora all_settings_raw contiene:
+        # - Tutte le impostazioni di userid=1
+        # - Sovrascritte/Integrate da quelle di self.userid
 
         # 2. Organizza le impostazioni in un dizionario per un accesso efficiente
         field_settings_map = {}

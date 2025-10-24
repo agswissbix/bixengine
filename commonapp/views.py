@@ -21,6 +21,7 @@ from .bixmodels.user_record import *
 from .bixmodels.user_table import *
 from commonapp.models import SysCustomFunction, SysUser, SysUserSettings, SysTable
 from django.db.models import F, OuterRef, Subquery, IntegerField
+from commonapp.helper import *
 
 import pyotp
 import qrcode
@@ -4457,7 +4458,7 @@ def get_dashboard_blocks(request):
                             query_conditions = query_conditions + selected_years_conditions
                         chart_data=get_dynamic_chart_data(request, results['chartid'],query_conditions)
                         chart_data['datasets'][0]['view'] = viewid
-                        chart_data_json=json.dumps(chart_data)
+                        chart_data_json=json.dumps(chart_data, default=json_date_handler)
 
                         
                         block['chart_data'] = chart_data_json
@@ -4506,7 +4507,7 @@ def get_chart_data(request):
 
         chart_data = get_dynamic_chart_data(request, chart_id, query_conditions)
         chart_data['datasets'][0]['view'] = viewid
-        chart_data_json=json.dumps(chart_data)
+        chart_data_json = json.dumps(chart_data, default=json_date_handler)
 
 
         return JsonResponse({
@@ -4520,6 +4521,22 @@ def get_chart_data(request):
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
 
+
+#TODO spostare in un helper e capire perchè è necessario reimportare qui il datetime o va in errore
+def json_date_handler(obj):
+    """
+    Gestore personalizzato per json.dumps.
+    Formatta gli oggetti date e datetime in 'gg.mm.aaaa'.
+    """
+
+    from datetime import datetime, date
+
+    if isinstance(obj, (datetime, date)):
+        # Formatta la data come 'giorno.mese.anno'
+        return obj.strftime('%d.%m.%Y')
+    
+    # Se non è una data, solleva l'errore standard
+    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
 
 from django.db import connection

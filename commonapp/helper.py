@@ -32,6 +32,8 @@ def login_required_api(view_func):
     return wrapped
 
 
+
+
 ## PARSER PER CONVERTIRE LE CONDIZIONI DEGLI ALERT IN CONDIZIONI UTILIZZABILI A CODICE
 _OPERATOR_FUNCS = {
     '=':  lambda a, b: a == b,
@@ -131,11 +133,15 @@ class CodeTimer:
         print(f"✅  [FINE] '{self.name}' eseguito in {elapsed_time:.4f} secondi.")
 
 
+
+
+
+
 class Helper:
 
     @classmethod     
     def isempty(cls, var):
-        if var is None or var=='None' or var=='' or var=='null' or var==0:
+        if not var or var == 'None' or var == 'null':
             return True
         else:
             return False
@@ -362,3 +368,5 @@ class Helper:
                 return False
 
         return True
+
+    

@@ -12,6 +12,9 @@ from commonapp.helper import *
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view
 from datetime import *
+import qrcode
+import base64
+import pdfkit
 
 from commonapp.helper import Helper
 from commonapp.bixmodels.user_record import UserRecord
@@ -576,16 +579,26 @@ def save_record_fields(tableid,recordid):
         assenza_record = UserRecord('assenze', recordid)
         tipo_assenza=assenza_record.values['tipo_assenza']
         if tipo_assenza!='Malattia':
-            ore_assenza= Helper.safe_float(assenza_record.values['ore'])
-            giorni_assenza = ore_assenza / 8
             dipendente_recordid = assenza_record.values['recordiddipendente_']
-            dipendente_record = UserRecord('dipendente', dipendente_recordid)
-            saldovacanze_attuale=Helper.safe_float(dipendente_record.values['saldovacanze'])
-            if not saldovacanze_attuale:
-                saldovacanze_attuale=0
-            saldovacanze=saldovacanze_attuale-giorni_assenza
-            dipendente_record.values['saldovacanze'] = saldovacanze
-            dipendente_record.save()
+            save_record_fields(tableid='dipendente', recordid=dipendente_recordid)
+
+    # ---DIPENDENTE---
+    if tableid == 'dipendente':
+        dipendente_record = UserRecord('dipendente', recordid)
+
+        #calcolo saldo vacanze
+        saldovacanze_iniziale= Helper.safe_float(dipendente_record.values['saldovacanze_iniziale'])
+        saldovacanze=saldovacanze_iniziale
+        assenze_dict_list=dipendente_record.get_linkedrecords_dict('assenze')
+        for assenza in assenze_dict_list:
+            tipo_assenza=assenza.get('tipo_assenza')
+            if tipo_assenza == 'Vacanze':
+                giorni_assenza= Helper.safe_float(assenza.get('giorni'))
+                saldovacanze=saldovacanze-giorni_assenza
+
+        dipendente_record.values['saldovacanze'] = saldovacanze
+        dipendente_record.save()
+            
 
 
 def card_task_pianificaperoggi(recordid):
@@ -776,10 +789,119 @@ def calculate_dependent_fields(request):
     #---ASSENZE---
     if tableid=='assenze':
         fields= data.get('fields')
-        giorni= Helper.safe_float(fields.get('giorni', 0))
-        ore= Helper.safe_float(fields.get('ore', 0))
-        if ore == '' or ore is None:
-            ore_updated=giorni * 8
-            updated_fields['ore']=ore_updated   
+        #giorni= Helper.safe_float(fields.get('giorni', 0))
+        #ore= Helper.safe_float(fields.get('ore', 0))
+        #if ore == '' or ore is None:
+         #   ore_updated=giorni * 8
+          #  updated_fields['ore']=ore_updated   
 
     return JsonResponse({'status': 'success', 'updated_fields': updated_fields})
+
+
+def print_timesheet(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            recordid = data.get('recordid')
+
+            
+            base_path = os.path.join(settings.STATIC_ROOT, 'pdf')
+
+
+
+
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_H,
+                box_size=10,
+                border=0,
+            )
+
+            today = date.today()
+            d1 = today.strftime("%d/%m/%Y")
+
+            qrcontent = 'timesheet_' + str(recordid)
+
+
+            data = qrcontent
+            qr.add_data(data)
+            qr.make(fit=True)
+
+            img = qr.make_image(fill_color="black", back_color="white")
+
+            qr_name = 'qrcode' + recordid + '.png'
+
+            qr_path = os.path.join(base_path, qr_name)
+
+            img.save(qr_path)
+
+
+            rows = HelpderDB.sql_query(f"SELECT t.*, c.companyname, c.address, c.city, c.email, c.phonenumber, u.firstname, u.lastname FROM user_timesheet AS t JOIN user_company AS c ON t.recordidcompany_=c.recordid_ JOIN sys_user AS u ON t.user = u.id WHERE t.recordid_='{recordid}'")
+
+            server = os.environ.get('BIXENGINE_SERVER')
+            qr_url = server + '/static/pdf/' + qr_name
+
+
+            pdf_filename = f"Timesheet_{str(recordid)}.pdf"
+            pdf_filename = re.sub(r'[\\/*?:"<>|]', "", pdf_filename) # Pulisci il nome
+
+            filename_with_path = os.path.join(base_path, 'temp_timesheet_' + str(recordid) + '.pdf')
+
+
+
+            row = rows[0]
+
+            for value in row:
+                if row[value] is None:
+                    row[value] = ''
+
+            row['recordid'] = recordid
+            row['qrUrl'] = qr_url
+
+
+            timesheetlines = HelpderDB.sql_query(f"SELECT * FROM user_timesheetline WHERE recordidtimesheet_='{recordid}'")
+
+
+            for line in timesheetlines:
+                line['note'] = line['note'] or ''   
+                line['expectedquantity'] = line['expectedquantity'] or ''
+                line['actualquantity'] = line['actualquantity'] or ''
+
+            row['timesheetlines'] = timesheetlines
+
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+        
+            wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
+
+            config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
+            content = render_to_string('pdf/timesheet_signature.html', row)
+
+            pdfkit.from_string(
+                content,
+                filename_with_path,
+                configuration=config,
+                options={
+                    "enable-local-file-access": "",
+                    # "quiet": ""  # <-- rimuovilo!
+                }
+            )
+
+
+            try:
+                with open(filename_with_path, 'rb') as f:
+                    pdf_data = f.read()
+  
+                    response = HttpResponse(pdf_data, content_type='application/pdf')
+                    response['Content-Disposition'] = f'inline; filename="{pdf_filename}"'
+                    return response
+            finally:
+                if os.path.exists(filename_with_path):
+                    os.remove(filename_with_path)
+                if os.path.exists(qr_path):
+                    os.remove(qr_path)
+
+        except Exception as e:
+            print(f"Error in print_timesheet: {e}")
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
