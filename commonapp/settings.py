@@ -8,7 +8,7 @@ from bixsettings.views.businesslogic.models.field_settings import *
 from bixsettings.views.helpers.helperdb import *
 from django.db import transaction
 from django.db.models.functions import Coalesce
-from django.db.models import F, OuterRef, Subquery, IntegerField
+from django.db.models import F, OuterRef, Subquery, IntegerField, Case, When, Value
 from django.utils import timezone
 from commonapp.helper import *
 
@@ -100,7 +100,16 @@ def settings_table_fields(request):
             master_tableid=master_table_id
         ).first()
 
-        # Aggiungi solo l'order (None se non esiste)
+        
+        if not user_field_conf:
+            user_field_conf = SysUserFieldOrder.objects.filter(
+                tableid=tableid,
+                fieldid=field['id'],
+                userid=1,
+                typepreference=typepreference,
+                master_tableid=master_table_id
+            ).first()
+
         field['order'] = user_field_conf.fieldorder if user_field_conf else None
 
     return JsonResponse({
@@ -496,19 +505,44 @@ def settings_table_linkedtables(request):
     tableid = data.get('tableid')
     userid = data.get('userid')
 
-    # Subquery per prendere il fieldorder dell'utente se esiste
-    user_order_subquery = SysUserOrder.objects.filter(
-        tableid=OuterRef('tableid'),
-        fieldid=OuterRef('tablelinkid'),
-        userid=userid
-    ).values('fieldorder')[:1]
+    def _user_order_subqueries(userid):
+        """Restituisce subquery per order e id di SysUserOrder per un dato utente."""
+        base_filter = {
+            'tableid': OuterRef('tableid'),
+            'fieldid': OuterRef('tablelinkid'),
+            'typepreference': 'keylabel',
+            'userid': userid
+        }
+        order_sq = SysUserOrder.objects.filter(**base_filter).values('fieldorder')[:1]
+        id_sq = SysUserOrder.objects.filter(**base_filter).values('id')[:1]
+        return order_sq, id_sq
 
+    # Subquery utente corrente
+    user_order_subquery, user_id_subquery = _user_order_subqueries(userid)
+
+    # Subquery fallback
+    fb_order_subquery, fb_id_subquery = _user_order_subqueries(1)
+
+    # Query principale
     linked_qs = (
         SysTableLink.objects
         .filter(tableid=tableid)
-        .select_related('tablelinkid')  # segue FK per accedere alla descrizione
-        .annotate(fieldorder=Subquery(user_order_subquery, output_field=IntegerField()))
-        .order_by(Coalesce('fieldorder', 9999))
+        .select_related('tablelinkid')
+        .annotate(
+            user_order=Subquery(user_order_subquery, output_field=IntegerField()),
+            user_order_id=Subquery(user_id_subquery),
+            fallback_order=Subquery(fb_order_subquery, output_field=IntegerField()),
+            fallback_order_id=Subquery(fb_id_subquery),
+        )
+        .annotate(
+            fieldorder=Case(
+                When(user_order_id__isnull=False, then='user_order'),
+                When(fallback_order_id__isnull=False, then='fallback_order'),
+                default=Value(None),
+                output_field=IntegerField(),
+            )
+        )
+        .order_by('fieldorder')
     )
 
     # Costruiamo la lista per React nel formato richiesto
@@ -733,41 +767,99 @@ def settings_table_steps(request):
     if not tableid or not userid:
         return JsonResponse({'success': False, 'error': 'Parametri mancanti'}, status=400)
 
-    # --- Recupera gli step e il loro ordine
+    # --- STEP ORDER (user + fallback)
+    user_step_order_subq = SysStepTable.objects.filter(
+        table_id=tableid,
+        step_id=OuterRef('id'),
+        user_id=userid
+    ).values('order')[:1]
+
+    fb_step_order_subq = SysStepTable.objects.filter(
+        table_id=tableid,
+        step_id=OuterRef('id'),
+        user_id=1
+    ).values('order')[:1]
+
     step_links = (
         SysStep.objects
         .annotate(
-            order=Subquery(
-                SysStepTable.objects.filter(
-                    table_id=tableid,
-                    step_id=OuterRef('id')
-                ).values('order')[:1],
+            user_order=Subquery(user_step_order_subq, output_field=IntegerField()),
+            fallback_order=Subquery(fb_step_order_subq, output_field=IntegerField())
+        )
+        .annotate(
+            order=Case(
+                When(user_order__isnull=False, then='user_order'),
+                When(fallback_order__isnull=False, then='fallback_order'),
+                default=Value(9999),
                 output_field=IntegerField()
             )
         )
-        .order_by('order')  # prima per ordine, poi per id
+        .order_by('order')
     )
 
-    # --- Recupera tutti i campi della tabella
+    # --- CAMPI della tabella
     fields = list(SysField.objects.filter(tableid=tableid).values())
     fields = [f for f in fields if not f['fieldid'].endswith('_')]
 
-    # --- Step di tipo 'campi': legami utente per i campi
+    # --- Ordini user per i campi
     user_field_orders = SysUserFieldOrder.objects.filter(
         tableid=tableid,
         userid=userid,
         typepreference='steps_fields'
     )
-
     user_field_map = {
         (ufo.fieldid.id, ufo.step.id): ufo.fieldorder
         for ufo in user_field_orders
     }
 
-    # --- Step di tipo 'collegate': definizione subquery per ordine utente
-    linked_qs = SysTableLink.objects.filter(tableid=tableid).select_related('tablelinkid')
+    # --- Ordini fallback (utente 1) per i campi
+    fallback_field_orders = SysUserFieldOrder.objects.filter(
+        tableid=tableid,
+        userid=1,
+        typepreference='steps_fields'
+    )
+    fallback_field_map = {
+        (ufo.fieldid.id, ufo.step.id): ufo.fieldorder
+        for ufo in fallback_field_orders
+    }
 
-    # Recupera gli ordini personalizzati in Python (non usando OuterRef su step)
+    # --- LINKED TABLES
+    def _user_order_subqueries(userid, typepref):
+        base_filter = {
+            'tableid': OuterRef('tableid'),
+            'fieldid': OuterRef('tablelinkid'),
+            'userid': userid,
+            'typepreference': typepref
+        }
+        order_sq = SysUserOrder.objects.filter(**base_filter).values('fieldorder')[:1]
+        id_sq = SysUserOrder.objects.filter(**base_filter).values('id')[:1]
+        return order_sq, id_sq
+
+    user_order_subq, user_id_subq = _user_order_subqueries(userid, 'keylabel_steps')
+    fb_order_subq, fb_id_subq = _user_order_subqueries(1, 'keylabel_steps')
+
+    linked_qs = (
+        SysTableLink.objects
+        .filter(tableid=tableid)
+        .select_related('tablelinkid')
+        .annotate(
+            user_order=Subquery(user_order_subq, output_field=IntegerField()),
+            user_order_id=Subquery(user_id_subq),
+            fallback_order=Subquery(fb_order_subq, output_field=IntegerField()),
+            fallback_order_id=Subquery(fb_id_subq),
+        )
+        .annotate(
+            fieldorder=Case(
+                When(user_order_id__isnull=False, then='user_order'),
+                When(fallback_order_id__isnull=False, then='fallback_order'),
+                default=Value(None),
+                output_field=IntegerField(),
+            )
+        )
+        .order_by('fieldorder')
+    )
+
+    # --- Mappa ordini user per linked tables (step-specifici)
     user_orders = SysUserOrder.objects.filter(
         tableid=tableid,
         userid=userid,
@@ -778,25 +870,24 @@ def settings_table_steps(request):
         for uo in user_orders
     }
 
-    # Costruzione lista linked tables con ordine corretto per step
+    # --- Costruzione lista linked tables (merge user + fallback)
+    collegate_step_ids = list(step_links.filter(type='collegate').values_list('id', flat=True))
     linked_tables_all = []
     for link in linked_qs:
-        # user_order_map chiave: (fieldid, stepid)
         order = None
-        # Se vuoi associare all'ultimo step 'collegate' o match logico
-        for step in step_links.filter(type='collegate'):
-            key = (link.tablelinkid.id, step.id)
+        for step_id in collegate_step_ids:
+            key = (link.tablelinkid.id, step_id)
             if key in user_order_map:
                 order = user_order_map[key]
                 break
         linked_tables_all.append({
             "tablelinkid": link.tablelinkid.id if hasattr(link.tablelinkid, 'id') else link.tablelinkid,
             "description": getattr(link.tablelinkid, 'description', ''),
-            "fieldorder": order,
+            "fieldorder": order or link.fieldorder,
             "visible": True
         })
 
-    # --- Trova l'ultimo step di tipo campi
+    # --- Trova ultimo step per campi e collegate
     campi_steps = [step for step in step_links if step.type == 'campi']
     collegate_steps = [step for step in step_links if step.type == 'collegate']
     last_campi_step_id = campi_steps[-1].id if campi_steps else None
@@ -814,68 +905,65 @@ def settings_table_steps(request):
             "items": []
         }
 
-        # 🔹 Caso 1: step di tipo 'campi'
+        # 🔹 Step di tipo 'campi'
         if step.type == 'campi':
             step_fields = []
             for f in fields:
                 order = user_field_map.get((f['id'], step.id))
-                if order is not None:
-                    step_fields.append({
-                        "id": f["id"],
-                        "description": f["description"],
-                        "order": order,
-                        "visible": f.get("visible", True),
-                        "fieldid": f["fieldid"],
-                        "fieldtypeid": f.get("fieldtypeid"),
-                        "label": f.get("label", f["description"])
-                    })
-            step_fields.sort(key=lambda x: (x["order"] is None, x["order"]))
+                if order is None:
+                    order = fallback_field_map.get((f['id'], step.id))
+                step_fields.append({
+                    "id": f["id"],
+                    "description": f["description"],
+                    "order": order,
+                    "visible": f.get("visible", True),
+                    "fieldid": f["fieldid"],
+                    "fieldtypeid": f.get("fieldtypeid"),
+                    "label": f.get("label", f["description"])
+                })
+            step_fields.sort(key=lambda x: (x["order"] is None, x["order"] or 9999))
             step_data["items"] = step_fields
 
-        # 🔹 Caso 2: step di tipo 'collegate'
+        # 🔹 Step di tipo 'collegate'
         elif step.type == 'collegate':
             step_links_items = []
             for t in linked_tables_all:
                 key = (t["tablelinkid"], step.id)
-                order = user_order_map.get(key)
+                order = user_order_map.get(key) or t["fieldorder"]
                 step_links_items.append({
                     "id": t["tablelinkid"],
                     "description": t["description"],
                     "order": order,
-                    "visible": order is None != True
+                    "visible": True
                 })
             step_links_items.sort(key=lambda x: (x["order"] is None, x["order"] or 9999))
             step_data["items"] = step_links_items
 
         steps_data.append(step_data)
 
-    # 🔸 Assegna campi non presenti in SysUserFieldOrder all’ultimo step campi
+    # 🔸 Aggiungi campi non assegnati all’ultimo step campi
     if last_campi_step_id:
         assigned_field_ids = {
             f["id"]
             for s in steps_data if s["type"] == "campi"
             for f in s["items"]
         }
-
         remaining_fields = [f for f in fields if f["id"] not in assigned_field_ids]
-
         if remaining_fields:
             for s in steps_data:
                 if s["id"] == last_campi_step_id:
-                    s["items"].extend([
-                        {
-                            "id": f["id"],
-                            "description": f["description"],
-                            "order": None,
-                            "visible": f.get("visible", False),
-                            "fieldid": f["fieldid"],
-                            "fieldtypeid": f.get("fieldtypeid"),
-                            "label": f.get("label", f["description"])
-                        }
-                        for f in remaining_fields
-                    ])
+                    s["items"].extend([{
+                        "id": f["id"],
+                        "description": f["description"],
+                        "order": None,
+                        "visible": f.get("visible", False),
+                        "fieldid": f["fieldid"],
+                        "fieldtypeid": f.get("fieldtypeid"),
+                        "label": f.get("label", f["description"])
+                    } for f in remaining_fields])
                     break
 
+    # 🔸 Aggiungi linked tables non assegnate all’ultimo step collegate
     if last_collegate_step_id:
         assigned_link_ids = {
             t["id"]
@@ -889,15 +977,12 @@ def settings_table_steps(request):
         if remaining_links:
             for s in steps_data:
                 if s["id"] == last_collegate_step_id:
-                    s["items"].extend([
-                        {
-                            "id": t["tablelinkid"],
-                            "description": t["description"],
-                            "order": t["fieldorder"] or None,
-                            "visible": t["visible"] or None
-                        }
-                        for t in remaining_links
-                    ])
+                    s["items"].extend([{
+                        "id": t["tablelinkid"],
+                        "description": t["description"],
+                        "order": t["fieldorder"] or None,
+                        "visible": t["visible"] or None
+                    } for t in remaining_links])
                     break
 
     return JsonResponse({

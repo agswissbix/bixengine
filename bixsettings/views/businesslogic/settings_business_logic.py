@@ -22,7 +22,8 @@ from django_user_agents.utils import get_user_agent
 #from bixdata_app.models import MyModel
 from django import template
 from bs4 import BeautifulSoup
-from django.db.models import OuterRef, Subquery
+from django.db.models import OuterRef, Subquery, Value
+from django.db.models.functions import Coalesce
 from .models.database_helper import *
 
 
@@ -31,21 +32,80 @@ class SettingsBusinessLogic:
     def __init__(self):
         self.test=None
     
-    def get_user_tables(self,userid):
-        returnvalue=dict()
-        subquery = SysUserTableOrder.objects.filter(tableid=OuterRef('id'),userid=userid).values('tableorder')[:1]
-        tables=dict()
-        tablesdict=dict()
-        workspaces=dict()
-        workspace_rows=SysTableWorkspace.objects.all()
+    def get_user_tables(self, userid):
+        workspaces = dict()
+
+        def _user_order_subqueries(userid):
+            """Restituisce subquery per order e id di SysUserTableOrder per un dato utente."""
+            base_filter = {
+                'tableid': OuterRef('id'),
+                'userid': userid
+            }
+            order_sq = SysUserTableOrder.objects.filter(**base_filter).values('tableorder')[:1]
+            id_sq = SysUserTableOrder.objects.filter(**base_filter).values('id')[:1]
+            return order_sq, id_sq
+
+        # Subquery utente corrente
+        user_order_subquery, user_id_subquery = _user_order_subqueries(userid)
+
+        # Subquery fallback
+        fallback_order_subquery, fallback_id_subquery = _user_order_subqueries(1)
+
+        workspace_rows = SysTableWorkspace.objects.all()
+
         for workspace_row in workspace_rows:
-            workspaces[workspace_row.name]=dict()
-            workspaces[workspace_row.name]['name']=workspace_row.name
-            workspaces[workspace_row.name]['groupOrder']=workspace_row.order
-            workspace_name=workspace_row.name
-            tablesdict=SysTable.objects.annotate(order=Subquery(subquery)).filter(workspace=workspace_name).order_by('workspace','order').values('id','description','workspace','order')
-            print(tablesdict.query) 
-            workspaces[workspace_row.name]['tables']=tablesdict
+            workspaces[workspace_row.name] = dict()
+            workspaces[workspace_row.name]['name'] = workspace_row.name
+            workspaces[workspace_row.name]['groupOrder'] = workspace_row.order
+            workspace_name = workspace_row.name
+
+            # Annotazione per utente
+            tablesdict = SysTable.objects.annotate(
+                order=Subquery(user_order_subquery),
+                user_order_id=Subquery(user_id_subquery)
+            ).filter(
+                workspace=workspace_name
+            ).order_by(
+                'workspace', 'order'
+            ).values(
+                'id', 'description', 'workspace', 'order', 'user_order_id'
+            )
+
+            tablesdict = list(tablesdict)
+
+            # Filtra solo quelle con record valido (user_order_id e order non nulli)
+            valid_tables = [t for t in tablesdict if t['user_order_id'] is not None]
+            missing_tables_ids = [t['id'] for t in tablesdict if t['user_order_id'] is None]
+
+            if missing_tables_ids:
+                fallback_tables_qs = SysTable.objects.annotate(
+                    order=Subquery(fallback_order_subquery),
+                    fb_order_id=Subquery(fallback_id_subquery)
+                ).filter(
+                    workspace=workspace_name,
+                    id__in=missing_tables_ids
+                ).order_by(
+                    'workspace', 'order'
+                ).values(
+                    'id', 'description', 'workspace', 'order', 'fb_order_id'
+                )
+
+                fallback_tables = [t for t in fallback_tables_qs if t['fb_order_id'] is not None]
+            else:
+                fallback_tables = []
+
+            # Pulizia dei campi extra
+            for t in valid_tables:
+                t.pop('user_order_id', None)
+            for t in fallback_tables:
+                t.pop('fb_order_id', None)
+
+            # Merge user + fallback e ordinamento finale
+            all_tables = valid_tables + fallback_tables
+            all_tables = sorted(all_tables, key=lambda x: x['order'] if x['order'] is not None else 99999)
+
+            workspaces[workspace_row.name]['tables'] = all_tables
+
         return workspaces
 
 

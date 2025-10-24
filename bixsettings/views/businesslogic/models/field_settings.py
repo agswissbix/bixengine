@@ -79,15 +79,29 @@ class FieldSettings:
         self.settings = self.get_settings()
 
     def get_settings(self):
-        sql = f"SELECT settingid, value FROM sys_user_field_settings WHERE tableid='{self.tableid}' AND fieldid='{self.fieldid}' AND userid='{self.userid}'"
-        rows = self.db_helper.sql_query(sql)
-
         settings_copy = {key: value.copy() for key, value in self.settings.items()}
 
-        for setting_id, setting_info in settings_copy.items():
-            for row in rows:
-                if setting_id == row['settingid']:
-                    setting_info['value'] = row['value']
+        # Query ORM per l'utente corrente
+        user_settings = SysUserFieldSettings.objects.filter(
+            tableid=self.tableid,
+            fieldid=self.fieldid,
+            userid=self.userid
+        ).values('settingid', 'value')
+
+        # Se non esistono impostazioni per l'utente, fallback a utente 1 (admin)
+        if not user_settings.exists():
+            user_settings = SysUserFieldSettings.objects.filter(
+                tableid=self.tableid,
+                fieldid=self.fieldid,
+                userid=1
+            ).values('settingid', 'value')
+
+        # Applica i valori recuperati alle impostazioni di base
+        for setting in user_settings:
+            setting_id = setting['settingid']
+            value = setting['value']
+            if setting_id in settings_copy:
+                settings_copy[setting_id]['value'] = value
 
         return settings_copy
 
