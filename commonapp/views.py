@@ -4808,10 +4808,38 @@ def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
         group_by_clause = f"GROUP BY {lookup_table_alias}.{lookup_config['display_field']}"
     else:
         main_table = f"user_{config['from_table']}"
-        select_group_field = f"{group_by_config['field']} AS {group_by_alias}"
-        from_clause = f"FROM {main_table}"
-        group_by_clause = f"GROUP BY {group_by_config['field']}"
+        tableid=config['from_table']
+        fieldid=group_by_config['field']
+        
+        
+
+        try:
+            field_record = SysField.objects.get(
+            tableid=tableid,
+            fieldid=fieldid
+            )
+            field_type = field_record.fieldtypewebid
+
+        except SysField.DoesNotExist:
+            print("Nessun record trovato.")
+        except SysField.MultipleObjectsReturned:
+            print("Trovati record multipli (questo non dovrebbe accadere se la combinazione è unica).")
+            
+        
+        if field_type == 'Utente':
+            select_group_field = f"CONCAT(sys_user.firstname,' ', sys_user.lastname) AS {group_by_alias}"
+            from_clause = (f"FROM {main_table} "
+                       f"JOIN sys_user "
+                       f"ON {main_table}.{group_by_config['field']} = sys_user.id")  
+        else: 
+            select_group_field = f"{main_table}.{group_by_config['field']} AS {group_by_alias}"
+            from_clause = f"FROM {main_table}"
+        
+        group_by_clause = f"GROUP BY {main_table}.{group_by_config['field']}"
     
+
+
+
     query_select_part = f"{select_group_field}, {', '.join(select_clauses)}" if select_clauses else select_group_field
     query = (f"SELECT {query_select_part} "
              f"{from_clause} "
