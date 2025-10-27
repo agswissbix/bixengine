@@ -31,6 +31,7 @@ from docx.enum.section import WD_SECTION
 from docxtpl import DocxTemplate
 from customapp_swissbix.mock.activeMind.products import products as products_data_mock
 from customapp_swissbix.mock.activeMind.services import services as services_data_mock
+from customapp_swissbix.mock.activeMind.conditions import frequencies as conditions_data_mock
 from customapp_swissbix.customfunc import save_record_fields
 
 logger = logging.getLogger(__name__)
@@ -93,7 +94,20 @@ def save_activemind(request):
                     'message': f'Prodotto con ID {product_id} non trovato.'
                 }, status=404)
 
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT recordid_
+                    FROM user_dealline
+                    WHERE recordiddeal_ = %s
+                    AND name LIKE 'System assurance%%'
+                    LIMIT 1
+                """, [recordid_deal])
+                existing_row = cursor.fetchone()
+
             record_dealline = UserRecord('dealline')
+            if existing_row:
+                record_dealline = UserRecord('dealline', existing_row[0])
+
             record_dealline.values['recordiddeal_'] = recordid_deal
             record_dealline.values['recordidproduct_'] = product.values.get('recordid_', '')
             record_dealline.values['name'] = product.values.get('name', '')
@@ -112,6 +126,7 @@ def save_activemind(request):
         for product_key, product_data in section2_products.items():
             quantity = product_data.get('quantity', 1)
             unit_price = product_data.get('unitPrice', 0)
+            billing_type = product_data.get('billingType', 'monthly')
 
             # Trova il recordid_ del prodotto
             product = UserRecord('product', product_key)
@@ -119,18 +134,85 @@ def save_activemind(request):
                 # se non trova il prodotto → logga o salta
                 continue
 
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT recordid_
+                    FROM user_dealline
+                    WHERE recordiddeal_ = %s
+                    AND name LIKE 'AM - Manutenzione servizi%%'
+                    LIMIT 1
+                """, [recordid_deal])
+                existing_row = cursor.fetchone()
+
             record_dealline = UserRecord('dealline')
+            if existing_row:
+                record_dealline = UserRecord('dealline', existing_row[0])
             record_dealline.values['recordiddeal_'] = recordid_deal
             record_dealline.values['recordidproduct_'] = product.values.get('recordid_', '')
             record_dealline.values['name'] = product.values.get('name', '')
             record_dealline.values['unitprice'] = unit_price
             record_dealline.values['unitexpectedcost'] = 0
             record_dealline.values['quantity'] = quantity
+            record_dealline.values['frequency'] = 'Annuale' if billing_type == 'yearly' else 'Mensile'
             record_dealline.save()
 
             save_record_fields('dealline', record_dealline.recordid)
 
-        #section3
+        # =====================
+        # 🔸 SECTION 3 (servizi)
+        # =====================
+        section_services = data.get('section2Services', {})
+        section_conditions = data.get('section3', {})
+
+        frequency = section_conditions.get('selectedFrequency', 'Mensile')
+
+        name_parts = []
+        total_price = 0
+
+        for key, service in section_services.items():
+            qty = int(service.get('quantity', 0))
+            unit_price = float(service.get('unitPrice', 0))
+            title = service.get('title', '')
+
+            if qty > 0:
+                name_parts.append(f"{title}: {qty}")
+                total_price += qty * unit_price
+
+        name_str = "AM - Manutenzione servizi - " + ", ".join(name_parts) if name_parts else "AM - Manutenzione servizi"
+
+        # 2. Controllo se esiste già un record dealline per questa trattativa
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT recordid_
+                FROM user_dealline
+                WHERE recordiddeal_ = %s
+                AND name LIKE 'AM - Manutenzione servizi%%'
+                LIMIT 1
+            """, [recordid_deal])
+            existing_row = cursor.fetchone()
+
+            cursor.execute("""
+                SELECT recordid_
+                FROM user_product
+                WHERE name LIKE 'AM - Manutenzione servizi%%' AND deleted_ = 'N'
+                LIMIT 1
+            """)
+            product_row = cursor.fetchone()
+
+        # 3. Se esiste → UPDATE
+        record = UserRecord('dealline')
+        if existing_row:
+            record = UserRecord('dealline', existing_row[0])
+            record.values['recordidproduct_'] = product_row[0] if product_row else None
+        
+        record.values['recordiddeal_'] = recordid_deal
+        record.values['name'] = name_str
+        record.values['unitprice'] = total_price
+        record.values['unitexpectedcost'] = 0
+        record.values['quantity'] = 1
+        record.values['frequency'] = frequency
+        record.save()
+        save_record_fields('dealline', record.recordid)
 
         return JsonResponse({
             'success': True,
@@ -405,8 +487,63 @@ def get_system_assurance_activemind(request):
     return JsonResponse({"tiers": tiers})
 
 def get_services_activemind(request):
-    # print(services_data_mock)
-    return JsonResponse({"services": services_data_mock}, safe=False)
+    data = json.loads(request.body)
+    recordid_deal = data.get('dealid', None)
+
+    if not recordid_deal:
+        return JsonResponse({'error': 'Missing dealid'}, status=400)
+
+    services_dict = {s["title"].strip().lower(): s.copy() for s in services_data_mock}
+    for s in services_dict.values():
+        s["recordid_product"] = None
+        s["unitPrice"] = s.get("unitPrice", 0)
+        s["quantity"] = 0
+        s["selected"] = False
+
+    # 2. Prendo i prodotti che iniziano con AM -
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT recordid_, name, price
+            FROM user_product
+            WHERE name LIKE 'AM - %' AND deleted_ = 'N'
+        """)
+        products = cursor.fetchall()
+
+        # 3. Filtro solo quelli presenti nel mock
+        for recordid_product, name, price in products:
+            clean_name = name.replace("AM - ", "").strip().lower()
+            if clean_name in services_dict:
+                services_dict[clean_name]["recordid_product"] = recordid_product
+                services_dict[clean_name]["unitPrice"] = float(price) if price else 0.0
+
+        # 4. Controllo se esiste una riga nella dealline per manutenzione servizi
+        cursor.execute("""
+            SELECT name
+            FROM user_dealline
+            WHERE recordiddeal_ = %s
+              AND name LIKE 'AM - Manutenzione servizi%%'
+            LIMIT 1
+        """, [recordid_deal])
+        row = cursor.fetchone()
+
+    # 5. Se esiste la riga, estraggo le quantità
+    if row:
+        line_name = row[0]
+        # Esempio: "Windows server (VM): 2, Tenant: 3"
+        parts = [p.strip() for p in line_name.replace("AM - Manutenzione servizi -", "").strip().split(",") if p.strip()]
+        for part in parts:
+            match = re.match(r"(.+?):\s*(\d+)", part)
+            if match:
+                title = match.group(1).strip().lower()
+                qty = int(match.group(2))
+                if title in services_dict:
+                    services_dict[title]["quantity"] = qty
+                    services_dict[title]["selected"] = qty > 0
+
+    # 6. Lista finale
+    services_list = list(services_dict.values())
+
+    return JsonResponse({"services": services_list}, safe=False)
 
 def get_service_by_id(service_id: str):
     for service in services_data_mock:  # stesso array con categorie
@@ -478,12 +615,13 @@ def get_products_activemind(request):
 
         # 2. Prendo le quantità dalla trattativa
         cursor.execute("""
-            SELECT recordidproduct_, quantity
+            SELECT recordidproduct_, quantity, frequency
             FROM user_dealline
             WHERE recordiddeal_ = %s AND deleted_ = 'N'
         """, [recordid_deal])
         deal_rows = cursor.fetchall()
         quantity_map = {row[0]: row[1] for row in deal_rows}
+        frequency_map = {row[0]: row[2] for row in deal_rows}
 
     # 3. Per ogni prodotto DB → mappo alla categoria mock
     for recordid_, name, description, note, price in db_products:
@@ -505,6 +643,7 @@ def get_products_activemind(request):
 
         features = [f.strip() for f in note.split(",")] if note else []
         quantity = quantity_map.get(recordid_, 0)
+        frequency = frequency_map.get(recordid_, "")
 
         service = {
             "id": str(recordid_),
@@ -516,7 +655,8 @@ def get_products_activemind(request):
             "monthlyPrice": float(price) if price else None,
             "yearlyPrice": float(price) * 10.5 if price else None,
             "features": features,
-            "quantity": quantity
+            "quantity": quantity,
+            "billingType": "yearly" if frequency == "Annuale" else 'monthly',
         }
 
         categories_dict[matched_category_id]["services"].append(service)
@@ -554,8 +694,60 @@ def build_product_with_totals(product_id: str, quantity: int, billing_type: str 
     }
 
 def get_conditions_activemind(request):
-    from customapp_swissbix.mock.activeMind.conditions import frequencies as conditions_data_mock
-    return JsonResponse({"frequencies": conditions_data_mock}, safe=False)
+    data = json.loads(request.body)
+    recordid_deal = data.get('dealid', None)
+
+    if not recordid_deal:
+        return JsonResponse({'error': 'Missing trattativaid'}, status=400)
+
+    # 1. Dizionario base dal mock
+    conditions_dict = {f["label"].strip(): f.copy() for f in conditions_data_mock}
+    for f in conditions_dict.values():
+        f["price"] = 0
+        f["selected"] = False
+        f["recordid_product"] = None
+
+    # 2. Prendo i prodotti condizioni dal DB
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT recordid_, name, description, price
+            FROM user_product
+            WHERE name LIKE 'AM - %' AND deleted_ = 'N'
+        """)
+        products = cursor.fetchall()
+
+        for recordid_product, name, description, price in products:
+            clean_name = name.replace("AM - ", "").strip()
+            if clean_name in conditions_dict:
+                conditions_dict[clean_name]["label"] = clean_name
+                conditions_dict[clean_name]["id"] = clean_name
+                conditions_dict[clean_name]["description"] = description
+                conditions_dict[clean_name]["recordid_product"] = recordid_product
+                conditions_dict[clean_name]["price"] = float(price) if price else 0.0
+
+        # 3. Recupero la frequenza selezionata per AM - Manutenzione servizi
+        cursor.execute("""
+            SELECT frequency
+            FROM user_dealline
+            WHERE recordiddeal_ = %s
+              AND name LIKE 'AM - Manutenzione servizi%%'
+            LIMIT 1
+        """, [recordid_deal])
+        row = cursor.fetchone()
+
+    # 4. Se esiste una riga per manutenzione servizi, controllo il product id associato
+    if row and row[0]:
+        selected_frequency = row[0]
+
+        # Ricerco tra le condizioni quella con lo stesso recordid_product
+        for cond in conditions_dict.values():
+            if cond["label"] == selected_frequency:
+                cond["selected"] = True
+                break
+
+    # 5. Ritorno la lista aggiornata
+    conditions_list = list(conditions_dict.values())
+    return JsonResponse({"frequencies": conditions_list}, safe=False)
 
 
 def get_record_badge_swissbix_company(request):
