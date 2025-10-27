@@ -2494,6 +2494,11 @@ def save_record_fields(request):
         operation2_total = chart_record.values['operation2_total']
         chartid = chart_record.values['reportid']
         pivot_total_field = chart_record.values.get('pivot_total_field')
+        granularity = chart_record.values.get('date_granularity', 'day')
+
+        sql_type_query = f"SELECT fieldtypewebid FROM sys_field WHERE tableid = '{tabella}' AND fieldid = '{raggruppamento}'"
+        field_type_result = HelpderDB.sql_query(sql_type_query)
+        field_type = field_type_result[0]['fieldtypewebid'] if field_type_result else None
 
         # Nuove variabili per dashboard/view
         dashboards_str = chart_record.values.get('dashboards', '')
@@ -2644,6 +2649,9 @@ def save_record_fields(request):
                     "from_table": "golfclub",
                     "display_field": "nome_club"
                 }
+
+            if field_type.lower() in ('date', 'datetime', 'data'):
+                config_python['group_by_field']["date_granularity"] = granularity
 
         # =======================
         #   CHART SAVE
@@ -2811,7 +2819,7 @@ def get_record_card_fields(request):
         ]
 
         # Lookup per campi (organizzati per tableid)
-        fields_qs = SysField.objects.all().values("tableid", "fieldid", "description")
+        fields_qs = SysField.objects.all().values("tableid", "fieldid", "description", "fieldtypewebid").order_by("tableid")
         fields_lookup = {}
         for f in fields_qs:
             tid = str(f["tableid"])
@@ -2819,7 +2827,8 @@ def get_record_card_fields(request):
                 fields_lookup[tid] = []
             fields_lookup[tid].append({
                 "value": f["fieldid"],
-                "label": f["description"]
+                "label": f["description"],
+                "fieldtype": f["fieldtypewebid"]
             })
 
         dashboards_qs = SysDashboard.objects.all().values("id", "name").order_by("order_dashboard")
@@ -4810,6 +4819,7 @@ def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
     group_by_config = config['group_by_field']
     group_by_alias = group_by_config.get('alias', group_by_config['field'])
     select_group_field, from_clause, group_by_clause = '', '', ''
+    granularity = group_by_config.get('date_granularity', None)
     
     # ... (la logica di lookup e non-lookup per la query rimane IDENTICA a prima)
     if 'lookup' in group_by_config:
@@ -4847,11 +4857,25 @@ def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
             from_clause = (f"FROM {main_table} "
                        f"JOIN sys_user "
                        f"ON {main_table}.{group_by_config['field']} = sys_user.id")  
+        elif field_type in ('Data', 'Datetime', 'Timestamp') and granularity:
+            if granularity == 'day':
+                expr = f"DATE({main_table}.{fieldid})"
+            elif granularity == 'month':
+                expr = f"DATE_FORMAT({main_table}.{fieldid}, '%Y-%m')"
+            elif granularity == 'year':
+                expr = f"YEAR({main_table}.{fieldid})"
+            else:
+                expr = f"{main_table}.{fieldid}"  # fallback
+
+            select_group_field = f"{expr} AS {group_by_alias}"
+            from_clause = f"FROM {main_table}"
+            group_by_clause = f"GROUP BY {expr}"
         else: 
             select_group_field = f"{main_table}.{group_by_config['field']} AS {group_by_alias}"
             from_clause = f"FROM {main_table}"
         
-        group_by_clause = f"GROUP BY {main_table}.{group_by_config['field']}"
+        if not group_by_clause:
+            group_by_clause = f"GROUP BY {main_table}.{group_by_config['field']}"
     
 
 
