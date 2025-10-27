@@ -4365,7 +4365,9 @@ def get_dashboard_blocks(request):
                 datas = dbh.sql_query(sql)
 
                 # all_blocks = SysDashboardBlock.objects.all()
-                sql = "SELECT * FROM sys_dashboard_block ORDER BY name asc"
+                sql = "SELECT * FROM sys_dashboard_block WHERE dashboardid = {dashboard_id} ORDER BY name asc".format(
+                    dashboard_id=dashboard_id
+                )
                 all_blocks = dbh.sql_query(sql)
 
                 for block in all_blocks:
