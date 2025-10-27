@@ -478,6 +478,23 @@ class UserRecord:
         #    Questo corrisponderà al formato che avevi nell'immagine.
         all_settings_raw = list(merged_settings.values())
 
+        # 7. Post-elaborazione: Modifica i 'fieldid' che iniziano con underscore
+        final_settings = []
+        for setting in all_settings_raw:
+            current_fieldid = setting['fieldid']
+            
+            # Controlla se 'fieldid' inizia con un underscore
+            if current_fieldid.startswith('_'):
+                # Rimuove l'underscore iniziale e aggiunge un underscore finale
+                setting['fieldid'] = current_fieldid[1:] + '_'
+                
+                # Esempio: '_fieldesempio' diventa 'fieldesempio_'
+            
+            final_settings.append(setting)
+
+        # Il risultato finale è in 'final_settings'
+        all_settings_raw = final_settings
+
         # Ora all_settings_raw contiene:
         # - Tutte le impostazioni di userid=1
         # - Sovrascritte/Integrate da quelle di self.userid
