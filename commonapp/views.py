@@ -2695,31 +2695,59 @@ def save_record_fields(request):
         # Combinazioni attuali
         existing_blocks = SysDashboardBlock.objects.filter(chartid=chart_obj)
         existing_combinations = set(
-            (str(block.dashboardid_id) if block.dashboardid_id else None, str(block.viewid_id) if block.viewid_id else None)
+            (str(block.dashboardid_id) if block.dashboardid_id else None,
+             str(block.viewid_id) if block.viewid_id else None)
             for block in existing_blocks
         )
 
-        # Blocchi da rimuovere
+        # Blocchi da rimuovere e da creare
         to_delete = existing_combinations - target_combinations
-        for dashboard_id, view_id in to_delete:
+        to_create = target_combinations - existing_combinations
+        to_update = target_combinations & existing_combinations
+
+        # 🧠 Logica di trasformazione intelligente:
+        # Se cambia solo la view (o dashboard), invece di cancellare/creare, aggiorna
+        to_transform = []
+        remaining_to_delete = set(to_delete)
+        remaining_to_create = set(to_create)
+
+        for old_dashboard_id, old_view_id in list(to_delete):
+            # match per stesso dashboard_id ma nuova view_id
+            match = next(
+                ((new_dashboard_id, new_view_id) for (new_dashboard_id, new_view_id) in remaining_to_create
+                 if new_dashboard_id == old_dashboard_id),
+                None
+            )
+            if match:
+                to_transform.append(((old_dashboard_id, old_view_id), match))
+                remaining_to_delete.remove((old_dashboard_id, old_view_id))
+                remaining_to_create.remove(match)
+                continue
+
+            # match per stessa view_id ma nuova dashboard_id (opzionale)
+            match = next(
+                ((new_dashboard_id, new_view_id) for (new_dashboard_id, new_view_id) in remaining_to_create
+                 if new_view_id == old_view_id),
+                None
+            )
+            if match:
+                to_transform.append(((old_dashboard_id, old_view_id), match))
+                remaining_to_delete.remove((old_dashboard_id, old_view_id))
+                remaining_to_create.remove(match)
+
+        # 🧹 Rimuovi blocchi non più necessari
+        for dashboard_id, view_id in remaining_to_delete:
             blocks_to_delete = SysDashboardBlock.objects.filter(
                 chartid=chart_obj,
                 dashboardid_id=dashboard_id,
                 viewid_id=view_id
             )
-
             for block in blocks_to_delete:
-                # Prima elimina eventuali record figli
                 SysUserDashboardBlock.objects.filter(dashboard_block_id=block.id).delete()
-
-                # Poi elimina il blocco stesso
                 block.delete()
 
-        # Blocchi da creare o aggiornare
-        to_create = target_combinations - existing_combinations
-        to_update = target_combinations & existing_combinations
-
-        for dashboard_id, view_id in to_create:
+        # 🆕 Crea nuovi blocchi
+        for dashboard_id, view_id in remaining_to_create:
             dashboard_obj = SysDashboard.objects.filter(id=dashboard_id).first() if dashboard_id else None
             view_obj = SysView.objects.filter(id=view_id).first() if view_id else None
             final_name = f"{title} {(view_obj.name if view_obj else '')} {(dashboard_obj.name if dashboard_obj else '')}".strip()
@@ -2733,6 +2761,7 @@ def save_record_fields(request):
                 category='benchmark' if raggruppamento == 'recordidgolfclub_' else None
             )
 
+        # ✏️ Aggiorna blocchi già presenti con stesso (dashboard_id, view_id)
         for dashboard_id, view_id in to_update:
             dashboard_obj = SysDashboard.objects.filter(id=dashboard_id).first() if dashboard_id else None
             view_obj = SysView.objects.filter(id=view_id).first() if view_id else None
@@ -2743,6 +2772,22 @@ def save_record_fields(request):
                 dashboardid_id=dashboard_id,
                 viewid_id=view_id
             ).update(name=final_name)
+
+        # 🔄 Aggiorna blocchi esistenti con “trasformazione” (es. vista 13 -> vista 3)
+        for (old_dashboard_id, old_view_id), (new_dashboard_id, new_view_id) in to_transform:
+            dashboard_obj = SysDashboard.objects.filter(id=new_dashboard_id).first() if new_dashboard_id else None
+            view_obj = SysView.objects.filter(id=new_view_id).first() if new_view_id else None
+            final_name = f"{title} {(view_obj.name if view_obj else '')} {(dashboard_obj.name if dashboard_obj else '')}".strip()
+
+            SysDashboardBlock.objects.filter(
+                chartid=chart_obj,
+                dashboardid_id=old_dashboard_id,
+                viewid_id=old_view_id
+            ).update(
+                dashboardid_id=new_dashboard_id,
+                viewid_id=new_view_id,
+                name=final_name
+            )
 
     custom_save_record_fields(tableid, recordid)
     return JsonResponse({"success": True, "detail": "Campi del record salvati con successo", "recordid": record.recordid})
