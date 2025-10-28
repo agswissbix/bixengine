@@ -33,6 +33,8 @@ from customapp_swissbix.mock.activeMind.products import products as products_dat
 from customapp_swissbix.mock.activeMind.services import services as services_data_mock
 from customapp_swissbix.mock.activeMind.conditions import frequencies as conditions_data_mock
 from customapp_swissbix.customfunc import save_record_fields
+from xhtml2pdf import pisa
+from types import SimpleNamespace
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +180,7 @@ def save_activemind(request):
                 name_parts.append(f"{title}: {qty}")
                 total_price += qty * unit_price
 
-        name_str = "AM - Manutenzione servizi - " + ", ".join(name_parts) if name_parts else "AM - Manutenzione servizi"
+        name_str = "AM - Manutenzione servizi - \n" + ",\n".join(name_parts) if name_parts else "AM - Manutenzione servizi"
 
         # 2. Controllo se esiste già un record dealline per questa trattativa
         with connection.cursor() as cursor:
@@ -203,8 +205,8 @@ def save_activemind(request):
         record = UserRecord('dealline')
         if existing_row:
             record = UserRecord('dealline', existing_row[0])
-            record.values['recordidproduct_'] = product_row[0] if product_row else None
         
+        record.values['recordidproduct_'] = product_row[0] if product_row else None
         record.values['recordiddeal_'] = recordid_deal
         record.values['name'] = name_str
         record.values['unitprice'] = total_price
@@ -226,14 +228,124 @@ def save_activemind(request):
         }, status=500)
     
 
+def build_offer_data(recordid_deal):
+    offer_data = {}
+
+    # --- 1) Tiers ---
+    req_sa = type('Req', (object,), {"body": json.dumps({"trattativaid": recordid_deal})})
+    sa_resp = get_system_assurance_activemind(req_sa)
+    tiers = json.loads(sa_resp.content)["tiers"]
+    for t in tiers:
+        t["total"] = float(t.get("price") or 0.0) if t.get("selected") else 0.0
+    offer_data["tiers"] = tiers
+
+    # --- 2) Frequenze ---
+    req_freq = type('Req', (object,), {"body": json.dumps({"dealid": recordid_deal})})
+    freq_resp = get_conditions_activemind(req_freq)
+    frequencies = json.loads(freq_resp.content)["frequencies"]
+    offer_data["frequencies"] = frequencies
+
+    selected_frequency_label = None
+    for f in frequencies:
+        if f.get("selected"):
+            selected_frequency_label = f.get("label")
+            break
+
+    # --- 3) Servizi ---
+    req_srv = type('Req', (object,), {"body": json.dumps({"dealid": recordid_deal})})
+    srv_resp = get_services_activemind(req_srv)
+    services = json.loads(srv_resp.content)["services"]
+    for s in services:
+        s["total"] = float(s.get("unitPrice") or 0.0) * int(s.get("quantity") or 0)
+        s["billingType"] = selected_frequency_label  # usiamo la frequenza selezionata
+
+    offer_data["services"] = services
+
+    # --- 4) Prodotti ---
+    req_prod = type('Req', (object,), {"body": json.dumps({"trattativaid": recordid_deal})})
+    prod_resp = get_products_activemind(req_prod)
+    products = json.loads(prod_resp.content)["servicesCategory"]
+    for cat in products:
+        for p in cat.get("services", []):
+            p["total"] = float(p.get("unitPrice") or 0.0) * int(p.get("quantity") or 0)
+    offer_data["products"] = products
+
+    # --- 5) Totali ---
+    total_tiers = sum(t.get("total", 0.0) for t in tiers)
+    total_services = sum(s.get("total", 0.0) for s in services)
+    total_products = sum(p.get("total", 0.0) for c in products for p in c.get("services", []))
+
+    # 📊 Subtotali ricorrenti
+    monthly_total = 0.0
+    quarterly_total = 0.0
+    biannual_total = 0.0
+    yearly_total = 0.0
+
+    # Prodotti
+    for c in products:
+        for p in c.get("services", []):
+            total = p.get("total", 0.0)
+            billing = (p.get("billingType") or "").lower()
+            if billing == "monthly":
+                monthly_total += total
+            elif billing == "yearly":
+                yearly_total += total
+
+    # Servizi (basati sulla frequenza selezionata)
+    if selected_frequency_label:
+        for s in services:
+            total = s.get("total", 0.0)
+            if selected_frequency_label == "Mensile":
+                monthly_total += total
+            elif selected_frequency_label == "Trimestrale":
+                quarterly_total += total
+            elif selected_frequency_label == "Semestrale":
+                biannual_total += total
+            elif selected_frequency_label == "Annuale":
+                yearly_total += total
+
+    grand_total = total_tiers + total_services + total_products
+
+    offer_data["totals"] = {
+        "tiers": total_tiers,
+        "services": total_services,
+        "products": total_products,
+        "monthly": monthly_total,
+        "quarterly": quarterly_total,
+        "biannual": biannual_total,
+        "yearly": yearly_total,
+        "grand_total": grand_total,
+    }
+
+    return offer_data
+
+
+def make_obj(d: dict) -> SimpleNamespace:
+    """
+    Converte un dict in oggetto con attribute access,
+    garantendo campi minimi usati dal chunk.
+    """
+    d = dict(d)  # copia
+    d.setdefault("features", [])
+    d.setdefault("quantity", 0)
+    return SimpleNamespace(**d)
+
 def chunk(iterable):
+    """
+    Mantiene esattamente la tua logica:
+    - se quantity == 0 → salta
+    - se features > 7 → 2 elementi per pagina, altrimenti 3
+    """
     pages = []
     page = []
     counter = 0
     for s in iterable:
-        if s.quantity == 0:
+        # supporta sia oggetti sia dict
+        qty = getattr(s, "quantity", s.get("quantity", 0) if isinstance(s, dict) else 0)
+        feats = getattr(s, "features", s.get("features", []) if isinstance(s, dict) else [])
+        if qty == 0:
             continue
-        limit = 2 if len(s.features) > 10 else 3
+        limit = 2 if len(feats) > 7 else 3
         page.append(s)
         counter += 1
         if counter >= limit:
@@ -247,185 +359,91 @@ def chunk(iterable):
 @csrf_exempt
 def print_pdf_activemind(request):
     """
-    Generate a PDF for ActiveMind services
+    Genera il PDF usando SOLO l'id della trattativa:
+    - legge tutto dal DB (build_offer_data)
+    - calcola i totali lato backend
+    - crea le pagine (chunk) per servizi e prodotti
     """
     try:
         data = json.loads(request.body)
-        
-        services_data = data.get('data', {})
         recordid_deal = data.get('idTrattativa', None)
+        if not recordid_deal:
+            return JsonResponse({'error': 'Missing idTrattativa'}, status=400)
 
-        # Recupero info cliente
-        cliente = {}
-        if recordid_deal:
-            record_deal = UserRecord('deal', recordid_deal)
-            recordid_company = record_deal.values.get('recordidcompany_', None)
-            if recordid_company:
-                record_company = UserRecord('company', recordid_company)
-                cliente = {
-                    "nome": record_company.values.get('companyname', ''),
-                    "indirizzo": record_company.values.get('address', ''),
-                    "citta": record_company.values.get('city', '')
-                }
-
-        # Firma digitale (base64 → file immagine)
+        # firma digitale (come nel tuo codice)
         digital_signature_b64 = data.get('signature', None)
         nameSignature = data.get('nameSignature', '')
 
         signature_url = None
         if digital_signature_b64:
             try:
-                # Rimuovo eventuale prefisso "data:image/png;base64,"
+                import base64, os, uuid
                 if "," in digital_signature_b64:
                     digital_signature_b64 = digital_signature_b64.split(",")[1]
-
                 signature_bytes = base64.b64decode(digital_signature_b64)
-
-                # Nome univoco
                 filename = f"signature_{uuid.uuid4().hex}.png"
-                # TODO verificare path corretto
                 signature_path = os.path.join(BASE_DIR, "customapp_swissbix/static/signatures", filename)
                 os.makedirs(os.path.dirname(signature_path), exist_ok=True)
-
-                # Salvo il file
                 with open(signature_path, "wb") as f:
                     f.write(signature_bytes)
-
-                # Creo URL relativo a MEDIA_URL (usato nel template)
                 signature_url = f"signatures/{filename}"
             except Exception as e:
                 logger.error(f"Errore salvataggio firma: {e}")
 
-        # Calcolo i totali
-        # TODO prendere dati come fe es. servizi e prodotti già fatti
-        section1_total = services_data.get('section1', {}).get('price', 0)
-        
+        # 1) ricostruzione offerta
+        offer_data = build_offer_data(recordid_deal)
 
-        raw_service_dicts = []
-        for p in services_data.get("services", {}):
-            if isinstance(p, dict) and p.get("quantity", 0) > 0:
-                enriched = build_service_with_totals(
-                    service_id=p["id"],
-                    quantity=p["quantity"],
-                )
-                if enriched:
-                    raw_service_dicts.append(enriched)
+        # 2) preparo oggetti per impaginazione (chunk)
+        # servizi (flat -> oggetti)
+        service_objs = [make_obj(s) for s in offer_data["services"]]
+        section2_services_pages = chunk(service_objs)
 
-        section2_services_total = sum(p["total"] for p in raw_service_dicts)
+        # prodotti: flatten categorie -> oggetti
+        product_objs = []
+        for cat in offer_data["products"]:
+            for p in cat.get("services", []):
+                product_objs.append(make_obj(p))
+        section2_products_pages = chunk(product_objs)
 
+        # 3) info cliente
+        cliente = {}
+        record_deal = UserRecord('deal', recordid_deal)
+        recordid_company = record_deal.values.get('recordidcompany_', None)
+        if recordid_company:
+            record_company = UserRecord('company', recordid_company)
+            cliente = {
+                "nome": record_company.values.get('companyname', ''),
+                "indirizzo": record_company.values.get('address', ''),
+                "citta": record_company.values.get('city', '')
+            }
 
-        raw_product_dicts = []
-        for p in services_data.get("products", {}):
-            if isinstance(p, dict) and p.get("quantity", 0) > 0:
-                enriched = build_product_with_totals(
-                    product_id=p["id"],
-                    quantity=p["quantity"],
-                    billing_type=p.get("billingType", "monthly")
-                )
-                if enriched:
-                    raw_product_dicts.append(enriched)
-
-        section2_products_total = sum(p["total"] for p in raw_product_dicts)
-
-
-        grand_total = section1_total + section2_services_total + section2_products_total
-
-
-        condition = services_data.get('conditions', {})
-
-        tier_descriptions = {
-            'tier1': 'Fino a 5 PC + server',
-            'tier2': 'Fino a 10 PC + server', 
-            'tier3': 'Fino a 15 PC + server',
-            'tier4': 'Fino a 20 PC + server'
-        }
-        selected_tier = services_data.get('section1', {}).get('selectedTier', '')
-        tier_display = tier_descriptions.get(selected_tier, selected_tier)
-
-        totals = {
-            "monthly": 0,
-            "quarterly": 0,
-            "biannual": 0,
-            "yearly": 0,
-        }
-
-        for p in raw_product_dicts:
-            billing = p.get("billingType", "monthly").lower()
-            if billing in totals:
-                totals[billing] += p.get("total", 0)
-
-        # Servizi → gestiti da 'conditions'
-        for s in raw_service_dicts:
-            billing = condition.lower() if condition else "monthly"
-            if billing in totals:
-                totals[billing] += s.get("total", 0)
-
-        # Assegno i valori finali
-        monthly_total   = totals["monthly"]
-        quarterly_total = totals["quarterly"]
-        biannual_total  = totals["biannual"]
-        yearly_total    = totals["yearly"]
-
-        monthly_total += section1_total
-
-        # grand total resta invariato
-        grand_total = monthly_total + yearly_total
-
-        service_objects_for_chunking = [
-            type('Service', (object,), s) for s in raw_service_dicts
-        ]
-        product_objects_for_chunking = [
-            type('Product', (object,), p) for p in raw_product_dicts
-        ]
-
-
-        # Preparo contesto per template
+        # 4) contesto per il template
         context = {
-            'client_info': cliente,
-            'services_data': services_data,
-            # Passa i prodotti per la sezione economica
-            'section2_products_pages': chunk(product_objects_for_chunking), 
-            # I servizi sono già gestiti da 'section2_pages' (codice precedente)
-            'section2_services_pages': chunk(service_objects_for_chunking),
-            
-            # Nuovi totali
-            'section1_price': section1_total,
-            'section2_services_total': section2_services_total,
-            'section2_products_total': section2_products_total,
-            'monthly_total': monthly_total,
-            'quarterly_total': quarterly_total,
-            'biannual_total': biannual_total,
-            'yearly_total': yearly_total,
-            'grand_total': grand_total,
-            
-            'tier_display': tier_display,
-            'digital_signature_url': signature_url,
-            'nameSignature': nameSignature,
-            'date': datetime.datetime.now().strftime("%d/%m/%Y"),
-            'limit_acceptance_date': (datetime.datetime.now() + timedelta(days=10)).strftime("%d/%m/%Y"),
+            "client_info": cliente,
+            "offer_data": offer_data,
+            "section2_services_pages": section2_services_pages,
+            "section2_products_pages": section2_products_pages,
+            # flat per tabella riepilogo finale (se ti serve)
+            "section2_products": product_objs,
+            "date": datetime.datetime.now().strftime("%d/%m/%Y"),
+            "limit_acceptance_date": (datetime.datetime.now() + timedelta(days=10)).strftime("%d/%m/%Y"),
+            "digital_signature_url": signature_url,
+            "nameSignature": nameSignature,
         }
-        
-        # Render HTML
+
+        # 5) render + pdf
         template = get_template('activeMind/pdf_template.html')
         html = template.render(context)
-
-        from xhtml2pdf import pisa 
-        # Genera PDF
         response = HttpResponse(content_type="application/pdf")
         response["Content-Disposition"] = 'inline; filename="offerta.pdf"'
-
-        pisa_status = pisa.CreatePDF(
-            html, dest=response, link_callback=link_callback
-        )
-
+        pisa_status = pisa.CreatePDF(html, dest=response, link_callback=link_callback)
         if pisa_status.err:
             return HttpResponse("Errore durante la creazione del PDF", status=500)
         return response
-            
+
     except Exception as e:
         logger.error(f"Errore nella generazione PDF: {str(e)}")
         return JsonResponse({'error': f'Errore nella generazione del PDF: {str(e)}'}, status=500)
-
 
 def link_callback(uri, rel):
     """
@@ -487,86 +505,95 @@ def get_system_assurance_activemind(request):
     return JsonResponse({"tiers": tiers})
 
 def get_services_activemind(request):
-    data = json.loads(request.body)
-    recordid_deal = data.get('dealid', None)
+    """
+    Restituisce i servizi ActiveMind:
+    - Si appoggia al mock solo per determinare quali servizi sono validi e per l'ordine base.
+    - Recupera prezzo e features reali dal DB (user_product).
+    - Recupera quantità dalla dealline (record AM - Manutenzione servizi).
+    - Se il prodotto non è nel DB → mantiene mock con quantità 0.
+    """
+    try:
+        data = json.loads(request.body)
+        recordid_deal = data.get("dealid")
+        if not recordid_deal:
+            return JsonResponse({"error": "Missing dealid"}, status=400)
 
-    if not recordid_deal:
-        return JsonResponse({'error': 'Missing dealid'}, status=400)
+        # 1️⃣ Costruisco dizionario dal mock (titolo lower come chiave)
+        services_dict = {s["title"].strip().lower(): s.copy() for s in services_data_mock}
+        for s in services_dict.values():
+            s["recordid_product"] = None
+            s["unitPrice"] = s.get("unitPrice", 0)
+            s["quantity"] = 0
+            s["selected"] = False
+            s["features"] = s.get("features", [])
 
-    services_dict = {s["title"].strip().lower(): s.copy() for s in services_data_mock}
-    for s in services_dict.values():
-        s["recordid_product"] = None
-        s["unitPrice"] = s.get("unitPrice", 0)
-        s["quantity"] = 0
-        s["selected"] = False
+        # 2️⃣ Recupero dal DB i prodotti validi
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT recordid_, name, price, note
+                FROM user_product
+                WHERE name LIKE 'AM %%'
+                  AND name NOT LIKE 'AM - Annuale'
+                  AND name NOT LIKE 'AM - Trimestrale'
+                  AND name NOT LIKE 'AM - Semestrale'
+                  AND name NOT LIKE 'AM - Mensile'
+                  AND deleted_ = 'N'
+            """)
+            db_products = cursor.fetchall()
 
-    # 2. Prendo i prodotti che iniziano con AM -
-    with connection.cursor() as cursor:
-        cursor.execute("""
-            SELECT recordid_, name, price
-            FROM user_product
-            WHERE name LIKE 'AM - %' AND deleted_ = 'N'
-        """)
-        products = cursor.fetchall()
+        for recordid_product, name, price, note in db_products:
+            clean_name = name.replace("AM - ", "").strip()
+            key = clean_name.lower()
+            if key not in services_dict:
+                # ignoro prodotti non presenti nel mock
+                continue
 
-        # 3. Filtro solo quelli presenti nel mock
-        for recordid_product, name, price in products:
-            clean_name = name.replace("AM - ", "").strip().lower()
-            if clean_name in services_dict:
-                services_dict[clean_name]["recordid_product"] = recordid_product
-                services_dict[clean_name]["unitPrice"] = float(price) if price else 0.0
+            # sovrascrivo i dati dal DB
+            s = services_dict[key]
+            s["recordid_product"] = recordid_product
+            s["title"] = clean_name
+            s["unitPrice"] = float(price or 0)
+            s["selected"] = False
 
-        # 4. Controllo se esiste una riga nella dealline per manutenzione servizi
-        cursor.execute("""
-            SELECT name
-            FROM user_dealline
-            WHERE recordiddeal_ = %s
-              AND name LIKE 'AM - Manutenzione servizi%%'
-            LIMIT 1
-        """, [recordid_deal])
-        row = cursor.fetchone()
+            # estraggo le features dal campo note (una per riga)
+            if note and note.strip():
+                s["features"] = [f.strip() for f in note.split(",")] if note else []
 
-    # 5. Se esiste la riga, estraggo le quantità
-    if row:
-        line_name = row[0]
-        # Esempio: "Windows server (VM): 2, Tenant: 3"
-        parts = [p.strip() for p in line_name.replace("AM - Manutenzione servizi -", "").strip().split(",") if p.strip()]
-        for part in parts:
-            match = re.match(r"(.+?):\s*(\d+)", part)
-            if match:
-                title = match.group(1).strip().lower()
-                qty = int(match.group(2))
-                if title in services_dict:
-                    services_dict[title]["quantity"] = qty
-                    services_dict[title]["selected"] = qty > 0
+        # 3️⃣ Recupero quantità dalla dealline
+        quantities_map = {}
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT name
+                FROM user_dealline
+                WHERE recordiddeal_ = %s
+                  AND name LIKE 'AM - Manutenzione servizi%%'
+                LIMIT 1
+            """, [recordid_deal])
+            row = cursor.fetchone()
 
-    # 6. Lista finale
-    services_list = list(services_dict.values())
+        if row:
+            raw = row[0].replace("AM - Manutenzione servizi - ", "")
+            for entry in raw.split(","):
+                if ":" not in entry:
+                    continue
+                n, qty = entry.strip().split(":", 1)
+                quantities_map[n.strip().lower()] = int(qty.strip())
 
-    return JsonResponse({"services": services_list}, safe=False)
+        # 4️⃣ Aggiorno quantità e totale
+        for key, s in services_dict.items():
+            s["quantity"] = quantities_map.get(key, 0)
+            s["total"] = float(s["unitPrice"]) * s["quantity"]
+            s["selected"] = s["quantity"] > 0
 
-def get_service_by_id(service_id: str):
-    for service in services_data_mock:  # stesso array con categorie
-        if service["id"] == service_id:
-            return service
-    return None
+        # 5️⃣ Lista finale mantenendo l’ordine del mock
+        services_list = list(services_dict.values())
 
-def build_service_with_totals(service_id: str, quantity: int):
-    service = get_service_by_id(service_id)
-    if not service:
-        return None
-    unit_price = service.get("unitPrice", 0)
-    total = unit_price * quantity
-    return {
-        "id": service["id"],
-        "title": service["title"],
-        "description": service.get("description", ""),
-        "features": service.get("features", []),
-        "category": service.get("category"),
-        "unitPrice": unit_price,
-        "quantity": quantity,
-        "total": total,
-    }
+        return JsonResponse({"services": services_list})
+
+    except Exception as e:
+        logger.error(f"Errore in get_services_activemind: {e}")
+        return JsonResponse({"error": str(e)}, status=500)
+    
 
 def get_products_activemind(request):
     data = json.loads(request.body)

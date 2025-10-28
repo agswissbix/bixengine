@@ -451,12 +451,17 @@ def custom_delete_record(tableid,recordid):
     if tableid=='chart':
         chart_record=UserRecord('chart',recordid)
         chartid=chart_record.values['reportid']
-        dashboard_block_dict=HelpderDB.sql_query_row(f"SELECT * FROM sys_dashboard_block WHERE chartid={chartid}")
-        if dashboard_block_dict:
-            dashboard_blockid=dashboard_block_dict['id']
-            HelpderDB.sql_execute(f"DELETE FROM sys_user_dashboard_block WHERE dashboard_block_id={dashboard_blockid}")
-            HelpderDB.sql_execute(f"DELETE FROM sys_dashboard_block WHERE id={dashboard_blockid}")
-        HelpderDB.sql_execute(f"DELETE FROM sys_chart WHERE id={recordid}")
+        chart = SysChart.objects.filter(id=chartid).first()
+        if not chart:
+            return
+
+        dashboard_blocks = SysDashboardBlock.objects.filter(chartid=chart)
+        # Per ogni blocco, elimina eventuali record figli
+        for block in dashboard_blocks:
+            SysUserDashboardBlock.objects.filter(dashboard_block_id=block.id).delete()
+
+        dashboard_blocks.delete()
+        chart.delete()
     
 
 @timing_decorator
