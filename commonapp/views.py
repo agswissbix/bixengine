@@ -2567,7 +2567,7 @@ def save_record_fields(request):
                     "from_table": tabella,
                     "aggregation": {"function": "AVG"},
                     "pivot_fields": datasets,
-                    "dataset_label": "Media " + field
+                    "dataset_label": "Media " + datasets[0]['label'] if datasets else "Media Dati"
                 }
 
         # =======================
