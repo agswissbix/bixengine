@@ -4490,7 +4490,7 @@ def get_dashboard_blocks(request):
                         view= HelpderDB.sql_query_row(f"SELECT * FROM sys_view WHERE id='{viewid}'")
                         query_conditions = view['query_conditions']
                         query_conditions = query_conditions.replace("$userid$", str(userid))
-
+                        query_conditions = query_conditions + " AND deleted_='N'"
                         #TODO custom wegolf. abilitare queste condizioni e gestire recordid in modo che sia dinamico dal frontend sia in bixdata che wegolf
                         if cliente_id == 'wegolf':
                             if block_category != 'benchmark':
