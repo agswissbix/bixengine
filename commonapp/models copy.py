@@ -859,13 +859,13 @@ class BaseUserTable(models.Model):
         db_default='N',
         db_column='deleted_'
     )
-    id = models.IntegerField(null=True, blank=True)
 
     class Meta:
         abstract = True   # 👈 Non crea tabella fisica
 
 
 class UserChart(BaseUserTable):
+    id = models.IntegerField(null=True, blank=True)
     name = models.CharField(max_length=255, null=True, blank=True)
     title = models.CharField(max_length=255, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
@@ -898,59 +898,16 @@ class UserChart(BaseUserTable):
     
 
 class UserEmail(BaseUserTable):
+    internal_id = models.IntegerField(null=True, blank=True)
     subject = models.CharField(max_length=255, null=True, blank=True)
     recipients = models.CharField(max_length=255, null=True, blank=True)
-    mailbody = models.TextField(null=True, blank=True)
+    mail_body = models.TextField(null=True, blank=True)
     note = models.TextField(null=True, blank=True)
-    date = models.DateField(null=True, blank=True)
+    sent_date = models.DateField(null=True, blank=True)
     sent_timestamp = models.CharField(max_length=255, null=True, blank=True)
     cc = models.CharField(max_length=255, null=True, blank=True)
-    ccn = models.CharField(max_length=255, null=True, blank=True)
+    bcc = models.CharField(max_length=255, null=True, blank=True)
     status = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
         db_table = 'user_email'
-    
-
-class UserSchedulerLog(BaseUserTable):
-    date = models.DateField(null=True, blank=True)
-    hour = models.CharField(max_length=255, null=True, blank=True)
-    function = models.CharField(max_length=255, null=True, blank=True)
-    output = models.TextField(null=True, blank=True)
-
-    class Meta:
-        db_table = 'user_scheduler_log'
-
-
-class UserSystemLog(BaseUserTable):
-    date = models.DateField(null=True, blank=True)
-    time = models.TimeField(null=True, blank=True)
-    function = models.CharField(max_length=255, null=True, blank=True)
-    output = models.TextField(null=True, blank=True)
-
-    class Meta:
-        db_table = 'user_system_log'
-
-
-class UserUserLog(BaseUserTable):
-    date = models.DateField(null=True, blank=True)
-    time = models.TimeField(null=True, blank=True)
-    user = models.ForeignKey(SysUser, models.DO_NOTHING, null=True, blank=True)
-    function = models.CharField(max_length=255, null=True, blank=True)
-    output = models.TextField(null=True, blank=True)
-
-    class Meta:
-        db_table = 'user_user_log'
-
-
-class UserEvents(BaseUserTable):
-    table = models.ForeignKey(SysTable, models.DO_NOTHING, null=True, blank=True)
-    graphid = models.CharField(max_length=255, null=True, blank=True)
-    user = models.ForeignKey(SysUser, models.DO_NOTHING, null=True, blank=True)
-    title = models.CharField(max_length=255, null=True, blank=True)
-    event_date = models.DateField(null=True, blank=True)
-    event_time = models.TimeField(null=True, blank=True)
-    description = models.TextField(null=True, blank=True)
-
-    class Meta:
-        db_table = 'user_events'
