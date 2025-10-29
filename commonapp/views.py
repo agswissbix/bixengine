@@ -4518,7 +4518,8 @@ def get_dashboard_blocks(request):
                                 selected_years_conditions = " AND (" + selected_years_conditions + ")"
                             query_conditions = query_conditions + selected_years_conditions
                         chart_data=get_dynamic_chart_data(request, results['chartid'],query_conditions)
-                        chart_data['datasets'][0]['view'] = viewid
+                        if 'datasets' in chart_data and len(chart_data['datasets'])>0:
+                            chart_data['datasets'][0]['view'] = viewid
                         chart_data_json=json.dumps(chart_data, default=json_date_handler)
 
                         
@@ -4567,7 +4568,8 @@ def get_chart_data(request):
             query_conditions = view["query_conditions"].replace("$userid$", str(userid))
 
         chart_data = get_dynamic_chart_data(request, chart_id, query_conditions)
-        chart_data['datasets'][0]['view'] = viewid
+        if 'datasets' in chart_data and len(chart_data['datasets']) > 0:
+            chart_data['datasets'][0]['view'] = viewid
         chart_data_json = json.dumps(chart_data, default=json_date_handler)
 
 
@@ -4780,9 +4782,8 @@ def _handle_record_pivot_chart(config, chart_id, chart_record, query_conditions)
     dataset_label = config.get('dataset_label', 'Dati')
 
     if not record_data:
-        return {'id': chart_id, 'name': chart_record['name'], 'layout': chart_record['layout'],
-                'labels': [item['label'] for item in config['pivot_fields']], 
-                'datasets': [{'label': dataset_label, 'data': []}]}
+        # Errore Dati del grafico non validi
+        return {'id': chart_id, 'name': chart_record['name']}
 
     # --- PARTE 2: ELABORAZIONE DATI (MODIFICATA) ---
 
@@ -4942,8 +4943,8 @@ def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
     dictrows = HelpderDB.sql_query(query)
     
     if not dictrows:
-        return {'id': chart_id, 'name': chart_record['name'], 'layout': chart_record['layout'],
-                'labels': [], 'datasets': [], 'datasets2': []}
+        # Errore Dati del grafico non validi
+        return {'id': chart_id, 'name': chart_record['name']}
 
     labels = [row[group_by_alias] for row in dictrows]
     
