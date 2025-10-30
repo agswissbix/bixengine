@@ -943,6 +943,19 @@ class UserUserLog(BaseUserTable):
         db_table = 'user_user_log'
 
 
+class UserAttachment(BaseUserTable):
+    type = models.CharField(max_length=255, null=True, blank=True)
+    date = models.DateField(null=True, blank=True)
+    note = models.TextField(null=True, blank=True)
+    file = models.CharField(max_length=255, null=True, blank=True)
+    filename = models.CharField(max_length=255, null=True, blank=True)
+    recordiddeal = models.CharField(max_length=255, null=True, blank=True, db_column='recordiddeal_')
+    _recordiddeal = models.CharField(max_length=255, null=True, blank=True)
+
+    class Meta:
+        db_table = 'user_attachment'
+        verbose_name_plural = 'Allegati'
+
 class UserEvents(BaseUserTable):
     table = models.ForeignKey(SysTable, models.DO_NOTHING, null=True, blank=True)
     graph_event_id = models.CharField(max_length=255, null=True, blank=True)
@@ -962,3 +975,4 @@ class UserEvents(BaseUserTable):
 
     class Meta:
         db_table = 'user_events'
+        verbose_name_plural = 'Eventi'
