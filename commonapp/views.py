@@ -62,7 +62,7 @@ from django.http import JsonResponse
 import locale
 from commonapp.bixmodels.helper_db import *
 
-
+from . import graph_service
 
 
 env = environ.Env()
@@ -978,30 +978,208 @@ def get_calendar_records(request):
     response_data['counter'] = len(response_data['rows'])
     return JsonResponse(response_data)
 
-def get_graph_users(request):
-    print('Function: get_graph_users')
+def get_graph_users():
+    """
+    Ottiene gli utenti Bixdata che hanno una corrispondenza su Graph.
+    """
+    graph_users = graph_service.get_all_users()
     
+    if isinstance(graph_users, dict) and 'error' in graph_users:
+        return {"error": graph_users['error']}
+    
+    return graph_users
 
+def get_delta_link_from_db(event_owner):
+    event = UserEvents.objects.filter(owner=event_owner).exclude(calendar_delta_link__isnull=True).exclude(calendar_delta_link='').order_by('-id').first()
+    return event.calendar_delta_link if event else None
+
+def save_delta_link_to_db(event_owner, new_delta_link):
+    UserEvents.objects.filter(owner=event_owner).update(calendar_delta_link=new_delta_link)
+
+
+def map_and_save_event(event_data, user_email):
+    """
+    Mappa i dati dell'evento da Graph al modello UserEvents e li salva.
+    """
+    try:
+        body_content = event_data.get('body', {}).get('content', '')
+        categories = event_data.get('categories', [])
+        
+        calendar_id = event_data.get('calendar', {}).get('id')
+        
+        sys_user = None
+        try:
+             sys_user = SysUser.objects.get(email=user_email)
+        except SysUser.DoesNotExist:
+             print(f"Utente Bixdata '{user_email}' non trovato nel DB locale.")
+
+        defaults = {
+            'user': sys_user, 
+            'owner': user_email,
+            'subject': event_data.get('subject'),
+            'body_content': body_content,
+            'start_date': datetime.datetime.fromisoformat(event_data.get('start', {}).get('dateTime')),
+            'end_date': datetime.datetime.fromisoformat(event_data.get('end', {}).get('dateTime')),
+            'timezone': event_data.get('start', {}).get('timeZone', 'UTC'),
+            'organizer_email': event_data.get('organizer', {}).get('emailAddress', {}).get('address'),
+            'categories': ", ".join(categories),
+            'm365_calendar_id': calendar_id
+        }
+        
+        saved_event, created = UserEvents.objects.update_or_create(
+            graph_event_id=event_data.get('id'),
+            defaults=defaults
+        )
+        
+        print(f"Evento '{saved_event.subject}' {'creato' if created else 'aggiornato'} nel DB per {user_email}.")
+        return saved_event, created
+
+    except Exception as e:
+        print(f"Errore durante il salvataggio/aggiornamento dell'evento {event_data.get('id')}: {e}")
+        return None, False
+    
 def initial_graph_calendar_sync(request):
     """
     Sincronizzazione iniziale degli eventi del calendario con il DB Bixdata.
     """
     print('Function: initial_graph_calendar_sync')
 
+    graph_users = get_graph_users()
+    
+    if isinstance(graph_users, dict) and 'error' in graph_users:
+        return JsonResponse({"success": False, "detail": f"Errore Graph: {graph_users['error']}"}, status=500)
+    
+    if not graph_users:
+        return JsonResponse({"success": False, "detail": "Nessun utente trovato da Microsoft Graph"}, status=404)
+    
+    start_date = datetime.datetime.now().replace(day=1, hour=0, minute=0, second=0).isoformat()
+    end_date = (datetime.datetime.now() + datetime.timedelta(days=365)).isoformat()
+    
+    total_events_merged = 0
+    total_events_downloaded = 0
+    users_synced_count = 0
 
+    graph_users_map = {u.get('mail'): u for u in graph_users if u.get('mail')}
 
-    return HttpResponse()
+    # Sicnronizzazione in uscita (da Bixdata a Microsoft 365)
+    local_unsynced_events = UserEvents.objects.filter(graph_event_id__isnull=True).exclude(owner__isnull=True)
+    
+    events_by_owner = {}
+    for event in local_unsynced_events:
+        if event.owner not in events_by_owner:
+            events_by_owner[event.owner] = []
+        events_by_owner[event.owner].append(event)
 
+    for owner_email, events_to_promote in events_by_owner.items():
+        if owner_email not in graph_users_map:
+            print(f"Utente '{owner_email}' non trovato su Graph, saltata promozione.")
+            continue
+
+        for local_event in events_to_promote:
+            try:
+                result = graph_service.create_calendar_event(
+                    user_email=owner_email,
+                    subject=local_event.subject,
+                    start_time=local_event.start_date.isoformat(),
+                    end_time=local_event.end_date.isoformat(),
+                    body_content=local_event.body_content,
+                )
+                
+                if "error" not in result:
+                    local_event.graph_event_id = result.get('id')
+                    local_event.m365_calendar_id = result.get('calendar', {}).get('id')
+                    local_event.save()
+                    total_events_merged += 1
+                else:
+                    print(f"AVVISO: Creazione su Outlook fallita per '{local_event.subject}' ({owner_email}): {result['error']}")
+
+            except Exception as e:
+                 print(f"Errore grave durante la promozione di un evento: {e}")
+
+    
+    # Sincronizzazione in entrata (da MS 365/Graph a Bixdata)
+    for graph_user in graph_users:
+        user_email = graph_user.get('mail')
+        
+        if not user_email:
+            continue
+
+        events = graph_service.get_events_for_user(user_email, start_date, end_date)
+        
+        if isinstance(events, dict) and 'error' in events:
+            continue
+
+        if events:
+            for event in events:
+                map_and_save_event(event, user_email)
+                total_events_downloaded += 1
+            
+            users_synced_count += 1
+
+    return JsonResponse({
+        "success": True, 
+        "detail": f"Merge completato. {total_events_merged} locali promossi. Scaricati/Aggiornati {total_events_downloaded} eventi M365 ({users_synced_count} utenti)."
+    })
 
 def sync_graph_calendar(request):
     """
-    Sincronizza gli eventi del calendario di ogni utente Outlook con il DB Bixdata.
+    Sincronizza gli eventi del calendario di un utente Outlook con il DB Bixdata
+    usando i delta query.
     """
-    print('Function: sync_outlook_calendar')
+    print('Function: sync_graph_calendar')
+
+    graph_users = get_graph_users()
     
+    if isinstance(graph_users, dict) and 'error' in graph_users:
+        return JsonResponse({"success": False, "detail": f"Errore Graph: {graph_users['error']}"}, status=500)
     
+    if not graph_users:
+        return JsonResponse({"success": False, "detail": "Nessun utente trovato da Microsoft Graph"}, status=404)
     
-    return HttpResponse()
+    start_date = datetime.datetime.now().replace(day=1, hour=0, minute=0, second=0).isoformat()
+    end_date = (datetime.datetime.now() + datetime.timedelta(days=365)).isoformat()
+    
+    total_users_synced = 0
+    
+    for graph_user in graph_users:
+        user_email = graph_user.get('mail')
+        
+        if not user_email:
+            print(f"Utente senza email principale, saltato.")
+            continue
+        
+        delta_link = get_delta_link_from_db(user_email)
+        is_fully_synced = delta_link is None
+        
+        print(f"-> Sincronizzazione utente: {user_email}. Delta Link: {is_fully_synced and 'None (Full Sync)' or 'Exists'}")
+
+        delta_result = graph_service.get_calendar_view_delta(user_email, start_date, end_date, delta_link)
+
+        if isinstance(delta_result, dict) and 'error' in delta_result:
+            print(f"   Errore per {user_email}: {delta_result.get('error')}.")
+            continue
+
+        events_from_graph = delta_result.get('value', [])
+
+        if is_fully_synced:
+            graph_event_ids = {e['id'] for e in events_from_graph if e.get('@removed') is None}
+            UserEvents.objects.filter(owner=user_email).exclude(graph_event_id__in=graph_event_ids).delete()
+
+        for event_data in events_from_graph:
+            if event_data.get('@removed', {}).get('reason') == 'deleted':
+                UserEvents.objects.filter(graph_event_id=event_data.get('id')).delete()
+            else:
+                map_and_save_event(event_data, user_email)
+
+        if '@odata.deltaLink' in delta_result:
+            save_delta_link_to_db(user_email, delta_result['@odata.deltaLink'])
+        
+        total_users_synced += 1
+
+    return JsonResponse({
+        "success": True, 
+        "detail": f"Sincronizzazione Delta Batch completata. {total_users_synced} utenti processati."
+    })
 
 def get_records_matrixcalendar(request):
     print('Function: get_records_matrixcalendar')
