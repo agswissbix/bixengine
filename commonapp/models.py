@@ -960,7 +960,8 @@ class UserEvents(BaseUserTable):
     table = models.ForeignKey(SysTable, models.DO_NOTHING, null=True, blank=True)
     graph_event_id = models.CharField(max_length=255, null=True, blank=True)
     user = models.ForeignKey(SysUser, models.DO_NOTHING, null=True, blank=True)
-    
+
+    owner = models.CharField(max_length=255, null=True, blank=True)
     subject = models.CharField(max_length=255, null=True, blank=True) # Title
     body_content = models.TextField(blank=True) # Description
     start_date = models.DateTimeField(null=True, blank=True)
