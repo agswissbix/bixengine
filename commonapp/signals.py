@@ -59,8 +59,8 @@ LOOKUP_ITEMS_MAP = {
     "date_granularity_chart": ["year", "month", "day"],
 }
 
-INDIFFERENT_FIELDS = {"commonapp.UserChart", "commonapp.UserEmail", "commonapp.UserSchedulerLog", "commonapp.UserSystemLog", "commonapp.UserUserLog"}
-INCLUDE_FIELDS = {"commonapp.UserEvents"}
+INDIFFERENT_FIELDS = {  }
+INCLUDE_FIELDS = {"commonapp.UserEmail", "commonapp.UserSchedulerLog", "commonapp.UserSystemLog","commonapp.UserEvents","commonapp.UserChart", "commonapp.UserUserLog"}
 
 EXCLUDED_FIELDS = {
     "record_id",
