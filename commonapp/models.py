@@ -892,6 +892,8 @@ class UserChart(BaseUserTable):
 
     class Meta:
         db_table = 'user_chart'
+        verbose_name_plural = 'Grafici'
+
 
     def __str__(self):
         return self.name or self.title or str(self.recordid_)
@@ -910,6 +912,8 @@ class UserEmail(BaseUserTable):
 
     class Meta:
         db_table = 'user_email'
+        verbose_name_plural = 'Email'
+
     
 
 class UserSchedulerLog(BaseUserTable):
@@ -920,6 +924,8 @@ class UserSchedulerLog(BaseUserTable):
 
     class Meta:
         db_table = 'user_scheduler_log'
+        verbose_name_plural = 'Log scheduler'
+
 
 
 class UserSystemLog(BaseUserTable):
@@ -930,6 +936,8 @@ class UserSystemLog(BaseUserTable):
 
     class Meta:
         db_table = 'user_system_log'
+        verbose_name_plural = 'Log sistema'
+
 
 
 class UserUserLog(BaseUserTable):
@@ -941,6 +949,7 @@ class UserUserLog(BaseUserTable):
 
     class Meta:
         db_table = 'user_user_log'
+        verbose_name_plural = 'Log utente'
 
 
 class UserAttachment(BaseUserTable):
