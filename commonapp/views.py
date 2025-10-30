@@ -665,7 +665,7 @@ def get_table_records(request):
         rows.append(row)
 
     # --- Risposta Finale (invariata) ---
-    final_columns = [{'fieldtypeid': c['fieldtypeid'], 'desc': c['description'], 'fieldid': c['fieldid']} for c in table_columns]
+    final_columns = [{'fieldtypeid': c['fieldtypewebid'], 'desc': c['description'], 'fieldid': c['fieldid']} for c in table_columns]
     totalPages= (counter + pagination_limit - 1) // pagination_limit  
     response_data = {
         "counter": counter,
