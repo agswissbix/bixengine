@@ -1077,12 +1077,17 @@ def initial_graph_calendar_sync(request):
 
         for local_event in events_to_promote:
             try:
+                splitted_categories = local_event.categories.split(', ') if local_event.categories else []
+
                 result = graph_service.create_calendar_event(
                     user_email=owner_email,
                     subject=local_event.subject,
                     start_time=local_event.start_date.isoformat(),
                     end_time=local_event.end_date.isoformat(),
                     body_content=local_event.body_content,
+                    timezone=local_event.timezone,
+                    organizer_email=local_event.organizer_email,
+                    categories=splitted_categories
                 )
                 
                 if "error" not in result:
