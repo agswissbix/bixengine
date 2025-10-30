@@ -923,3 +923,6 @@ def get_scheduler_logs(request):
         return JsonResponse(data, safe=False)
     except requests.RequestException as e:  
         return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
+    
+def sync_graph_calendar():
+    print("sync_graph_calendar")

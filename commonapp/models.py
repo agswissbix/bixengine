@@ -945,12 +945,20 @@ class UserUserLog(BaseUserTable):
 
 class UserEvents(BaseUserTable):
     table = models.ForeignKey(SysTable, models.DO_NOTHING, null=True, blank=True)
-    graphid = models.CharField(max_length=255, null=True, blank=True)
+    graph_event_id = models.CharField(max_length=255, null=True, blank=True)
     user = models.ForeignKey(SysUser, models.DO_NOTHING, null=True, blank=True)
-    title = models.CharField(max_length=255, null=True, blank=True)
-    event_date = models.DateField(null=True, blank=True)
-    event_time = models.TimeField(null=True, blank=True)
-    description = models.TextField(null=True, blank=True)
+    
+    subject = models.CharField(max_length=255, null=True, blank=True) # Title
+    body_content = models.TextField(blank=True) # Description
+    start_date = models.DateTimeField(null=True, blank=True)
+    end_date = models.DateTimeField(null=True, blank=True)
+    timezone = models.CharField(max_length=100, default='UTC')
+
+    organizer_email = models.EmailField(max_length=255, blank=True, null=True)
+    categories = models.CharField(max_length=255, blank=True, null=True)
+    
+    m365_calendar_id = models.CharField(max_length=255, blank=True, null=True)
+    calendar_delta_link = models.TextField(blank=True, null=True)
 
     class Meta:
         db_table = 'user_events'

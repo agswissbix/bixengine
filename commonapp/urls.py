@@ -79,6 +79,7 @@ urlpatterns = [
     path('get_chart_data/', get_chart_data, name='get_chart_data'),
     path('get_calendar_data/', get_calendar_data, name='get_calendar_data'),
     path('save_calendar_event/', save_calendar_event, name='save_calendar_event'),
+    path('sync_graph_calendar/', sync_graph_calendar, name='sync_graph_calendar'),
     path('fieldsupdate/', fieldsupdate, name='fieldsupdate'),
     
     

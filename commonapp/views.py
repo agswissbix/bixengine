@@ -978,6 +978,31 @@ def get_calendar_records(request):
     response_data['counter'] = len(response_data['rows'])
     return JsonResponse(response_data)
 
+def get_graph_users(request):
+    print('Function: get_graph_users')
+    
+
+def initial_graph_calendar_sync(request):
+    """
+    Sincronizzazione iniziale degli eventi del calendario con il DB Bixdata.
+    """
+    print('Function: initial_graph_calendar_sync')
+
+
+
+    return HttpResponse()
+
+
+def sync_graph_calendar(request):
+    """
+    Sincronizza gli eventi del calendario di ogni utente Outlook con il DB Bixdata.
+    """
+    print('Function: sync_outlook_calendar')
+    
+    
+    
+    return HttpResponse()
+
 def get_records_matrixcalendar(request):
     print('Function: get_records_matrixcalendar')
     data = json.loads(request.body)

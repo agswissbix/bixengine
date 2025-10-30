@@ -206,3 +206,20 @@ Q_CLUSTER = {
     'catch_up': False, # The default behavior for schedules that didn’t run while a cluster was down, is to play catch up and execute all the missed time slots until things are back on schedule.
     'HOOKS': ['bixscheduler.hooks.on_task_success'],
 }
+
+# Configurazione Microsoft Graph API
+
+graph_client_id = env('GRAPH_CLIENT_ID')
+graph_client_secret = env('GRAPH_CLIENT_SECRET')
+graph_tenant_id = env('GRAPH_TENANT_ID')
+
+MS_GRAPH = {
+    'CLIENT_ID': graph_client_id,
+    'CLIENT_SECRET': graph_client_secret,
+    'TENANT_ID': graph_tenant_id,
+    
+    'AUTHORITY': f"https://login.microsoftonline.com/{graph_tenant_id}", 
+    
+    'SCOPE': ['https://graph.microsoft.com/.default'],
+    'GRAPH_ENDPOINT': 'https://graph.microsoft.com/v1.0'
+}
