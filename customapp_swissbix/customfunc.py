@@ -343,6 +343,7 @@ def save_record_fields(tableid,recordid):
         deal_annualmargin = 0
 
         deal_record.values['fixedprice'] = 'No'
+        # dealline records
         dealline_records = deal_record.get_linkedrecords_dict(linkedtable='dealline')
         for dealline_record_dict in dealline_records:
             dealline_recordid = dealline_record_dict['recordid_']
@@ -428,6 +429,15 @@ def save_record_fields(tableid,recordid):
         deal_record.values['annualcost'] = deal_annualcost
         deal_record.values['annualmargin'] = deal_annualmargin
 
+
+        #projects
+        project_records = deal_record.get_linkedrecords_dict(linkedtable='project')
+        for project_record_dict in project_records:
+            completed= project_record_dict['completed']
+            deal_record.values['projectcompleted'] = completed
+            project_record.save()
+
+            
         # valutazione step workflow
         deal_type = deal_record.values['type']
         deal_record.values['techvalidation'] = 'No'
