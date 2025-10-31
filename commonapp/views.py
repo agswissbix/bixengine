@@ -3653,7 +3653,7 @@ def get_input_linked(request):
                 if recordid_stabile:
                     additional_conditions = " AND recordidstabile_ = '"+recordid_stabile+"'"
             if searchTerm:
-                sql=f"SELECT recordid_ as recordid, {kyefieldlink} as name FROM user_{linkedmaster_tableid} where {kyefieldlink} like '%{searchTerm}%' {additional_conditions} AND deleted_='N' LIMIT 20"
+                sql=f"SELECT recordid_ as recordid, {kyefieldlink} as name FROM user_{linkedmaster_tableid} where {kyefieldlink} like '%{searchTerm}%' {additional_conditions} AND deleted_='N' ORDER BY recordid_ DESC LIMIT 20"
             else:
                 sql=f"SELECT recordid_ as recordid, {kyefieldlink} as name FROM user_{linkedmaster_tableid} where deleted_='N' {additional_conditions} ORDER BY recordid_ desc LIMIT 20 "
 
