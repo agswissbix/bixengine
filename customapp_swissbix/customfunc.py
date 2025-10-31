@@ -623,8 +623,17 @@ def save_record_fields(tableid,recordid):
         owner=event_record.values['owner']
         body_content=event_record.values['body_content']
         timezone=event_record.values['timezone']
+
+        if not timezone:
+            timezone = 'Europe/Rome'
+            event_record.values['timezone'] = timezone
+
         organizer_email=event_record.values['organizer_email']
-        categories=event_record.values['categories'].split(',')
+
+        categories=[]
+        if  event_record.values['categories']:
+            categories=event_record.values['categories'].split(',')
+        
 
         if not owner and user:
             owner = user.get('id')

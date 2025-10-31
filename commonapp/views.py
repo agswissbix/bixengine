@@ -1178,11 +1178,11 @@ def sync_graph_calendar(request):
             for local_event in local_unsynced_events:
                 try:
 
-                    table=local_event.values['table']
+                    table=local_event.values['table_id']
                     subject=local_event.values['subject']
                     start_date=local_event.values['start_date']
                     end_date=local_event.values['end_date']
-                    user=local_event.values['user']
+                    user=local_event.values['user_id']
                     owner=local_event.values['owner']
                     body_content=local_event.values['body_content']
                     timezone=local_event.values['timezone']
@@ -1255,16 +1255,18 @@ def create_event(event_data):
     """
     print('Function: create_event')
 
-    user = event_data.get('user', None)
-    table = event_data.get('table', None)
+    user = event_data.get('user_id', None)
+    table = event_data.get('table_id', None)
     owner = event_data.get('owner', None)
     subject = event_data.get('subject', None)
     body_content = event_data.get('body_content', None)
     start_date = event_data.get('start_date', None)
     end_date = event_data.get('end_date', None)
     categories = event_data.get('categories', [])
-    timezone = event_data.get('timezone', 'UTC')
-    organizer_email=event_data.get('organizer_email', None)
+    timezone = event_data.get('timezone')
+
+    if not timezone:
+        timezone = 'UTC'
 
     if user and not owner:
         owner = user.email
@@ -1283,7 +1285,6 @@ def create_event(event_data):
         body_content=body_content,
         categories=categories,
         timezone=timezone,
-        organizer_email=organizer_email
     )
 
     if "error" in result:
