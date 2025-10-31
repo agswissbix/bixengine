@@ -23,6 +23,7 @@ from bixscheduler.decorators.safe_schedule_task import safe_schedule_task
 import pyodbc
 from cryptography.fernet import Fernet, InvalidToken
 
+from commonapp import views
 
 
 # ritorna dei contatori (ad esempio: numero di stabili, numero di utenti, ecc.)
@@ -924,5 +925,16 @@ def get_scheduler_logs(request):
     except requests.RequestException as e:  
         return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
     
-def sync_graph_calendar():
+def sync_graph_calendar(request):
     print("sync_graph_calendar")
+
+    is_empty = not UserEvents.objects.all().exists()
+
+    if is_empty:
+        print("Nessun evento")
+        views.initial_graph_calendar_sync(request)
+    else:
+        print("Eventi esistenti")
+        views.sync_graph_calendar(request)
+
+    

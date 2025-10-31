@@ -14,6 +14,9 @@ from django.core.files.storage import default_storage
 from django.contrib.auth.decorators import login_required
 from functools import wraps
 
+from rest_framework.response import Response
+from rest_framework import status
+
 from bixsettings.views.businesslogic.models.table_settings import TableSettings
 from bixsettings.views.helpers.helperdb import Helperdb
 from commonapp.bixmodels import helper_db   
@@ -1101,7 +1104,6 @@ def initial_graph_calendar_sync(request):
             except Exception as e:
                  print(f"Errore grave durante la promozione di un evento: {e}")
 
-    
     # Sincronizzazione in entrata (da MS 365/Graph a Bixdata)
     for graph_user in graph_users:
         user_email = graph_user.get('mail')
@@ -1120,6 +1122,9 @@ def initial_graph_calendar_sync(request):
                 total_events_downloaded += 1
             
             users_synced_count += 1
+
+    # TODO: gestire salvataggio in tabelle specifiche tramite categorizzazione
+    # TODO: creazione iniziale eventi da tabelle specifiche (ed eventuale merge)
 
     return JsonResponse({
         "success": True, 
@@ -1185,6 +1190,247 @@ def sync_graph_calendar(request):
         "success": True, 
         "detail": f"Sincronizzazione Delta Batch completata. {total_users_synced} utenti processati."
     })
+
+def sync_event_to_db(event_data):
+    """
+    Crea o aggiorna un evento nel DB locale
+    """
+
+    graph_event_id = event_data.get('graph_event_id', None)
+    if not graph_event_id:
+        return None, False
+
+    try:
+        event, created = UserEvents.objects.get_or_create(
+            graph_event_id=graph_event_id,
+            defaults={} 
+        )
+
+        if 'owner' in event_data:
+            event.owner = event_data['owner']
+            if not hasattr(event, 'user') or not event.user:
+                 event.user = SysUser.objects.filter(email=event.owner).first()
+
+        if 'user' in event_data and not event.user:
+            event.user = event_data['user']
+
+        if 'subject' in event_data:
+            event.subject = event_data['subject']
+        if 'body_content' in event_data:
+            event.body_content = event_data['body_content']
+        if 'start_date' in event_data:
+            event.start_date = event_data['start_date']
+        if 'end_date' in event_data:
+            event.end_date = event_data['end_date']
+        if 'timezone' in event_data:
+            event.timezone = event_data['timezone']
+        if 'organizer_email' in event_data:
+            event.organizer_email = event_data['organizer_email']
+        if 'categories' in event_data:
+            event.categories = ", ".join(event_data['categories'])
+        if 'm365_calendar_id' in event_data:
+            event.m365_calendar_id = event_data['m365_calendar_id']
+
+        event.save()
+
+        print(f"Evento '{event.subject}' {'creato' if created else 'aggiornato'} nel DB per {event.owner}.")
+        return event, created
+
+    except Exception as e:
+        print(f"Errore durante il salvataggio/aggiornamento dell'evento {graph_event_id}: {e}")
+        return None, False
+    
+def create_event(event_data):
+    print('Function: create_event')
+
+    user = event_data.get('user', None)
+    table = event_data.get('table', None)
+    owner = event_data.get('owner', None)
+    subject = event_data.get('subject', None)
+    body_content = event_data.get('body_content', None)
+    start_date = event_data.get('start_date', None)
+    end_date = event_data.get('end_date', None)
+    categories = event_data.get('categories', [])
+    timezone = event_data.get('timezone', 'UTC')
+
+    if user and not owner:
+        owner = user.email
+
+    if not all([owner, subject, start_date, end_date]):
+        return {"error": "Parametri mancanti per creare l'evento."}
+
+    if not end_date and start_date:
+        end_date = start_date
+
+    # TODO: controllare questa parte per poter mettere il nome della tabella (es. assenze) come tag
+    # if table:
+    #     categories.append(table.name)
+
+    result = graph_service.create_calendar_event(
+        user_email=owner,
+        subject=subject,
+        start_time=start_date.isoformat(),
+        end_time=end_date.isoformat(),
+        body_content=body_content,
+        categories=categories,
+        timezone=timezone
+    )
+
+    if "error" in result:
+        print(f"Errore durante la creazione dell'evento su Graph: {result['details']}")
+        return result
+
+    db_event_data = {
+        'user': user,
+        'table': table,
+        'graph_event_id': result.get('id'),
+        'owner': owner,
+        'subject': result.get('subject'),
+        'body_content': result.get('body', {}).get('content'),
+        'start_date': datetime.fromisoformat(result.get('start', {}).get('dateTime')),
+        'end_date': datetime.fromisoformat(result.get('end', {}).get('dateTime')),
+        'timezone': result.get('start', {}).get('timeZone'),
+        'organizer_email': result.get('organizer', {}).get('emailAddress', {}).get('address'),
+        'categories': result.get('categories', []),
+        'm365_calendar_id': result.get('calendar', {}).get('id'),
+    }
+
+    sync_event_to_db(db_event_data)
+
+    return result
+
+def update_event(event_data):
+    """
+    Aggiorna un evento esistente su Microsoft Graph e nel DB locale.
+    """
+    print('Function: update_event')
+
+    graph_event_id = event_data.get('graph_event_id')
+    owner = event_data.get('owner')
+    user = event_data.get('user')
+
+    event = UserEvents.objects.filter(graph_event_id=graph_event_id).first()
+    if not event:
+        print(f"Evento con ID Graph {graph_event_id} non trovato nel DB locale.")
+        return None
+
+    # TODO: controllare che sia corretto il cambio di utente
+    if owner and (event.owner != owner):
+        change_event_owner(graph_event_id, owner, user)
+
+    if user and not owner:
+        owner = user.email
+
+    if not graph_event_id or not owner:
+        return {"error": "graph_event_id e owner sono obbligatori per l'aggiornamento."}
+
+    subject = event_data.get('subject')
+    body_content = event_data.get('body_content')
+    start_date = event_data.get('start_date')
+    end_date = event_data.get('end_date')
+    categories = event_data.get('categories') 
+    timezone = event_data.get('timezone', 'UTC')
+
+    result = graph_service.update_calendar_event(
+        user_email=owner,
+        event_id=graph_event_id,
+        subject=subject,
+        start_time=start_date.isoformat() if start_date else None,
+        end_time=end_date.isoformat() if end_date else None,
+        body_content=body_content,
+        categories=categories,
+        timezone=timezone
+    )
+
+    if "error" in result:
+        print(f"Errore durante l'aggiornamento dell'evento su Graph: {result.get('details')}")
+        return result
+
+    db_event_data = {
+        'graph_event_id': result.get('id'),
+        'owner': owner,
+        'subject': result.get('subject'),
+        'body_content': result.get('body', {}).get('content'),
+        'start_date': datetime.fromisoformat(result.get('start', {}).get('dateTime')),
+        'end_date': datetime.fromisoformat(result.get('end', {}).get('dateTime')),
+        'timezone': result.get('start', {}).get('timeZone'),
+        'organizer_email': result.get('organizer', {}).get('emailAddress', {}).get('address'),
+        'categories': result.get('categories', []),
+        'm365_calendar_id': result.get('calendar', {}).get('id'),
+    }
+
+    sync_event_to_db(db_event_data)
+
+    return result
+
+def delete_event(owner, event_id):
+    """
+    Cancella un evento esistente su Microsoft Graph e dal DB locale.
+    """
+    print('Function: delete_event')
+
+    if not owner or not event_id:
+        return Response(
+            {"error": "Dati mancanti"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    result = graph_service.delete_event(owner, event_id)
+
+    if "error" in result:
+        if isinstance(result.get("details"), dict) and result["details"].get("error", {}).get("code") == "ErrorItemNotFound":
+            return Response({"error": f"Evento con ID {event_id} non trovato."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(result, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    deleted_count, _ = UserEvents.objects.filter(graph_event_id=event_id).delete()
+    if deleted_count > 0:
+        print(f"Evento con ID Graph {event_id} eliminato dal DB locale.")
+
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+def change_event_owner(event_id, new_owner, user=None):
+    """
+    Cambia l'owner di un evento esistente su Microsoft Graph e nel DB locale.
+    """
+    print('Function: change_event_owner')
+
+    if not event_id or not new_owner:
+        print("DAti mancanti per il cambio di utente")
+        return None
+    
+    event = UserEvents.objects.filter(graph_event_id=event_id).first()
+    if not event:
+        print(f"Evento con ID Graph {event_id} non trovato nel DB locale.")
+        return None
+    
+    old_owner = event.owner
+
+    result = graph_service.delete_event(old_owner, event_id)
+    if "error" in result:
+        print(f"Errore durante la cancellazione dell'evento su Graph: {result.get('details')}")
+        return result
+
+    result = graph_service.create_calendar_event(
+        user_email=new_owner,
+        subject=event.subject,
+        start_time=event.start_date.isoformat(),
+        end_time=event.end_date.isoformat(),
+        body_content=event.body_content,
+        categories=event.categories,
+        timezone=event.timezone
+    )
+
+    if "error" in result:
+        print(f"Errore durante la creazione dell'evento su Graph: {result.get('details')}")
+        return None
+    
+    event.graph_event_id = result.get('id')
+    event.owner = new_owner
+    if user:
+        event.user = user
+    event.save()
+
+    return event
 
 def get_records_matrixcalendar(request):
     print('Function: get_records_matrixcalendar')
