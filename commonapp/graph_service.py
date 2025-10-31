@@ -163,6 +163,7 @@ def get_events_for_user(user_id_or_email, start_date_iso, end_date_iso, calendar
         f"{base_endpoint}/calendarView"
         f"?startDateTime={start_date_iso}&endDateTime={end_date_iso}"
         "&$select=id,subject,start,end,organizer,body,categories"
+        "&$expand=calendar"
     )
     headers = {'Authorization': f'Bearer {token}'}
 

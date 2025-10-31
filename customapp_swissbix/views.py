@@ -1096,3 +1096,7 @@ def update_deals(request):
 def get_scheduler_logs(request):
     from customapp_swissbix.script import get_scheduler_logs
     return get_scheduler_logs(request)
+
+def sync_graph_calendar(request):
+    from customapp_swissbix.script import sync_graph_calendar
+    return sync_graph_calendar(request)
