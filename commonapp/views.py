@@ -986,6 +986,8 @@ def get_graph_users():
     Ottiene gli utenti Bixdata che hanno una corrispondenza su Graph.
     """
     graph_users = graph_service.get_all_users()
+
+    # TODO: Filtrare gli utenti presenti solo in bixdata
     
     if isinstance(graph_users, dict) and 'error' in graph_users:
         return {"error": graph_users['error']}
@@ -1008,6 +1010,8 @@ def map_and_save_event(event_data, user_email):
         body_content = event_data.get('body', {}).get('content', '')
         categories = event_data.get('categories', [])
         
+        # TODO: Aggiungere riferimento tabella se categoria corrispondente è presente
+
         calendar_id = event_data.get('calendar', {}).get('id')
         
         sys_user = None
@@ -1190,57 +1194,11 @@ def sync_graph_calendar(request):
         "success": True, 
         "detail": f"Sincronizzazione Delta Batch completata. {total_users_synced} utenti processati."
     })
-
-def sync_event_to_db(event_data):
-    """
-    Crea o aggiorna un evento nel DB locale
-    """
-
-    graph_event_id = event_data.get('graph_event_id', None)
-    if not graph_event_id:
-        return None, False
-
-    try:
-        event, created = UserEvents.objects.get_or_create(
-            graph_event_id=graph_event_id,
-            defaults={} 
-        )
-
-        if 'owner' in event_data:
-            event.owner = event_data['owner']
-            if not hasattr(event, 'user') or not event.user:
-                 event.user = SysUser.objects.filter(email=event.owner).first()
-
-        if 'user' in event_data and not event.user:
-            event.user = event_data['user']
-
-        if 'subject' in event_data:
-            event.subject = event_data['subject']
-        if 'body_content' in event_data:
-            event.body_content = event_data['body_content']
-        if 'start_date' in event_data:
-            event.start_date = event_data['start_date']
-        if 'end_date' in event_data:
-            event.end_date = event_data['end_date']
-        if 'timezone' in event_data:
-            event.timezone = event_data['timezone']
-        if 'organizer_email' in event_data:
-            event.organizer_email = event_data['organizer_email']
-        if 'categories' in event_data:
-            event.categories = ", ".join(event_data['categories'])
-        if 'm365_calendar_id' in event_data:
-            event.m365_calendar_id = event_data['m365_calendar_id']
-
-        event.save()
-
-        print(f"Evento '{event.subject}' {'creato' if created else 'aggiornato'} nel DB per {event.owner}.")
-        return event, created
-
-    except Exception as e:
-        print(f"Errore durante il salvataggio/aggiornamento dell'evento {graph_event_id}: {e}")
-        return None, False
     
 def create_event(event_data):
+    """
+    Crea un nuovo evento su Microsoft Graph.
+    """
     print('Function: create_event')
 
     user = event_data.get('user', None)
@@ -1262,10 +1220,6 @@ def create_event(event_data):
     if not end_date and start_date:
         end_date = start_date
 
-    # TODO: controllare questa parte per poter mettere il nome della tabella (es. assenze) come tag
-    # if table:
-    #     categories.append(table.name)
-
     result = graph_service.create_calendar_event(
         user_email=owner,
         subject=subject,
@@ -1279,23 +1233,6 @@ def create_event(event_data):
     if "error" in result:
         print(f"Errore durante la creazione dell'evento su Graph: {result['details']}")
         return result
-
-    db_event_data = {
-        'user': user,
-        'table': table,
-        'graph_event_id': result.get('id'),
-        'owner': owner,
-        'subject': result.get('subject'),
-        'body_content': result.get('body', {}).get('content'),
-        'start_date': datetime.fromisoformat(result.get('start', {}).get('dateTime')),
-        'end_date': datetime.fromisoformat(result.get('end', {}).get('dateTime')),
-        'timezone': result.get('start', {}).get('timeZone'),
-        'organizer_email': result.get('organizer', {}).get('emailAddress', {}).get('address'),
-        'categories': result.get('categories', []),
-        'm365_calendar_id': result.get('calendar', {}).get('id'),
-    }
-
-    sync_event_to_db(db_event_data)
 
     return result
 
@@ -1314,7 +1251,6 @@ def update_event(event_data):
         print(f"Evento con ID Graph {graph_event_id} non trovato nel DB locale.")
         return None
 
-    # TODO: controllare che sia corretto il cambio di utente
     if owner and (event.owner != owner):
         change_event_owner(graph_event_id, owner, user)
 
@@ -1345,21 +1281,6 @@ def update_event(event_data):
     if "error" in result:
         print(f"Errore durante l'aggiornamento dell'evento su Graph: {result.get('details')}")
         return result
-
-    db_event_data = {
-        'graph_event_id': result.get('id'),
-        'owner': owner,
-        'subject': result.get('subject'),
-        'body_content': result.get('body', {}).get('content'),
-        'start_date': datetime.fromisoformat(result.get('start', {}).get('dateTime')),
-        'end_date': datetime.fromisoformat(result.get('end', {}).get('dateTime')),
-        'timezone': result.get('start', {}).get('timeZone'),
-        'organizer_email': result.get('organizer', {}).get('emailAddress', {}).get('address'),
-        'categories': result.get('categories', []),
-        'm365_calendar_id': result.get('calendar', {}).get('id'),
-    }
-
-    sync_event_to_db(db_event_data)
 
     return result
 

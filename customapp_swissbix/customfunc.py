@@ -21,6 +21,8 @@ from commonapp.bixmodels.user_record import UserRecord
 from commonapp.bixmodels.user_table import UserTable
 from commonapp.bixmodels.helper_db import HelpderDB
 
+from commonapp import views
+
 # Initialize environment variables
 env = environ.Env()
 environ.Env.read_env()
@@ -598,7 +600,47 @@ def save_record_fields(tableid,recordid):
 
         dipendente_record.values['saldovacanze'] = saldovacanze
         dipendente_record.save()
-            
+
+    # ---EVENT---
+    if tableid == 'events':
+        event_record = UserRecord('events', recordid)
+        
+        table=event_record.values['table_id']
+        subject=event_record.values['subject']
+        start_date=event_record.values['start_date']
+        end_date=event_record.values['end_date']
+        user=event_record.values['user_id']
+        owner=event_record.values['owner']
+        body_content=event_record.values['body_content']
+        timezone=event_record.values['timezone']
+        organizer_email=event_record.values['organizer_email']
+        categories=event_record.values['categories'].split(',')
+
+        if not owner and user:
+            owner = user.get('id')
+            event_record.values['owner'] = owner
+
+
+        event_data = {
+            'table': table,
+            'subject': subject,
+            'start_date': start_date,
+            'end_date': end_date,
+            'user': user,
+            'owner': owner,
+            'body_content': body_content,
+            'timezone': timezone,
+            'organizer_email': organizer_email,
+            'categories': categories,
+        }
+
+        result = views.create_event(event_data)
+
+        if not "error" in result:
+            event_record.values['graph_event_id'] = result.get('id')
+            event_record.values['m365_calendar_id'] =  result.get('calendar', {}).get('id'),
+        
+        event_record.save()
 
 
 def card_task_pianificaperoggi(recordid):
