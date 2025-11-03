@@ -635,11 +635,18 @@ def save_record_fields(tableid,recordid):
         if  event_record.values['categories']:
             categories=event_record.values['categories'].split(',')
         
-
+        sys_user_details = None
+        if user:
+            sys_user_details = HelpderDB.sql_query_row(f"SELECT * FROM sys_user WHERE id = {user}")
+        
         if not owner and user:
-            owner = user.get('id')
-            event_record.values['owner'] = owner
+            if sys_user_details and sys_user_details.get('email'):
+                owner = sys_user_details['email']
+                event_record.values['owner'] = owner
 
+        if not organizer_email and sys_user_details and sys_user_details.get('email'):
+            organizer_email = sys_user_details['email']
+            event_record.values['organizer_email'] = organizer_email
 
         event_data = {
             'graph_event_id': graph_event_id,

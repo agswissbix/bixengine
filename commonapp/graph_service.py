@@ -215,7 +215,7 @@ def get_calendar_view_delta(user_id, start_date_iso, end_date_iso, delta_link=No
     except requests.exceptions.HTTPError as e:
         return {"error": str(e), "details": e.response.json()}
     
-def create_calendar_event(user_email, subject, start_time, end_time, body_content, categories=None, timezone="Europe/Rome", calendar_id=None):
+def create_calendar_event(user_email, subject, start_time, end_time, body_content, categories=None, timezone="Europe/Rome", calendar_id=None, organizer_email=None):
     """
     Crea un evento nel calendario dell'utente specificato.
     'start_time' e 'end_time' devono essere stringhe in formato ISO 8601 (es. "2024-10-30T10:00:00")
@@ -234,6 +234,9 @@ def create_calendar_event(user_email, subject, start_time, end_time, body_conten
         'Content-Type': 'application/json'
     }
 
+    if organizer_email is None:
+        organizer_email = user_email
+
     event_data = {
         "subject": subject,
         "body": {
@@ -248,7 +251,12 @@ def create_calendar_event(user_email, subject, start_time, end_time, body_conten
             "dateTime": end_time,
             "timeZone": timezone
         },
-        "isReminderOn": False
+        "isReminderOn": False,
+        "organizer": {
+            "emailAddress": {
+                "address": organizer_email
+            }
+        }
     }
 
     if categories:
@@ -291,7 +299,7 @@ def get_event_details(user_id_or_email, event_id, calendar_id=None):
     except Exception as e:
         return {"error": str(e)}
     
-def update_calendar_event(user_email, event_id, subject=None, start_time=None, end_time=None, body_content=None, categories=None, timezone="Europe/Rome", calendar_id=None):
+def update_calendar_event(user_email, event_id, subject=None, start_time=None, end_time=None, body_content=None, categories=None, timezone="Europe/Rome", calendar_id=None, organizer_email=None):
     """
     Modifica un evento esistente nel calendario di un utente.
     Invia solo i campi che vengono effettivamente forniti.
@@ -322,6 +330,8 @@ def update_calendar_event(user_email, event_id, subject=None, start_time=None, e
         event_data["end"] = {"dateTime": end_time, "timeZone": timezone}
     if categories is not None:
         event_data["categories"] = categories
+    if organizer_email:
+        event_data["organizer"] = {"emailAddress": {"address": organizer_email}}
 
     if not event_data:
         return {"error": "Nessun dato fornito per la modifica."}
