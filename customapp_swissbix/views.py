@@ -141,9 +141,9 @@ def save_activemind(request):
                     SELECT recordid_
                     FROM user_dealline
                     WHERE recordiddeal_ = %s
-                    AND name LIKE 'AM - Manutenzione servizi%%'
+                    AND name LIKE %s
                     LIMIT 1
-                """, [recordid_deal])
+                """, [recordid_deal, product.values.get('name', '')])
                 existing_row = cursor.fetchone()
 
             record_dealline = UserRecord('dealline')
@@ -177,7 +177,7 @@ def save_activemind(request):
             title = service.get('title', '')
 
             if qty > 0:
-                name_parts.append(f"{title}: {qty}")
+                name_parts.append(f"{title}: qta. {qty}")
                 total_price += qty * unit_price
 
         name_str = "AM - Manutenzione servizi - \n" + ",\n".join(name_parts) if name_parts else "AM - Manutenzione servizi"
