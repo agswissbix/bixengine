@@ -932,9 +932,8 @@ def sync_graph_calendar(request):
 
     if is_empty:
         print("Nessun evento")
-        views.initial_graph_calendar_sync(request)
+        return views.initial_graph_calendar_sync(request)
     else:
         print("Eventi esistenti")
-        views.sync_graph_calendar(request)
-
+        return views.sync_graph_calendar(request)
     
