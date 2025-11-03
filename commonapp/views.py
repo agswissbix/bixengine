@@ -1026,9 +1026,14 @@ def map_and_save_event(event_data, user_email):
              sys_user = SysUser.objects.get(email=user_email)
         except SysUser.DoesNotExist:
              print(f"Utente Bixdata '{user_email}' non trovato nel DB locale.")
+        if not sys_user:
+            # Soluzione temporanea
+            sys_user = 75
 
         defaults = {
-            'user': sys_user, 
+            'user_id': sys_user,
+            # Soluzione temporanea
+            'table_id': 'task',
             'owner': user_email,
             'subject': event_data.get('subject'),
             'body_content': body_content,
@@ -1092,6 +1097,21 @@ def initial_graph_calendar_sync(request):
         for local_event in events_to_promote:
             try:
                 splitted_categories = local_event.categories.split(', ') if local_event.categories else []
+
+                if not local_event.timezone:
+                    local_event.timezone = 'Europe/Rome'
+                    local_event.save()
+
+                if local_event.start_date and not local_event.end_date:
+                    local_event.end_date = local_event.start_date
+                    local_event.save()
+
+                if local_event.end_date and not local_event.start_date:
+                    local_event.start_date = local_event.end_date
+                    local_event.save()
+
+                if not local_event.start_date and not local_event.end_date:
+                    continue
 
                 result = graph_service.create_calendar_event(
                     user_email=owner_email,
@@ -1189,6 +1209,18 @@ def sync_graph_calendar(request):
                     organizer_email=local_event.values['organizer_email']
                     categories=local_event.values['categories'].split(',')
 
+                    if not timezone:
+                        timezone = 'Europe/Rome'
+
+                    if not end_date and start_date:
+                        end_date = start_date
+
+                    if not start_date and end_date:
+                        start_date = end_date
+
+                    if not start_date and not end_date:
+                        continue
+
                     event_data = {
                         'table': table,
                         'subject': subject,
@@ -1266,10 +1298,12 @@ def create_event(event_data):
     timezone = event_data.get('timezone')
 
     if not timezone:
-        timezone = 'UTC'
+        timezone = 'Europe/Rome'
 
     if user and not owner:
-        owner = user.email
+        user = SysUser.objects.get(id=user)
+        if user:
+            owner = user.email
 
     if not all([owner, subject, start_date, end_date]):
         return {"error": "Parametri mancanti per creare l'evento."}
@@ -1301,7 +1335,7 @@ def update_event(event_data):
 
     graph_event_id = event_data.get('graph_event_id')
     owner = event_data.get('owner')
-    user = event_data.get('user')
+    user = event_data.get('user_id')
 
     event = UserEvents.objects.filter(graph_event_id=graph_event_id).first()
     if not event:
@@ -1309,10 +1343,14 @@ def update_event(event_data):
         return None
 
     if owner and (event.owner != owner):
-        change_event_owner(graph_event_id, owner, user)
+        result = change_event_owner(graph_event_id, owner, user)
+        graph_event_id = result.get('id')
+        owner = result.get('owner')
 
     if user and not owner:
-        owner = user.email
+        user = SysUser.objects.get(id=user)
+        if user:
+            owner = user.email
 
     if not graph_event_id or not owner:
         return {"error": "graph_event_id e owner sono obbligatori per l'aggiornamento."}
@@ -1323,6 +1361,15 @@ def update_event(event_data):
     end_date = event_data.get('end_date')
     categories = event_data.get('categories') 
     timezone = event_data.get('timezone', 'UTC')
+
+    if not timezone:
+        timezone = 'Europe/Rome'
+
+    if not end_date and start_date:
+        end_date = start_date
+
+    if not start_date and end_date:
+        start_date = end_date
 
     result = graph_service.update_calendar_event(
         user_email=owner,
@@ -1404,7 +1451,7 @@ def change_event_owner(event_id, new_owner, user=None):
     #     event.user = user
     # event.save()
 
-    return event
+    return result
 
 def get_records_matrixcalendar(request):
     print('Function: get_records_matrixcalendar')

@@ -615,6 +615,7 @@ def save_record_fields(tableid,recordid):
     if tableid == 'events':
         event_record = UserRecord('events', recordid)
         
+        graph_event_id = event_record.values['graph_event_id']
         table=event_record.values['table_id']
         subject=event_record.values['subject']
         start_date=event_record.values['start_date']
@@ -641,6 +642,7 @@ def save_record_fields(tableid,recordid):
 
 
         event_data = {
+            'graph_event_id': graph_event_id,
             'table': table,
             'subject': subject,
             'start_date': start_date,
@@ -653,7 +655,10 @@ def save_record_fields(tableid,recordid):
             'categories': categories,
         }
 
-        result = views.create_event(event_data)
+        if graph_event_id:
+            result = views.update_event(event_data)
+        else:
+            result = views.create_event(event_data)
 
         if not "error" in result:
             event_record.values['graph_event_id'] = result.get('id')
