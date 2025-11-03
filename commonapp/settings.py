@@ -340,17 +340,20 @@ def settings_table_fields_settings_fields_save(request):
     })
 
 
+
+
 FIELDTYPES = {
     "Parola": "VARCHAR(255)",
     "Seriale": "VARCHAR(255)",
     "Data": "DATE",
     "Ora": "TIME",
-    "Numero": "INT",
+    "Numero": "FLOAT",
     "lookup": "VARCHAR(255)",
     "multiselect": "VARCHAR(255)",
     "Utente": "VARCHAR(255)",
     "Memo": "TEXT",
     "html": "LONGTEXT",
+    "linked": "VARCHAR(255)"
 }
 
 def settings_table_fields_new_field(request):
@@ -361,6 +364,9 @@ def settings_table_fields_new_field(request):
     fieldid = data.get("fieldid")
     fielddescription = data.get("fielddescription")
     fieldtype = data.get("fieldtype")
+    is_linked = data.get("islinked", False)
+    linked_table = data.get("linkedtable", None)
+    linked_table_fields = data.get("linkedtablefields", [])
     label = data.get("label", "Dati")
 
     if not all([tableid, fieldid, fielddescription, fieldtype]):
@@ -376,27 +382,27 @@ def settings_table_fields_new_field(request):
     tableid_obj = SysTable.objects.filter(id=tableid).first()
 
     # Caso base
-    new_field = SysField.objects.create(
-        tableid=tableid_obj.id,
-        fieldid=fieldid,
-        description=fielddescription,
-        fieldtypewebid=fieldtype,
-        label=label,
-        length=255,
-    )
 
     sql_column_type = FIELDTYPES.get(fieldtype, "VARCHAR(255)")
-
     user_table_name = f"user_{tableid}"
-    alter_sql = f'ALTER TABLE {user_table_name} ADD COLUMN {fieldid} {sql_column_type} NULL'
+    if not is_linked:
+        new_field = SysField.objects.create(
+            tableid=tableid_obj.id,
+            fieldid=fieldid,
+            description=fielddescription,
+            fieldtypewebid=fieldtype,
+            label=label,
+            length=255,
+        )
+        alter_sql = f'ALTER TABLE {user_table_name} ADD COLUMN {fieldid} {sql_column_type} NULL'
 
-    try:
-        with connection.cursor() as cursor:
-            cursor.execute(alter_sql)
-    except Exception as e:
-        transaction.set_rollback(True)
-        print(f"Errore SQL durante l'aggiunta della colonna: {e}")
-        return JsonResponse({"success": False, "error": f"Errore SQL: {e}"}, status=500)
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(alter_sql)
+        except Exception as e:
+            transaction.set_rollback(True)
+            print(f"Errore SQL durante l'aggiunta della colonna: {e}")
+            return JsonResponse({"success": False, "error": f"Errore SQL: {e}"}, status=500)
 
     # Se è un campo Categoria → crea lookup table e relative opzioni
     if fieldtype == "lookup" or fieldtype == "multiselect":
@@ -437,8 +443,77 @@ def settings_table_fields_new_field(request):
             SysLookupTableItem(lookuptableid=lookuptableid, itemcode="Si", itemdesc="Si"),
             SysLookupTableItem(lookuptableid=lookuptableid, itemcode="No", itemdesc="No"),
         ])
-    elif fieldtype == "Linked":
-        pass
+    elif is_linked and linked_table and linked_table_fields:
+        linkedtableid = linked_table
+
+        # Costruisce i nomi delle nuove colonne
+        newcolumn = f"recordid{linkedtableid}_"
+        newcolumn2 = f"_recordid{linkedtableid}"
+
+        # Costruisce l'identificativo del campo collegato nella tabella opposta
+        fieldid2 = f"recordid{tableid}_"
+
+        # Costruisce la stringa con i campi collegati
+        fields = linked_table_fields
+        keyfieldlink = ",".join([str(field) for field in fields])
+        keyfieldlink = SysField.objects.filter(id__in=keyfieldlink.split(",")).values_list('fieldid', flat=True)
+
+        # Aggiunge la colonna nella tabella utente principale
+        alter_sql_1 = f"ALTER TABLE {user_table_name} ADD COLUMN {newcolumn} {sql_column_type} NULL"
+
+        # Aggiunge anche la seconda colonna di collegamento
+        alter_sql_2 = f"ALTER TABLE {user_table_name} ADD COLUMN {newcolumn2} {sql_column_type} NULL"
+
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(alter_sql_1)
+                cursor.execute(alter_sql_2)
+        except Exception as e:
+            transaction.set_rollback(True)
+            print(f"Errore SQL durante la creazione delle colonne Linked: {e}")
+            return JsonResponse({"success": False, "error": f"Errore SQL: {e}"}, status=500)
+
+        # Crea il campo collegato nella tabella principale
+        SysField.objects.create(
+            tableid=tableid,
+            fieldid=newcolumn,
+            description=fielddescription,
+            fieldtypewebid=fieldtype,
+            length=255,
+            label=linkedtableid,
+            keyfieldlink=keyfieldlink,
+            tablelink=linkedtableid,
+        )
+
+        # Crea il campo corrispondente nella tabella collegata
+        SysField.objects.create(
+            tableid=linkedtableid,
+            fieldid=fieldid2,
+            description=fielddescription,
+            fieldtypewebid=fieldtype,
+            length=255,
+            label=tableid,
+            keyfieldlink=keyfieldlink,
+            tablelink=tableid,
+        )
+
+        # Registra il legame tra le due tabelle
+        SysTableLink.objects.create(
+            tableid_id=linkedtableid,
+            tablelinkid_id=tableid
+        )
+
+        # Crea anche la seconda colonna di riferimento nel sistema dei campi
+        SysField.objects.create(
+            tableid=tableid,
+            fieldid=newcolumn2,
+            description=fielddescription,
+            fieldtypewebid=fieldtype,
+            length=255,
+            label="Dati",
+            keyfieldlink=keyfieldlink,
+            tablelink=linkedtableid,
+        )
 
     return JsonResponse({"success": True})
 
