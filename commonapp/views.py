@@ -3073,6 +3073,7 @@ def save_record_fields(request):
         chartid = values.get("report_id")
         pivot_total_field = values.get("pivot_total_field")
         granularity = values.get("date_granularity", "day")
+        func_button = values.get("function_button", None)
 
         # =======================
         # FIELD TYPE (ORM)
@@ -3250,12 +3251,12 @@ def save_record_fields(request):
         user = SysUser.objects.filter(id=userid).first()
         if chartid and chartid != "None":
             SysChart.objects.filter(id=chartid).update(
-                name=title, layout=layout, config=config_python, userid=user
+                name=title, layout=layout, config=config_python, userid=user, function_button_id=func_button
             )
             chart_obj = SysChart.objects.get(id=chartid)
         else:
             chart_obj = SysChart.objects.create(
-                name=title, layout=layout, config=config_python, userid=user
+                name=title, layout=layout, config=config_python, userid=user, function_button_id=func_button
             )
             chart_record.values["report_id"] = chart_obj.id
         chart_record.save()
@@ -3419,12 +3420,19 @@ def get_record_card_fields(request):
                 "label": v["name"]
             })
 
+        customs_fn = SysCustomFunction.objects.all().order_by('order').values('id', 'title')
+        functions_lookup = [
+            {"value": str(fn["id"]), "label": fn["title"]}
+            for fn in customs_fn
+        ]
+
         # Inseriamo i lookup nella response
         response["lookup"] = {
             "table": tables_lookup,
             "campi": fields_lookup,
             "views": views_lookup,
             "dashboards": dashboards_lookup,
+            "functions": functions_lookup,
         }
 
     return JsonResponse(response)
@@ -5517,6 +5525,21 @@ def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
     if chart_record['layout'] == 'table':
         final_datasets1[0]['tableid'] = config['from_table']
         final_datasets1[0]['view'] = chart_record.get('viewid', '')
+
+    if chart_record['layout'] == 'button':
+        final_datasets1[0]['tableid'] = config['from_table']
+        chart_record.get('function_button', None)
+        custom_func = SysCustomFunction.objects.filter(id=chart_record['function_button']).values(
+            'tableid', 'context', 'title', 'function', 'conditions', 'params', 'css'
+        ).first()
+        if custom_func:
+            for key in ['conditions', 'params']:
+                if custom_func.get(key):
+                    try:
+                        custom_func[key] = json.loads(custom_func[key])
+                    except Exception:
+                        pass  # lascialo com'è se non è JSON valido
+            final_datasets1[0]['fn'] = custom_func
 
     # 6. Composizione del contesto finale
     context = {
