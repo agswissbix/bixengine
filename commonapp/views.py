@@ -991,6 +991,7 @@ def get_graph_users():
     if isinstance(graph_users, dict) and 'error' in graph_users:
         return {"error": graph_users['error']}
     
+    # TODO: enable just valid users sync
     valid_users = []
     for user in graph_users:
         try:
@@ -1009,7 +1010,7 @@ def get_delta_link_from_db(event_owner):
 def save_delta_link_to_db(event_owner, new_delta_link):
     UserEvents.objects.filter(owner=event_owner).update(calendar_delta_link=new_delta_link)
 
-def _parse_graph_datetime(graph_datetime_data):
+def _parse_graph_datetime(graph_datetime_data, timezone='Europe/Rome'):
     """
     Esegue il parsing di un oggetto data/ora di Graph (UTC)
     e lo converte in un oggetto datetime 'naive' (senza fuso orario)
@@ -1030,12 +1031,12 @@ def _parse_graph_datetime(graph_datetime_data):
     if dt_object.tzinfo is None:
         dt_object = pytz.utc.localize(dt_object)
 
-    target_tz = pytz.timezone('Europe/Rome')
+    target_tz = pytz.timezone(timezone)
     dt_object_converted = dt_object.astimezone(target_tz)
 
     return dt_object_converted.replace(tzinfo=None)
 
-def prepare_datetime_for_graph(naive_dt: datetime, tz_name: str = 'Europe/Rome') -> str:
+def _prepare_datetime_for_graph(naive_dt: datetime, tz_name: str = 'Europe/Rome') -> str:
     """
     Rende un datetime naive (assunto essere in tz_name) aware e lo converte in UTC,
     restituendo la stringa ISO formattata.
@@ -1052,7 +1053,7 @@ def prepare_datetime_for_graph(naive_dt: datetime, tz_name: str = 'Europe/Rome')
     
     return aware_dt.isoformat(timespec='seconds')
 
-def map_and_save_event(event_data, user_email):
+def _map_and_save_event(event_data, user_email):
     """
     Mappa i dati dell'evento da Graph al modello UserEvents e li salva.
     """
@@ -1070,24 +1071,30 @@ def map_and_save_event(event_data, user_email):
 
         calendar_id = event_data.get('calendar', {}).get('id')
         
+        event = UserEvents.objects.filter(graph_event_id=event_data.get('id')).first()
+
         user_id = 0
         sys_user = None
         try:
             sys_user = SysUser.objects.get(email=user_email)
-            user_id = sys_user.id
+            if sys_user:
+                user_id = sys_user.id
+            elif event:
+                user_id = event.user_id
         except SysUser.DoesNotExist:
             print(f"Utente Bixdata '{user_email}' non trovato nel DB locale.")
-
-        event = UserEvents.objects.filter(graph_event_id=event_data.get('id')).first()
+            if event:
+                user_id = event.user_id
         
         graph_id = event_data.get('id')
         calendar_id = event_data.get('calendar', {}).get('id')
         subject = event_data.get('subject')
         body_content = event_data.get('body', {}).get('content', '')
-        start_dt = _parse_graph_datetime(event_data.get('start'))
-        end_dt = _parse_graph_datetime(event_data.get('end'))
         timezone = event_data.get('start', {}).get('timeZone', 'Europe/Rome')
         local_timezone = 'Europe/Rome'
+        start_dt = _parse_graph_datetime(event_data.get('start'), local_timezone)
+        end_dt = _parse_graph_datetime(event_data.get('end'), local_timezone)
+
         organizer_email = event_data.get('organizer', {}).get('emailAddress', {}).get('address')
         categories_str = ", ".join(event_data.get('categories', []))
 
@@ -1226,7 +1233,7 @@ def initial_graph_calendar_sync(request):
 
         if events:
             for event in events:
-                map_and_save_event(event, user_email)
+                _map_and_save_event(event, user_email)
                 total_events_downloaded += 1
             
             users_synced_count += 1
@@ -1346,7 +1353,7 @@ def sync_graph_calendar(request):
             if event_data.get('@removed', {}).get('reason') == 'deleted':
                 UserEvents.objects.filter(graph_event_id=event_data.get('id')).delete()
             else:
-                map_and_save_event(event_data, user_email)
+                _map_and_save_event(event_data, user_email)
 
         if '@odata.deltaLink' in delta_result:
             save_delta_link_to_db(user_email, delta_result['@odata.deltaLink'])
@@ -1389,8 +1396,8 @@ def create_event(event_data):
     if not end_date and start_date:
         end_date = start_date
 
-    start_time_utc_str = prepare_datetime_for_graph(start_date, timezone)
-    end_time_utc_str = prepare_datetime_for_graph(end_date, timezone)
+    start_time_utc_str = _prepare_datetime_for_graph(start_date, timezone)
+    end_time_utc_str = _prepare_datetime_for_graph(end_date, timezone)
 
     result = graph_service.create_calendar_event(
         user_email=owner,
@@ -1425,9 +1432,9 @@ def update_event(event_data):
         return None
 
     if owner and (event.owner != owner):
-        result = change_event_owner(graph_event_id, owner, user)
-        graph_event_id = result.get('id')
-        owner = result.get('owner')
+        event = change_event_owner(graph_event_id, owner, user)
+        graph_event_id = event.get('graph_event_id')
+        owner = event.get('owner')
 
     if user and not owner:
         user = SysUser.objects.get(id=user)
@@ -1454,8 +1461,8 @@ def update_event(event_data):
     if not start_date and end_date:
         start_date = end_date
 
-    start_time_utc_str = prepare_datetime_for_graph(start_date, timezone)
-    end_time_utc_str = prepare_datetime_for_graph(end_date, timezone)
+    start_time_utc_str = _prepare_datetime_for_graph(start_date, timezone)
+    end_time_utc_str = _prepare_datetime_for_graph(end_date, timezone)
 
     result = graph_service.update_calendar_event(
         user_email=owner,
@@ -1532,13 +1539,13 @@ def change_event_owner(event_id, new_owner, user=None):
         print(f"Errore durante la creazione dell'evento su Graph: {result.get('details')}")
         return None
     
-    # event.graph_event_id = result.get('id')
-    # event.owner = new_owner
+    event.graph_event_id = result.get('id')
+    event.owner = new_owner
     # if user:
     #     event.user = user
-    # event.save()
+    event.save()
 
-    return result
+    return event
 
 def get_records_matrixcalendar(request):
     print('Function: get_records_matrixcalendar')
