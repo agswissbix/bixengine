@@ -35,6 +35,7 @@ from customapp_swissbix.mock.activeMind.conditions import frequencies as conditi
 from customapp_swissbix.customfunc import save_record_fields
 from xhtml2pdf import pisa
 from types import SimpleNamespace
+from commonapp.models import SysUser
 
 logger = logging.getLogger(__name__)
 
@@ -749,6 +750,40 @@ def get_conditions_activemind(request):
     return JsonResponse({"frequencies": conditions_list}, safe=False)
 
 
+def get_record_badge_swissbix_timesheet(request):
+    data = json.loads(request.body)
+    tableid= data.get("tableid")
+    recordid= data.get("recordid")
+
+    return_badgeItems={}
+
+    record_timesheet = UserRecord(tableid,recordid)
+    company = record_timesheet.fields.get("recordidcompany_", '')
+    project = record_timesheet.fields.get("recordidproject_", '')
+    service = record_timesheet.fields.get("service", '')
+    date = record_timesheet.fields.get("date", '')
+    description = record_timesheet.fields.get("description", '')
+    user = record_timesheet.fields.get("user", '')
+    total_worktime = record_timesheet.fields.get("totaltime_decimal", 0.00)
+    validated = record_timesheet.fields.get("validated", 'No')
+
+    if user and user['value']:
+        user_record = SysUser.objects.filter(id=user['value']).first()
+        return_badgeItems["user_photo"] = user_record.id if user_record else ''
+
+    return_badgeItems["service"] = service['value']
+    return_badgeItems["date"] = date['value']
+    return_badgeItems["description"] = description['value']
+    return_badgeItems['project_id'] = project['value'] if project else ''
+    return_badgeItems['project_name'] = project['convertedvalue'] if project else ''
+    return_badgeItems['user_name'] = user['convertedvalue'] if user else ''
+    return_badgeItems['company_id'] = company['value'] if company else ''
+    return_badgeItems['company_name'] = company['convertedvalue'] if company else ''
+    return_badgeItems["total_worktime"] = total_worktime['value']
+    return_badgeItems["validated"] = validated['value']
+    response={ "badgeItems": return_badgeItems}
+    return JsonResponse(response)
+
 def get_record_badge_swissbix_company(request):
     data = json.loads(request.body)
     tableid= data.get("tableid")
@@ -806,7 +841,7 @@ def get_record_badge_swissbix_company(request):
     response={ "badgeItems": return_badgeItems}
     return JsonResponse(response)   
 
-
+# TODO migliorare codice in modo da usare UserRecord invece di SQL diretto
 def get_record_badge_swissbix_deals(request):
     data = json.loads(request.body)
     tableid= data.get("tableid")
@@ -825,7 +860,6 @@ def get_record_badge_swissbix_deals(request):
 
     salesuser=HelpderDB.sql_query_value(sql, 'dealuser1')
     if salesuser:
-        from commonapp.models import SysUser
         user_sales=SysUser.objects.filter(id=salesuser).first()
         return_badgeItems["sales_user_name"] = user_sales.firstname + ' ' + user_sales.lastname if user_sales else ''
         return_badgeItems["sales_user_photo"] = user_sales.id if user_sales else ''
