@@ -28,7 +28,7 @@ from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.oxml import OxmlElement
 from docx.enum.section import WD_SECTION
-from docxtpl import DocxTemplate
+from docxtpl import DocxTemplate, RichText
 from customapp_swissbix.mock.activeMind.products import products as products_data_mock
 from customapp_swissbix.mock.activeMind.services import services as services_data_mock
 from customapp_swissbix.mock.activeMind.conditions import frequencies as conditions_data_mock
@@ -951,19 +951,63 @@ def stampa_offerta(request):
     
     # Definizione economica
     dealline_records = deal_record.get_linkedrecords_dict('dealline')
-    items = []
+    lines = []
+    total = 0.0
 
-    for idx, line in enumerate(dealline_records, start=1):
+    import textwrap
+    for idx, line in enumerate(dealline_records, 1):
         name = line.get('name', 'N/A')
         quantity = line.get('quantity', 0)
         unit_price = line.get('unitprice', 0.0)
         price = line.get('price', 0.0)
-        items.append({
-            "descrizione": name,
-            "qt": quantity,
-            "prezzo_unitario": f"{unit_price:.2f}",
-            "prezzo_totale": f"{price:.2f}",
-        })
+        total += price
+        
+        # Formatta i numeri in stile italiano
+        qty_str = f"{quantity:.0f}".replace('.', ',')
+        unit_str = f"CHF {unit_price:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        price_str = f"CHF {price:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        
+        # Crea RichText per questa riga prodotto
+        rt_prodotto = RichText()
+        rt_prodotto.add(f"{idx}. ", bold=True, size=20)
+        rt_prodotto.add(name, size=20)
+        rt_prodotto.add('\n   ', size=20)
+        rt_prodotto.add('Quantità: ', size=20)
+        rt_prodotto.add(f"{qty_str}  |  ", bold=True, size=20)
+        rt_prodotto.add('Prezzo unitario: ', size=20)
+        rt_prodotto.add(f"{unit_str}  |  ", bold=True, size=20)
+        rt_prodotto.add('Totale: ', size=20)
+        rt_prodotto.add(price_str, bold=True, size=20)
+        rt_prodotto.add('\n\n', size=20)
+        
+        lines.append(rt_prodotto)
+
+    # Crea il titolo
+    # Crea il separatore
+    separatore = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    # Crea il totale finale
+    total_str = f"CHF {total:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+    rt_totale = RichText()
+    rt_totale.add('TOTALE COMPLESSIVO: ', bold=True, size=24)
+    rt_totale.add(total_str, bold=True, size=24)
+
+    # Combina tutti i prodotti in un unico RichText
+    rt_all_products = RichText()
+    for rt_prod in lines:
+        # Aggiungi il contenuto di ogni prodotto
+        rt_all_products.add(rt_prod)
+
+    # Crea il documento completo
+    tabella_completa = RichText()
+    tabella_completa.add(separatore)
+    tabella_completa.add('\n\n')
+    tabella_completa.add(rt_all_products)
+    tabella_completa.add(separatore)
+    tabella_completa.add('\n\n')
+    tabella_completa.add(rt_totale)
+    tabella_completa.add('\n\n')
+    tabella_completa.add(separatore)
 
     dati_trattativa = {
         "indirizzo": f"{address}, {cap} {city}",
@@ -972,7 +1016,7 @@ def stampa_offerta(request):
         "venditore": user,
         "data_chiusura_vendita": closedata.strftime("%d/%m/%Y") if isinstance(closedata, datetime.date) else closedata,
         "data_attuale": datetime.datetime.now().strftime("%d/%m/%Y"),
-        'items': items,
+        'tabella_prodotti': tabella_completa,
     }
 
 
