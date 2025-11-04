@@ -576,7 +576,7 @@ def get_services_activemind(request):
             for entry in raw.split(","):
                 if ":" not in entry:
                     continue
-                n, qty = entry.strip().split(":", 1)
+                n, qty = entry.strip().split(": qta. ", 1)
                 quantities_map[n.strip().lower()] = int(qty.strip())
 
         # 4️⃣ Aggiorno quantità e totale
@@ -691,34 +691,6 @@ def get_products_activemind(request):
     # 4. Ritorno la struttura aggiornata
     return JsonResponse({"servicesCategory": list(categories_dict.values())}, safe=False)
 
-def get_product_by_id(product_id: str):
-    """Ritorna il dict del prodotto dal mock (in futuro DB)."""
-    for category in products_data_mock:
-        for service in category.get("services", []):
-            if service["id"] == product_id:
-                return service
-    return None
-
-def build_product_with_totals(product_id: str, quantity: int, billing_type: str = "monthly"):
-    """Arricchisce i dati con calcoli e dettagli dal mock."""
-    product = get_product_by_id(product_id)
-    if not product:
-        return None
-    
-    unit_price = product.get("monthlyPrice") if billing_type == "monthly" else product.get("yearlyPrice")
-    total = unit_price * quantity if unit_price else 0
-
-    return {
-        "id": product["id"],
-        "title": product["title"],
-        "description": product.get("description", ""),
-        "features": product.get("features", []),
-        "category": product.get("category"),
-        "billingType": billing_type,
-        "unitPrice": unit_price,
-        "quantity": quantity,
-        "total": total,
-    }
 
 def get_conditions_activemind(request):
     data = json.loads(request.body)
@@ -954,7 +926,6 @@ def stampa_offerta(request):
     lines = []
     total = 0.0
 
-    import textwrap
     for idx, line in enumerate(dealline_records, 1):
         name = line.get('name', 'N/A')
         quantity = line.get('quantity', 0)
