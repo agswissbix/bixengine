@@ -652,6 +652,14 @@ def save_record_fields(tableid,recordid):
             organizer_email = sys_user_details['email']
             event_record.values['organizer_email'] = organizer_email
 
+        if not start_date and end_date:
+            start_date = end_date
+            event_record.values['start_date'] = start_date
+
+        if not end_date and start_date:
+            end_date = start_date
+            event_record.values['end_date'] = end_date
+
         event_data = {
             'graph_event_id': graph_event_id,
             'table': table,
@@ -674,6 +682,8 @@ def save_record_fields(tableid,recordid):
         if not "error" in result:
             event_record.values['graph_event_id'] = result.get('id')
             event_record.values['m365_calendar_id'] =  result.get('calendar', {}).get('id'),
+        else:
+            print(result)
         
         event_record.save()
 

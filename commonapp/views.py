@@ -992,7 +992,7 @@ def get_graph_users():
     if isinstance(graph_users, dict) and 'error' in graph_users:
         return {"error": graph_users['error']}
     
-    # TODO: enable just valid users sync
+    # Enable sync just for valids Bixdata's users
     valid_users = []
     for user in graph_users:
         try:
@@ -1002,7 +1002,7 @@ def get_graph_users():
         except SysUser.DoesNotExist:
             continue
 
-    return graph_users
+    return valid_users
 
 def get_delta_link_from_db(event_owner):
     """
@@ -1159,6 +1159,7 @@ def _map_and_save_event(event_data, user_email):
 def initial_graph_calendar_sync(request):
     """
     Sincronizzazione iniziale degli eventi del calendario con il DB Bixdata.
+    Da utilizzare solo quando il DB è vuoto.
     """
     print('Function: initial_graph_calendar_sync')
 
@@ -1386,8 +1387,8 @@ def create_event(event_data):
     """
     print('Function: create_event')
 
-    user = event_data.get('user_id', None)
-    table = event_data.get('table_id', None)
+    user_id = event_data.get('user', None)
+    table = event_data.get('table', None)
     owner = event_data.get('owner', None)
     subject = event_data.get('subject', None)
     body_content = event_data.get('body_content', None)
@@ -1400,16 +1401,13 @@ def create_event(event_data):
     if not timezone:
         timezone = 'Europe/Zurich'
 
-    if user and not owner:
-        user = SysUser.objects.get(id=user)
+    if user_id and not owner:
+        user = SysUser.objects.get(id=user_id)
         if user:
             owner = user.email
 
     if not all([owner, subject, start_date, end_date]):
         return {"error": "Parametri mancanti per creare l'evento."}
-
-    if not end_date and start_date:
-        end_date = start_date
 
     start_time_utc_str = _prepare_datetime_for_graph(start_date, timezone)
     end_time_utc_str = _prepare_datetime_for_graph(end_date, timezone)
@@ -1439,7 +1437,7 @@ def update_event(event_data):
 
     graph_event_id = event_data.get('graph_event_id')
     owner = event_data.get('owner')
-    user = event_data.get('user_id')
+    user_id = event_data.get('user')
 
     event = UserEvents.objects.filter(graph_event_id=graph_event_id).first()
     if not event:
@@ -1452,8 +1450,8 @@ def update_event(event_data):
         if graph_event_id:
             owner = event.get('owner')
 
-    if user and not owner:
-        user = SysUser.objects.get(id=user)
+    if user_id and not owner:
+        user = SysUser.objects.get(id=user_id)
         if user:
             owner = user.email
 
@@ -1520,7 +1518,7 @@ def delete_event(owner, event_id):
 
     return Response(status=status.HTTP_204_NO_CONTENT)
 
-def change_event_owner(event_id, new_owner, user=None):
+def change_event_owner(event_id, new_owner):
     """
     Cambia l'owner di un evento esistente su Microsoft Graph e nel DB locale.
     """
@@ -1562,10 +1560,11 @@ def change_event_owner(event_id, new_owner, user=None):
     
     event.graph_event_id = result.get('id')
     event.owner = new_owner
-    # if user:
-    #     user = SysUser.objects.get(email=new_owner).first()
-    #     if user:
-    #         event.user_id = user.id if user else None
+
+    user = SysUser.objects.get(email=new_owner).first()
+    if user:
+        event.user_id = user.id if user else None
+
     event.save()
 
     return event
