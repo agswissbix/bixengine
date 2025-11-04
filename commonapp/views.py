@@ -67,6 +67,7 @@ import locale
 from commonapp.bixmodels.helper_db import *
 
 from . import graph_service
+from dateutil import parser
 
 
 env = environ.Env()
@@ -1004,17 +1005,23 @@ def get_graph_users():
     return graph_users
 
 def get_delta_link_from_db(event_owner):
+    """
+    Ottiene i delta link dell'utente dal DB locale.
+    """
     event = UserEvents.objects.filter(owner=event_owner).exclude(calendar_delta_link__isnull=True).exclude(calendar_delta_link='').order_by('-id').first()
     return event.calendar_delta_link if event else None
 
 def save_delta_link_to_db(event_owner, new_delta_link):
+    """
+    Aggiorna i delta link dell'utente nel DB locale.
+    """
     UserEvents.objects.filter(owner=event_owner).update(calendar_delta_link=new_delta_link)
 
-def _parse_graph_datetime(graph_datetime_data, timezone='Europe/Rome'):
+def _parse_graph_datetime(graph_datetime_data, target_timezone='Europe/Zurich'):
     """
     Esegue il parsing di un oggetto data/ora di Graph (UTC)
     e lo converte in un oggetto datetime 'naive' (senza fuso orario)
-    rappresentante l'ora corretta nel fuso orario 'Europe/Rome'.
+    rappresentante l'ora corretta nel fuso orario 'Europe/Zurich'.
     """
     if not graph_datetime_data:
         return None
@@ -1024,19 +1031,25 @@ def _parse_graph_datetime(graph_datetime_data, timezone='Europe/Rome'):
         return None
 
     try:
-        dt_object = datetime.datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-    except ValueError:
+        dt_object = parser.isoparse(date_str) 
+    except ValueError as e:
+        print(f"Errore di parsing ISO per data '{date_str}': {e}")
         return None
 
-    if dt_object.tzinfo is None:
+    if dt_object.tzinfo is None or dt_object.tzinfo.utcoffset(dt_object) is None:
         dt_object = pytz.utc.localize(dt_object)
+    
+    try:
+        target_tz = pytz.timezone(target_timezone)
+    except pytz.UnknownTimeZoneError:
+        print(f"ATTENZIONE: Fuso orario '{target_timezone}' sconosciuto. Uso UTC per la conversione.")
+        target_tz = pytz.utc 
 
-    target_tz = pytz.timezone(timezone)
     dt_object_converted = dt_object.astimezone(target_tz)
 
     return dt_object_converted.replace(tzinfo=None)
 
-def _prepare_datetime_for_graph(naive_dt: datetime, tz_name: str = 'Europe/Rome') -> str:
+def _prepare_datetime_for_graph(naive_dt: datetime, tz_name: str = 'Europe/Zurich') -> str:
     """
     Rende un datetime naive (assunto essere in tz_name) aware e lo converte in UTC,
     restituendo la stringa ISO formattata.
@@ -1058,12 +1071,15 @@ def _map_and_save_event(event_data, user_email):
     Mappa i dati dell'evento da Graph al modello UserEvents e li salva.
     """
     try:
+        preferred_timezone = 'Europe/Zurich'
+        
         body_content = event_data.get('body', {}).get('content', '')
         categories = event_data.get('categories', [])
         
         table_id = 'task'
         lower_categories = [cat.lower() for cat in categories]
         
+        # TODO: da cambiare
         if 'task' in lower_categories:
             table_id = 'task'
         elif 'assenze' in lower_categories:
@@ -1090,10 +1106,9 @@ def _map_and_save_event(event_data, user_email):
         calendar_id = event_data.get('calendar', {}).get('id')
         subject = event_data.get('subject')
         body_content = event_data.get('body', {}).get('content', '')
-        timezone = event_data.get('start', {}).get('timeZone', 'Europe/Rome')
-        local_timezone = 'Europe/Rome'
-        start_dt = _parse_graph_datetime(event_data.get('start'), local_timezone)
-        end_dt = _parse_graph_datetime(event_data.get('end'), local_timezone)
+        
+        start_dt = _parse_graph_datetime(event_data.get('start'), preferred_timezone)
+        end_dt = _parse_graph_datetime(event_data.get('end'), preferred_timezone)
 
         organizer_email = event_data.get('organizer', {}).get('emailAddress', {}).get('address')
         categories_str = ", ".join(event_data.get('categories', []))
@@ -1108,7 +1123,7 @@ def _map_and_save_event(event_data, user_email):
             saved_event.values['body_content'] = body_content
             saved_event.values['start_date'] = start_dt
             saved_event.values['end_date'] = end_dt
-            saved_event.values['timezone'] = local_timezone
+            saved_event.values['timezone'] = preferred_timezone 
             saved_event.values['organizer_email'] = organizer_email
             saved_event.values['categories'] = categories_str
             saved_event.values['m365_calendar_id'] = calendar_id
@@ -1126,7 +1141,7 @@ def _map_and_save_event(event_data, user_email):
             saved_event.values['body_content'] = body_content
             saved_event.values['start_date'] = start_dt
             saved_event.values['end_date'] = end_dt
-            saved_event.values['timezone'] = local_timezone
+            saved_event.values['timezone'] = preferred_timezone 
             saved_event.values['organizer_email'] = organizer_email
             saved_event.values['categories'] = categories_str
             saved_event.values['m365_calendar_id'] = calendar_id
@@ -1183,7 +1198,7 @@ def initial_graph_calendar_sync(request):
                 splitted_categories = local_event.categories.split(', ') if local_event.categories else []
 
                 if not local_event.timezone:
-                    local_event.timezone = 'Europe/Rome'
+                    local_event.timezone = 'Europe/Zurich'
                     local_event.save()
 
                 if local_event.start_date and not local_event.end_date:
@@ -1294,7 +1309,7 @@ def sync_graph_calendar(request):
                     categories=local_event.values['categories'].split(',')
 
                     if not timezone:
-                        timezone = 'Europe/Rome'
+                        timezone = 'Europe/Zurich'
 
                     if not end_date and start_date:
                         end_date = start_date
@@ -1383,7 +1398,7 @@ def create_event(event_data):
     organizer_email = event_data.get('organizer_email')
 
     if not timezone:
-        timezone = 'Europe/Rome'
+        timezone = 'Europe/Zurich'
 
     if user and not owner:
         user = SysUser.objects.get(id=user)
@@ -1434,7 +1449,8 @@ def update_event(event_data):
     if owner and (event.owner != owner):
         event = change_event_owner(graph_event_id, owner, user)
         graph_event_id = event.get('graph_event_id')
-        owner = event.get('owner')
+        if graph_event_id:
+            owner = event.get('owner')
 
     if user and not owner:
         user = SysUser.objects.get(id=user)
@@ -1449,11 +1465,12 @@ def update_event(event_data):
     start_date = event_data.get('start_date')
     end_date = event_data.get('end_date')
     categories = event_data.get('categories') 
-    timezone = event_data.get('timezone', 'Europe/Rome')
+    timezone = event_data.get('timezone', 'Europe/Zurich')
     organizer_email = event_data.get('organizer_email')
 
+
     if not timezone:
-        timezone = 'Europe/Rome'
+        timezone = 'Europe/Zurich'
 
     if not end_date and start_date:
         end_date = start_date
@@ -1507,6 +1524,7 @@ def change_event_owner(event_id, new_owner, user=None):
     """
     Cambia l'owner di un evento esistente su Microsoft Graph e nel DB locale.
     """
+    # TODO: controllare che funzioni correttamente
     print('Function: change_event_owner')
 
     if not event_id or not new_owner:
@@ -1537,12 +1555,17 @@ def change_event_owner(event_id, new_owner, user=None):
 
     if "error" in result:
         print(f"Errore durante la creazione dell'evento su Graph: {result.get('details')}")
-        return None
+        event.graph_event_id = None
+        event.save()
+
+        return result
     
     event.graph_event_id = result.get('id')
     event.owner = new_owner
     # if user:
-    #     event.user = user
+    #     user = SysUser.objects.get(email=new_owner).first()
+    #     if user:
+    #         event.user_id = user.id if user else None
     event.save()
 
     return event

@@ -143,7 +143,7 @@ def get_user_calendars(user_id_or_email):
     except Exception as e:
         return {"error": str(e)}
 
-def get_events_for_user(user_id_or_email, start_date_iso, end_date_iso, calendar_id=None):
+def get_events_for_user(user_id_or_email, start_date_iso, end_date_iso, calendar_id=None, preferred_timezone="Europe/Rome"):
     """
     Ottiene gli eventi per un singolo utente in un intervallo di date.
     Usa 'calendarView' che è l'endpoint corretto per gestire le date.
@@ -165,7 +165,10 @@ def get_events_for_user(user_id_or_email, start_date_iso, end_date_iso, calendar
         "&$select=id,subject,start,end,organizer,body,categories"
         "&$expand=calendar"
     )
-    headers = {'Authorization': f'Bearer {token}'}
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Prefer': f'outlook.timezone="{preferred_timezone}"'
+    }
 
     try:
         response = requests.get(endpoint, headers=headers)

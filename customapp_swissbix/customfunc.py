@@ -626,7 +626,7 @@ def save_record_fields(tableid,recordid):
         timezone=event_record.values['timezone']
 
         if not timezone:
-            timezone = 'Europe/Rome'
+            timezone = 'Europe/Zurich'
             event_record.values['timezone'] = timezone
 
         organizer_email=event_record.values['organizer_email']
@@ -634,6 +634,10 @@ def save_record_fields(tableid,recordid):
         categories=[]
         if  event_record.values['categories']:
             categories=event_record.values['categories'].split(',')
+
+        if table not in categories:
+            categories.append(table)
+            event_record.values['categories'] = ','.join(categories)
         
         sys_user_details = None
         if user:
