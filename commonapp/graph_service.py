@@ -43,12 +43,6 @@ def get_all_users():
     Ottiene un elenco di utenti che hanno un calendario attivo, 
     utilizzando una cache per migliorare le prestazioni.
     """
-    # cached_users = cache.get('users_with_calendar')
-    # if cached_users is not None:
-    #     print("Restituisco la lista di utenti dalla cache.")
-    #     return cached_users
-
-    # print("Cache vuota. Eseguo un controllo completo degli utenti e dei loro calendari...")
     token = get_graph_access_token()
     if not token:
         return {"error": "Impossibile ottenere il token di accesso"}
@@ -75,8 +69,6 @@ def get_all_users():
                     users_with_calendar.append(user)
             except requests.exceptions.RequestException:
                 continue
-        
-        # cache.set('users_with_calendar', users_with_calendar, 3600)
         
         print(f"Controllo completato. Trovati {len(users_with_calendar)} utenti con calendario attivo.")
         return users_with_calendar
