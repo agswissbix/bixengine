@@ -766,6 +766,7 @@ def get_record_badge_swissbix_timesheet(request):
     user = record_timesheet.fields.get("user", '')
     total_worktime = record_timesheet.fields.get("totaltime_decimal", 0.00)
     validated = record_timesheet.fields.get("validated", 'No')
+    invoice_status = record_timesheet.fields.get("invoicestatus", '')
 
     if user and user['value']:
         user_record = SysUser.objects.filter(id=user['value']).first()
@@ -781,6 +782,7 @@ def get_record_badge_swissbix_timesheet(request):
     return_badgeItems['company_name'] = company['convertedvalue'] if company else ''
     return_badgeItems["total_worktime"] = total_worktime['value']
     return_badgeItems["validated"] = validated['value']
+    return_badgeItems["invoice_status"] = invoice_status['value']
     response={ "badgeItems": return_badgeItems}
     return JsonResponse(response)
 
