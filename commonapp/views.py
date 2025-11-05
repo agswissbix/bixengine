@@ -5091,7 +5091,6 @@ def get_dashboard_blocks(request):
                         view= HelpderDB.sql_query_row(f"SELECT * FROM sys_view WHERE id='{viewid}'")
                         query_conditions = view['query_conditions']
                         query_conditions = query_conditions.replace("$userid$", str(userid))
-                        query_conditions = query_conditions + " AND deleted_='N'"
                         #TODO custom wegolf. abilitare queste condizioni e gestire recordid in modo che sia dinamico dal frontend sia in bixdata che wegolf
                         if cliente_id == 'wegolf':
                             if block_category != 'benchmark':
@@ -5506,28 +5505,28 @@ def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
         
         if field_type == 'Utente':
             select_group_field = f"CONCAT(sys_user.firstname,' ', sys_user.lastname) AS {group_by_alias}"
-            from_clause = (f"FROM {main_table} "
+            from_clause = (f"FROM {main_table} AS t1 "
                        f"JOIN sys_user "
-                       f"ON {main_table}.{group_by_config['field']} = sys_user.id")  
+                       f"ON t1.{group_by_config['field']} = sys_user.id")  
         elif field_type in ('Data', 'Datetime', 'Timestamp') and granularity:
             if granularity == 'day':
-                expr = f"DATE({main_table}.{fieldid})"
+                expr = f"DATE(t1.{fieldid})"
             elif granularity == 'month':
-                expr = f"DATE_FORMAT({main_table}.{fieldid}, '%Y-%m')"
+                expr = f"DATE_FORMAT(t1.{fieldid}, '%Y-%m')"
             elif granularity == 'year':
-                expr = f"YEAR({main_table}.{fieldid})"
+                expr = f"YEAR(t1.{fieldid})"
             else:
-                expr = f"{main_table}.{fieldid}"  # fallback
+                expr = f"t1.{fieldid}"  # fallback
 
             select_group_field = f"{expr} AS {group_by_alias}"
-            from_clause = f"FROM {main_table}"
+            from_clause = f"FROM {main_table} as t1"
             group_by_clause = f"GROUP BY {expr}"
         else: 
-            select_group_field = f"{main_table}.{group_by_config['field']} AS {group_by_alias}"
-            from_clause = f"FROM {main_table}"
+            select_group_field = f"t1.{group_by_config['field']} AS {group_by_alias}"
+            from_clause = f"FROM {main_table} as t1"
         
         if not group_by_clause:
-            group_by_clause = f"GROUP BY {main_table}.{group_by_config['field']}"
+            group_by_clause = f"GROUP BY t1.{group_by_config['field']}"
     
 
 
@@ -5535,7 +5534,7 @@ def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
     query_select_part = f"{select_group_field}, {', '.join(select_clauses)}" if select_clauses else select_group_field
     query = (f"SELECT {query_select_part} "
              f"{from_clause} "
-             f"WHERE {query_conditions} "
+             f"WHERE {query_conditions} AND t1.deleted_='N' "
              f"{group_by_clause}")
     if 'order_by' in config:
         query += f" ORDER BY {config['order_by']}"
