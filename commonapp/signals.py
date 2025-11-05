@@ -31,6 +31,7 @@ FIELD_TYPE_MAPPING = {
         "dashboards": "multiselect",
         "views": "multiselect",
         "date_granularity": "lookup",
+        "function_button": "lookup",
     },
     "email": {
         "id": "Seriale",
@@ -48,7 +49,7 @@ FIELD_TYPE_MAPPING = {
 
 LOOKUP_ITEMS_MAP = {
     "type_chart": [
-        "value", "table_name", "stackedchart", "scatterchart", "radarchart", "polarchart",
+        "button", "value", "table", "stackedchart", "scatterchart", "radarchart", "polarchart",
         "piechart", "orizbarchart", "multibarlinechart", "multibarchart", "linechart",
         "heatchart", "donutchart", "barchart"
     ],
@@ -60,7 +61,7 @@ LOOKUP_ITEMS_MAP = {
 }
 
 INDIFFERENT_FIELDS = {  }
-INCLUDE_FIELDS = {"commonapp.UserEmail", "commonapp.UserSchedulerLog", "commonapp.UserSystemLog","commonapp.UserEvents","commonapp.UserChart", "commonapp.UserUserLog"}
+INCLUDE_FIELDS = {"commonapp.UserChart","commonapp.UserEmail", "commonapp.UserSchedulerLog", "commonapp.UserSystemLog","commonapp.UserEvents", "commonapp.UserUserLog"}
 
 EXCLUDED_FIELDS = {
     "record_id",

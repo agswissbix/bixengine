@@ -14,6 +14,7 @@ from django.core.files.storage import default_storage
 from django.contrib.auth.decorators import login_required
 from functools import wraps
 
+import pytz
 from rest_framework.response import Response
 from rest_framework import status
 
@@ -66,6 +67,7 @@ import locale
 from commonapp.bixmodels.helper_db import *
 
 from . import graph_service
+from dateutil import parser
 
 
 env = environ.Env()
@@ -986,59 +988,168 @@ def get_graph_users():
     Ottiene gli utenti Bixdata che hanno una corrispondenza su Graph.
     """
     graph_users = graph_service.get_all_users()
-
-    # TODO: Filtrare gli utenti presenti solo in bixdata
     
     if isinstance(graph_users, dict) and 'error' in graph_users:
         return {"error": graph_users['error']}
     
-    return graph_users
+    # Enable sync just for valids Bixdata's users
+    valid_users = []
+    for user in graph_users:
+        try:
+            local_user = SysUser.objects.get(email=user.get('mail'))
+            if (local_user):
+                valid_users.append(user)
+        except SysUser.DoesNotExist:
+            continue
+
+    return valid_users
 
 def get_delta_link_from_db(event_owner):
+    """
+    Ottiene i delta link dell'utente dal DB locale.
+    """
     event = UserEvents.objects.filter(owner=event_owner).exclude(calendar_delta_link__isnull=True).exclude(calendar_delta_link='').order_by('-id').first()
     return event.calendar_delta_link if event else None
 
 def save_delta_link_to_db(event_owner, new_delta_link):
+    """
+    Aggiorna i delta link dell'utente nel DB locale.
+    """
     UserEvents.objects.filter(owner=event_owner).update(calendar_delta_link=new_delta_link)
 
+def _parse_graph_datetime(graph_datetime_data, target_timezone='Europe/Zurich'):
+    """
+    Esegue il parsing di un oggetto data/ora di Graph (UTC)
+    e lo converte in un oggetto datetime 'naive' (senza fuso orario)
+    rappresentante l'ora corretta nel fuso orario 'Europe/Zurich'.
+    """
+    if not graph_datetime_data:
+        return None
 
-def map_and_save_event(event_data, user_email):
+    date_str = graph_datetime_data.get('dateTime') or graph_datetime_data.get('date')
+    if not date_str:
+        return None
+
+    try:
+        dt_object = parser.isoparse(date_str) 
+    except ValueError as e:
+        print(f"Errore di parsing ISO per data '{date_str}': {e}")
+        return None
+
+    if dt_object.tzinfo is None or dt_object.tzinfo.utcoffset(dt_object) is None:
+        dt_object = pytz.utc.localize(dt_object)
+    
+    try:
+        target_tz = pytz.timezone(target_timezone)
+    except pytz.UnknownTimeZoneError:
+        print(f"ATTENZIONE: Fuso orario '{target_timezone}' sconosciuto. Uso UTC per la conversione.")
+        target_tz = pytz.utc 
+
+    dt_object_converted = dt_object.astimezone(target_tz)
+
+    return dt_object_converted.replace(tzinfo=None)
+
+def _prepare_datetime_for_graph(naive_dt: datetime, tz_name: str = 'Europe/Zurich') -> str:
+    """
+    Rende un datetime naive (assunto essere in tz_name) aware e lo converte in UTC,
+    restituendo la stringa ISO formattata.
+    """
+    if naive_dt is None:
+        return None
+        
+    local_tz = pytz.timezone(tz_name)
+
+    try:
+        aware_dt = local_tz.localize(naive_dt, is_dst=None) 
+    except pytz.exceptions.AmbiguousTimeError:
+        aware_dt = local_tz.localize(naive_dt, is_dst=False)
+    
+    return aware_dt.isoformat(timespec='seconds')
+
+def _map_and_save_event(event_data, user_email):
     """
     Mappa i dati dell'evento da Graph al modello UserEvents e li salva.
     """
     try:
+        preferred_timezone = 'Europe/Zurich'
+        
         body_content = event_data.get('body', {}).get('content', '')
         categories = event_data.get('categories', [])
         
-        # TODO: Aggiungere riferimento tabella se categoria corrispondente è presente
+        table_id = 'task'
+        lower_categories = [cat.lower() for cat in categories]
+        
+        # TODO: da cambiare
+        if 'task' in lower_categories:
+            table_id = 'task'
+        elif 'assenze' in lower_categories:
+            table_id = 'assenze'
 
         calendar_id = event_data.get('calendar', {}).get('id')
         
+        event = UserEvents.objects.filter(graph_event_id=event_data.get('id')).first()
+
+        user_id = 0
         sys_user = None
         try:
-             sys_user = SysUser.objects.get(email=user_email)
+            sys_user = SysUser.objects.get(email=user_email)
+            if sys_user:
+                user_id = sys_user.id
+            elif event:
+                user_id = event.user_id
         except SysUser.DoesNotExist:
-             print(f"Utente Bixdata '{user_email}' non trovato nel DB locale.")
+            print(f"Utente Bixdata '{user_email}' non trovato nel DB locale.")
+            if event:
+                user_id = event.user_id
+        
+        graph_id = event_data.get('id')
+        calendar_id = event_data.get('calendar', {}).get('id')
+        subject = event_data.get('subject')
+        body_content = event_data.get('body', {}).get('content', '')
+        
+        start_dt = _parse_graph_datetime(event_data.get('start'), preferred_timezone)
+        end_dt = _parse_graph_datetime(event_data.get('end'), preferred_timezone)
 
-        defaults = {
-            'user': sys_user, 
-            'owner': user_email,
-            'subject': event_data.get('subject'),
-            'body_content': body_content,
-            'start_date': datetime.datetime.fromisoformat(event_data.get('start', {}).get('dateTime')),
-            'end_date': datetime.datetime.fromisoformat(event_data.get('end', {}).get('dateTime')),
-            'timezone': event_data.get('start', {}).get('timeZone', 'UTC'),
-            'organizer_email': event_data.get('organizer', {}).get('emailAddress', {}).get('address'),
-            'categories': ", ".join(categories),
-            'm365_calendar_id': calendar_id
-        }
-        
-        saved_event, created = UserEvents.objects.update_or_create(
-            graph_event_id=event_data.get('id'),
-            defaults=defaults
-        )
-        
-        print(f"Evento '{saved_event.subject}' {'creato' if created else 'aggiornato'} nel DB per {user_email}.")
+        organizer_email = event_data.get('organizer', {}).get('emailAddress', {}).get('address')
+        categories_str = ", ".join(event_data.get('categories', []))
+
+        if event:
+            saved_event = UserRecord('events', event.record_id) 
+            
+            saved_event.values['user_id'] = user_id
+            saved_event.values['table_id'] = table_id
+            saved_event.values['owner'] = user_email
+            saved_event.values['subject'] = subject
+            saved_event.values['body_content'] = body_content
+            saved_event.values['start_date'] = start_dt
+            saved_event.values['end_date'] = end_dt
+            saved_event.values['timezone'] = preferred_timezone 
+            saved_event.values['organizer_email'] = organizer_email
+            saved_event.values['categories'] = categories_str
+            saved_event.values['m365_calendar_id'] = calendar_id
+            saved_event.values['graph_event_id'] = graph_id
+
+            saved_event.save() 
+            created = False
+        else:
+            saved_event = UserRecord('events')
+            
+            saved_event.values['user_id'] = user_id
+            saved_event.values['table_id'] = table_id
+            saved_event.values['owner'] = user_email
+            saved_event.values['subject'] = subject
+            saved_event.values['body_content'] = body_content
+            saved_event.values['start_date'] = start_dt
+            saved_event.values['end_date'] = end_dt
+            saved_event.values['timezone'] = preferred_timezone 
+            saved_event.values['organizer_email'] = organizer_email
+            saved_event.values['categories'] = categories_str
+            saved_event.values['m365_calendar_id'] = calendar_id
+            saved_event.values['graph_event_id'] = graph_id
+
+            saved_event.save()
+            created = True
+
         return saved_event, created
 
     except Exception as e:
@@ -1048,6 +1159,7 @@ def map_and_save_event(event_data, user_email):
 def initial_graph_calendar_sync(request):
     """
     Sincronizzazione iniziale degli eventi del calendario con il DB Bixdata.
+    Da utilizzare solo quando il DB è vuoto.
     """
     print('Function: initial_graph_calendar_sync')
 
@@ -1068,7 +1180,7 @@ def initial_graph_calendar_sync(request):
 
     graph_users_map = {u.get('mail'): u for u in graph_users if u.get('mail')}
 
-    # Sicnronizzazione in uscita (da Bixdata a Microsoft 365)
+    # Sincronizzazione in uscita (da Bixdata a Microsoft 365)
     local_unsynced_events = UserEvents.objects.filter(graph_event_id__isnull=True).exclude(owner__isnull=True)
     
     events_by_owner = {}
@@ -1085,6 +1197,21 @@ def initial_graph_calendar_sync(request):
         for local_event in events_to_promote:
             try:
                 splitted_categories = local_event.categories.split(', ') if local_event.categories else []
+
+                if not local_event.timezone:
+                    local_event.timezone = 'Europe/Zurich'
+                    local_event.save()
+
+                if local_event.start_date and not local_event.end_date:
+                    local_event.end_date = local_event.start_date
+                    local_event.save()
+
+                if local_event.end_date and not local_event.start_date:
+                    local_event.start_date = local_event.end_date
+                    local_event.save()
+
+                if not local_event.start_date and not local_event.end_date:
+                    continue
 
                 result = graph_service.create_calendar_event(
                     user_email=owner_email,
@@ -1122,7 +1249,7 @@ def initial_graph_calendar_sync(request):
 
         if events:
             for event in events:
-                map_and_save_event(event, user_email)
+                _map_and_save_event(event, user_email)
                 total_events_downloaded += 1
             
             users_synced_count += 1
@@ -1161,6 +1288,65 @@ def sync_graph_calendar(request):
         if not user_email:
             print(f"Utente senza email principale, saltato.")
             continue
+
+        local_unsynced_events = UserEvents.objects.filter(owner=user_email, graph_event_id__isnull=True)
+        promoted_count = 0
+        
+        if local_unsynced_events.exists():
+            print(f"-> Trovati {local_unsynced_events.count()} eventi locali da sincronizzare per {user_email}.")
+            
+            for local_event in local_unsynced_events:
+                try:
+
+                    table=local_event.values['table_id']
+                    subject=local_event.values['subject']
+                    start_date=local_event.values['start_date']
+                    end_date=local_event.values['end_date']
+                    user=local_event.values['user_id']
+                    owner=local_event.values['owner']
+                    body_content=local_event.values['body_content']
+                    timezone=local_event.values['timezone']
+                    organizer_email=local_event.values['organizer_email']
+                    categories=local_event.values['categories'].split(',')
+
+                    if not timezone:
+                        timezone = 'Europe/Zurich'
+
+                    if not end_date and start_date:
+                        end_date = start_date
+
+                    if not start_date and end_date:
+                        start_date = end_date
+
+                    if not start_date and not end_date:
+                        continue
+
+                    event_data = {
+                        'table': table,
+                        'subject': subject,
+                        'start_date': start_date,
+                        'end_date': end_date,
+                        'user': user,
+                        'owner': owner,
+                        'body_content': body_content,
+                        'timezone': timezone,
+                        'organizer_email': organizer_email,
+                        'categories': categories,
+                    }
+
+                    result = create_event(event_data)
+                    
+                    if "error" not in result:
+                        local_event.graph_event_id = result.get('id')
+                        local_event.m365_calendar_id = result.get('calendar', {}).get('id')
+                        local_event.save()
+                        promoted_count += 1
+                        print(f"   Sincronizzato: {local_event.subject}")
+                    else:
+                        print(f"   AVVISO: Sincronizzazione fallita per '{local_event.subject}'. Errore: {result['error']}")
+
+                except Exception as e:
+                     print(f"Errore grave durante la sincronizzazione di un evento: {e}")
         
         delta_link = get_delta_link_from_db(user_email)
         is_fully_synced = delta_link is None
@@ -1183,7 +1369,7 @@ def sync_graph_calendar(request):
             if event_data.get('@removed', {}).get('reason') == 'deleted':
                 UserEvents.objects.filter(graph_event_id=event_data.get('id')).delete()
             else:
-                map_and_save_event(event_data, user_email)
+                _map_and_save_event(event_data, user_email)
 
         if '@odata.deltaLink' in delta_result:
             save_delta_link_to_db(user_email, delta_result['@odata.deltaLink'])
@@ -1201,7 +1387,7 @@ def create_event(event_data):
     """
     print('Function: create_event')
 
-    user = event_data.get('user', None)
+    user_id = event_data.get('user', None)
     table = event_data.get('table', None)
     owner = event_data.get('owner', None)
     subject = event_data.get('subject', None)
@@ -1209,25 +1395,32 @@ def create_event(event_data):
     start_date = event_data.get('start_date', None)
     end_date = event_data.get('end_date', None)
     categories = event_data.get('categories', [])
-    timezone = event_data.get('timezone', 'UTC')
+    timezone = event_data.get('timezone')
+    organizer_email = event_data.get('organizer_email')
 
-    if user and not owner:
-        owner = user.email
+    if not timezone:
+        timezone = 'Europe/Zurich'
+
+    if user_id and not owner:
+        user = SysUser.objects.get(id=user_id)
+        if user:
+            owner = user.email
 
     if not all([owner, subject, start_date, end_date]):
         return {"error": "Parametri mancanti per creare l'evento."}
 
-    if not end_date and start_date:
-        end_date = start_date
+    start_time_utc_str = _prepare_datetime_for_graph(start_date, timezone)
+    end_time_utc_str = _prepare_datetime_for_graph(end_date, timezone)
 
     result = graph_service.create_calendar_event(
         user_email=owner,
         subject=subject,
-        start_time=start_date.isoformat(),
-        end_time=end_date.isoformat(),
+        start_time=start_time_utc_str,
+        end_time=end_time_utc_str,
         body_content=body_content,
         categories=categories,
-        timezone=timezone
+        timezone=timezone,
+        organizer_email=organizer_email
     )
 
     if "error" in result:
@@ -1238,13 +1431,13 @@ def create_event(event_data):
 
 def update_event(event_data):
     """
-    Aggiorna un evento esistente su Microsoft Graph e nel DB locale.
+    Aggiorna un evento esistente su Microsoft Graph.
     """
     print('Function: update_event')
 
     graph_event_id = event_data.get('graph_event_id')
     owner = event_data.get('owner')
-    user = event_data.get('user')
+    user_id = event_data.get('user')
 
     event = UserEvents.objects.filter(graph_event_id=graph_event_id).first()
     if not event:
@@ -1252,10 +1445,15 @@ def update_event(event_data):
         return None
 
     if owner and (event.owner != owner):
-        change_event_owner(graph_event_id, owner, user)
+        event = change_event_owner(graph_event_id, owner, user)
+        graph_event_id = event.get('graph_event_id')
+        if graph_event_id:
+            owner = event.get('owner')
 
-    if user and not owner:
-        owner = user.email
+    if user_id and not owner:
+        user = SysUser.objects.get(id=user_id)
+        if user:
+            owner = user.email
 
     if not graph_event_id or not owner:
         return {"error": "graph_event_id e owner sono obbligatori per l'aggiornamento."}
@@ -1265,17 +1463,32 @@ def update_event(event_data):
     start_date = event_data.get('start_date')
     end_date = event_data.get('end_date')
     categories = event_data.get('categories') 
-    timezone = event_data.get('timezone', 'UTC')
+    timezone = event_data.get('timezone', 'Europe/Zurich')
+    organizer_email = event_data.get('organizer_email')
+
+
+    if not timezone:
+        timezone = 'Europe/Zurich'
+
+    if not end_date and start_date:
+        end_date = start_date
+
+    if not start_date and end_date:
+        start_date = end_date
+
+    start_time_utc_str = _prepare_datetime_for_graph(start_date, timezone)
+    end_time_utc_str = _prepare_datetime_for_graph(end_date, timezone)
 
     result = graph_service.update_calendar_event(
         user_email=owner,
         event_id=graph_event_id,
         subject=subject,
-        start_time=start_date.isoformat() if start_date else None,
-        end_time=end_date.isoformat() if end_date else None,
+        start_time=start_time_utc_str,
+        end_time=end_time_utc_str,
         body_content=body_content,
         categories=categories,
-        timezone=timezone
+        timezone=timezone,
+        organizer_email=organizer_email
     )
 
     if "error" in result:
@@ -1286,7 +1499,7 @@ def update_event(event_data):
 
 def delete_event(owner, event_id):
     """
-    Cancella un evento esistente su Microsoft Graph e dal DB locale.
+    Cancella un evento esistente su Microsoft Graph.
     """
     print('Function: delete_event')
 
@@ -1302,17 +1515,14 @@ def delete_event(owner, event_id):
         if isinstance(result.get("details"), dict) and result["details"].get("error", {}).get("code") == "ErrorItemNotFound":
             return Response({"error": f"Evento con ID {event_id} non trovato."}, status=status.HTTP_404_NOT_FOUND)
         return Response(result, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-    deleted_count, _ = UserEvents.objects.filter(graph_event_id=event_id).delete()
-    if deleted_count > 0:
-        print(f"Evento con ID Graph {event_id} eliminato dal DB locale.")
 
     return Response(status=status.HTTP_204_NO_CONTENT)
 
-def change_event_owner(event_id, new_owner, user=None):
+def change_event_owner(event_id, new_owner):
     """
     Cambia l'owner di un evento esistente su Microsoft Graph e nel DB locale.
     """
+    # TODO: controllare che funzioni correttamente
     print('Function: change_event_owner')
 
     if not event_id or not new_owner:
@@ -1343,12 +1553,18 @@ def change_event_owner(event_id, new_owner, user=None):
 
     if "error" in result:
         print(f"Errore durante la creazione dell'evento su Graph: {result.get('details')}")
-        return None
+        event.graph_event_id = None
+        event.save()
+
+        return result
     
     event.graph_event_id = result.get('id')
     event.owner = new_owner
+
+    user = SysUser.objects.get(email=new_owner).first()
     if user:
-        event.user = user
+        event.user_id = user.id if user else None
+
     event.save()
 
     return event
@@ -2879,6 +3095,7 @@ def save_record_fields(request):
         chartid = values.get("report_id")
         pivot_total_field = values.get("pivot_total_field")
         granularity = values.get("date_granularity", "day")
+        func_button = values.get("function_button", None)
 
         # =======================
         # FIELD TYPE (ORM)
@@ -3056,12 +3273,12 @@ def save_record_fields(request):
         user = SysUser.objects.filter(id=userid).first()
         if chartid and chartid != "None":
             SysChart.objects.filter(id=chartid).update(
-                name=title, layout=layout, config=config_python, userid=user
+                name=title, layout=layout, config=config_python, userid=user, function_button_id=func_button
             )
             chart_obj = SysChart.objects.get(id=chartid)
         else:
             chart_obj = SysChart.objects.create(
-                name=title, layout=layout, config=config_python, userid=user
+                name=title, layout=layout, config=config_python, userid=user, function_button_id=func_button
             )
             chart_record.values["report_id"] = chart_obj.id
         chart_record.save()
@@ -3225,12 +3442,19 @@ def get_record_card_fields(request):
                 "label": v["name"]
             })
 
+        customs_fn = SysCustomFunction.objects.all().order_by('order').values('id', 'title')
+        functions_lookup = [
+            {"value": str(fn["id"]), "label": fn["title"]}
+            for fn in customs_fn
+        ]
+
         # Inseriamo i lookup nella response
         response["lookup"] = {
             "table": tables_lookup,
             "campi": fields_lookup,
             "views": views_lookup,
             "dashboards": dashboards_lookup,
+            "functions": functions_lookup,
         }
 
     return JsonResponse(response)
@@ -5322,6 +5546,21 @@ def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
     if chart_record['layout'] == 'table':
         final_datasets1[0]['tableid'] = config['from_table']
         final_datasets1[0]['view'] = chart_record.get('viewid', '')
+
+    if chart_record['layout'] == 'button':
+        final_datasets1[0]['tableid'] = config['from_table']
+        chart_record.get('function_button', None)
+        custom_func = SysCustomFunction.objects.filter(id=chart_record['function_button']).values(
+            'tableid', 'context', 'title', 'function', 'conditions', 'params', 'css'
+        ).first()
+        if custom_func:
+            for key in ['conditions', 'params']:
+                if custom_func.get(key):
+                    try:
+                        custom_func[key] = json.loads(custom_func[key])
+                    except Exception:
+                        pass  # lascialo com'è se non è JSON valido
+            final_datasets1[0]['fn'] = custom_func
 
     # 6. Composizione del contesto finale
     context = {

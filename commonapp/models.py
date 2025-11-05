@@ -751,6 +751,7 @@ class SysChart(models.Model):
     )
     layout = models.CharField(max_length=100)
     config = models.JSONField()
+    function_button = models.ForeignKey('SysCustomFunction', models.DO_NOTHING, db_column='function_button', blank=True, null=True)
 
     class Meta:
         db_table = "sys_chart"
@@ -889,6 +890,7 @@ class UserChart(BaseUserTable):
     dashboards = models.CharField(max_length=255, null=True, blank=True)
     views = models.CharField(max_length=255, null=True, blank=True)
     date_granularity = models.CharField(max_length=255, null=True, blank=True)
+    function_button = models.ForeignKey('SysCustomFunction', models.DO_NOTHING, db_column='function_button', null=True, blank=True)
 
     class Meta:
         db_table = 'user_chart'
@@ -966,9 +968,9 @@ class UserAttachment(BaseUserTable):
         verbose_name_plural = 'Allegati'
 
 class UserEvents(BaseUserTable):
-    table = models.ForeignKey(SysTable, models.DO_NOTHING, null=True, blank=True)
+    table = models.ForeignKey(SysTable, models.DO_NOTHING, null=True, blank=True, db_column='table')
     graph_event_id = models.CharField(max_length=255, null=True, blank=True)
-    user = models.ForeignKey(SysUser, models.DO_NOTHING, null=True, blank=True)
+    user = models.ForeignKey(SysUser, models.DO_NOTHING, null=True, blank=True, db_column='user')
 
     owner = models.CharField(max_length=255, null=True, blank=True)
     subject = models.CharField(max_length=255, null=True, blank=True) # Title

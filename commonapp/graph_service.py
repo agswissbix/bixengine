@@ -43,12 +43,6 @@ def get_all_users():
     Ottiene un elenco di utenti che hanno un calendario attivo, 
     utilizzando una cache per migliorare le prestazioni.
     """
-    # cached_users = cache.get('users_with_calendar')
-    # if cached_users is not None:
-    #     print("Restituisco la lista di utenti dalla cache.")
-    #     return cached_users
-
-    # print("Cache vuota. Eseguo un controllo completo degli utenti e dei loro calendari...")
     token = get_graph_access_token()
     if not token:
         return {"error": "Impossibile ottenere il token di accesso"}
@@ -75,8 +69,6 @@ def get_all_users():
                     users_with_calendar.append(user)
             except requests.exceptions.RequestException:
                 continue
-        
-        # cache.set('users_with_calendar', users_with_calendar, 3600)
         
         print(f"Controllo completato. Trovati {len(users_with_calendar)} utenti con calendario attivo.")
         return users_with_calendar
@@ -143,7 +135,7 @@ def get_user_calendars(user_id_or_email):
     except Exception as e:
         return {"error": str(e)}
 
-def get_events_for_user(user_id_or_email, start_date_iso, end_date_iso, calendar_id=None):
+def get_events_for_user(user_id_or_email, start_date_iso, end_date_iso, calendar_id=None, preferred_timezone="Europe/Rome"):
     """
     Ottiene gli eventi per un singolo utente in un intervallo di date.
     Usa 'calendarView' che è l'endpoint corretto per gestire le date.
@@ -165,7 +157,10 @@ def get_events_for_user(user_id_or_email, start_date_iso, end_date_iso, calendar
         "&$select=id,subject,start,end,organizer,body,categories"
         "&$expand=calendar"
     )
-    headers = {'Authorization': f'Bearer {token}'}
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Prefer': f'outlook.timezone="{preferred_timezone}"'
+    }
 
     try:
         response = requests.get(endpoint, headers=headers)
@@ -215,7 +210,7 @@ def get_calendar_view_delta(user_id, start_date_iso, end_date_iso, delta_link=No
     except requests.exceptions.HTTPError as e:
         return {"error": str(e), "details": e.response.json()}
     
-def create_calendar_event(user_email, subject, start_time, end_time, body_content, categories=None, timezone="Europe/Rome", calendar_id=None):
+def create_calendar_event(user_email, subject, start_time, end_time, body_content, categories=None, timezone="Europe/Rome", calendar_id=None, organizer_email=None):
     """
     Crea un evento nel calendario dell'utente specificato.
     'start_time' e 'end_time' devono essere stringhe in formato ISO 8601 (es. "2024-10-30T10:00:00")
@@ -234,6 +229,9 @@ def create_calendar_event(user_email, subject, start_time, end_time, body_conten
         'Content-Type': 'application/json'
     }
 
+    if organizer_email is None:
+        organizer_email = user_email
+
     event_data = {
         "subject": subject,
         "body": {
@@ -248,7 +246,12 @@ def create_calendar_event(user_email, subject, start_time, end_time, body_conten
             "dateTime": end_time,
             "timeZone": timezone
         },
-        "isReminderOn": False
+        "isReminderOn": False,
+        "organizer": {
+            "emailAddress": {
+                "address": organizer_email
+            }
+        }
     }
 
     if categories:
@@ -291,7 +294,7 @@ def get_event_details(user_id_or_email, event_id, calendar_id=None):
     except Exception as e:
         return {"error": str(e)}
     
-def update_calendar_event(user_email, event_id, subject=None, start_time=None, end_time=None, body_content=None, categories=None, timezone="Europe/Rome", calendar_id=None):
+def update_calendar_event(user_email, event_id, subject=None, start_time=None, end_time=None, body_content=None, categories=None, timezone="Europe/Rome", calendar_id=None, organizer_email=None):
     """
     Modifica un evento esistente nel calendario di un utente.
     Invia solo i campi che vengono effettivamente forniti.
@@ -322,6 +325,8 @@ def update_calendar_event(user_email, event_id, subject=None, start_time=None, e
         event_data["end"] = {"dateTime": end_time, "timeZone": timezone}
     if categories is not None:
         event_data["categories"] = categories
+    if organizer_email:
+        event_data["organizer"] = {"emailAddress": {"address": organizer_email}}
 
     if not event_data:
         return {"error": "Nessun dato fornito per la modifica."}

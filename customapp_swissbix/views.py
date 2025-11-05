@@ -28,13 +28,14 @@ from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.oxml import OxmlElement
 from docx.enum.section import WD_SECTION
-from docxtpl import DocxTemplate
+from docxtpl import DocxTemplate, RichText
 from customapp_swissbix.mock.activeMind.products import products as products_data_mock
 from customapp_swissbix.mock.activeMind.services import services as services_data_mock
 from customapp_swissbix.mock.activeMind.conditions import frequencies as conditions_data_mock
 from customapp_swissbix.customfunc import save_record_fields
 from xhtml2pdf import pisa
 from types import SimpleNamespace
+from commonapp.models import SysUser
 
 logger = logging.getLogger(__name__)
 
@@ -141,9 +142,9 @@ def save_activemind(request):
                     SELECT recordid_
                     FROM user_dealline
                     WHERE recordiddeal_ = %s
-                    AND name LIKE 'AM - Manutenzione servizi%%'
+                    AND name LIKE %s
                     LIMIT 1
-                """, [recordid_deal])
+                """, [recordid_deal, product.values.get('name', '')])
                 existing_row = cursor.fetchone()
 
             record_dealline = UserRecord('dealline')
@@ -177,7 +178,7 @@ def save_activemind(request):
             title = service.get('title', '')
 
             if qty > 0:
-                name_parts.append(f"{title}: {qty}")
+                name_parts.append(f"{title}: qta. {qty}")
                 total_price += qty * unit_price
 
         name_str = "AM - Manutenzione servizi - \n" + ",\n".join(name_parts) if name_parts else "AM - Manutenzione servizi"
@@ -576,7 +577,7 @@ def get_services_activemind(request):
             for entry in raw.split(","):
                 if ":" not in entry:
                     continue
-                n, qty = entry.strip().split(":", 1)
+                n, qty = entry.strip().split(": qta. ", 1)
                 quantities_map[n.strip().lower()] = int(qty.strip())
 
         # 4️⃣ Aggiorno quantità e totale
@@ -691,34 +692,6 @@ def get_products_activemind(request):
     # 4. Ritorno la struttura aggiornata
     return JsonResponse({"servicesCategory": list(categories_dict.values())}, safe=False)
 
-def get_product_by_id(product_id: str):
-    """Ritorna il dict del prodotto dal mock (in futuro DB)."""
-    for category in products_data_mock:
-        for service in category.get("services", []):
-            if service["id"] == product_id:
-                return service
-    return None
-
-def build_product_with_totals(product_id: str, quantity: int, billing_type: str = "monthly"):
-    """Arricchisce i dati con calcoli e dettagli dal mock."""
-    product = get_product_by_id(product_id)
-    if not product:
-        return None
-    
-    unit_price = product.get("monthlyPrice") if billing_type == "monthly" else product.get("yearlyPrice")
-    total = unit_price * quantity if unit_price else 0
-
-    return {
-        "id": product["id"],
-        "title": product["title"],
-        "description": product.get("description", ""),
-        "features": product.get("features", []),
-        "category": product.get("category"),
-        "billingType": billing_type,
-        "unitPrice": unit_price,
-        "quantity": quantity,
-        "total": total,
-    }
 
 def get_conditions_activemind(request):
     data = json.loads(request.body)
@@ -777,6 +750,42 @@ def get_conditions_activemind(request):
     return JsonResponse({"frequencies": conditions_list}, safe=False)
 
 
+def get_record_badge_swissbix_timesheet(request):
+    data = json.loads(request.body)
+    tableid= data.get("tableid")
+    recordid= data.get("recordid")
+
+    return_badgeItems={}
+
+    record_timesheet = UserRecord(tableid,recordid)
+    company = record_timesheet.fields.get("recordidcompany_", '')
+    project = record_timesheet.fields.get("recordidproject_", '')
+    service = record_timesheet.fields.get("service", '')
+    date = record_timesheet.fields.get("date", '')
+    description = record_timesheet.fields.get("description", '')
+    user = record_timesheet.fields.get("user", '')
+    total_worktime = record_timesheet.fields.get("totaltime_decimal", 0.00)
+    validated = record_timesheet.fields.get("validated", 'No')
+    invoice_status = record_timesheet.fields.get("invoicestatus", '')
+
+    if user and user['value']:
+        user_record = SysUser.objects.filter(id=user['value']).first()
+        return_badgeItems["user_photo"] = user_record.id if user_record else ''
+
+    return_badgeItems["service"] = service['value']
+    return_badgeItems["date"] = date['value']
+    return_badgeItems["description"] = description['value']
+    return_badgeItems['project_id'] = project['value'] if project else ''
+    return_badgeItems['project_name'] = project['convertedvalue'] if project else ''
+    return_badgeItems['user_name'] = user['convertedvalue'] if user else ''
+    return_badgeItems['company_id'] = company['value'] if company else ''
+    return_badgeItems['company_name'] = company['convertedvalue'] if company else ''
+    return_badgeItems["total_worktime"] = total_worktime['value']
+    return_badgeItems["validated"] = validated['value']
+    return_badgeItems["invoice_status"] = invoice_status['value']
+    response={ "badgeItems": return_badgeItems}
+    return JsonResponse(response)
+
 def get_record_badge_swissbix_company(request):
     data = json.loads(request.body)
     tableid= data.get("tableid")
@@ -834,7 +843,7 @@ def get_record_badge_swissbix_company(request):
     response={ "badgeItems": return_badgeItems}
     return JsonResponse(response)   
 
-
+# TODO migliorare codice in modo da usare UserRecord invece di SQL diretto
 def get_record_badge_swissbix_deals(request):
     data = json.loads(request.body)
     tableid= data.get("tableid")
@@ -853,7 +862,6 @@ def get_record_badge_swissbix_deals(request):
 
     salesuser=HelpderDB.sql_query_value(sql, 'dealuser1')
     if salesuser:
-        from commonapp.models import SysUser
         user_sales=SysUser.objects.filter(id=salesuser).first()
         return_badgeItems["sales_user_name"] = user_sales.firstname + ' ' + user_sales.lastname if user_sales else ''
         return_badgeItems["sales_user_photo"] = user_sales.id if user_sales else ''
@@ -951,19 +959,62 @@ def stampa_offerta(request):
     
     # Definizione economica
     dealline_records = deal_record.get_linkedrecords_dict('dealline')
-    items = []
+    lines = []
+    total = 0.0
 
-    for idx, line in enumerate(dealline_records, start=1):
+    for idx, line in enumerate(dealline_records, 1):
         name = line.get('name', 'N/A')
         quantity = line.get('quantity', 0)
         unit_price = line.get('unitprice', 0.0)
         price = line.get('price', 0.0)
-        items.append({
-            "descrizione": name,
-            "qt": quantity,
-            "prezzo_unitario": f"{unit_price:.2f}",
-            "prezzo_totale": f"{price:.2f}",
-        })
+        total += price
+        
+        # Formatta i numeri in stile italiano
+        qty_str = f"{quantity:.0f}".replace('.', ',')
+        unit_str = f"CHF {unit_price:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        price_str = f"CHF {price:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        
+        # Crea RichText per questa riga prodotto
+        rt_prodotto = RichText()
+        rt_prodotto.add(f"{idx}. ", bold=True, size=20)
+        rt_prodotto.add(name, size=20)
+        rt_prodotto.add('\n   ', size=20)
+        rt_prodotto.add('Quantità: ', size=20)
+        rt_prodotto.add(f"{qty_str}  |  ", bold=True, size=20)
+        rt_prodotto.add('Prezzo unitario: ', size=20)
+        rt_prodotto.add(f"{unit_str}  |  ", bold=True, size=20)
+        rt_prodotto.add('Totale: ', size=20)
+        rt_prodotto.add(price_str, bold=True, size=20)
+        rt_prodotto.add('\n\n', size=20)
+        
+        lines.append(rt_prodotto)
+
+    # Crea il titolo
+    # Crea il separatore
+    separatore = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    # Crea il totale finale
+    total_str = f"CHF {total:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+    rt_totale = RichText()
+    rt_totale.add('TOTALE COMPLESSIVO: ', bold=True, size=24)
+    rt_totale.add(total_str, bold=True, size=24)
+
+    # Combina tutti i prodotti in un unico RichText
+    rt_all_products = RichText()
+    for rt_prod in lines:
+        # Aggiungi il contenuto di ogni prodotto
+        rt_all_products.add(rt_prod)
+
+    # Crea il documento completo
+    tabella_completa = RichText()
+    tabella_completa.add(separatore)
+    tabella_completa.add('\n\n')
+    tabella_completa.add(rt_all_products)
+    tabella_completa.add(separatore)
+    tabella_completa.add('\n\n')
+    tabella_completa.add(rt_totale)
+    tabella_completa.add('\n\n')
+    tabella_completa.add(separatore)
 
     dati_trattativa = {
         "indirizzo": f"{address}, {cap} {city}",
@@ -972,7 +1023,7 @@ def stampa_offerta(request):
         "venditore": user,
         "data_chiusura_vendita": closedata.strftime("%d/%m/%Y") if isinstance(closedata, datetime.date) else closedata,
         "data_attuale": datetime.datetime.now().strftime("%d/%m/%Y"),
-        'items': items,
+        'tabella_prodotti': tabella_completa,
     }
 
 

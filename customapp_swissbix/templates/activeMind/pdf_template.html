@@ -116,30 +116,37 @@
         .service-header {
             font-weight: bold;
             color: #dc2626;
-            margin-bottom: 0px;
+            margin-bottom: 10px;
             margin-top: 20px;
             font-size: 18px;
         }
-        
-        .service-details {
-            margin-left: 10px;
-            font-size: 16px;
-        }
 
-        .service-details ul {
-            margin: 0px 0;
-            padding-left: 15px;
-        }
-        
-        .service-details li {
-            margin-bottom: 4px;
-            font-size: 14px;
+        .service-details h3 {
+            color: #333333; 
+            font-size: 16px;
+            border-bottom: 2px solid #dc2626; /* Linea di separazione elegante */
+            padding-bottom: 2px;
+            margin-top: 15px;
+            margin-bottom: 10px;
+            font-weight: bold;
         }
 
         .service-details p {
-            margin: 0px 0;
+            margin: 5px 0;
             font-size: 14px;
-            padding-left: 15px
+            padding-left: 0; 
+            text-align: justify;
+        }
+        
+        /* Elenchi */
+        .service-details ul {
+            margin: 5px 0;
+            padding-left: 20px; 
+            list-style-type: square;
+        }
+        .service-details li {
+            margin-bottom: 2px;
+            font-size: 14px;
         }
         
         .pricing-table {
@@ -215,7 +222,7 @@
         }
         
         .conditions {
-            font-size: 16px;
+            font-size: 14px;
             margin-top: 25px;
             line-height: 1.3;
         }
@@ -233,12 +240,6 @@
         
         .conditions li {
             margin-bottom: 2px;
-        }
-        
-        .service-title {
-            font-weight: bold;
-            {% comment %} color: #dc2626; {% endcomment %}
-            font-size: 16px;
         }
     </style>
 </head>
@@ -259,11 +260,38 @@
 
     {% if offer_data.tiers %}
     <div class="section page-break">
-        <div class="section-title">Sezione 1.0</div>
+        <div class="section-title">Sezione 1.0 - System Assurance</div>
+        <div style="width: 100%; text-align: center; margin-top: 15px;">
+            <img src="{% static 'images/systemassurance.png' %}" alt="Analisi rete aziendale" style="width: 100%; height: auto;">
+        </div>
         <div class="service-item">
+
             <p class="service-header">System Assurance tramite RMM di sistema (intervento propedeutico)</p>
+            
             <div class="service-details">
-                <h3><strong>Implementazione degli agent RMM (Remote Monitoring and Management)</strong></h3>
+                
+                <h3><strong>Analisi preliminare dell’infrastruttura di rete</strong></h3>
+                <p>
+                    La struttura della rete aziendale rappresenta il cuore pulsante dei processi digitali e operativi della vostra impresa. 
+                    Un check-up preliminare della rete, svolto da tecnici qualificati, è il primo passo fondamentale per ottenere una 
+                    fotografia chiara e oggettiva dello stato dell’infrastruttura IT.
+                </p>
+                <p>Durante questa fase, ci dedichiamo a:</p>
+                <ul>
+                    <li>Mappare i dispositivi connessi, analizzando la loro tipologia, posizione, modalità di collegamento e configurazione.</li>
+                    <li>Rilevare la disposizione e le configurazioni dei componenti di rete (router, switch, access point, server, firewall).</li>
+                    <li>Individuare carenze strutturali che potrebbero ostacolare l’implementazione di efficaci strategie di sicurezza e conformità.</li>
+                </ul>
+                <p>
+                    Il report della system assurance redatto a seguito dell’analisi fornirà un quadro articolato e accessibile, 
+                    evidenziando le aree su cui concentrarsi per pianificare interventi di sicurezza, ottimizzazione e adeguamento 
+                    alle normative in ambito nLPD e NIs2. Questo approccio consente di proporre soluzioni successive specifiche e su misura, 
+                    come test di vulnerabilità, analisi di conformità, progettazione di sistemi di monitoraggio e protezione avanzati, 
+                    garantendo un percorso evolutivo solido per la vostra infrastruttura digitale.
+                </p>
+                
+                <h3>Implementazione degli agent RMM (Remote Monitoring and Management)</h3>
+                
                 <table class="pricing-table">
                     <tr>
                         <th colspan="2">System Assurance</th>
@@ -289,34 +317,85 @@
                         {% endif %}
                     {% endfor %}
                 </table>
-                <br>
-                <p style="margin: 10px 0;">Il servizio permette di:</p>
-                <ul>
-                    <li>Fotografare lo "stato dell'arte" dell'infrastruttura del cliente</li>
-                    <li>Generare un inventario (asset managed) dei client presenti in azienda</li>
-                    <li>Verificare gli aggiornamenti di windows e pianificarne l'avvio (da integrare nel servizio ActiveMind)</li>
-                    <li>Definire tempistiche e valori economici di intervento da applicare al contratto</li>
-                </ul>
+
+                <div class="benefits-box">
+                    <p>Il servizio permette di:</p>
+                    <ul>
+                        <li>Fotografare lo "stato dell'arte" dell'infrastruttura del cliente</li>
+                        <li>Generare un inventario (asset managed) dei client presenti in azienda</li>
+                        <li>Verificare gli aggiornamenti di Windows e pianificarne l'avvio (da integrare nel servizio ActiveMind)</li>
+                        </ul>
+                </div>
+
             </div>
         </div>
     </div>
     {% endif %}
 
     {% if section2_products_pages %}
+        <!-- Pagina introduttiva dedicata -->
+        <div class="page-break">
+            <div class="section-title">Sezione 2.0 - Prodotti Ricorrenti</div>
+            
+            <div style="width: 100%; text-align: center; margin-top: 15px;">
+                <img src="{% static 'images/prodotti_beall.jpg' %}" alt="Prodotti be all" style="width: 100%; height: auto;">
+            </div>
+
+            <div class="service-header">Licenze e Prodotti (Costi Mensili o Annuali)</div>
+            <div class="service-details" style="margin-top: 10px;">
+                <p>
+                    Swissbix adotta soluzioni MSP basate su <strong>SentinelOne RMM</strong>, progettate per offrire gestione remota,
+                    automazione e sicurezza avanzata in ambienti IT complessi. Il modello di servizio a canone mensile consente
+                    scalabilità e prevedibilità dei costi, riducendo al minimo gli interventi manuali e migliorando l’efficienza operativa.
+                </p>
+                <p>
+                    L’infrastruttura RMM integra funzionalità di <strong>monitoraggio continuo</strong>, <strong>patch management</strong>,
+                    gestione degli asset e <strong>protezione endpoint</strong> con capacità di risposta autonoma alle minacce.
+                    Questo approccio proattivo consente di prevenire vulnerabilità, ottimizzare le performance dei sistemi
+                    e garantire un’elevata disponibilità dei servizi.
+                </p>
+                <p>
+                    Tutte le soluzioni implementate rispettano pienamente i requisiti della normativa svizzera
+                    <strong>nLPD</strong> in materia di protezione dei dati personali, assicurando tracciabilità, sicurezza
+                    nella raccolta delle informazioni e conformità ai più alti standard di cybersecurity.
+                </p>
+            </div>
+
+            <div style="margin-top: 25px; border-top: 1px solid #999; padding-top: 10px;">
+                <p style="font-style: italic; color: #444;">
+                    Le pagine seguenti elencano i <strong>prodotti ricorrenti</strong> suddivisi per categoria.<br>
+                    (Elenco da pagina 
+                        {% if offer_data.tiers %}4{% else %}3{% endif %}
+                        a pagina 
+                        {% if offer_data.tiers %}
+                            {{ section2_products_pages|length|add:3 }}
+                        {% else %}
+                            {{ section2_products_pages|length|add:2 }}
+                        {% endif %}
+                        )
+                </p>
+            </div>
+        </div>
+
+        <!-- Pagine successive con i prodotti -->
         {% for page in section2_products_pages %}
             <div class="page-break">
                 {% if forloop.first %}
-                    <div class="section-title">Sezione 2.0 - Prodotti Ricorrenti</div>
-                    <div class="service-header">Licenze e Prodotti (Costi Mensili o Annuali):</div>
+                    <div class="service-details" style="margin-bottom: 15px;">
+                        <h3 class="section-subtitle" style="font-weight: bold; margin-bottom: 10px;">
+                            Elenco Prodotti Ricorrenti
+                        </h3>
+                    </div>
                 {% endif %}
+
                 {% for product in page %}
                     <div class="service-item">
-                        <h1 class="service-title" style="margin-top: 15px;">
+                        <h3 class="service-title" style="margin-top: 15px;">
                             {{ product.title }}
                             <span style="font-weight: normal; font-size: 13px; color: #555;">
                                 {% if product.billingType == 'yearly' %}(Fatt. Annuale){% else %}(Fatt. Mensile){% endif %}
                             </span>
-                        </h1>
+                        </h3>
                         <table class="pricing-table">
                             <tr>
                                 <th>Costo unitario</th>
@@ -329,6 +408,7 @@
                                 <td class="price">CHF {{ product.total|default:"0.00"|floatformat:2 }}.-</td>
                             </tr>
                         </table>
+
                         {% if product.features %}
                         <div class="service-details">
                             <ul>
@@ -345,16 +425,75 @@
         {% endfor %}
     {% endif %}
 
+
     {% if section2_services_pages %}
+
+        <!-- Pagina introduttiva dedicata -->
+        <div class="page-break">
+            <div class="section-title">Sezione 2.1 - Servizi inclusi in ActiveMind</div>
+
+            <div style="width: 100%; text-align: center; margin-top: 15px;">
+                <img src="{% static 'images/servizi.jpg' %}" alt="Prodotti be all" style="width: 100%; height: auto;">
+            </div>
+
+            <div class="service-header">Panoramica del servizio</div>
+
+            <div class="service-details" style="margin-top: 10px;">
+                <p>
+                    Swissbix ha sviluppato un sistema strutturato di interventi programmati per la <strong>manutenzione e l’ottimizzazione</strong> 
+                    delle reti e dei dispositivi aziendali. Questo approccio consente di garantire <strong>continuità operativa</strong>, 
+                    <strong>sicurezza</strong> e massime prestazioni dell’infrastruttura IT.
+                </p>
+                <p>
+                    Il programma integra gli interventi in loco con l’assistenza <strong>MSP da remoto</strong>, offrendo un monitoraggio costante 
+                    e reazioni tempestive a qualsiasi anomalia. I controlli periodici possono essere pianificati con frequenza 
+                    <strong>mensile, trimestrale, semestrale o annuale</strong>, a seconda delle esigenze e della complessità 
+                    dell’ambiente aziendale.
+                </p>
+                <p>
+                    Grazie a questo servizio, Swissbix assicura una <strong>gestione proattiva dell’infrastruttura ICT</strong>, 
+                    riducendo i tempi di inattività e ottimizzando nel tempo l’affidabilità del sistema informativo del cliente.
+                </p>
+            </div>
+
+            <div style="margin-top: 25px; border-top: 1px solid #999; padding-top: 10px;">
+                <p style="font-style: italic; color: #444;">
+                    Le pagine seguenti presentano in dettaglio i <strong>servizi inclusi nel programma ActiveMind</strong>.<br>
+                    (Elenco da pagina
+                        {% with has_tiers=offer_data.tiers products_count=section2_products_pages|length services_count=section2_services_pages|length %}
+                            {% if section2_products_pages %}
+                                {% if has_tiers %}
+                                    {{ products_count|add:5 }}
+                                {% else %}
+                                    {{ products_count|add:4 }}
+                                {% endif %}
+                            {% else %}
+                                {% if has_tiers %}4{% else %}3{% endif %}
+                            {% endif %}
+                            a pagina 
+                            {% if has_tiers %}
+                                {{ products_count|add:services_count|add:5 }}
+                            {% else %}
+                                {{ products_count|add:services_count|add:4 }}
+                            {% endif %}
+                        {% endwith %}
+                    )
+                </p>
+            </div>
+        </div>
+
+        <!-- Pagine successive con i servizi -->
         {% for page in section2_services_pages %}
             <div class="page-break">
                 {% if forloop.first %}
-                    <div class="section-title">Sezione 2.1</div>
-                    <div class="service-header">Servizi inclusi in ActiveMind:</div>
+                    <div class="section-subtitle" style="font-weight: bold; margin-bottom: 10px;">
+                        Elenco Servizi ActiveMind
+                    </div>
                 {% endif %}
+
                 {% for service in page %}
                     <div class="service-item">
-                        <h1 class="service-title">{{ service.title }}</h1>
+                        <h3 class="service-title">{{ service.title }}</h3>
                         <table class="pricing-table">
                             <tr>
                                 <th>Costo unitario</th>
@@ -367,6 +506,7 @@
                                 <td class="price">CHF {{ service.total|default:"0.00"|floatformat:2 }}.-</td>
                             </tr>
                         </table>
+
                         {% if service.features %}
                         <div class="service-details">
                             <ul>
@@ -377,7 +517,7 @@
                         </div>
                         {% endif %}
                     </div>
-                    <hr>
+                    <hr style="border: 0; border-top: 1px dashed #ccc; margin: 10px 0;">
                 {% endfor %}
             </div>
         {% endfor %}
@@ -437,7 +577,7 @@
 
             {% for product in section2_products %}
                 {% if product.quantity > 0 %}
-                <tr>
+                <tr {% if forloop.first %}style="border-top: 2px solid #555"{% endif %}>
                     <td>
                         {{ product.title }}
                         {% if product.billingType == 'yearly' %}
@@ -455,7 +595,7 @@
 
             {% for service in offer_data.services %}
                 {% if service.quantity > 0 %}
-                <tr style="border-top: 1px dashed #ccc;">
+                <tr {% if forloop.first %}style="border-top: 2px solid #555"{% endif %}>
                     <td>{{ service.title }} (Base Intervento)</td>
                     <td>{{ service.quantity }}</td>
                     <td class="price">CHF {{ service.unitPrice|default:"0.00"|floatformat:2 }}.-</td>
@@ -503,21 +643,66 @@
     <!-- CONDIZIONI CONTRATTUALI HARDCODED (ripristinate) -->
     <div class="conditions page-break">
         <h4>Condizioni contrattuali di vendita</h4>
-        <p><strong>Contatti per Assistenza Tecnica:</strong></p>
+
+        <p><strong>CONTATTI PER ASSISTENZA TECNICA</strong></p>
         <ul>
-            <li>Apertura ticket: helpdesk@swissbix.ch</li>
-            <li>Supporto telefonico: 091 960 22 09</li>
-            <li>Orari supporto tecnico: dal lunedì al venerdì dalle 9:00 alle 12:00 e dalle 14:00 alle 17:00</li>
+            <li>Tutte le richieste di assistenza devono essere inoltrate tramite apertura di un ticket via e-mail all’indirizzo: <a href="mailto:helpdesk@swissbix.ch">helpdesk@swissbix.ch</a>.</li>
+            <li>Le richieste verranno gestite in ordine cronologico di ricezione e riceveranno risposta entro i termini previsti dal contratto o dal livello di servizio concordato (SLA).</li>
+            <li>Orari del servizio Helpdesk: dal lunedì al venerdì, dalle ore 09:00 alle 12:00 e dalle 14:00 alle 17:00, esclusi i giorni festivi riconosciuti dal Cantone Ticino.</li>
         </ul>
-        <p><strong>Metodo di pagamento e fatturazione:</strong></p>
-        <p>Fatturazione ad intervento eseguito, pagamento a 20gg</p>
-        <p><strong>Condizioni generali:</strong></p>
+
+        <p><strong>CONDIZIONI DI PAGAMENTO E FATTURAZIONE</strong></p>
         <ul>
-            <li>Condizioni generali di vendita visionabili al link: https://www.swissbix.ch/cgv.pdf</li>
-            <li>I prezzi indicati sono IVA Esclusa</li>
-            <li>Offerta valida fino al {{ limit_acceptance_date }}</li>
+            <li>Al momento della conferma dell’ordine è richiesto un acconto pari al 50% dell’importo totale del progetto. Il saldo dovrà essere corrisposto entro 20 (venti) giorni dal completamento dei lavori e dalla firma del relativo verbale di fine lavori.</li>
+            <li>Per eventuali servizi ricorrenti a canone, il pagamento decorre dalla data di effettiva messa in opera del servizio e sarà fatturato trimestralmente in via anticipata.</li>
+            <li>La proprietà dei beni forniti verrà trasferita al cliente solo dopo l’avvenuto pagamento integrale degli importi dovuti.</li>
+            <li>Tutti i prezzi si intendono IVA esclusa. Eventuali spese aggiuntive non espressamente indicate nell’offerta saranno fatturate separatamente.</li>
+        </ul>
+
+        <p><strong>CONDIZIONI GENERALI</strong></p>
+        <ul>
+            <li>Le presenti condizioni generali di vendita sono disponibili al seguente link: <a href="https://www.swissbix.ch/cgv.pdf">https://www.swissbix.ch/cgv.pdf</a> e si intendono accettate automaticamente con l’emissione dell’ordine.</li>
+            <li>L’offerta prevede un servizio “chiavi in mano”, conforme agli standard qualitativi svizzeri.</li>
+            <li>Validità dell’offerta: fino al {{data_chiusura_vendita}} o salvo esaurimento scorte.</li>
+            <li>Swissbix SA declina ogni responsabilità per ritardi imputabili a cause di forza maggiore, a inefficienze dei fornitori o a disservizi di soggetti terzi coinvolti nella logistica, in conformità alla normativa svizzera.</li>
+        </ul>
+
+        <p><strong>ESCLUSIONI</strong></p>
+        <ul>
+            <li>Sono espressamente esclusi dal presente contratto, salvo specifica indicazione nell’offerta:</li>
+            <li>Supporto tecnico, installazione e interventi di fornitori esterni relativi ad applicativi di terze parti utilizzati dal cliente.</li>
+            <li>Lavori di cablaggio, fissaggio a muro, montaggio dispositivi, interventi elettrici o di adeguamento infrastrutturale, di competenza esclusiva di aziende certificate secondo le normative vigenti.</li>
+            <li>Fornitura di cavi, adattatori, convertitori o altri accessori, che saranno quotati e fatturati a parte, se non esplicitamente inclusi nell’offerta.</li>
+        </ul>
+
+        <p><strong>PROTEZIONE DEI DATI E RISERVATEZZA</strong></p>
+        <ul>
+            <li>Tutti i dati raccolti saranno trattati in conformità alla Legge federale sulla protezione dei dati (LPD), nonché alle direttive cantonali e UE (ove applicabili).</li>
+            <li>Le Parti si impegnano a mantenere riservate tutte le informazioni confidenziali acquisite nell’ambito del rapporto commerciale.</li>
+        </ul>
+
+        <p><strong>GARANZIA E RESPONSABILITÀ</strong></p>
+        <ul>
+            <li>L’hardware fornito è coperto da garanzia ai sensi del Codice delle Obbligazioni svizzero (CO, art. 197 ss) per un periodo massimo di 24 mesi, salvo diversa indicazione in offerta o nelle condizioni del produttore. Il periodo esatto può essere verificato tramite il seriale del prodotto sul sito del produttore.</li>
+            <li>In caso di discrepanze, prevale la durata determinata dal seriale del prodotto rispetto a quanto indicato nell’offerta o in fattura.</li>
+            <li>Per determinati prodotti, il produttore può richiedere che il cliente finale si rivolga direttamente al servizio assistenza del produttore. In tal caso, Swissbix SA fornirà i contatti utili al cliente.</li>
+            <li>Il software fornito è soggetto a licenza d’uso limitata all’ambito interno del cliente. Qualsiasi uso non autorizzato, riproduzione o cessione è vietato.</li>
+            <li>Swissbix SA risponde esclusivamente dei danni diretti e comprovati. Sono esclusi risarcimenti per danni indiretti, consequenziali, perdita di dati o mancati profitti, salvo dolo o colpa grave.</li>
+            <li>La garanzia minima prevista per i prodotti nuovi è di 24 mesi ai sensi del CO, riducibili solo per prodotti di seconda mano o su specifica pattuizione contrattuale.</li>
+        </ul>
+
+        <p><strong>FORZA MAGGIORE</strong></p>
+        <ul>
+            <li>Eventi quali calamità naturali, scioperi, decisioni delle autorità, pandemie, guasti tecnici o altre circostanze imprevedibili e non imputabili a Swissbix SA sospendono l’esecuzione delle prestazioni contrattuali senza che ciò dia luogo a pretese risarcitorie.</li>
+        </ul>
+
+        <p><strong>LEGGE APPLICABILE E FORO COMPETENTE</strong></p>
+        <ul>
+            <li>Il presente contratto è regolato dal diritto svizzero.</li>
+            <li>Foro esclusivamente competente per eventuali controversie è quello della sede di Swissbix SA, salvo diverso accordo scritto tra le parti.</li>
         </ul>
     </div>
+
 
     <!-- FIRMA DIGITALE (ripristinata) -->
     <div class="signature-section">
