@@ -5480,6 +5480,7 @@ def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
 
 
     query_select_part = f"{select_group_field}, {', '.join(select_clauses)}" if select_clauses else select_group_field
+    query_conditions = query_conditions.replace(main_table, "t1")  # Sanitize quotes
     query = (f"SELECT {query_select_part} "
              f"{from_clause} "
              f"WHERE {query_conditions} AND t1.deleted_='N' "
