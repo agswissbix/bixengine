@@ -6598,3 +6598,71 @@ def update_club_settings(request):
         return JsonResponse({"error": "Formato JSON non valido"}, status=400)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+    
+def get_documents(request):
+    documents_table=UserTable('documents')
+    documents=documents_table.get_records(conditions_list=[])
+
+    data = []
+
+    for document in documents:
+        categories = []
+        categories.append(document.get('categoria', ''))
+
+        file = document.get('file', '')
+
+        file_type = ""
+        if file:
+            file_type = file.split('.')[-1]
+
+        data.append({
+            'title': document.get('titolo', ''),
+            'description': document.get('descrizione', ''),
+            'fileType': file_type,
+            'categories': categories,
+            'record_id': file,
+        })
+
+    return JsonResponse({"documents": data}, safe=False)
+
+def get_projects(request):
+    project_table = UserTable('Projects')
+    projects = project_table.get_records(conditions_list=[])
+
+    data = []
+
+    for project in projects:
+        categories = []
+        categories.append(project.get('categoria', ''))
+
+        documents = project.get('documents', [])
+
+        formatted_documents = []
+        for document in documents:
+            document_categories = []
+            document_categories.append(document.get('categoria', ''))
+
+            file = document.get('file', '')
+
+            file_type = ""
+            if file:
+                file_type = file.split('.')[-1]
+
+            formatted_documents.append({
+                'title': document.get('titolo', ''),
+                'description': document.get('descrizione', ''),
+                'fileType': file_type,
+                'categories': document_categories,
+                'record_id': file,
+            })
+
+
+        data.append({
+            'title': project.get('titolo', ''),
+            'description': project.get('descrizione', ''),
+            'categories': categories,
+            'documents': formatted_documents
+        })
+    
+    
+    return JsonResponse({"projects": data}, safe=False)
