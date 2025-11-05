@@ -109,6 +109,10 @@ urlpatterns = [
     path('settings_table_steps/', settings_table_steps, name='settings_table_steps'),
     path('settings_table_newstep/', settings_table_newstep, name='settings_table_newstep'),
     path('settings_table_steps_save/', settings_table_steps_save, name='settings_table_steps_save'),
+    path('get_documents/', get_documents, name='get_documents'),
+    path('get_projects/', get_projects, name='get_projects'),
+
+    
 ]
 
 
