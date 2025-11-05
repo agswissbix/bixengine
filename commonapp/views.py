@@ -2900,6 +2900,58 @@ def save_record_fields(request):
 
     record.save()
 
+    if tableid == 'task':
+        event_exist = UserEvents.objects.filter(recordidtable=recordid, tableid='task').first()
+        event_record = UserRecord('events', event_exist.record_id if event_exist else None)
+        due_date = record.values['duedate']
+        if due_date:
+            end_str = record.values.get('end')
+            start_str = record.values.get('start')
+            planned_date = record.values.get('planneddate') or due_date
+            duration = record.values.get('duration')
+
+            # Default se non presenti
+            if not start_str and not end_str:
+                start_str = "08:00"
+                end_str = "17:00"
+
+            start_date = datetime.datetime.strptime(planned_date, "%Y-%m-%d").date()
+            end_date = datetime.datetime.strptime(due_date, "%Y-%m-%d").date()
+
+            start_time = None
+            end_time = None
+
+            if start_str:
+                start_time = datetime.datetime.strptime(start_str, "%H:%M").time()
+            if end_str:
+                end_time = datetime.datetime.strptime(end_str, "%H:%M").time()
+
+            start_datetime = datetime.datetime.combine(start_date, start_time or datetime.time(0, 0))
+            end_datetime = datetime.datetime.combine(end_date, end_time or datetime.time(0, 0))
+
+            duration_task = 1
+            if duration and int(duration) > 0:
+                duration_task = int(duration)
+
+            if not end_str:
+                end_datetime = start_datetime + datetime.timedelta(hours=duration_task)
+            elif not start_str:
+                start_datetime = end_datetime - datetime.timedelta(hours=duration_task)
+
+            # Salvo nei valori dell’evento
+            event_record.values['start_date'] = start_datetime
+            event_record.values['end_date'] = end_datetime
+
+
+        event_record.values['recordidtable'] = recordid
+        event_record.values['tableid'] = 'task'
+        event_record.values['subject'] = record.values['description']
+        event_record.values['userid'] = record.values['user']
+        event_record.values['timezone'] = 'Europe/Zurich'
+        event_record.values['body_content'] = record.values['note']
+
+        event_record.save()
+
     if tableid == 'stabile':
         stabile_record = UserRecord('stabile', recordid)
         if Helper.isempty(stabile_record.values['titolo_stabile']):
