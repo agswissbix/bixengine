@@ -99,6 +99,7 @@ urlpatterns = [
     path('get_master_linked_tables/', get_master_linked_tables, name='get_master_linked_tables'),
     path('settings_get_dashboards_user/', settings_get_dashboards_user, name='settings_get_dashboards_user'),
     path('save_user_dashboard_setting/', save_user_dashboard_setting, name='save_user_dashboard_setting'),
+    path('get_all_tables/', get_all_tables, name='get_all_tables'),
     
     
     # ------------------  WeGolf views ---------------------------------

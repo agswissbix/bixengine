@@ -84,11 +84,11 @@ def settings_table_fields(request):
     if typepreference == "linked_columns" and master_table_id is None:
         return JsonResponse({"fields": []})
 
-    fields = list(SysField.objects.filter(tableid=tableid).values())
+    fields = list(SysField.objects.filter(tableid=tableid).values().order_by('description'))
 
     for field in fields[:]:  # usa [:] per evitare problemi durante la rimozione
         # Rimuovi i campi con fieldid che termina con "_"
-        if str(field['id']).endswith('_'):
+        if str(field['fieldid']).endswith('_'):
             fields.remove(field)
             continue
 
@@ -516,6 +516,11 @@ def settings_table_fields_new_field(request):
         )
 
     return JsonResponse({"success": True})
+
+
+def get_all_tables(request):
+    tables = list(SysTable.objects.all().values('id', 'description').order_by('description'))
+    return JsonResponse({"tables": tables})
 
 
 def settings_table_fields_settings_block(request):
