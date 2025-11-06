@@ -246,12 +246,14 @@ def get_sidebarmenu_items(request):
     userid =Helper.get_userid(request)
     for table in tables:
         workspace = table["workspace"]
+
         
         if workspace not in workspaces_tables:
+            workspace_record = SysTableWorkspace.objects.filter(name=table['workspace']).first()
             workspaces_tables[workspace] = {}
             workspaces_tables[workspace]["id"]=table['workspace']
             workspaces_tables[workspace]["title"]=table['workspace']
-            workspaces_tables[workspace]["icon"]='Home'
+            workspaces_tables[workspace]["icon"]=workspace_record.icon
             workspaces_tables[workspace]["order"]=table['workspace_order']
         subitem={}
         subitem['id']=table['id']
