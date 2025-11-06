@@ -5204,6 +5204,8 @@ def get_dashboard_blocks(request):
                 all_blocks = dbh.sql_query(sql)
 
                 for block in all_blocks:
+                    chart= HelpderDB.sql_query_row(f"SELECT name FROM sys_chart WHERE id='{block['chartid']}'")
+                    block['description'] = chart['name'] if chart else 'N/A'
                     context['block_list'].append(block)
 
                 for data in datas:
