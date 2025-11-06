@@ -648,7 +648,6 @@ def sync_bexio_contacts(request):
 
         record.values['bexio_id'] = contact['id']
         record.values['nr'] = contact['nr']
-        record.values['nr'] = contact['nr']
         record.values['contact_type_id'] = contact['contact_type_id']
         record.values['name_1'] = contact['name_1']
         record.values['name_2'] = contact['name_2']
@@ -703,7 +702,6 @@ def sync_bexio_orders(request):
 
         record.values['bexio_id'] = order['id']
         record.values['document_nr'] = order['document_nr']
-        record.values['document_nr'] = order['document_nr']
         record.values['title'] = order['title']
         record.values['contact_id'] = order['contact_id']
         record.values['user_id'] = order['user_id']
@@ -714,7 +712,6 @@ def sync_bexio_orders(request):
         record.values['is_valid_from'] = order['is_valid_from']
         record.values['contact_address'] = order['contact_address']
         record.values['delivery_address'] = order['delivery_address']
-        record.values['is_recurring'] = order['is_recurring']
         record.values['is_recurring'] = order['is_recurring']
 
         order_taxs = order['taxs']
@@ -937,3 +934,57 @@ def sync_graph_calendar(request):
         print("Eventi esistenti")
         return views.sync_graph_calendar(request)
     
+def sync_tables(request):
+    print("sync_tables")
+    try:
+        # tables = HelpderDB.sql_query("SELECT * FROM sys_table WHERE sync_table IS NOT NULL")
+        tables = HelpderDB.sql_query("SELECT * FROM sys_table WHERE sync_table IS NOT NULL AND id = 'company'")
+
+        for table in tables:
+            print("Starting sync of table: " + table['sync_table'])
+            columns = HelpderDB.sql_query(f"SELECT * FROM sys_field WHERE tableid='{table['id']}' AND sync_fieldid IS NOT NULL")
+
+            sync_fieldid = table['sync_field']
+            founded_fieldid = [c for c in columns if c.get('sync_fieldid') == sync_fieldid]
+            if not founded_fieldid:
+                continue
+            fieldid = founded_fieldid[0]['fieldid']
+
+            # query = f"SELECT * from {table['sync_table']}"
+            query = f"SELECT * from user_bexio_contact"
+            condition = table['sync_condition']
+            order = table['sync_order']
+
+            if condition:
+                query += f" WHERE {condition}"
+
+            if order:
+                query += f" ORDER BY {order}"
+
+            data = HelpderDB.sql_query(query)
+
+            for row in data:
+                id = row[sync_fieldid]
+                
+                field = HelpderDB.sql_query_row(f"SELECT * FROM user_{table['id']} WHERE {fieldid}='{id}'")
+
+                if field:
+                    print("Update filed")
+                    record = UserRecord(table['id'], field['recordid_'])
+
+                    for column in columns:
+                        record.values[column['fieldid']] = row[column['sync_fieldid']]
+
+                    # record.save()
+                else:
+                    print("Create new field")
+                    new_record = UserRecord(table['id'])
+
+                    for column in columns:
+                        new_record.values[column['fieldid']] = row[column['sync_fieldid']]
+                    
+                    # new_record.save()
+
+        return JsonResponse(data, safe=False)
+    except requests.RequestException as e:  
+        return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
