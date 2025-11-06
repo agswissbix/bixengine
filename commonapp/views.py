@@ -2835,10 +2835,14 @@ def save_record_fields(request):
     if not tableid:
         return JsonResponse({'error': 'Missing tableid'}, status=400)
 
+    def normalize_value(value):
+        if value == '' or value == 'null':
+            return None
+        return value
 
     record = UserRecord(tableid, recordid)
     for saved_fieldid, saved_value in saved_fields_dict.items():
-        record.values[saved_fieldid] = saved_value
+        record.values[saved_fieldid] = normalize_value(saved_value)
 
     record.save()
     recordid = record.recordid
@@ -3149,6 +3153,29 @@ def save_record_fields(request):
         granularity = values.get("date_granularity", "day")
         func_button = values.get("function_button", None)
 
+
+        # =======================
+        # DASHBOARDS / VIEWS
+        # =======================
+        dashboards_str = values.get("dashboards", None)
+        views_str = values.get("views", None)
+        
+        # Handle dashboards_str whether it's a string or already a list
+        if isinstance(dashboards_str, str):
+            dashboard_ids = [d.strip() for d in dashboards_str.split(",") if d.strip()]
+        elif isinstance(dashboards_str, list):
+            dashboard_ids = [str(d).strip() for d in dashboards_str if str(d).strip()]
+        else:
+            return JsonResponse({"error": "Dashboards value is missing."}, status=400)
+        
+        # Handle views_str whether it's a string or already a list
+        if isinstance(views_str, str):
+            view_ids = [v.strip() for v in views_str.split(",") if v.strip()]
+        elif isinstance(views_str, list):
+            view_ids = [str(v).strip() for v in views_str if str(v).strip()]
+        else:
+            return JsonResponse({"error": "Views value is missing."}, status=400)
+
         # =======================
         # FIELD TYPE (ORM)
         # =======================
@@ -3157,14 +3184,6 @@ def save_record_fields(request):
             .values_list("fieldtypewebid", flat=True)
             .first()
         )
-
-        # =======================
-        # DASHBOARDS / VIEWS
-        # =======================
-        dashboards_str = values.get("dashboards", "")
-        views_str = values.get("views", "")
-        dashboard_ids = [d for d in dashboards_str.split(",") if d.strip()]
-        view_ids = [v for v in views_str.split(",") if v.strip()]
 
         # =======================
         # FIELD DESCRIPTIONS
