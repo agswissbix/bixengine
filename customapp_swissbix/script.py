@@ -969,7 +969,7 @@ def sync_tables(request):
                 field = HelpderDB.sql_query_row(f"SELECT * FROM user_{table['id']} WHERE {fieldid}='{id}'")
 
                 if field:
-                    print("Update filed")
+                    print("Updating record")
                     record = UserRecord(table['id'], field['recordid_'])
 
                     for column in columns:
@@ -977,14 +977,16 @@ def sync_tables(request):
 
                     # record.save()
                 else:
-                    print("Create new field")
+                    print("Creating record")
                     new_record = UserRecord(table['id'])
 
                     for column in columns:
                         new_record.values[column['fieldid']] = row[column['sync_fieldid']]
                     
                     # new_record.save()
-
+            print("Sync completed of table: " + table['sync_table'])
+            
+        print("Syncronization completed")
         return JsonResponse(data, safe=False)
     except requests.RequestException as e:  
         return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
