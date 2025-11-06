@@ -1113,6 +1113,10 @@ def get_fields_swissbix_deal(request):
 
             step_data["linked_tables"] = linked_tables
 
+        elif step.type == "allegati":
+            attachments=HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordid{tableid}_='{recordid}' AND deleted_ = 'N'")
+            step_data["attachments"] = attachments
+
         steps_data.append(step_data)
 
     return JsonResponse({

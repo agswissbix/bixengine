@@ -960,8 +960,6 @@ class UserAttachment(BaseUserTable):
     note = models.TextField(null=True, blank=True)
     file = models.CharField(max_length=255, null=True, blank=True)
     filename = models.CharField(max_length=255, null=True, blank=True)
-    recordiddeal = models.CharField(max_length=255, null=True, blank=True, db_column='recordiddeal_')
-    _recordiddeal = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
         db_table = 'user_attachment'

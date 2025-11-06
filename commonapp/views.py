@@ -4851,122 +4851,274 @@ def script_test(request):
 
     return JsonResponse({'success': True, 'path documento': file_path})
 
-def sign_timesheet(request):
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            recordid = data.get('recordid')
-            img_base64 = data.get('image')
-            if not img_base64:
-                return JsonResponse({'error': 'No image data'}, status=400)
 
-            header, img_base64 = img_base64.split(',', 1)
-            img_data = base64.b64decode(img_base64)
-            
-            base_path = os.path.join(settings.STATIC_ROOT, 'pdf')
-            filename_firma = 'firma_' + str(recordid) + '.png'
+def generate_timesheet_pdf(recordid, signature_path):
+    """
+    Genera il PDF del timesheet con la firma e restituisce il percorso del file PDF.
+    """
+    try:
+        base_path = os.path.join(settings.STATIC_ROOT, 'pdf')
+        os.makedirs(base_path, exist_ok=True)
 
-            # Salva firma come immagine
-            firma_path = os.path.join(base_path, filename_firma)
-            img_pil = Image.open(BytesIO(img_data))
+        uid = uuid.uuid4().hex
+        qr_name = f'qrcode_{uid}.png'
+        qr_path = os.path.join(base_path, qr_name)
 
-            if img_pil.mode in ('RGBA', 'LA') or (img_pil.mode == 'P' and 'transparency' in img_pil.info):
-                background = Image.new('RGB', img_pil.size, (255, 255, 255))
-                background.paste(img_pil, mask=img_pil.split()[-1])
-                img_pil = background
-            else:
-                img_pil = img_pil.convert('RGB')
+        # Genera QR
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=10,
+            border=0,
+        )
+        qrcontent = f'timesheet_{recordid}'
+        qr.add_data(qrcontent)
+        qr.make(fit=True)
+        img_qr = qr.make_image(fill_color="black", back_color="white")
+        img_qr.save(qr_path)
 
-            img_pil.save(firma_path, format='PNG')
+        # Recupera dati dal DB
+        rows = HelpderDB.sql_query(f"""
+            SELECT t.*, c.companyname, c.address, c.city, c.email, c.phonenumber, 
+                   u.firstname, u.lastname 
+            FROM user_timesheet AS t 
+            JOIN user_company AS c ON t.recordidcompany_=c.recordid_ 
+            JOIN sys_user AS u ON t.user = u.id 
+            WHERE t.recordid_='{recordid}'
+        """)
 
-            uid = uuid.uuid4().hex
+        if not rows:
+            raise Exception(f"Nessun timesheet trovato per recordid {recordid}")
 
-            qr = qrcode.QRCode(
-                version=1,
-                error_correction=qrcode.constants.ERROR_CORRECT_H,
-                box_size=10,
-                border=0,
-            )
+        row = rows[0]
+        for k in row:
+            row[k] = row[k] or ''
 
-            today = datetime.date.today()
-            d1 = today.strftime("%d/%m/%Y")
+        server = os.environ.get('BIXENGINE_SERVER')
+        qr_url = f"{server}/static/pdf/{qr_name}"
+        firma_url = f"{server}/{signature_path.replace(settings.STATIC_ROOT + '/', '')}"
 
-            qrcontent = 'timesheet_' + str(recordid)
+        row['recordid'] = recordid
+        row['qrUrl'] = qr_url
+        row['signatureUrl'] = firma_url
 
+        timesheetlines = HelpderDB.sql_query(
+            f"SELECT * FROM user_timesheetline WHERE recordidtimesheet_='{recordid}'"
+        )
+        for line in timesheetlines:
+            line['note'] = line.get('note') or ''
+            line['expectedquantity'] = line.get('expectedquantity') or ''
+            line['actualquantity'] = line.get('actualquantity') or ''
+        row['timesheetlines'] = timesheetlines
 
-            data = qrcontent
-            qr.add_data(data)
-            qr.make(fit=True)
+        # Percorso PDF finale
+        pdf_filename = f'timesheet_signature_{recordid}_{uuid.uuid4().hex}.pdf'
+        pdf_path = os.path.join(base_path, pdf_filename)
 
-            img = qr.make_image(fill_color="black", back_color="white")
+        # Genera PDF
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        wkhtmltopdf_path = os.path.join(script_dir, 'wkhtmltopdf.exe')
+        config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
+        html_content = render_to_string('pdf/timesheet_signature.html', row)
 
-            qr_name = 'qrcode' + uid + '.png'
+        pdfkit.from_string(html_content, pdf_path, configuration=config)
 
-            qr_path = os.path.join(base_path, qr_name)
+        # Rimuove QR temporaneo
+        if os.path.exists(signature_path):
+            os.remove(signature_path)
+        if os.path.exists(qr_path):
+            os.remove(qr_path)
 
-            img.save(qr_path)
+        return pdf_path, pdf_filename
 
+    except Exception as e:
+        print(f"Errore in generate_timesheet_pdf: {e}")
+        raise
 
-            rows = HelpderDB.sql_query(f"SELECT t.*, c.companyname, c.address, c.city, c.email, c.phonenumber, u.firstname, u.lastname FROM user_timesheet AS t JOIN user_company AS c ON t.recordidcompany_=c.recordid_ JOIN sys_user AS u ON t.user = u.id WHERE t.recordid_='{recordid}'")
+def print_timesheet(request):
+    """
+    Restituisce un PDF già generato, passato come file_path nel body.
+    Serve per scaricare il PDF firmato precedentemente salvato.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Invalid method'}, status=405)
 
-            server = os.environ.get('BIXENGINE_SERVER')
-            firma_url = server + '/static/pdf/' + filename_firma
-            qr_url = server + '/static/pdf/' + qr_name
+    try:
+        data = json.loads(request.body)
+        recordid = data.get('recordid')
 
-            filename_with_path = os.path.join(base_path, 'firma_salvata_' + str(recordid) + '.pdf')
-
-
-            row = rows[0]
-
-            for value in row:
-                if row[value] is None:
-                    row[value] = ''
-
-            row['recordid'] = recordid
-            row['qrUrl'] = qr_url
-            row['signatureUrl'] = firma_url
-
-
-            timesheetlines = HelpderDB.sql_query(f"SELECT * FROM user_timesheetline WHERE recordidtimesheet_='{recordid}'")
-
-
-            for line in timesheetlines:
-                line['note'] = line['note'] or ''   
-                line['expectedquantity'] = line['expectedquantity'] or ''
-                line['actualquantity'] = line['actualquantity'] or ''
-
-            row['timesheetlines'] = timesheetlines
-
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-        
-            wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
-
-            config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
-            content = render_to_string('pdf/timesheet_signature.html', row)
-
-            pdfkit.from_string(content, filename_with_path, configuration=config)
+        if not recordid:
+            return JsonResponse({'error': 'Missing recordid'}, status=400)
 
 
-            try:
-                with open(filename_with_path, 'rb') as f:
-                    pdf_data = f.read()
-  
-                    response = HttpResponse(pdf_data, content_type='application/pdf')
-                    response['Content-Disposition'] = 'attachment; filename="timesheet_signature.pdf"'
+        record_timesheet = UserRecord('attachment', recordid)
+        file_path = record_timesheet.values['file']
 
-                    return response
-            finally:
-                if os.path.exists(firma_path):
-                    os.remove(firma_path)
-                if os.path.exists(filename_with_path):
-                    os.remove(filename_with_path)
-                if os.path.exists(qr_path):
-                    os.remove(qr_path)
+        # Percorso assoluto
+        abs_path = os.path.join(settings.UPLOADS_ROOT, file_path)
 
-        except Exception as e:
-            print(f"Error in sign_timesheet: {e}")
-            return JsonResponse({'success': False, 'error': str(e)}, status=500)
-        
+        if not os.path.exists(abs_path):
+            return JsonResponse({'error': f'File not found: {file_path}'}, status=404)
+
+        # Legge il PDF e lo restituisce
+        with open(abs_path, 'rb') as f:
+            pdf_data = f.read()
+
+        response = HttpResponse(pdf_data, content_type='application/pdf')
+        filename = os.path.basename(file_path)
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+    except Exception as e:
+        print(f"Error in sign_timesheet (download): {e}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+@csrf_exempt
+def save_signature(request):
+    """
+    Riceve una firma in base64, genera il PDF del timesheet con la firma
+    e salva il file come allegato nel DB (tabella attachment).
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Invalid method'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        recordid = data.get('recordid')
+        img_base64 = data.get('image')
+
+        if not recordid:
+            return JsonResponse({'error': 'Missing recordid'}, status=400)
+        if not img_base64:
+            return JsonResponse({'error': 'No image data'}, status=400)
+
+        # -------------------------
+        # 1️⃣ Salva la firma come immagine PNG
+        # -------------------------
+        if ',' in img_base64:
+            _, img_base64 = img_base64.split(',', 1)
+        img_data = base64.b64decode(img_base64)
+
+        base_path = os.path.join(settings.STATIC_ROOT, 'pdf')
+        os.makedirs(base_path, exist_ok=True)
+
+        filename_firma = f"firma_{recordid}_{uuid.uuid4().hex}.png"
+        firma_path = os.path.join(base_path, filename_firma)
+
+        img_pil = Image.open(BytesIO(img_data))
+        if img_pil.mode in ('RGBA', 'LA') or (img_pil.mode == 'P' and 'transparency' in img_pil.info):
+            background = Image.new('RGB', img_pil.size, (255, 255, 255))
+            background.paste(img_pil, mask=img_pil.split()[-1])
+            img_pil = background
+        else:
+            img_pil = img_pil.convert('RGB')
+        img_pil.save(firma_path, format='PNG')
+
+        # -------------------------
+        # 2️⃣ Genera QR Code
+        # -------------------------
+        uid = uuid.uuid4().hex
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=10,
+            border=0,
+        )
+        qrcontent = f"timesheet_{recordid}"
+        qr.add_data(qrcontent)
+        qr.make(fit=True)
+
+        img_qr = qr.make_image(fill_color="black", back_color="white")
+        qr_name = f"qrcode_{uid}.png"
+        qr_path = os.path.join(base_path, qr_name)
+        img_qr.save(qr_path)
+
+        # -------------------------
+        # 3️⃣ Recupera i dati del timesheet
+        # -------------------------
+        rows = HelpderDB.sql_query(f"""
+            SELECT t.*, c.companyname, c.address, c.city, c.email, c.phonenumber, 
+                   u.firstname, u.lastname 
+            FROM user_timesheet AS t 
+            JOIN user_company AS c ON t.recordidcompany_=c.recordid_ 
+            JOIN sys_user AS u ON t.user = u.id 
+            WHERE t.recordid_='{recordid}'
+        """)
+
+        if not rows:
+            return JsonResponse({'error': f'Timesheet {recordid} non trovato'}, status=404)
+
+        row = rows[0]
+        for value in row:
+            row[value] = row[value] or ''
+
+        server = os.environ.get('BIXENGINE_SERVER')
+        firma_url = f"{server}/static/pdf/{filename_firma}"
+        qr_url = f"{server}/static/pdf/{qr_name}"
+
+        # -------------------------
+        # 4️⃣ Prepara i dati per il template
+        # -------------------------
+        row['recordid'] = recordid
+        row['qrUrl'] = qr_url
+        row['signatureUrl'] = firma_url
+
+        timesheetlines = HelpderDB.sql_query(
+            f"SELECT * FROM user_timesheetline WHERE recordidtimesheet_='{recordid}'"
+        )
+        for line in timesheetlines:
+            line['note'] = line.get('note') or ''
+            line['expectedquantity'] = line.get('expectedquantity') or ''
+            line['actualquantity'] = line.get('actualquantity') or ''
+        row['timesheetlines'] = timesheetlines
+
+        # -------------------------
+        # 5️⃣ Genera il PDF
+        # -------------------------
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        wkhtmltopdf_path = os.path.join(script_dir, 'wkhtmltopdf.exe')
+        config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
+        content = render_to_string('pdf/timesheet_signature.html', row)
+
+        pdf_filename = f"timesheet_signature_{recordid}_{uuid.uuid4().hex}.pdf"
+        pdf_path = os.path.join(base_path, pdf_filename)
+        pdfkit.from_string(content, pdf_path, configuration=config)
+
+        # -------------------------
+        # 6️⃣ Crea il record allegato
+        # -------------------------
+        attachment_record = UserRecord('attachment')
+        attachment_record.values['type'] = "Signature"
+        attachment_record.values['recordidtimesheet_'] = recordid
+        attachment_record.save()
+
+        uploads_dir = os.path.join(settings.UPLOADS_ROOT, f'attachments/{attachment_record.recordid}')
+        os.makedirs(uploads_dir, exist_ok=True)
+
+        final_pdf_path = os.path.join(uploads_dir, pdf_filename)
+        shutil.copy(pdf_path, final_pdf_path)
+
+        relative_path = f'attachments/{attachment_record.recordid}/{pdf_filename}'
+        attachment_record.values['file'] = relative_path
+        attachment_record.values['filename'] = pdf_filename
+        attachment_record.save()
+
+        # -------------------------
+        # 7️⃣ Risposta finale
+        # -------------------------
+        return JsonResponse({
+            'success': True,
+            'message': 'PDF con firma salvato con successo',
+            'recordid': recordid,
+            'attachment_recordid': attachment_record.recordid,
+            'pdf_filename': pdf_filename,
+            'pdf_path': relative_path
+        })
+
+    except Exception as e:
+        print(f"Error in save_signature: {e}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+     
 @csrf_exempt
 def update_user_profile_pic(request):
     if request.method != 'POST':
