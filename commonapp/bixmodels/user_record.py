@@ -539,8 +539,7 @@ class UserRecord:
 
         insert_fields=[]
         for field in fields:
-            defaultcode=''
-            defaultvalue=''
+            
             insert_field={}
             fieldid=field['fieldid']
             if fieldid.startswith("_"):
@@ -579,6 +578,9 @@ class UserRecord:
             # Sovrascrivi con le impostazioni dal DB
             insert_field['settings'].update(current_field_settings)
 
+            defaultvalue=insert_field['settings'].get('default','')
+            defaultcode=insert_field['settings'].get('default','')
+            
             #TODO rendere dinamico dai settings
             if fieldid=='unitprice' or fieldid=='quantity' or fieldid=='unitexpectedcost' or fieldid=='recordidproduct_':
                 insert_field['hasDependencies']=True
@@ -611,8 +613,8 @@ class UserRecord:
                     defaultcode=date.today().strftime('%Y-%m-%d')
                     defaultvalue=date.today().strftime('%Y-%m-%d')
                 
-                default_value=insert_field['settings'].get('default','')
-                if default_value == '$today$':
+                
+                if defaultvalue == '$today$':
                     defaultcode=date.today().strftime('%Y-%m-%d')
                     defaultvalue=date.today().strftime('%Y-%m-%d')
                     
