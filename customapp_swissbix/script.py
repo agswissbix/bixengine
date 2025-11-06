@@ -975,7 +975,7 @@ def sync_tables(request):
                     for column in columns:
                         record.values[column['fieldid']] = row[column['sync_fieldid']]
 
-                    # record.save()
+                    record.save()
                 else:
                     print("Creating record")
                     new_record = UserRecord(table['id'])
@@ -983,9 +983,9 @@ def sync_tables(request):
                     for column in columns:
                         new_record.values[column['fieldid']] = row[column['sync_fieldid']]
                     
-                    # new_record.save()
+                    new_record.save()
             print("Sync completed of table: " + table['sync_table'])
-            
+
         print("Syncronization completed")
         return JsonResponse(data, safe=False)
     except requests.RequestException as e:  
