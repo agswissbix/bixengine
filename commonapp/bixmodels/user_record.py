@@ -269,9 +269,9 @@ class UserRecord:
                         value = value.replace("'", "''")  
                     if isinstance(value, list):
                         value = ','.join(map(str, value))
-                    sql=sql+f" {fieldid}='{value}' "
+                    sql=sql+f" `{fieldid}`='{value}' "
                 else:
-                    sql=sql+f" {fieldid}=null "
+                    sql=sql+f" `{fieldid}`=null "
                 counter+=1
             sql=sql+f" WHERE recordid_='{self.recordid}'"  
             HelpderDB.sql_execute(sql) 
