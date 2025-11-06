@@ -369,7 +369,7 @@ def settings_table_fields_new_field(request):
     linked_table_fields = data.get("linkedtablefields", [])
     label = data.get("label", "Dati")
 
-    if not all([tableid, fieldid, fielddescription, fieldtype]):
+    if not all([tableid, fielddescription, fieldtype]) and (not fieldid or not is_linked):
         return JsonResponse({"success": False, "error": "Dati mancanti o non validi"}, status=400)
 
     # Evita duplicati
