@@ -4997,9 +4997,11 @@ def get_dashboard_blocks(request):
     request_data = json.loads(request.body)
     #TODO custom wegolf
     filters=request_data.get('filters', None)
-    selected_clubs=[]
+    selected_clubs=None
+    selected_years=None
     if filters:
         selected_clubs=filters.get('selectedClubs', [])
+        selected_years=filters.get('selectedYears', [])
     cliente_id = Helper.get_cliente_id()
     #dashboard_id = data.get('dashboardid')
     dashboard_id = request_data.get('dashboardid')  # Default to 1 if not provided
@@ -5127,15 +5129,18 @@ def get_dashboard_blocks(request):
                                         if selected_clubs_conditions != '':
                                             query_conditions = query_conditions + " AND (" + selected_clubs_conditions + ")"
 
-                            selected_years=request_data.get('selectedYears', [])
-                            selected_years_conditions = ''
-                            for selected_year in selected_years:
+                            if selected_years:
+                                selected_years_conditions = ''
+                                for selected_year in selected_years:
+                                    if selected_years_conditions != '':
+                                        selected_years_conditions = selected_years_conditions + " OR "
+                                    selected_years_conditions = selected_years_conditions + "  anno='{selected_year}'".format(selected_year=selected_year)
                                 if selected_years_conditions != '':
-                                    selected_years_conditions = selected_years_conditions + " OR "
-                                selected_years_conditions = selected_years_conditions + "  anno='{selected_year}'".format(selected_year=selected_year)
-                            if selected_years_conditions != '':
-                                selected_years_conditions = " AND (" + selected_years_conditions + ")"
-                            query_conditions = query_conditions + selected_years_conditions
+                                    selected_years_conditions = " AND (" + selected_years_conditions + ")"
+                                query_conditions = query_conditions + selected_years_conditions
+
+
+
                         chart_data=get_dynamic_chart_data(request, results['chartid'],query_conditions)
                         if 'datasets' in chart_data and len(chart_data['datasets'])>0:
                             chart_data['datasets'][0]['view'] = viewid
@@ -5343,7 +5348,6 @@ def _perform_post_calculation(post_calc_def, all_db_datasets, labels):
     # Trova i dati del dataset di origine
     source_data = None
     for ds in all_db_datasets:
-        # 'original_alias' è una chiave custom che aggiungeremo per tracciabilità
         if ds.get('original_alias') == source_alias:
             source_data = ds['data']
             break
@@ -5354,10 +5358,31 @@ def _perform_post_calculation(post_calc_def, all_db_datasets, labels):
     # Esegui il calcolo
     result_value = 0
     if func == 'AVG':
-        if source_data:
-            result_value = sum(source_data) / len(source_data)
+        
+        # --- INIZIO MODIFICA ---
+        
+        # 1. Ottieni l'anno corrente come STRINGA (es. "2024")
+        current_year_str = str(datetime.date.today().year)
+        
+        # 2. Filtra i dati: escludi i valori il cui label (stringa) corrisponde all'anno corrente
+        # Usiamo zip per accoppiare ogni label (anno come stringa) al suo valore
+        filtered_data = [
+            value for label_str, value in zip(labels, source_data) 
+            if label_str != current_year_str
+        ]
+        
+        # Nota: questo codice ora gestisce correttamente anche labels che 
+        # non sono anni (es. "Gennaio"). "Gennaio" è diverso da "2024" (l'anno corrente),
+        # quindi i suoi dati verranno correttamente inclusi nella media.
+        
+        # 3. Calcola la media sui dati filtrati
+        if filtered_data:
+            result_value = sum(filtered_data) / len(filtered_data)
         else:
-            result_value = 0 # Evita divisione per zero
+            result_value = 0 # Evita divisione per zero (se source_data era vuoto o conteneva solo l'anno corrente)
+            
+        # --- FINE MODIFICA ---
+
     # Qui potrebbero essere aggiunte altre funzioni (SUM, etc.)
     
     # Crea il nuovo set di dati (es. una linea orizzontale per la media)
