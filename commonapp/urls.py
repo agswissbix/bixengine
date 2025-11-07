@@ -51,7 +51,7 @@ urlpatterns = [
     path('get_dashboard_data/', get_dashboard_data, name='get_dashboard_data'),
     path('script_add_golfclub/', script_add_golfclub, name='script_add_golfclub'),
     path('script_test/', script_test, name='script_test'),
-    path('sign_timesheet/', sign_timesheet, name='sign_timesheet'),
+    path('sign_timesheet/', print_timesheet, name='print_timesheet'),
     path('update_user_profile_pic/', update_user_profile_pic, name='update_user_profile_pic'),
     path('get_dashboard_blocks/', get_dashboard_blocks, name='get_dashboard_blocks'),
     path('save_dashboard_disposition/', save_dashboard_disposition, name='save_dashboard_disposition'),
@@ -80,6 +80,7 @@ urlpatterns = [
     path('get_calendar_data/', get_calendar_data, name='get_calendar_data'),
     path('save_calendar_event/', save_calendar_event, name='save_calendar_event'),
     path('fieldsupdate/', fieldsupdate, name='fieldsupdate'),
+    path('save_signature/', save_signature, name='save_signature'),
     
     
      # ------------------  Settings views --------------------------------- 

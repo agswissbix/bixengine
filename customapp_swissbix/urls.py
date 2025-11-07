@@ -36,7 +36,7 @@ urlpatterns = [
     path('get_system_assurance_activemind/', get_system_assurance_activemind, name='get_system_assurance_activemind'),
     path('print_timesheet/', print_timesheet, name='print_timesheet'),
     path('sync_graph_calendar/', sync_graph_calendar, name='sync_graph_calendar'),
-    
+    path('sync_tables/', sync_tables, name='sync_tables'),
     
     
     
