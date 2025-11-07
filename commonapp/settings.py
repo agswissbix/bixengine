@@ -1019,6 +1019,7 @@ def settings_table_steps(request):
             step_links_items.sort(key=lambda x: (x["order"] is None, x["order"] or 9999))
             step_data["items"] = step_links_items
 
+
         steps_data.append(step_data)
 
     # 🔸 Aggiungi campi non assegnati all’ultimo step campi
