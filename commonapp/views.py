@@ -5243,7 +5243,6 @@ def get_dashboard_blocks(request):
                     block['gsh'] = data['gsh']
                     block['viewid'] = results['viewid']
                     block['widgetid'] = results['widgetid']
-                    block_category=results['category']
                     # if they are null set default values
                     if block['gsw'] == None or block['gsw'] == '':
                         block['gsw'] = 3
@@ -5274,56 +5273,16 @@ def get_dashboard_blocks(request):
                             block['html'] = 'test'
 
                     else:
-                        chart= HelpderDB.sql_query_row(f"SELECT * FROM sys_chart WHERE id='{results['chartid']}'")
-                        chart_name=chart['name']
-                        chart_layout=chart['layout']
-                        chart_config=chart['config']
-                        chart_config = json.loads(chart_config)
-                        selected = ''
-
-                        viewid = results['viewid']
-                        view= HelpderDB.sql_query_row(f"SELECT * FROM sys_view WHERE id='{viewid}'")
-                        query_conditions = view['query_conditions']
-                        query_conditions = query_conditions.replace("$userid$", str(userid))
-                        #TODO custom wegolf. abilitare queste condizioni e gestire recordid in modo che sia dinamico dal frontend sia in bixdata che wegolf
-                        if cliente_id == 'wegolf':
-                            if block_category != 'benchmark':
-                                recordid_golfclub=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_golfclub WHERE utente='{userid}'","recordid_")
-                                query_conditions = query_conditions+" AND recordidgolfclub_='{recordid_golfclub}'".format(recordid_golfclub=recordid_golfclub)
-
-                            if block_category == 'benchmark':
-                                if selected_clubs:
-                                    if len(selected_clubs)>0:
-                                        selected_clubs_conditions = ''
-                                        for selected_club in selected_clubs:
-                                            if selected_clubs_conditions != '':
-                                                selected_clubs_conditions = selected_clubs_conditions + " OR "
-                                            selected_clubs_conditions = selected_clubs_conditions + "  recordidgolfclub_='{selected_club}'".format(selected_club=selected_club)
-                                        if selected_clubs_conditions != '':
-                                            query_conditions = query_conditions + " AND (" + selected_clubs_conditions + ")"
-
-                            if selected_years:
-                                selected_years_conditions = ''
-                                for selected_year in selected_years:
-                                    if selected_years_conditions != '':
-                                        selected_years_conditions = selected_years_conditions + " OR "
-                                    selected_years_conditions = selected_years_conditions + "  anno='{selected_year}'".format(selected_year=selected_year)
-                                if selected_years_conditions != '':
-                                    selected_years_conditions = " AND (" + selected_years_conditions + ")"
-                                query_conditions = query_conditions + selected_years_conditions
-
-
-
-                        chart_data=get_dynamic_chart_data(request, results['chartid'],query_conditions)
-                        if 'datasets' in chart_data and len(chart_data['datasets'])>0:
-                            chart_data['datasets'][0]['view'] = viewid
-
-                        chart_data_json=json.dumps(chart_data, default=json_date_handler)
-
-                        
-                        block['chart_data'] = chart_data_json
-                        block['name'] = chart_name
-                        block['type'] = chart_layout.lower() if chart_layout is not None else 'value'
+                        chart_info = build_chart_data(
+                            request,
+                            results['chartid'],
+                            results['viewid'],
+                            filters,
+                            block_category=results.get('category', '')
+                        )
+                        block['chart_data'] = chart_info['chart_data']
+                        block['name'] = chart_info['name']
+                        block['type'] = chart_info['type']
 
                     block['width'] = width
                     block['height'] = height
@@ -5336,51 +5295,117 @@ def get_dashboard_blocks(request):
 
 @login_required(login_url='/login/')
 def get_chart_data(request):
-    request_data = json.loads(request.body)
-    chart_id = request_data.get("chart_id")
-    viewid = request_data.get('viewid', '')
-    userid = Helper.get_userid(request)
-
-    if not chart_id:
-        return JsonResponse({"error": "chart_id is required"}, status=400)
-
     try:
-        chart = HelpderDB.sql_query_row(
-            f"SELECT * FROM sys_chart WHERE id='{chart_id}'"
-        )
+        request_data = json.loads(request.body)
+        chart_id = request_data.get("chart_id")
+        viewid = request_data.get("viewid", "")
+        filters = request_data.get("filters", None)
 
-        if not chart:
-            return JsonResponse({"error": "Chart not found"}, status=404)
+        if not chart_id:
+            return JsonResponse({"error": "chart_id is required"}, status=400)
 
-        # Recupero config e layout
-        chart_name = chart["name"]
-        chart_layout = chart["layout"]
-        chart_config = chart["config"]
-        if isinstance(chart_config, str):
-            chart_config = json.loads(chart_config)
-
-        # Eseguo query dinamica in base al chart
-        query_conditions = ""
-        if viewid:
-            view = HelpderDB.sql_query_row(f"SELECT * FROM sys_view WHERE id='{viewid}'")
-            query_conditions = view["query_conditions"].replace("$userid$", str(userid))
-
-        chart_data = get_dynamic_chart_data(request, chart_id, query_conditions)
-        if 'datasets' in chart_data and len(chart_data['datasets']) > 0:
-            chart_data['datasets'][0]['view'] = viewid
-        chart_data_json = json.dumps(chart_data, default=json_date_handler)
-
-
-        return JsonResponse({
-            "id": chart_id,
-            "name": chart_name,
-            "type": chart_layout.lower() if chart_layout else "value",
-            "chart_data": chart_data_json,
-            "config": chart_config,
-        })
+        chart_info = build_chart_data(request, chart_id, viewid, filters)
+        return JsonResponse(chart_info)
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
+
+def build_chart_data(request, chart_id, viewid=None, filters=None, block_category=None):
+    """
+    Costruisce e restituisce i dati completi di un grafico (chart_data + meta),
+    con gestione filtri e logica custom per cliente 'wegolf'.
+
+    Parametri:
+      - chart_id: id del chart (obbligatorio)
+      - viewid: id della sys_view collegata (opzionale; serve per query_conditions)
+      - filters: dict opzionale con chiavi: selectedClubs, selectedYears, showAllClubs
+      - block_category: categoria del blocco letta da sys_dashboard_block; se non fornita,
+                        viene ricavata (fallback) interrogando sys_dashboard_block per chart_id.
+    """
+    userid = Helper.get_userid(request)
+    cliente_id = Helper.get_cliente_id()
+
+    # 1) Chart record
+    chart = HelpderDB.sql_query_row(f"SELECT * FROM sys_chart WHERE id='{chart_id}'")
+    if not chart:
+        raise ValueError(f"Chart with id {chart_id} not found")
+
+    chart_name = chart["name"]
+    chart_layout = chart["layout"]
+    chart_config = chart["config"]
+    if isinstance(chart_config, str):
+        chart_config = json.loads(chart_config)
+
+    # 2) Ricavo (o uso) la block_category dalla sys_dashboard_block
+    if block_category is None:
+        # NB: se esistono più blocchi che puntano allo stesso chart_id con categorie diverse,
+        # qui si prende la prima occorrenza. Se vuoi essere più preciso, passa block_category esplicitamente.
+        block_category = HelpderDB.sql_query_value(
+            f"SELECT category FROM sys_dashboard_block WHERE chartid='{chart_id}' LIMIT 1",
+            "category"
+        ) or ""
+
+    # 3) Costruzione query_conditions dalla view (se presente)
+    query_conditions = ""
+    if viewid:
+        view = HelpderDB.sql_query_row(f"SELECT * FROM sys_view WHERE id='{viewid}'")
+        if not view:
+            raise ValueError(f"View with id {viewid} not found")
+        query_conditions = (view.get("query_conditions") or "").replace("$userid$", str(userid))
+
+    # 4) Filtri (wegolf): selectedClubs / selectedYears / showAllClubs
+    if cliente_id == "wegolf":
+        selected_clubs = (filters or {}).get("selectedClubs", [])
+        selected_years = (filters or {}).get("selectedYears", [])
+
+        # Se NON è benchmark e NON è richiesto "tutti i club", limita al club dell'utente
+        if block_category != "benchmark":
+            recordid_golfclub = HelpderDB.sql_query_value(
+                f"SELECT recordid_ FROM user_golfclub WHERE utente='{userid}'",
+                "recordid_"
+            )
+            if recordid_golfclub:
+                if query_conditions:
+                    query_conditions += f" AND recordidgolfclub_='{recordid_golfclub}'"
+                else:
+                    query_conditions = f"recordidgolfclub_='{recordid_golfclub}'"
+
+        # Se è benchmark e sono stati scelti club specifici, filtra per quelli
+        if block_category == "benchmark" and selected_clubs:
+            clubs_conditions = " OR ".join(
+                [f"recordidgolfclub_='{club}'" for club in selected_clubs]
+            )
+            if clubs_conditions:
+                if query_conditions:
+                    query_conditions += f" AND ({clubs_conditions})"
+                else:
+                    query_conditions = f"({clubs_conditions})"
+
+        # Filtro anni (sempre applicabile se presente)
+        if selected_years:
+            years_conditions = " OR ".join([f"anno='{year}'" for year in selected_years])
+            if years_conditions:
+                if query_conditions:
+                    query_conditions += f" AND ({years_conditions})"
+                else:
+                    query_conditions = f"({years_conditions})"
+
+    # 5) Generazione dati dinamici
+    chart_data = get_dynamic_chart_data(request, chart_id, query_conditions or "1=1")
+    if "datasets" in chart_data and chart_data["datasets"]:
+        chart_data["datasets"][0]["view"] = viewid
+
+    chart_data_json = json.dumps(chart_data, default=json_date_handler)
+
+    # 6) Output finale
+    return {
+        "id": chart_id,
+        "name": chart_name,
+        "type": chart_layout.lower() if chart_layout else "value",
+        "chart_data": chart_data_json,
+        "config": chart_config,
+    }
 
 
 #TODO spostare in un helper e capire perchè è necessario reimportare qui il datetime o va in errore
@@ -5565,175 +5590,153 @@ def _perform_post_calculation(post_calc_def, all_db_datasets, labels):
     
     return {'label': post_calc_def['label'], 'data': calculated_data}
 
+
+# === COMMON HELPERS =========================================================
+
+def _get_chart_colors(chart_record):
+    """Ritorna i colori del grafico, default se mancano."""
+    colors = chart_record.get('colors')
+    if not colors:
+        colors = Helper.get_chart_colors()
+    return colors.split(',') if isinstance(colors, str) else colors
+
+
+def _safe_get_value(record, key):
+    """Converte in float in modo sicuro, restituendo 0 se fallisce."""
+    try:
+        return round(float(record.get(key, 0)), 2)
+    except (ValueError, TypeError):
+        return 0
+
+
+def _build_chart_context_base(chart_id, chart_record, labels, datasets, datasets2=None):
+    """Costruisce il contesto standard per un grafico."""
+    context = {
+        'id': chart_id,
+        'name': chart_record['name'],
+        'layout': chart_record['layout'],
+        'labels': labels,
+        'datasets': datasets
+    }
+    if datasets2:
+        context['datasets2'] = datasets2
+
+    context['colors'] = _get_chart_colors(chart_record)
+    return context
+
+
+# === SPECIFIC IMPLEMENTATIONS ==============================================
+
 def _handle_record_pivot_chart(config, chart_id, chart_record, query_conditions):
-    """
-    Gestisce la generazione di dati per grafici 'record_pivot'.
-    Ora supporta anche il calcolo di percentuali rispetto a un totale.
-    """
-    # --- PARTE 1: ESECUZIONE QUERY (INVARIATA) ---
-    select_clauses = []
-    # Recupera tutti gli alias e le label definite in pivot_fields
+    """Gestisce la generazione di dati per grafici 'record_pivot'."""
     pivot_fields_map = {item['alias']: item for item in config['pivot_fields']}
     aliases = list(pivot_fields_map.keys())
-    
+
+    # Costruzione query SELECT dinamica
+    select_clauses = []
+    agg_function = None
     if 'aggregation' in config:
-        agg_config = config['aggregation']
-        agg_function = agg_config.get('function', 'SUM').upper()
+        agg_function = config['aggregation'].get('function', 'SUM').upper()
         ALLOWED_FUNCTIONS = ['SUM', 'AVG', 'COUNT', 'MAX', 'MIN']
         if agg_function not in ALLOWED_FUNCTIONS:
             raise ValueError(f"Funzione di aggregazione non permessa: {agg_function}")
-        for item in config['pivot_fields']:
-            expression = item.get('field') or f"({item.get('expression')})"
-            select_clauses.append(f"{agg_function}({expression}) AS {item['alias']}")
-    else:
-        for item in config['pivot_fields']:
-            expression = item.get('field') or f"({item.get('expression')})"
-            select_clauses.append(f"{expression} AS {item['alias']}")
+
+    for item in config['pivot_fields']:
+        expr = item.get('field') or f"({item.get('expression')})"
+        if agg_function:
+            select_clauses.append(f"{agg_function}({expr}) AS {item['alias']}")
+        else:
+            select_clauses.append(f"{expr} AS {item['alias']}")
 
     from_table = f"user_{config['from_table']}"
-    query = (f"SELECT {', '.join(select_clauses)} FROM {from_table} WHERE {query_conditions}")
-    
-    # Per record_pivot, ci aspettiamo sempre un singolo risultato (aggregato o meno)
-    query += " LIMIT 1"
-    
+    query = f"SELECT {', '.join(select_clauses)} FROM {from_table} WHERE {query_conditions} LIMIT 1"
     record_data = HelpderDB.sql_query_row(query)
     dataset_label = config.get('dataset_label', 'Dati')
 
     if not record_data:
-        # Errore Dati del grafico non validi
         return {'id': chart_id, 'name': chart_record['name']}
 
-    # --- PARTE 2: ELABORAZIONE DATI (MODIFICATA) ---
+    # --- Costruzione dataset finale ---
+    final_labels, final_data = [], []
 
-    final_labels = []
-    final_data = []
-
+    # Calcolo breakdown (se presente)
     if 'total_breakdown' in config:
         pc_config = config['total_breakdown']
         total_alias = pc_config['total_field_alias']
-        
-        try:
-            total_value = float(record_data.get(total_alias, 0))
-        except (ValueError, TypeError):
-            total_value = 0
-
-        # Evita divisione per zero
+        total_value = _safe_get_value(record_data, total_alias)
         if total_value == 0:
-            # Se il totale è zero, tutte le percentuali sono zero
-            final_labels = [pivot_fields_map[alias]['label'] for alias in pc_config['part_field_aliases']]
+            final_labels = [pivot_fields_map[a]['label'] for a in pc_config['part_field_aliases']]
             if pc_config.get('include_remainder'):
                 final_labels.append(pc_config['remainder_label'])
             final_data = [0] * len(final_labels)
         else:
-            sum_of_parts = 0
-            # Calcola la percentuale per ogni "parte"
-            for part_alias in pc_config['part_field_aliases']:
-                try:
-                    part_value = float(record_data.get(part_alias, 0))
-                except (ValueError, TypeError):
-                    part_value = 0
-                
-                # Aggiunge l'etichetta e il dato percentuale
-                final_labels.append(pivot_fields_map[part_alias]['label'])
-                # --- MODIFICATO ---
-                # Aggiunge il valore effettivo invece della percentuale.
-                final_data.append(round(part_value, 2))
-                sum_of_parts += part_value
-            
-            # Calcola la parte rimanente, se richiesto
+            sum_parts = 0
+            for alias in pc_config['part_field_aliases']:
+                val = _safe_get_value(record_data, alias)
+                final_labels.append(pivot_fields_map[alias]['label'])
+                final_data.append(val)
+                sum_parts += val
+
             if pc_config.get('include_remainder', False):
-                remainder_value = total_value - sum_of_parts
-                # --- MODIFICATO ---
-                # Aggiunge il valore effettivo rimanente invece della percentuale.
+                remainder = total_value - sum_parts
                 final_labels.append(pc_config['remainder_label'])
-                final_data.append(round(remainder_value, 2))
-
-    # LOGICA ORIGINALE: Se non è configurato il calcolo percentuale
+                final_data.append(round(remainder, 2))
     else:
+        # Caso standard
         final_labels = [item['label'] for item in config['pivot_fields']]
-        for alias in aliases:
-            value = record_data.get(alias)
-            try:
-                final_data.append(round(float(value), 2) if value is not None else 0)
-            except (ValueError, TypeError):
-                final_data.append(0)
+        final_data = [_safe_get_value(record_data, a) for a in aliases]
 
-    # --- PARTE 3: COSTRUZIONE CONTESTO (INVARIATA) ---
     datasets = [{'label': dataset_label, 'data': final_data}]
-    context = {
-        'id': chart_id, 
-        'name': chart_record['name'], 
-        'layout': chart_record['layout'],
-        'labels': final_labels, 
-        'datasets': datasets
-    }
-
-    colors = chart_record['colors']
-    if not colors:
-        colors = Helper.get_chart_colors()
-    colors = colors.split(',') if isinstance(colors, str) else colors
-    context['colors'] = colors
-
-    return context
+    return _build_chart_context_base(chart_id, chart_record, final_labels, datasets)
 
 
 def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
-    """
-    Gestisce grafici di aggregazione, ora con supporto per post-calcoli in Python.
-    """
-    # 1. Separa le definizioni dei dataset: quelle da query e quelle da post-calcolo
-    all_dataset_defs = config.get('datasets', []) + config.get('datasets2', [])
-    
-    db_defs = [ds for ds in all_dataset_defs if 'expression' in ds]
-    post_calc_defs = [ds for ds in all_dataset_defs if 'post_calculation' in ds]
+    all_defs = config.get('datasets', []) + config.get('datasets2', [])
+    db_defs = [ds for ds in all_defs if 'expression' in ds]
+    post_calc_defs = [ds for ds in all_defs if 'post_calculation' in ds]
 
     db_aliases = [ds['alias'] for ds in db_defs]
     db_labels = [ds['label'] for ds in db_defs]
     select_clauses = [f"{ds['expression']} AS {ds['alias']}" for ds in db_defs]
 
-    # 2. Costruzione della Query (logica GROUP BY invariata)
     group_by_config = config['group_by_field']
     group_by_alias = group_by_config.get('alias', group_by_config['field'])
-    select_group_field, from_clause, group_by_clause = '', '', ''
-    granularity = group_by_config.get('date_granularity', None)
-    
-    # ... (la logica di lookup e non-lookup per la query rimane IDENTICA a prima)
-    if 'lookup' in group_by_config:
-        lookup_config = group_by_config['lookup']
-        main_table_alias, lookup_table_alias = 't1', 't2'
-        main_table = f"user_{config['from_table']}"
-        lookup_table = f"user_{lookup_config['from_table']}"
-        select_group_field = f"{lookup_table_alias}.{lookup_config['display_field']} AS {group_by_alias}"
-        from_clause = (f"FROM {main_table} AS {main_table_alias} "
-                       f"JOIN {lookup_table} AS {lookup_table_alias} "
-                       f"ON {main_table_alias}.{group_by_config['field']} = {lookup_table_alias}.{lookup_config['on_key']}")
-        group_by_clause = f"GROUP BY {lookup_table_alias}.{lookup_config['display_field']}"
+
+    main_table = f"user_{config['from_table']}"
+    has_lookup = 'lookup' in group_by_config
+    lookup_table = None
+
+    # ---- Branch LOOKUP (ripristinato) ----
+    if has_lookup:
+        lookup_cfg = group_by_config['lookup']
+        lookup_table = f"user_{lookup_cfg['from_table']}"
+        main_alias, lookup_alias = 't1', 't2'
+        # display_field è il campo "umano" da mostrare come label
+        select_group_field = f"{lookup_alias}.{lookup_cfg['display_field']} AS {group_by_alias}"
+        from_clause = (
+            f"FROM {main_table} AS {main_alias} "
+            f"JOIN {lookup_table} AS {lookup_alias} "
+            f"ON {main_alias}.{group_by_config['field']} = {lookup_alias}.{lookup_cfg['on_key']}"
+        )
+        group_by_clause = f"GROUP BY {lookup_alias}.{lookup_cfg['display_field']}"
+        # aliasing condizioni -> t1/t2
+        qc = _aliasize_conditions(query_conditions, main_table, True, lookup_table)
+
+    # ---- Branch NON-LOOKUP (come in origine, con tipi Data/Datetime ecc.) ---
     else:
-        main_table = f"user_{config['from_table']}"
-        tableid=config['from_table']
-        fieldid=group_by_config['field']
-        
-        
-
+        fieldid = group_by_config['field']
         try:
-            field_record = SysField.objects.get(
-            tableid=tableid,
-            fieldid=fieldid
-            )
+            field_record = SysField.objects.get(tableid=config['from_table'], fieldid=fieldid)
             field_type = field_record.fieldtypewebid
-
         except SysField.DoesNotExist:
-            print("Nessun record trovato.")
-        except SysField.MultipleObjectsReturned:
-            print("Trovati record multipli (questo non dovrebbe accadere se la combinazione è unica).")
-            
-        
-        if field_type == 'Utente':
-            select_group_field = f"CONCAT(sys_user.firstname,' ', sys_user.lastname) AS {group_by_alias}"
-            from_clause = (f"FROM {main_table} AS t1 "
-                       f"JOIN sys_user "
-                       f"ON t1.{group_by_config['field']} = sys_user.id")  
-        elif field_type in ('Data', 'Datetime', 'Timestamp') and granularity:
+            field_type = None
+
+        select_group_field = f"t1.{fieldid} AS {group_by_alias}"
+        from_clause = f"FROM {main_table} AS t1"
+        group_by_clause = f"GROUP BY t1.{fieldid}"
+
+        granularity = group_by_config.get('date_granularity')
+        if field_type in ('Data', 'Datetime', 'Timestamp') and granularity:
             if granularity == 'day':
                 expr = f"DATE(t1.{fieldid})"
             elif granularity == 'month':
@@ -5741,148 +5744,136 @@ def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
             elif granularity == 'year':
                 expr = f"YEAR(t1.{fieldid})"
             else:
-                expr = f"t1.{fieldid}"  # fallback
-
+                expr = f"t1.{fieldid}"
             select_group_field = f"{expr} AS {group_by_alias}"
-            from_clause = f"FROM {main_table} as t1"
             group_by_clause = f"GROUP BY {expr}"
-        else: 
-            select_group_field = f"t1.{group_by_config['field']} AS {group_by_alias}"
-            from_clause = f"FROM {main_table} as t1"
-        
-        if not group_by_clause:
-            group_by_clause = f"GROUP BY t1.{group_by_config['field']}"
-    
 
+        # aliasing condizioni -> t1
+        qc = _aliasize_conditions(query_conditions, main_table, False, None)
 
+    # composizione SELECT
+    if select_clauses:
+        query_select = f"{select_group_field}, {', '.join(select_clauses)}"
+    else:
+        query_select = select_group_field
 
-    query_select_part = f"{select_group_field}, {', '.join(select_clauses)}" if select_clauses else select_group_field
-    query_conditions = query_conditions.replace(main_table, "t1")  # Sanitize quotes
-    query = (f"SELECT {query_select_part} "
-             f"{from_clause} "
-             f"WHERE {query_conditions} AND t1.deleted_='N' "
-             f"{group_by_clause}")
+    query = (
+        f"SELECT {query_select} "
+        f"{from_clause} "
+        f"WHERE {qc} AND t1.deleted_='N' "
+        f"{group_by_clause}"
+    )
     if 'order_by' in config:
         query += f" ORDER BY {config['order_by']}"
 
-    # 3. Esecuzione della Query e Formattazione Dati
     dictrows = HelpderDB.sql_query(query)
-    
     if not dictrows:
-        # Errore Dati del grafico non validi
         return {'id': chart_id, 'name': chart_record['name']}
 
     labels = [row[group_by_alias] for row in dictrows]
-    
     all_db_datasets = _format_datasets_from_rows(db_aliases, db_labels, dictrows)
     for i, ds in enumerate(all_db_datasets):
         ds['original_alias'] = db_aliases[i]
 
-    # 4. Esegui Post-Calcoli
     all_post_calc_datasets = []
     for pc_def in post_calc_defs:
-        calculated_ds = _perform_post_calculation(pc_def, all_db_datasets, labels)
-        if calculated_ds:
-            all_post_calc_datasets.append(calculated_ds)
+        r = _perform_post_calculation(pc_def, all_db_datasets, labels)
+        if r:
+            all_post_calc_datasets.append(r)
 
-    # =========================================================================
-    # 5. NUOVA LOGICA DI ASSEMBLAGGIO DEI DATASET (Corretta)
-    # =========================================================================
-    
-    # Creiamo una mappa dei dati già pronti per un facile accesso
-    processed_db_map = {ds.pop('original_alias'): ds for ds in all_db_datasets}
-    processed_pc_map = {ds['label']: ds for ds in all_post_calc_datasets}
+    # Attenzione: NON poppare se la stessa alias serve a datasets e datasets2
+    db_map = {ds['original_alias']: {k: v for k, v in ds.items() if k != 'original_alias'} for ds in all_db_datasets}
+    pc_map = {ds['label']: ds for ds in all_post_calc_datasets}
 
-    final_datasets1 = []
-    for d_def in config.get('datasets', []):
-        if 'expression' in d_def:
-            # È un dataset dal DB, lo cerchiamo tramite il suo alias
-            if d_def['alias'] in processed_db_map:
-                final_datasets1.append(processed_db_map[d_def['alias']])
-        elif 'post_calculation' in d_def:
-            # È un post-calcolo, lo cerchiamo tramite il suo label
-            if d_def['label'] in processed_pc_map:
-                final_datasets1.append(processed_pc_map[d_def['label']])
+    def _resolve(defs):
+        out = []
+        for d in defs or []:
+            if 'expression' in d and d['alias'] in db_map:
+                out.append(db_map[d['alias']])
+            elif 'post_calculation' in d and d['label'] in pc_map:
+                out.append(pc_map[d['label']])
+        return out
 
-    final_datasets2 = []
-    for d_def in config.get('datasets2', []):
-        if 'expression' in d_def:
-            if d_def['alias'] in processed_db_map:
-                final_datasets2.append(processed_db_map[d_def['alias']])
-        elif 'post_calculation' in d_def:
-            if d_def['label'] in processed_pc_map:
-                final_datasets2.append(processed_pc_map[d_def['label']])
+    final_datasets1 = _resolve(config.get('datasets'))
+    final_datasets2 = _resolve(config.get('datasets2'))
 
-    # Logica per l'immagine invariata
+    # extra metadata invariati
     if chart_record['layout'] == 'value':
         icon = HelpderDB.sql_query_value(f"SELECT icon FROM user_chart WHERE report_id={chart_id} LIMIT 1", "icon")
-        if icon:
-            image_relativepath = icon
-            if final_datasets1:
-                final_datasets1[0]['image'] = image_relativepath
+        if icon and final_datasets1:
+            final_datasets1[0]['image'] = icon
 
-    if chart_record['layout'] == 'table':
+    if chart_record['layout'] in ('table', 'button') and final_datasets1:
         final_datasets1[0]['tableid'] = config['from_table']
-        final_datasets1[0]['view'] = chart_record.get('viewid', '')
+        if chart_record['layout'] == 'table':
+            final_datasets1[0]['view'] = chart_record.get('viewid', '')
+        elif chart_record['layout'] == 'button':
+            custom_func = SysCustomFunction.objects.filter(
+                id=chart_record['function_button']
+            ).values('tableid', 'context', 'title', 'function', 'conditions', 'params', 'css').first()
+            if custom_func:
+                for key in ['conditions', 'params']:
+                    if custom_func.get(key):
+                        try:
+                            custom_func[key] = json.loads(custom_func[key])
+                        except Exception:
+                            pass
+                final_datasets1[0]['fn'] = custom_func
 
-    if chart_record['layout'] == 'button':
-        final_datasets1[0]['tableid'] = config['from_table']
-        chart_record.get('function_button', None)
-        custom_func = SysCustomFunction.objects.filter(id=chart_record['function_button']).values(
-            'tableid', 'context', 'title', 'function', 'conditions', 'params', 'css'
-        ).first()
-        if custom_func:
-            for key in ['conditions', 'params']:
-                if custom_func.get(key):
-                    try:
-                        custom_func[key] = json.loads(custom_func[key])
-                    except Exception:
-                        pass  # lascialo com'è se non è JSON valido
-            final_datasets1[0]['fn'] = custom_func
+    return _build_chart_context_base(chart_id, chart_record, labels, final_datasets1, final_datasets2 or None)
 
-    # 6. Composizione del contesto finale
-    context = {
-        'id': chart_id, 
-        'name': chart_record['name'], 
-        'layout': chart_record['layout'],
-        'labels': labels, 
-        'datasets': final_datasets1
-    }
-    
-    if final_datasets2:
-        context['datasets2'] = final_datasets2
-        
-    colors = chart_record['colors']
-    if not colors:
-        colors = Helper.get_chart_colors()
-    colors = colors.split(',') if isinstance(colors, str) else colors
-    context['colors'] = colors
-    
-    return context
+# --- NEW: aliasing robusto delle condizioni --------------------------------
+import re
+
+def _aliasize_conditions(query_conditions, main_table, has_lookup=False, lookup_table=None):
+    """
+    Rimpiazza i prefissi di tabella nelle condizioni con gli alias t1/t2.
+    Gestisce sia `user_table`.`col` che user_table.col che `user_table` senza punti.
+    Non tocca i nomi di colonna non qualificati.
+    """
+    qc = query_conditions or ""
+
+    # pattern per main table
+    # cattura: `user_table`.  |  user_table.  |  `user_table`
+    patterns_main = [
+        rf"`{re.escape(main_table)}`\.",  # `user_orders`.
+        rf"\b{re.escape(main_table)}\.",  # user_orders.
+        rf"`{re.escape(main_table)}`\b",  # `user_orders`
+    ]
+    for p in patterns_main:
+        qc = re.sub(p, lambda m: "t1." if m.group(0).endswith(".") else "t1", qc)
+
+    if has_lookup and lookup_table:
+        patterns_lookup = [
+            rf"`{re.escape(lookup_table)}`\.",
+            rf"\b{re.escape(lookup_table)}\.",
+            rf"`{re.escape(lookup_table)}`\b",
+        ]
+        for p in patterns_lookup:
+            qc = re.sub(p, lambda m: "t2." if m.group(0).endswith(".") else "t2", qc)
+
+    return qc
 
 
 def get_dynamic_chart_data(request, chart_id, query_conditions='1=1'):
-    """
-    Genera dinamicamente i dati per un grafico leggendo la sua configurazione 
-    JSON dal database.
-    """
-    # IMPORTANTE: Utilizzare SEMPRE query parametrizzate per prevenire SQL Injection.
-    query = f"SELECT * FROM sys_chart WHERE id={chart_id}"
-    chart_record = HelpderDB.sql_query_row(query)
-
+    """Genera dinamicamente i dati per un grafico leggendo la configurazione JSON dal database."""
+    chart_record = HelpderDB.sql_query_row(f"SELECT * FROM sys_chart WHERE id={chart_id}")
     if not chart_record:
         return {'error': 'Chart not found'}
 
     config = json.loads(chart_record['config'])
     chart_type = config.get('chart_type', 'aggregate')
 
-    if chart_type == 'record_pivot':
-        return _handle_record_pivot_chart(config, chart_id, chart_record, query_conditions)
-    else: # 'aggregate'
-        return _handle_aggregate_chart(config, chart_id, chart_record, query_conditions)
+    handlers = {
+        'record_pivot': _handle_record_pivot_chart,
+        'aggregate': _handle_aggregate_chart,
+    }
 
+    handler = handlers.get(chart_type)
+    if not handler:
+        return {'error': f'Unknown chart type: {chart_type}'}
 
-
+    return handler(config, chart_id, chart_record, query_conditions)
 
 
 
