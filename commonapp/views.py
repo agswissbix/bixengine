@@ -5243,7 +5243,6 @@ def get_dashboard_blocks(request):
                     block['gsh'] = data['gsh']
                     block['viewid'] = results['viewid']
                     block['widgetid'] = results['widgetid']
-                    block_category=results['category']
                     # if they are null set default values
                     if block['gsw'] == None or block['gsw'] == '':
                         block['gsw'] = 3
@@ -5274,7 +5273,13 @@ def get_dashboard_blocks(request):
                             block['html'] = 'test'
 
                     else:
-                        chart_info = build_chart_data(request, results['chartid'], results['viewid'], filters)
+                        chart_info = build_chart_data(
+                            request,
+                            results['chartid'],
+                            results['viewid'],
+                            filters,
+                            block_category=results.get('category', '')
+                        )
                         block['chart_data'] = chart_info['chart_data']
                         block['name'] = chart_info['name']
                         block['type'] = chart_info['type']
@@ -5305,12 +5310,23 @@ def get_chart_data(request):
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
 
-def build_chart_data(request, chart_id, viewid=None, filters=None):
-    """Costruisce e restituisce i dati del grafico (chart_data + meta)."""
+
+def build_chart_data(request, chart_id, viewid=None, filters=None, block_category=None):
+    """
+    Costruisce e restituisce i dati completi di un grafico (chart_data + meta),
+    con gestione filtri e logica custom per cliente 'wegolf'.
+
+    Parametri:
+      - chart_id: id del chart (obbligatorio)
+      - viewid: id della sys_view collegata (opzionale; serve per query_conditions)
+      - filters: dict opzionale con chiavi: selectedClubs, selectedYears, showAllClubs
+      - block_category: categoria del blocco letta da sys_dashboard_block; se non fornita,
+                        viene ricavata (fallback) interrogando sys_dashboard_block per chart_id.
+    """
     userid = Helper.get_userid(request)
     cliente_id = Helper.get_cliente_id()
 
-    # 1. Recupero dati del chart
+    # 1) Chart record
     chart = HelpderDB.sql_query_row(f"SELECT * FROM sys_chart WHERE id='{chart_id}'")
     if not chart:
         raise ValueError(f"Chart with id {chart_id} not found")
@@ -5321,45 +5337,68 @@ def build_chart_data(request, chart_id, viewid=None, filters=None):
     if isinstance(chart_config, str):
         chart_config = json.loads(chart_config)
 
-    # 2. Recupero e preparo condizioni query
+    # 2) Ricavo (o uso) la block_category dalla sys_dashboard_block
+    if block_category is None:
+        # NB: se esistono più blocchi che puntano allo stesso chart_id con categorie diverse,
+        # qui si prende la prima occorrenza. Se vuoi essere più preciso, passa block_category esplicitamente.
+        block_category = HelpderDB.sql_query_value(
+            f"SELECT category FROM sys_dashboard_block WHERE chartid='{chart_id}' LIMIT 1",
+            "category"
+        ) or ""
+
+    # 3) Costruzione query_conditions dalla view (se presente)
     query_conditions = ""
     if viewid:
         view = HelpderDB.sql_query_row(f"SELECT * FROM sys_view WHERE id='{viewid}'")
         if not view:
             raise ValueError(f"View with id {viewid} not found")
-        query_conditions = view["query_conditions"].replace("$userid$", str(userid))
+        query_conditions = (view.get("query_conditions") or "").replace("$userid$", str(userid))
 
-        # --- Custom "wegolf" filters ---
-        if cliente_id == "wegolf":
-            block_category = view.get("category", "")
-            selected_clubs = filters.get("selectedClubs", []) if filters else []
-            selected_years = filters.get("selectedYears", []) if filters else []
+    # 4) Filtri (wegolf): selectedClubs / selectedYears / showAllClubs
+    if cliente_id == "wegolf":
+        selected_clubs = (filters or {}).get("selectedClubs", [])
+        selected_years = (filters or {}).get("selectedYears", [])
 
-            if block_category != "benchmark":
-                recordid_golfclub = HelpderDB.sql_query_value(
-                    f"SELECT recordid_ FROM user_golfclub WHERE utente='{userid}'",
-                    "recordid_"
-                )
-                query_conditions += f" AND recordidgolfclub_='{recordid_golfclub}'"
+        # Se NON è benchmark e NON è richiesto "tutti i club", limita al club dell'utente
+        if block_category != "benchmark":
+            recordid_golfclub = HelpderDB.sql_query_value(
+                f"SELECT recordid_ FROM user_golfclub WHERE utente='{userid}'",
+                "recordid_"
+            )
+            if recordid_golfclub:
+                if query_conditions:
+                    query_conditions += f" AND recordidgolfclub_='{recordid_golfclub}'"
+                else:
+                    query_conditions = f"recordidgolfclub_='{recordid_golfclub}'"
 
-            if block_category == "benchmark" and selected_clubs:
-                conditions = " OR ".join(
-                    [f"recordidgolfclub_='{club}'" for club in selected_clubs]
-                )
-                query_conditions += f" AND ({conditions})"
+        # Se è benchmark e sono stati scelti club specifici, filtra per quelli
+        if block_category == "benchmark" and selected_clubs:
+            clubs_conditions = " OR ".join(
+                [f"recordidgolfclub_='{club}'" for club in selected_clubs]
+            )
+            if clubs_conditions:
+                if query_conditions:
+                    query_conditions += f" AND ({clubs_conditions})"
+                else:
+                    query_conditions = f"({clubs_conditions})"
 
-            if selected_years:
-                year_conditions = " OR ".join([f"anno='{y}'" for y in selected_years])
-                query_conditions += f" AND ({year_conditions})"
+        # Filtro anni (sempre applicabile se presente)
+        if selected_years:
+            years_conditions = " OR ".join([f"anno='{year}'" for year in selected_years])
+            if years_conditions:
+                if query_conditions:
+                    query_conditions += f" AND ({years_conditions})"
+                else:
+                    query_conditions = f"({years_conditions})"
 
-    # 3. Recupero dati dinamici
-    chart_data = get_dynamic_chart_data(request, chart_id, query_conditions)
-    if 'datasets' in chart_data and len(chart_data['datasets']) > 0:
-        chart_data['datasets'][0]['view'] = viewid
+    # 5) Generazione dati dinamici
+    chart_data = get_dynamic_chart_data(request, chart_id, query_conditions or "1=1")
+    if "datasets" in chart_data and chart_data["datasets"]:
+        chart_data["datasets"][0]["view"] = viewid
 
-    # 4. Serializzazione
     chart_data_json = json.dumps(chart_data, default=json_date_handler)
 
+    # 6) Output finale
     return {
         "id": chart_id,
         "name": chart_name,
@@ -5552,6 +5591,41 @@ def _perform_post_calculation(post_calc_def, all_db_datasets, labels):
     return {'label': post_calc_def['label'], 'data': calculated_data}
 
 
+# === COMMON HELPERS =========================================================
+
+def _get_chart_colors(chart_record):
+    """Ritorna i colori del grafico, default se mancano."""
+    colors = chart_record.get('colors')
+    if not colors:
+        colors = Helper.get_chart_colors()
+    return colors.split(',') if isinstance(colors, str) else colors
+
+
+def _safe_get_value(record, key):
+    """Converte in float in modo sicuro, restituendo 0 se fallisce."""
+    try:
+        return round(float(record.get(key, 0)), 2)
+    except (ValueError, TypeError):
+        return 0
+
+
+def _build_chart_context_base(chart_id, chart_record, labels, datasets, datasets2=None):
+    """Costruisce il contesto standard per un grafico."""
+    context = {
+        'id': chart_id,
+        'name': chart_record['name'],
+        'layout': chart_record['layout'],
+        'labels': labels,
+        'datasets': datasets
+    }
+    if datasets2:
+        context['datasets2'] = datasets2
+
+    context['colors'] = _get_chart_colors(chart_record)
+    return context
+
+
+# === SPECIFIC IMPLEMENTATIONS ==============================================
 
 def _handle_record_pivot_chart(config, chart_id, chart_record, query_conditions):
     """Gestisce la generazione di dati per grafici 'record_pivot'."""
@@ -5617,7 +5691,6 @@ def _handle_record_pivot_chart(config, chart_id, chart_record, query_conditions)
 
 
 def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
-    """Gestisce grafici di aggregazione, con supporto post-calcoli."""
     all_defs = config.get('datasets', []) + config.get('datasets2', [])
     db_defs = [ds for ds in all_defs if 'expression' in ds]
     post_calc_defs = [ds for ds in all_defs if 'post_calculation' in ds]
@@ -5626,43 +5699,72 @@ def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
     db_labels = [ds['label'] for ds in db_defs]
     select_clauses = [f"{ds['expression']} AS {ds['alias']}" for ds in db_defs]
 
-    # GROUP BY logic
     group_by_config = config['group_by_field']
     group_by_alias = group_by_config.get('alias', group_by_config['field'])
+
     main_table = f"user_{config['from_table']}"
-    fieldid = group_by_config['field']
+    has_lookup = 'lookup' in group_by_config
+    lookup_table = None
 
-    # Ricerca tipo campo
-    try:
-        field_record = SysField.objects.get(tableid=config['from_table'], fieldid=fieldid)
-        field_type = field_record.fieldtypewebid
-    except SysField.DoesNotExist:
-        field_type = None
+    # ---- Branch LOOKUP (ripristinato) ----
+    if has_lookup:
+        lookup_cfg = group_by_config['lookup']
+        lookup_table = f"user_{lookup_cfg['from_table']}"
+        main_alias, lookup_alias = 't1', 't2'
+        # display_field è il campo "umano" da mostrare come label
+        select_group_field = f"{lookup_alias}.{lookup_cfg['display_field']} AS {group_by_alias}"
+        from_clause = (
+            f"FROM {main_table} AS {main_alias} "
+            f"JOIN {lookup_table} AS {lookup_alias} "
+            f"ON {main_alias}.{group_by_config['field']} = {lookup_alias}.{lookup_cfg['on_key']}"
+        )
+        group_by_clause = f"GROUP BY {lookup_alias}.{lookup_cfg['display_field']}"
+        # aliasing condizioni -> t1/t2
+        qc = _aliasize_conditions(query_conditions, main_table, True, lookup_table)
 
-    # Prepara la query dinamica (semplificata ma compatibile)
-    select_group_field = f"t1.{fieldid} AS {group_by_alias}"
-    from_clause = f"FROM {main_table} AS t1"
-    group_by_clause = f"GROUP BY t1.{fieldid}"
+    # ---- Branch NON-LOOKUP (come in origine, con tipi Data/Datetime ecc.) ---
+    else:
+        fieldid = group_by_config['field']
+        try:
+            field_record = SysField.objects.get(tableid=config['from_table'], fieldid=fieldid)
+            field_type = field_record.fieldtypewebid
+        except SysField.DoesNotExist:
+            field_type = None
 
-    if field_type in ('Data', 'Datetime', 'Timestamp') and group_by_config.get('date_granularity'):
-        granularity = group_by_config['date_granularity']
-        if granularity == 'day':
-            expr = f"DATE(t1.{fieldid})"
-        elif granularity == 'month':
-            expr = f"DATE_FORMAT(t1.{fieldid}, '%Y-%m')"
-        elif granularity == 'year':
-            expr = f"YEAR(t1.{fieldid})"
-        else:
-            expr = f"t1.{fieldid}"
-        select_group_field = f"{expr} AS {group_by_alias}"
-        group_by_clause = f"GROUP BY {expr}"
+        select_group_field = f"t1.{fieldid} AS {group_by_alias}"
+        from_clause = f"FROM {main_table} AS t1"
+        group_by_clause = f"GROUP BY t1.{fieldid}"
 
-    query = f"""
-        SELECT {select_group_field}, {', '.join(select_clauses)}
-        {from_clause}
-        WHERE {query_conditions} AND t1.deleted_='N'
-        {group_by_clause}
-    """.strip()
+        granularity = group_by_config.get('date_granularity')
+        if field_type in ('Data', 'Datetime', 'Timestamp') and granularity:
+            if granularity == 'day':
+                expr = f"DATE(t1.{fieldid})"
+            elif granularity == 'month':
+                expr = f"DATE_FORMAT(t1.{fieldid}, '%Y-%m')"
+            elif granularity == 'year':
+                expr = f"YEAR(t1.{fieldid})"
+            else:
+                expr = f"t1.{fieldid}"
+            select_group_field = f"{expr} AS {group_by_alias}"
+            group_by_clause = f"GROUP BY {expr}"
+
+        # aliasing condizioni -> t1
+        qc = _aliasize_conditions(query_conditions, main_table, False, None)
+
+    # composizione SELECT
+    if select_clauses:
+        query_select = f"{select_group_field}, {', '.join(select_clauses)}"
+    else:
+        query_select = select_group_field
+
+    query = (
+        f"SELECT {query_select} "
+        f"{from_clause} "
+        f"WHERE {qc} AND t1.deleted_='N' "
+        f"{group_by_clause}"
+    )
+    if 'order_by' in config:
+        query += f" ORDER BY {config['order_by']}"
 
     dictrows = HelpderDB.sql_query(query)
     if not dictrows:
@@ -5675,26 +5777,27 @@ def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
 
     all_post_calc_datasets = []
     for pc_def in post_calc_defs:
-        result = _perform_post_calculation(pc_def, all_db_datasets, labels)
-        if result:
-            all_post_calc_datasets.append(result)
+        r = _perform_post_calculation(pc_def, all_db_datasets, labels)
+        if r:
+            all_post_calc_datasets.append(r)
 
-    # Costruzione finale dataset1 / dataset2 coerente
-    def _resolve_datasets(dataset_defs, db_map, pc_map):
+    # Attenzione: NON poppare se la stessa alias serve a datasets e datasets2
+    db_map = {ds['original_alias']: {k: v for k, v in ds.items() if k != 'original_alias'} for ds in all_db_datasets}
+    pc_map = {ds['label']: ds for ds in all_post_calc_datasets}
+
+    def _resolve(defs):
         out = []
-        for d in dataset_defs:
+        for d in defs or []:
             if 'expression' in d and d['alias'] in db_map:
                 out.append(db_map[d['alias']])
             elif 'post_calculation' in d and d['label'] in pc_map:
                 out.append(pc_map[d['label']])
         return out
 
-    db_map = {ds.pop('original_alias'): ds for ds in all_db_datasets}
-    pc_map = {ds['label']: ds for ds in all_post_calc_datasets}
-    final_datasets1 = _resolve_datasets(config.get('datasets', []), db_map, pc_map)
-    final_datasets2 = _resolve_datasets(config.get('datasets2', []), db_map, pc_map)
+    final_datasets1 = _resolve(config.get('datasets'))
+    final_datasets2 = _resolve(config.get('datasets2'))
 
-    # Extra metadata (button/table/value)
+    # extra metadata invariati
     if chart_record['layout'] == 'value':
         icon = HelpderDB.sql_query_value(f"SELECT icon FROM user_chart WHERE report_id={chart_id} LIMIT 1", "icon")
         if icon and final_datasets1:
@@ -5717,41 +5820,40 @@ def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
                             pass
                 final_datasets1[0]['fn'] = custom_func
 
-    return _build_chart_context_base(chart_id, chart_record, labels, final_datasets1, final_datasets2)
+    return _build_chart_context_base(chart_id, chart_record, labels, final_datasets1, final_datasets2 or None)
 
+# --- NEW: aliasing robusto delle condizioni --------------------------------
+import re
 
-# === COMMON HELPERS =========================================================
+def _aliasize_conditions(query_conditions, main_table, has_lookup=False, lookup_table=None):
+    """
+    Rimpiazza i prefissi di tabella nelle condizioni con gli alias t1/t2.
+    Gestisce sia `user_table`.`col` che user_table.col che `user_table` senza punti.
+    Non tocca i nomi di colonna non qualificati.
+    """
+    qc = query_conditions or ""
 
-def _get_chart_colors(chart_record):
-    """Ritorna i colori del grafico, default se mancano."""
-    colors = chart_record.get('colors')
-    if not colors:
-        colors = Helper.get_chart_colors()
-    return colors.split(',') if isinstance(colors, str) else colors
+    # pattern per main table
+    # cattura: `user_table`.  |  user_table.  |  `user_table`
+    patterns_main = [
+        rf"`{re.escape(main_table)}`\.",  # `user_orders`.
+        rf"\b{re.escape(main_table)}\.",  # user_orders.
+        rf"`{re.escape(main_table)}`\b",  # `user_orders`
+    ]
+    for p in patterns_main:
+        qc = re.sub(p, lambda m: "t1." if m.group(0).endswith(".") else "t1", qc)
 
+    if has_lookup and lookup_table:
+        patterns_lookup = [
+            rf"`{re.escape(lookup_table)}`\.",
+            rf"\b{re.escape(lookup_table)}\.",
+            rf"`{re.escape(lookup_table)}`\b",
+        ]
+        for p in patterns_lookup:
+            qc = re.sub(p, lambda m: "t2." if m.group(0).endswith(".") else "t2", qc)
 
-def _safe_get_value(record, key):
-    """Converte in float in modo sicuro, restituendo 0 se fallisce."""
-    try:
-        return round(float(record.get(key, 0)), 2)
-    except (ValueError, TypeError):
-        return 0
+    return qc
 
-
-def _build_chart_context_base(chart_id, chart_record, labels, datasets, datasets2=None):
-    """Costruisce il contesto standard per un grafico."""
-    context = {
-        'id': chart_id,
-        'name': chart_record['name'],
-        'layout': chart_record['layout'],
-        'labels': labels,
-        'datasets': datasets
-    }
-    if datasets2:
-        context['datasets2'] = datasets2
-
-    context['colors'] = _get_chart_colors(chart_record)
-    return context
 
 def get_dynamic_chart_data(request, chart_id, query_conditions='1=1'):
     """Genera dinamicamente i dati per un grafico leggendo la configurazione JSON dal database."""
@@ -5772,6 +5874,7 @@ def get_dynamic_chart_data(request, chart_id, query_conditions='1=1'):
         return {'error': f'Unknown chart type: {chart_type}'}
 
     return handler(config, chart_id, chart_record, query_conditions)
+
 
 
 def save_dashboard_disposition(request):
