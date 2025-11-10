@@ -3336,6 +3336,14 @@ def save_record_fields(request):
                 "order_by": f"{grouping} ASC",
             }
 
+            #TODO custom wegolf gestiredinamico
+            if grouping == 'recordidgolfclub_':
+                config_python['group_by_field']["lookup"] = {
+                    "on_key": "recordid_",
+                    "from_table": "golfclub",
+                    "display_field": "nome_club"
+                }
+
             # Date granularity
             if field_type and field_type.lower() in ("date", "datetime", "data"):
                 config_python["group_by_field"]["date_granularity"] = granularity
@@ -5200,7 +5208,7 @@ def get_dashboard_blocks(request):
                 datas = dbh.sql_query(sql)
 
                 # all_blocks = SysDashboardBlock.objects.all()
-                sql = "SELECT * FROM sys_dashboard_block WHERE dashboardid = {dashboard_id} ORDER BY name asc".format(
+                sql = "SELECT * FROM sys_dashboard_block WHERE dashboardid = {dashboard_id} ORDER BY id desc".format(
                     dashboard_id=dashboard_id
                 )
                 all_blocks = dbh.sql_query(sql)
@@ -5790,9 +5798,9 @@ def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
 
     # Logica per l'immagine invariata
     if chart_record['layout'] == 'value':
-        chart_recordid = HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_chart WHERE reportid={chart_id} LIMIT 1", "recordid_")
+        chart_recordid = HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_chart WHERE report_id={chart_id} LIMIT 1", "recordid_")
         if chart_recordid:
-            image_relativepath = f"chart/{chart_recordid}/icona.png"
+            image_relativepath = f"chart/{chart_recordid}/icon.png"
             if final_datasets1:
                 final_datasets1[0]['image'] = image_relativepath
 
@@ -6708,6 +6716,7 @@ def get_benchmark_filters(request):
     response_data = {
             'filterOptions': [
                 {'field': 'nr_totale_soci', 'label': 'Totale soci'},
+                {'field': 'altro_test', 'label': 'Altro test'}
             ],
             'availableClubs': clubs
         }
