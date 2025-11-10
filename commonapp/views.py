@@ -2810,6 +2810,115 @@ def insert_domains_test(request):
     })
 
 
+
+
+def _save_record_data(tableid, recordid=None, fields=None, files=None):
+    """
+    Funzione di utilità condivisa per creare o aggiornare un record.
+    - tableid: stringa (obbligatoria)
+    - recordid: id del record esistente o None per crearne uno nuovo
+    - fields: dizionario dei campi {fieldid: value}
+    - files: dict di file caricati (es. da request.FILES)
+    """
+    def normalize_value(value):
+        if value == '' or value == 'null' or len(str(value).strip()) == 0:
+            return None
+        return value
+
+    record = UserRecord(tableid, recordid)
+
+    # 1️⃣ Assegna i campi
+    if fields:
+        for fieldid, value in fields.items():
+            record.values[fieldid] = normalize_value(value)
+
+    # 2️⃣ Salva i file (se presenti)
+    if files:
+        for file_key, uploaded_file in files.items():
+            if file_key.startswith('files[') and file_key.endswith(']'):
+                clean_key = file_key[6:-1]
+            else:
+                clean_key = file_key
+
+            _, ext = os.path.splitext(uploaded_file.name)
+            record_path = f"{tableid}/{record.recordid}/{clean_key}{ext}"
+            file_path = os.path.join(tableid, record.recordid, f"{clean_key}{ext}")
+
+            # Rimuovi file esistente se c’è
+            if default_storage.exists(file_path):
+                default_storage.delete(file_path)
+
+            saved_path = default_storage.save(file_path, uploaded_file)
+
+            # 🔁 Copia in backup
+            try:
+                full_path = default_storage.path(saved_path)
+                backup_base = env('BACKUP_DIR')
+                backup_path = os.path.join(backup_base, tableid, record.recordid, f"{clean_key}{ext}")
+                os.makedirs(os.path.dirname(backup_path), exist_ok=True)
+                if os.path.exists(full_path):
+                    shutil.copy2(full_path, backup_path)
+            except Exception as e:
+                print(f"Errore backup file {clean_key}: {e}")
+
+            record.values[clean_key] = record_path
+
+    record.save()
+    return record
+
+@csrf_exempt
+def duplicate_record(request):
+    data = json.loads(request.body)
+    source_recordid = data.get('recordid')
+    tableid = data.get('tableid')
+
+    if not source_recordid or not tableid:
+        return JsonResponse({'error': 'Missing recordid or tableid'}, status=400)
+
+    # 1️⃣ Recupera il record sorgente
+    source_record = UserRecord(tableid, source_recordid)
+    if not source_record.recordid:
+        return JsonResponse({'error': 'Record not found'}, status=404)
+
+    excluded_fields = {
+        'recordid_', 'creatorid_', 'creation_', 'lastupdaterid_', 'lastupdate_',
+        'totpages_', 'firstpagefilename_', 'recordstatus_', 'deleted_',
+    }
+
+    fields_copy = {
+        k: v for k, v in source_record.values.items()
+        if k not in excluded_fields
+    }
+
+
+    fields_copy.update({"id": None})
+
+    # 3️⃣ Copia eventuali file fisici
+    files_to_copy = {}
+    for fieldid, value in source_record.values.items():
+        if isinstance(value, str) and '/' in value:
+            try:
+                old_path = default_storage.path(value)
+                if os.path.exists(old_path):
+                    _, ext = os.path.splitext(old_path)
+                    with open(old_path, 'rb') as f:
+                        files_to_copy[fieldid] = ContentFile(f.read(), name=f"{fieldid}{ext}")
+            except Exception as e:
+                print(f"Errore copia file {fieldid}: {e}")
+
+    # 4️⃣ Salva nuovo record usando la funzione condivisa
+    new_record = _save_record_data(
+        tableid=tableid,
+        recordid='',          # nuovo record
+        fields=fields_copy,
+        files=files_to_copy
+    )
+
+    return JsonResponse({
+        'success': True,
+        'new_recordid': new_record.recordid
+    })
+
 @csrf_exempt
 def save_record_fields(request):
     recordid = request.POST.get('recordid')
@@ -2837,74 +2946,73 @@ def save_record_fields(request):
     if not tableid:
         return JsonResponse({'error': 'Missing tableid'}, status=400)
 
-    def normalize_value(value):
-        if value == '' or value == 'null' or len(str(value).strip()) == 0:
-            return None
-        return value
+    uploaded_files = request.FILES if request.FILES else None
 
-    record = UserRecord(tableid, recordid)
-    for saved_fieldid, saved_value in saved_fields_dict.items():
-        record.values[saved_fieldid] = normalize_value(saved_value)
-
-    record.save()
+    # 4️⃣ Chiama la funzione comune
+    record = _save_record_data(
+        tableid=tableid,
+        recordid=recordid,
+        fields=saved_fields_dict,
+        files=uploaded_files
+    )
     recordid = record.recordid
 
-    for file_key, uploaded_file in request.FILES.items():
-        if file_key.startswith('files[') and file_key.endswith(']'):
-            clean_key = file_key[6:-1]
-        else:
-            clean_key = file_key
+    # for file_key, uploaded_file in request.FILES.items():
+    #     if file_key.startswith('files[') and file_key.endswith(']'):
+    #         clean_key = file_key[6:-1]
+    #     else:
+    #         clean_key = file_key
 
-        _, ext = os.path.splitext(uploaded_file.name)
-        record_path = f"{tableid}/{recordid}/{clean_key}{ext}"
-        file_path = os.path.join(tableid, recordid, f"{clean_key}{ext}")
+    #     _, ext = os.path.splitext(uploaded_file.name)
+    #     record_path = f"{tableid}/{recordid}/{clean_key}{ext}"
+    #     file_path = os.path.join(tableid, recordid, f"{clean_key}{ext}")
 
-        if tableid =='attachment':
-            original_filename = uploaded_file.name
-            record.values['filename'] = original_filename
-            record.save()
-            #record_path = f"{tableid}/{recordid}/{original_filename}"
-            #file_path = os.path.join(tableid, recordid, original_filename)
+    #     if tableid =='attachment':
+    #         original_filename = uploaded_file.name
+    #         record.values['filename'] = original_filename
+    #         record.save()
+    #         #record_path = f"{tableid}/{recordid}/{original_filename}"
+    #         #file_path = os.path.join(tableid, recordid, original_filename)
 
             
 
 
-        # Salvataggio tramite default_storage (usa MEDIA_ROOT)
-        if default_storage.exists(file_path):
-            default_storage.delete(file_path)
+    #     # Salvataggio tramite default_storage (usa MEDIA_ROOT)
+    #     if default_storage.exists(file_path):
+    #         default_storage.delete(file_path)
 
-        saved_path = default_storage.save(file_path, uploaded_file)
+    #     saved_path = default_storage.save(file_path, uploaded_file)
 
-        # Salva il file anche in una path di backup che viene presa dal file env
-        try:
-            full_path = default_storage.path(saved_path)
+    #     # Salva il file anche in una path di backup che viene presa dal file env
+    #     try:
+    #         full_path = default_storage.path(saved_path)
 
-            # Usa os.path.join per evitare errori di slash
-            backup_base = env('BACKUP_DIR')
-            #crea la cartella con tableid e dentro recordid e salva il file con il fieldid come nel salvataggio normale, ma nella cartella di backup, presa dall'env
-            backup_path = os.path.join(backup_base, tableid, recordid, f"{clean_key}{ext}")
+    #         # Usa os.path.join per evitare errori di slash
+    #         backup_base = env('BACKUP_DIR')
+    #         #crea la cartella con tableid e dentro recordid e salva il file con il fieldid come nel salvataggio normale, ma nella cartella di backup, presa dall'env
+    #         backup_path = os.path.join(backup_base, tableid, recordid, f"{clean_key}{ext}")
 
-            # Crea la cartella di backup se non esiste
-            os.makedirs(os.path.dirname(backup_path), exist_ok=True)
+    #         # Crea la cartella di backup se non esiste
+    #         os.makedirs(os.path.dirname(backup_path), exist_ok=True)
             
 
-            # Copia il file fisico nella cartella di backup
-            if os.path.exists(full_path):
-                shutil.copy2(full_path, backup_path)
-                print(f"🧾 Backup file salvato in: {backup_path}")
-            else:
-                print(f"File non trovato per backup: {full_path}")
+    #         # Copia il file fisico nella cartella di backup
+    #         if os.path.exists(full_path):
+    #             shutil.copy2(full_path, backup_path)
+    #             print(f"🧾 Backup file salvato in: {backup_path}")
+    #         else:
+    #             print(f"File non trovato per backup: {full_path}")
 
-        except Exception as e:
-            print(f"Errore nel salvataggio backup: {str(e)}")
-            full_path = os.path.join(settings.MEDIA_ROOT, saved_path)
+    #     except Exception as e:
+    #         print(f"Errore nel salvataggio backup: {str(e)}")
+    #         full_path = os.path.join(settings.MEDIA_ROOT, saved_path)
 
-        print(f"🧾 File salvato fisicamente in: {full_path}")
+    #     print(f"🧾 File salvato fisicamente in: {full_path}")
 
-        # Salva il percorso relativo nel record
-        record.values[clean_key] = record_path
+    #     # Salva il percorso relativo nel record
+    #     record.values[clean_key] = record_path
 
-    record.save()
+    # record.save()
 
     if tableid == 'task':
         event_exist = UserEvents.objects.filter(recordidtable=recordid, tableid='task').first()
