@@ -5308,6 +5308,12 @@ def get_dashboard_blocks(request):
                         chart_data=get_dynamic_chart_data(request, results['chartid'],query_conditions)
                         if 'datasets' in chart_data and len(chart_data['datasets'])>0:
                             chart_data['datasets'][0]['view'] = viewid
+                        
+                        # Colori per i grafici 
+                        # TODO: getire selezione colori
+                        colors = ["#2dad6e", "#007BFF", "#FFC107", "#17A2B8", "#DC3545", "#6C757D"]
+                        chart_data['colors']  = colors
+
                         chart_data_json=json.dumps(chart_data, default=json_date_handler)
 
                         
