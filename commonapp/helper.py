@@ -201,9 +201,11 @@ class Helper:
     @classmethod
     def get_chart_colors(cls):
         colors = [
-        "#4E79A7", "#F28E2B", "#E15759", "#76B7B2",
-        "#59A14F", "#EDC948", "#B07AA1", "#FF9DA7",
-        "#9C755F", "#BAB0AC"
+        "#4E79A7", "#3B5998", "#76B7B2", "#A8DADC",
+        "#59A14F", "#8CD17D", "#43A047", "#EDC948",
+        "#F28E2B", "#FFB96A", "#E15759", "#DAA520",
+        "#D67073", "#FF9DA7", "#B07AA1", "#9C755F",
+        "#5F5F5F", "#BAB0AC", "#000000", "#808080"
         ];
         return colors
     
