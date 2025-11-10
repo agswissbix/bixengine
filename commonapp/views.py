@@ -2838,7 +2838,7 @@ def save_record_fields(request):
         return JsonResponse({'error': 'Missing tableid'}, status=400)
 
     def normalize_value(value):
-        if value == '' or value == 'null':
+        if value == '' or value == 'null' or len(str(value).strip()) == 0:
             return None
         return value
 
@@ -5804,9 +5804,9 @@ def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
 
     # Logica per l'immagine invariata
     if chart_record['layout'] == 'value':
-        chart_recordid = HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_chart WHERE report_id={chart_id} LIMIT 1", "recordid_")
-        if chart_recordid:
-            image_relativepath = f"chart/{chart_recordid}/icon.png"
+        icon = HelpderDB.sql_query_value(f"SELECT icon FROM user_chart WHERE report_id={chart_id} LIMIT 1", "icon")
+        if icon:
+            image_relativepath = icon
             if final_datasets1:
                 final_datasets1[0]['image'] = image_relativepath
 
