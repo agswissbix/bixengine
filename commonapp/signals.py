@@ -3,7 +3,7 @@ from django.dispatch import receiver
 from django.utils import timezone
 
 
-DISABLE_SCRIPT = False
+DISABLE_SCRIPT = True
 
 FIELD_TYPE_MAPPING = {
     "chart": {

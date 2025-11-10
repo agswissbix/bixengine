@@ -199,6 +199,15 @@ class Helper:
         return cliente_id
     
     @classmethod
+    def get_chart_colors(cls):
+        colors = [
+        "#4E79A7", "#F28E2B", "#E15759", "#76B7B2",
+        "#59A14F", "#EDC948", "#B07AA1", "#FF9DA7",
+        "#9C755F", "#BAB0AC"
+        ];
+        return colors
+    
+    @classmethod
     def pivot_to_nested_array(cls,
         pivot_df: pd.DataFrame,
         include_key_in_leaf: bool = True

@@ -3154,6 +3154,8 @@ def save_record_fields(request):
         pivot_total_field = values.get("pivot_total_field")
         granularity = values.get("date_granularity", "day")
         func_button = values.get("function_button", None)
+        colors = values.get("colors", None)
+        category_dashboard = values.get("category_dashboard", None)
 
 
         # =======================
@@ -3354,12 +3356,12 @@ def save_record_fields(request):
         user = SysUser.objects.filter(id=userid).first()
         if chartid and chartid != "None":
             SysChart.objects.filter(id=chartid).update(
-                name=title, layout=layout, config=config_python, userid=user, function_button_id=func_button
+                name=title, layout=layout, config=config_python, userid=user,colors=colors, function_button_id=func_button
             )
             chart_obj = SysChart.objects.get(id=chartid)
         else:
             chart_obj = SysChart.objects.create(
-                name=title, layout=layout, config=config_python, userid=user, function_button_id=func_button
+                name=title, layout=layout, config=config_python, userid=user,colors=colors, function_button_id=func_button
             )
             chart_record.values["report_id"] = chart_obj.id
         chart_record.save()
@@ -3529,6 +3531,12 @@ def get_record_card_fields(request):
             for fn in customs_fn
         ]
 
+        colors = Helper.get_chart_colors()
+        colors_lookup = [
+            {"value": color, "label": color}
+            for color in colors
+        ]
+
         # Inseriamo i lookup nella response
         response["lookup"] = {
             "table": tables_lookup,
@@ -3536,6 +3544,7 @@ def get_record_card_fields(request):
             "views": views_lookup,
             "dashboards": dashboards_lookup,
             "functions": functions_lookup,
+            "colors": colors_lookup,
         }
 
     return JsonResponse(response)
@@ -5308,11 +5317,6 @@ def get_dashboard_blocks(request):
                         chart_data=get_dynamic_chart_data(request, results['chartid'],query_conditions)
                         if 'datasets' in chart_data and len(chart_data['datasets'])>0:
                             chart_data['datasets'][0]['view'] = viewid
-                        
-                        # Colori per i grafici 
-                        # TODO: getire selezione colori
-                        colors = ["#2dad6e", "#007BFF", "#FFC107", "#17A2B8", "#DC3545", "#6C757D"]
-                        chart_data['colors']  = colors
 
                         chart_data_json=json.dumps(chart_data, default=json_date_handler)
 
@@ -5663,6 +5667,13 @@ def _handle_record_pivot_chart(config, chart_id, chart_record, query_conditions)
         'labels': final_labels, 
         'datasets': datasets
     }
+
+    colors = chart_record['colors']
+    if not colors:
+        colors = Helper.get_chart_colors()
+    colors = colors.split(',') if isinstance(colors, str) else colors
+    context['colors'] = colors
+
     return context
 
 
@@ -5841,6 +5852,12 @@ def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
     if final_datasets2:
         context['datasets2'] = final_datasets2
         
+    colors = chart_record['colors']
+    if not colors:
+        colors = Helper.get_chart_colors()
+    colors = colors.split(',') if isinstance(colors, str) else colors
+    context['colors'] = colors
+    
     return context
 
 

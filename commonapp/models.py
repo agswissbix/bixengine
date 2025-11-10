@@ -751,6 +751,7 @@ class SysChart(models.Model):
     )
     layout = models.CharField(max_length=100)
     config = models.JSONField()
+    colors = models.CharField(max_length=255, blank=True, null=True)
     function_button = models.ForeignKey('SysCustomFunction', models.DO_NOTHING, db_column='function_button', blank=True, null=True)
 
     class Meta:
@@ -888,9 +889,11 @@ class UserChart(BaseUserTable):
     report_id = models.CharField(max_length=255, null=True, blank=True)
     table_name = models.CharField(max_length=255, null=True, blank=True)
     dashboards = models.CharField(max_length=255, null=True, blank=True)
+    category_dashboard = models.CharField(max_length=255, null=True, blank=True)
     views = models.CharField(max_length=255, null=True, blank=True)
     date_granularity = models.CharField(max_length=255, null=True, blank=True)
     function_button = models.ForeignKey('SysCustomFunction', models.DO_NOTHING, db_column='function_button', null=True, blank=True)
+    colors = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
         db_table = 'user_chart'
