@@ -670,7 +670,11 @@ def sync_bexio_contacts(request):
     return JsonResponse(response, safe=False)
 
 def sync_bexio_orders(request):
-    url = "https://api.bexio.com/2.0/kb_order/search/?order_by=id_desc&limit=10&offset=0"
+    sql="DELETE FROM user_bexio_orders"
+    HelpderDB.sql_execute(sql)
+    sql="DELETE FROM user_bexio_positions"
+    HelpderDB.sql_execute(sql)
+    url = "https://api.bexio.com/2.0/kb_order/search/?order_by=id_desc&limit=2000&offset=0"
     accesstoken=os.environ.get('BEXIO_ACCESSTOKEN')
     headers = {
         'Accept': "application/json",
@@ -691,7 +695,15 @@ def sync_bexio_orders(request):
     response = requests.request("POST", url, data=payload, headers=headers)
     response = json.loads(response.text)
 
+    counter = 0
+    total_orders = len(response)  # Calcola il numero totale di ordini da elaborare
+
     for order in response:
+        counter += 1
+        
+        # Stampa l'avanzamento (Esempio: "Elaborazione ordine 5 di 20: Titolo - Nome Ordine")
+        print(f"Elaborazione ordine {counter} di {total_orders}: Titolo - {order['title']} Bexio id: {order['id']}")
+        
         field = HelpderDB.sql_query_row(f"select * from user_bexio_orders WHERE bexio_id='{order['id']}'")
         if not field:
             record = UserRecord("bexio_orders")
@@ -715,8 +727,9 @@ def sync_bexio_orders(request):
         record.values['is_recurring'] = order['is_recurring']
 
         order_taxs = order['taxs']
-        record.values['taxs_percentage'] = order_taxs[0]['percentage']
-        record.values['taxs_value'] = order_taxs[0]['value']
+        #if order_taxs and len(order_taxs) > 0:
+        #   record.values['taxs_percentage'] = order_taxs[0]['percentage']
+        #  record.values['taxs_value'] = order_taxs[0]['value']
 
         record.save()
 
@@ -742,6 +755,7 @@ def sync_bexio_positions(request,bexiotable,bexioid):
     response = json.loads(response.text)
 
     for position in response:
+        print(f"Elaborazione riga ordine con bexioid:{bexioid}: {position['text']}")
         field = HelpderDB.sql_query_row(f"select * from user_bexio_positions WHERE bexio_id='{position['id']}'")
         if not field:
             record = UserRecord("bexio_positions")
@@ -816,6 +830,8 @@ def sync_bexio_invoices(request):
 
 
     return JsonResponse(response, safe=False)
+
+
 
 # DO NOT EXECUTE
 def syncdata(request,tableid):
@@ -990,3 +1006,13 @@ def sync_tables(request):
         return JsonResponse(data, safe=False)
     except requests.RequestException as e:  
         return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
+
+def sync_salesorders(request):
+    print("sync_salesorders")
+    sql="UPDATE user_salesorder SET status='Complete'"
+    HelpderDB.sql_execute(sql)
+    #esecuzione sync_tables
+    sql="UPDATE user_salesorder JOIN user_bexio_orders ON user_salesorder.id_bexio=user_bexio_orders.bexio_id SET user_salesorder.status='In Progress'"
+    HelpderDB.sql_execute(sql)
+    
+    return JsonResponse({"status": "completed"}, safe=False)
