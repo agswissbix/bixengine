@@ -6827,18 +6827,17 @@ def save_calendar_event(request):
 
 #TODO spostare sotto customapp_wegolf
 def get_benchmark_filters(request):
-    data = json.loads(request.body)
-    userid = Helper.get_userid(request)
-
     golfclub_table=UserTable('golfclub')
     golfclubs=golfclub_table.get_records(conditions_list=[])
     clubs=[]
     for golfclub in golfclubs:
         clubs.append({'title': golfclub.get('nome_club',''), 'recordid': golfclub.get('recordid_','')})
+
+    fields = SysField.objects.filter(tableid='metrica_annuale', fieldtypewebid='Numero').values('fieldid', 'description').order_by('description')
     response_data = {
             'filterOptions': [
-                {'field': 'nr_totale_soci', 'label': 'Totale soci'},
-                {'field': 'altro_test', 'label': 'Altro test'}
+                {'field': field['fieldid'], 'label': field['description']}
+                for field in fields
             ],
             'availableClubs': clubs
         }
@@ -6925,7 +6924,13 @@ def get_settings_data(request):
             "struttureComplementari": club_data.get("strutture_complementari", ""),
             "territorioCircostante": club_data.get("territorio_circostante", ""),
             "tipoGestione": club_data.get("tipo_gestione", ""),
-            "note": club_data.get("note", "")
+            "note": club_data.get("note", ""),
+            "datiAnonimi": club_data.get("dati_anonimi", ""),
+            "lingua": club_data.get("Lingua", ""),
+            "valuta": club_data.get("valuta", ""),
+            "formatoNumerico": club_data.get("formato_numerico", ""),
+            "formatoData": club_data.get("formato_data", ""),
+            "logo": club_data.get("Logo", "")
         }
 
         response = {
@@ -6937,10 +6942,14 @@ def get_settings_data(request):
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
 
-
 def update_club_settings(request):
     try:
-        data = json.loads(request.body)
+        if request.method != "POST":
+            return JsonResponse({"error": "Metodo non consentito"}, status=405)
+
+        # Recupera i dati inviati nel form
+        data = request.POST
+        logo_file = request.FILES.get("logo")
 
         userid = Helper.get_userid(request)
 
@@ -6952,23 +6961,47 @@ def update_club_settings(request):
         if not recordidgolfclub:
             return JsonResponse({"error": "Nessun golf club associato all'utente"}, status=404)
 
-        # Recupera o crea il record
         club = UserRecord('golfclub', recordidgolfclub)
 
-        # Aggiorna i campi
-        club.values['nome_club'] = data.get("nome", club.values['nome_club'])
-        club.values['paese'] = data.get("paese", club.values['paese'])
-        club.values['indirizzo'] = data.get("indirizzo", club.values['indirizzo'])
-        club.values['email'] = data.get("email", club.values['email'])
-        club.values['anno_fondazione'] = data.get("annoFondazione", club.values['anno_fondazione'])
-        club.values['colelgamenti_pubblici'] = data.get("collegamentiPubblici", club.values['colelgamenti_pubblici'])
-        club.values['direttore'] = data.get("direttore", club.values['direttore'])
-        club.values['infrastrutture_turistiche'] = data.get("infrastruttureTuristiche", club.values['infrastrutture_turistiche'])
-        club.values['pacchetti_golf'] = data.get("pacchettiGolf", club.values['pacchetti_golf'])
-        club.values['strutture_complementari'] = data.get("struttureComplementari", club.values['strutture_complementari'])
-        club.values['territorio_circostante'] = data.get("territorioCircostante", club.values['territorio_circostante'])
-        club.values['tipo_gestione'] = data.get("tipoGestione", club.values['tipo_gestione'])
-        club.values['note'] = data.get("note", club.values['note'])
+        # Aggiorna i campi testuali
+        club.values['nome_club'] = data.get("nome", club.values.get('nome_club'))
+        club.values['paese'] = data.get("paese", club.values.get('paese'))
+        club.values['indirizzo'] = data.get("indirizzo", club.values.get('indirizzo'))
+        club.values['email'] = data.get("email", club.values.get('email'))
+        club.values['anno_fondazione'] = data.get("annoFondazione", club.values.get('anno_fondazione'))
+        club.values['colelgamenti_pubblici'] = data.get("collegamentiPubblici", club.values.get('collegamenti_pubblici'))
+        club.values['direttore'] = data.get("direttore", club.values.get('direttore'))
+        club.values['infrastrutture_turistiche'] = data.get("infrastruttureTuristiche", club.values.get('infrastrutture_turistiche'))
+        club.values['pacchetti_golf'] = data.get("pacchettiGolf", club.values.get('pacchetti_golf'))
+        club.values['strutture_complementari'] = data.get("struttureComplementari", club.values.get('strutture_complementari'))
+        club.values['territorio_circostante'] = data.get("territorioCircostante", club.values.get('territorio_circostante'))
+        club.values['tipo_gestione'] = data.get("tipoGestione", club.values.get('tipo_gestione'))
+        club.values['note'] = data.get("note", club.values.get('note'))
+        club.values['dati_anonimi'] = data.get("datiAnonimi", club.values.get('dati_anonimi')) 
+        club.values['Lingua'] = data.get("lingua", club.values.get('lingua'))
+        club.values['valuta'] = data.get("valuta", club.values.get('valuta'))
+        club.values['formato_numerico'] = data.get("formatoNumerico", club.values.get('formato_numerico'))
+        club.values['formato_data'] = data.get("formatoData", club.values.get('formato_data'))
+
+        # Se è stato caricato un logo, salvalo sul server
+        if logo_file:
+            # Percorso completo: BACKUP_DIR/golfclub/<recordid>/logo/
+            save_dir = os.path.join(settings.UPLOADS_ROOT, "golfclub", str(recordidgolfclub))
+            os.makedirs(save_dir, exist_ok=True)
+
+            # name, ext = logo_file
+
+            # Nome del file e percorso finale
+            file_path = os.path.join(save_dir, logo_file.name)
+
+            # Salvataggio fisico del file
+            with default_storage.open(file_path, "wb+") as destination:
+                for chunk in logo_file.chunks():
+                    destination.write(chunk)
+
+            # Salva il path relativo nel DB (ad esempio per usarlo nel frontend)
+            relative_path = f"golfclub/{recordidgolfclub}/{logo_file.name}"
+            club.values['Logo'] = relative_path
 
         # Salva nel DB
         club.save()
@@ -6978,10 +7011,9 @@ def update_club_settings(request):
             "message": "Impostazioni del club aggiornate correttamente."
         })
 
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Formato JSON non valido"}, status=400)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
     
 def get_documents(request):
     documents_table=UserTable('documents')

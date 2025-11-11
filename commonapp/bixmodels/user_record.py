@@ -542,7 +542,7 @@ class UserRecord:
             
             insert_field={}
             fieldid=field['fieldid']
-            if fieldid.startswith("_"):
+            if fieldid and fieldid.startswith("_"):
                 fieldid= fieldid[1:] + "_"
             value=self.values.get(fieldid, '')
             
