@@ -951,14 +951,17 @@ def sync_graph_calendar(request):
         return views.sync_graph_calendar(request)
     
 def sync_tables(request):
+    '''
+    Sincronizza tutte le tabelle da sincronizzare presenti in sys_table
+    '''
     print("sync_tables")
     try:
-        # tables = HelpderDB.sql_query("SELECT * FROM sys_table WHERE sync_table IS NOT NULL")
-        tables = HelpderDB.sql_query("SELECT * FROM sys_table WHERE sync_table IS NOT NULL AND id = 'company'")
+        tables = HelpderDB.sql_query("SELECT * FROM sys_table WHERE sync_table IS NOT NULL")
+        # tables = HelpderDB.sql_query("SELECT * FROM sys_table WHERE sync_table IS NOT NULL AND id = 'company'")
 
         for table in tables:
             print("Starting sync of table: " + table['sync_table'])
-            columns = HelpderDB.sql_query(f"SELECT * FROM sys_field WHERE tableid='{table['id']}' AND sync_fieldid IS NOT NULL")
+            columns = HelpderDB.sql_query(f"SELECT * FROM sys_field WHERE tableid='{table['id']}' AND sync_fieldid IS NOT NULL AND sync_fieldid != ''")
 
             sync_fieldid = table['sync_field']
             founded_fieldid = [c for c in columns if c.get('sync_fieldid') == sync_fieldid]
@@ -966,8 +969,7 @@ def sync_tables(request):
                 continue
             fieldid = founded_fieldid[0]['fieldid']
 
-            # query = f"SELECT * from {table['sync_table']}"
-            query = f"SELECT * from user_bexio_contact"
+            query = f"SELECT * from {table['sync_table']}"
             condition = table['sync_condition']
             order = table['sync_order']
 
@@ -989,7 +991,10 @@ def sync_tables(request):
                     record = UserRecord(table['id'], field['recordid_'])
 
                     for column in columns:
-                        record.values[column['fieldid']] = row[column['sync_fieldid']]
+                        if column['sync_fieldid'] in row:
+                            record.values[column['fieldid']] = row[column['sync_fieldid']]
+                        else:
+                            print("Missing column: " + column['sync_fieldid'])
 
                     record.save()
                 else:
@@ -997,10 +1002,82 @@ def sync_tables(request):
                     new_record = UserRecord(table['id'])
 
                     for column in columns:
-                        new_record.values[column['fieldid']] = row[column['sync_fieldid']]
+                        if column['sync_fieldid'] in row:
+                            new_record.values[column['fieldid']] = row[column['sync_fieldid']]
+                        else:
+                            print("Missing column: " + column['sync_fieldid'])
                     
                     new_record.save()
             print("Sync completed of table: " + table['sync_table'])
+
+        print("Syncronization completed")
+        return JsonResponse(data, safe=False)
+    except requests.RequestException as e:  
+        return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
+
+def sync_table(tableid):
+    '''
+    Sincronizza una singola tabella identificata da tableid
+    '''
+    print("sync_tables")
+
+    if not tableid:
+            return JsonResponse({"error": "Missing parameter"}, status=500)
+    try:
+        table = HelpderDB.sql_query_row(f"SELECT * FROM sys_table WHERE sync_table IS NOT NULL AND id = '{tableid}'")
+
+        if not table:
+            return JsonResponse({"error": "Table not found"}, status=500)
+
+        print("Starting sync of table: " + table['sync_table'])
+        columns = HelpderDB.sql_query(f"SELECT * FROM sys_field WHERE tableid='{table['id']}' AND sync_fieldid IS NOT NULL AND sync_fieldid != ''")
+
+        sync_fieldid = table['sync_field']
+        founded_fieldid = [c for c in columns if c.get('sync_fieldid') == sync_fieldid]
+        if not founded_fieldid:
+            return JsonResponse({"error": "Missing sync_fieldid"}, status=500)
+        fieldid = founded_fieldid[0]['fieldid']
+
+        query = f"SELECT * from {table['sync_table']}"
+        condition = table['sync_condition']
+        order = table['sync_order']
+
+        if condition:
+            query += f" WHERE {condition}"
+
+        if order:
+            query += f" ORDER BY {order}"
+
+        data = HelpderDB.sql_query(query)
+
+        for row in data:
+            id = row[sync_fieldid]
+            
+            field = HelpderDB.sql_query_row(f"SELECT * FROM user_{table['id']} WHERE {fieldid}='{id}'")
+
+            if field:
+                print("Updating record")
+                record = UserRecord(table['id'], field['recordid_'])
+
+                for column in columns:
+                    if column['sync_fieldid'] in row:
+                        record.values[column['fieldid']] = row[column['sync_fieldid']]
+                    else:
+                        print("Missing column: " + column['sync_fieldid'])
+
+                record.save()
+            else:
+                print("Creating record")
+                new_record = UserRecord(table['id'])
+
+                for column in columns:
+                    if column['sync_fieldid'] in row:
+                        new_record.values[column['fieldid']] = row[column['sync_fieldid']]
+                    else:
+                        print("Missing column: " + column['sync_fieldid'])
+                
+                new_record.save()
+        print("Sync completed of table: " + table['sync_table'])
 
         print("Syncronization completed")
         return JsonResponse(data, safe=False)
@@ -1011,7 +1088,12 @@ def sync_salesorders(request):
     print("sync_salesorders")
     sql="UPDATE user_salesorder SET status='Complete'"
     HelpderDB.sql_execute(sql)
-    #esecuzione sync_tables
+
+    #esecuzione sync_table
+    sync_output = sync_table('salesorder')
+
+    print(sync_output)
+
     sql="UPDATE user_salesorder JOIN user_bexio_orders ON user_salesorder.id_bexio=user_bexio_orders.bexio_id SET user_salesorder.status='In Progress'"
     HelpderDB.sql_execute(sql)
     
