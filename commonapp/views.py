@@ -7031,12 +7031,17 @@ def get_documents(request):
         if file:
             file_type = file.split('.')[-1]
 
+        data = document.get('data')
+        if data:
+            data = data.date().isoformat()
+
         data.append({
             'title': document.get('titolo', ''),
             'description': document.get('descrizione', ''),
             'fileType': file_type,
             'categories': categories,
             'record_id': file,
+            'data': data,
         })
 
     return JsonResponse({"documents": data}, safe=False)
@@ -7064,20 +7069,29 @@ def get_projects(request):
             if file:
                 file_type = file.split('.')[-1]
 
+            document_date = document.get('data')
+            if document_date:
+                document_date = document_date.date().isoformat()
+
             formatted_documents.append({
                 'title': document.get('titolo', ''),
                 'description': document.get('descrizione', ''),
                 'fileType': file_type,
                 'categories': document_categories,
                 'record_id': file,
+                'data': document_date,
             })
 
+        project_date = project.get('data')
+        if project_date:
+            project_date = project_date.date().isoformat()
 
         data.append({
             'title': project.get('titolo', ''),
             'description': project.get('descrizione', ''),
             'categories': categories,
-            'documents': formatted_documents
+            'documents': formatted_documents,
+            'data': project_date,
         })
     
     
