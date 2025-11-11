@@ -1156,7 +1156,6 @@ def sync_graph_calendar(request):
     from customapp_swissbix.script import sync_graph_calendar
     return sync_graph_calendar(request)
 
-
 def sync_tables(request):
     from customapp_swissbix.script import sync_tables
     return sync_tables(request)
