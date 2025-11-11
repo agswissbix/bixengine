@@ -29,6 +29,7 @@ urlpatterns = [
     path('matrixcalendar_save_record/', matrixcalendar_save_record, name='matrixcalendar_save_record'),
     path('get_pitservice_pivot_lavanderia/', get_pitservice_pivot_lavanderia, name='get_pitservice_pivot_lavanderia'),
     path('save_record_fields/', save_record_fields, name='save_record_fields'),
+    path('duplicate_record/', duplicate_record, name='duplicate_record'),
     path('get_table_views/', get_table_views, name='get_table_views'),
     path('get_record_badge/', get_record_badge, name='get_record_badge'),
     path('get_record_card_fields/', get_record_card_fields, name='get_record_card_fields'),
