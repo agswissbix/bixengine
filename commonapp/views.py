@@ -3288,6 +3288,23 @@ def save_record_fields(request):
         else:
             return JsonResponse({"error": "Views value is missing."}, status=400)
 
+        if category_dashboard:
+            # category_dashboard può essere una stringa (es. "marketing,sales") o una lista
+            if isinstance(category_dashboard, str):
+                category_list = [c.strip() for c in category_dashboard.split(",") if c.strip()]
+            elif isinstance(category_dashboard, list):
+                category_list = [str(c).strip() for c in category_dashboard if str(c).strip()]
+            else:
+                category_list = []
+
+            if category_list:
+                # Recupera tutte le dashboard appartenenti a una delle categorie
+                dashboards_by_category = SysDashboard.objects.filter(category__in=category_list)
+                category_dashboard_ids = [str(d.id) for d in dashboards_by_category]
+
+                # Unisci evitando duplicati
+                dashboard_ids = list(set(dashboard_ids + category_dashboard_ids))
+
         # =======================
         # FIELD TYPE (ORM)
         # =======================
@@ -3581,6 +3598,15 @@ def get_record_badge(request):
     response={ "badgeItems": return_badgeItems}
     return JsonResponse(response)
 
+def get_categories_dashboard(request):
+    categories_dashboard = SysDashboard.objects.values_list('category', flat=True).distinct()
+    categories_dashboard_lookup = [
+        {"value": category, "label": category}
+        for category in categories_dashboard if category
+    ]
+
+    return JsonResponse({"categories_dashboard": categories_dashboard_lookup})
+
 def get_record_card_fields(request):
     data = json.loads(request.body)
     tableid= data.get("tableid")
@@ -3621,6 +3647,13 @@ def get_record_card_fields(request):
             for d in dashboards_qs
         ]
 
+        # Categories dashboard
+        categories_dashboard = SysDashboard.objects.values_list('category', flat=True).distinct()
+        categories_dashboard_lookup = [
+            {"value": category, "label": category}
+            for category in categories_dashboard if category
+        ]
+
         # Views per tableid
         views_qs = SysView.objects.all().values("tableid", "name", "id")
         views_lookup = {}
@@ -3653,6 +3686,7 @@ def get_record_card_fields(request):
             "dashboards": dashboards_lookup,
             "functions": functions_lookup,
             "colors": colors_lookup,
+            "categories_dashboard": categories_dashboard_lookup,
         }
 
     return JsonResponse(response)
@@ -6569,29 +6603,104 @@ def loading(request):
     return render(request, 'loading.html')
 
 def new_dashboard(request):
-
     data = json.loads(request.body)
     dashboard_name = data.get('dashboard_name')
+    category = data.get('category', None)
 
-    userid = request.user.id
-    userid = HelpderDB.sql_query_row(f"SELECT sys_user_id FROM v_users WHERE id = {userid}")['sys_user_id']
+    user = request.user
+    if not user.is_authenticated:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
 
+    # Recupera sys_user_id tramite query parametrizzata
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT sys_user_id FROM v_users WHERE id = %s", [user.id])
+        row = cursor.fetchone()
+    if not row:
+        return JsonResponse({'error': 'User not found in v_users'}, status=404)
 
-    HelpderDB.sql_execute(
-        f"INSERT INTO sys_dashboard (userid, name) VALUES ('1', '{dashboard_name}')"
+    sys_user_id = row[0]
+
+    # Crea la dashboard con l’ORM
+    dashboard = SysDashboard.objects.create(
+        userid=sys_user_id,
+        name=dashboard_name,
+        category=category
     )
 
-    dashboardid = HelpderDB.sql_query_row(
-        f"SELECT id FROM sys_dashboard WHERE userid = '1' AND name = '{dashboard_name}'"
-    )['id']
-
-
-
-
-    HelpderDB.sql_execute(
-        f"INSERT INTO sys_user_dashboard (userid, dashboardid) VALUES ('{userid}', '{dashboardid}')"
+    # Associa l’utente alla dashboard (usando l’ORM)
+    SysUserDashboard.objects.create(
+        userid_id=sys_user_id,
+        dashboardid=dashboard
     )
 
+    if category:
+        # Recupera i grafici legati alla categoria (dalla tabella non-sys user_chart)
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT recordid_
+                FROM user_chart
+                WHERE category_dashboard = %s
+            """, [category])
+            chart_rows = cursor.fetchall()
+
+        for row in chart_rows:
+            recordid = row[0]
+            chart_record = UserRecord("chart", recordid)
+            values = chart_record.values
+
+            # Estraggo i valori da user_chart
+            chartid = values.get("report_id")
+            title = values.get("title")
+            table_name = values.get("table_name")
+            grouping = values.get("grouping")
+            views_str = values.get("views", None)
+
+            # Se non c'è chartid valido, salta
+            if not chartid or chartid == "None":
+                continue
+
+            # Recupero SysChart e la view di default
+            chart_obj = SysChart.objects.filter(id=chartid).first()
+            if not chart_obj:
+                continue  # grafico non trovato, passo oltre
+
+            if isinstance(views_str, str):
+                view_ids = [v.strip() for v in views_str.split(",") if v.strip()]
+            elif isinstance(views_str, list):
+                view_ids = [str(v).strip() for v in views_str if str(v).strip()]
+            else:
+                return JsonResponse({"error": "Views value is missing."}, status=400)
+
+            # View di default se non ne sono state fornite
+            default_view = SysView.objects.filter(tableid=table_name, query_conditions="true").first()
+            if not view_ids and default_view:
+                view_ids = [str(default_view.id)]
+
+            for view_id in view_ids:
+                view_obj = SysView.objects.filter(id=view_id).first() if view_id else None
+
+                # Nome del blocco
+                final_name = f"{title or chart_obj.name} {(view_obj.name if view_obj else '')} {dashboard.name}".strip()
+
+                # Evita duplicati (stesso chart, view e dashboard)
+                exists = SysDashboardBlock.objects.filter(
+                    userid=sys_user_id,
+                    chartid=chart_obj,
+                    dashboardid=dashboard,
+                    viewid=view_obj
+                ).exists()
+                if exists:
+                    continue
+
+                # Crea il blocco
+                SysDashboardBlock.objects.create(
+                    name=final_name,
+                    userid=sys_user_id,
+                    chartid=chart_obj,
+                    dashboardid=dashboard,
+                    viewid=view_obj if view_obj else default_view,
+                    category="benchmark" if grouping == "recordidgolfclub_" else None,
+                )
 
     return JsonResponse({'success': True, 'message': 'New dashboard created successfully.'})
 
