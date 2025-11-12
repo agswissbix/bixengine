@@ -7133,7 +7133,8 @@ def update_club_settings(request):
 
     
 def get_documents(request):
-    documents_table=UserTable('documents')
+    user_id = Helper.get_userid(request)
+    documents_table=UserTable('documents', userid=user_id)
     documents=documents_table.get_records(conditions_list=[])
 
     data = []
@@ -7148,23 +7149,25 @@ def get_documents(request):
         if file:
             file_type = file.split('.')[-1]
 
-        data = document.get('data')
-        if data:
-            data = data.date().isoformat()
+        date = document.get('data')
+        if date:
+            date = date.date().isoformat()
 
         data.append({
+            'id': document.get('recordid_', ''),
             'title': document.get('titolo', ''),
             'description': document.get('descrizione', ''),
             'fileType': file_type,
             'categories': categories,
             'record_id': file,
-            'data': data,
+            'data': date,
         })
 
     return JsonResponse({"documents": data}, safe=False)
 
 def get_projects(request):
-    project_table = UserTable('Projects')
+    userid = Helper.get_userid(request)
+    project_table = UserTable('projects', userid)
     projects = project_table.get_records(conditions_list=[])
 
     data = []
@@ -7191,6 +7194,7 @@ def get_projects(request):
                 document_date = document_date.date().isoformat()
 
             formatted_documents.append({
+                'id': document.get('recordid_', ''),
                 'title': document.get('titolo', ''),
                 'description': document.get('descrizione', ''),
                 'fileType': file_type,
@@ -7203,7 +7207,12 @@ def get_projects(request):
         if project_date:
             project_date = project_date.date().isoformat()
 
+        projectid = project.get('recordid_', '')
+
+        like = HelpderDB.sql_query_row(f"SELECT value FROM user_like WHERE recordidprojects_='{projectid}' AND utente='{userid}'")
+
         data.append({
+            'id':projectid,
             'title': project.get('titolo', ''),
             'description': project.get('descrizione', ''),
             'categories': categories,
@@ -7213,3 +7222,52 @@ def get_projects(request):
     
     
     return JsonResponse({"projects": data}, safe=False)
+
+def like_project(request):
+    data = json.loads(request.body)
+
+    projectid = data.get("project", "")
+    date = datetime.datetime.now().date
+
+    userid = Helper.get_userid(request)
+
+    project = UserTable('projects', userid=userid).get_records(conditions_list=[
+        f"recordid_='{projectid}'"
+    ])
+    
+    if not project[0]:
+        return HttpResponse("Project not found", status=404)
+    
+    like_record = HelpderDB.sql_query_row(f"SELECT value FROM user_like WHERE recordidprojects_='{projectid}' AND utente='{userid}'")
+
+    if not like_record:
+        like = UserRecord('like',)
+        like.values['recordidprojects_'] = projectid
+        like.values['utente'] = userid
+        like.values['data'] = date
+        like.save()
+
+        return HttpResponse("Project liked successfully", status=200)
+    else:
+        return HttpResponse("Project already liked", status=400)
+
+
+def unlike_project(request):
+    data = json.loads(request.body)
+
+    project = data.get("project", "")
+    user = Helper.get_userid(request)
+
+    like_record = HelpderDB.sql_query_row(f"SELECT * FROM user_like WHERE recordidprojects_='{project}' AND utente='{user}'")
+
+    if not like_record:
+        return HttpResponse("Project not liked", status=400)
+    
+    try:
+        HelpderDB.sql_execute("DELETE FROM user_like WHERE recordidprojects_=%s AND utente=%s", [project, user])
+
+        return HttpResponse("Project unliked successfully", status=200)
+    except:
+        return HttpResponse("Error while unliking project", status=500)
+    
+

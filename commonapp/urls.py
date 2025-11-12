@@ -116,6 +116,8 @@ urlpatterns = [
     path('get_documents/', get_documents, name='get_documents'),
     path('get_projects/', get_projects, name='get_projects'),
     path('get_wegolf_welcome_data/', get_wegolf_welcome_data, name='get_wegolf_welcome_data'),
+    path('like_project/', like_project, name='like_project'),
+    path('unlike_project/', unlike_project, name='unlike_project'),
 
     
 ]

@@ -437,7 +437,6 @@ def save_record_fields(tableid,recordid):
         for project_record_dict in project_records:
             completed= project_record_dict['completed']
             deal_record.values['projectcompleted'] = completed
-            project_record.save()
 
             
         # valutazione step workflow
