@@ -7074,6 +7074,7 @@ def get_projects(request):
                 document_date = document_date.date().isoformat()
 
             formatted_documents.append({
+                'id': document.get('recordid_', ''),
                 'title': document.get('titolo', ''),
                 'description': document.get('descrizione', ''),
                 'fileType': file_type,
@@ -7087,6 +7088,7 @@ def get_projects(request):
             project_date = project_date.date().isoformat()
 
         data.append({
+            'id': project.get('recordid_', ''),
             'title': project.get('titolo', ''),
             'description': project.get('descrizione', ''),
             'categories': categories,
@@ -7096,3 +7098,39 @@ def get_projects(request):
     
     
     return JsonResponse({"projects": data}, safe=False)
+
+def like_project(request):
+    data = json.loads(request.body)
+
+    projectid = data.get("project", "")
+    user = Helper.get_userid(request)
+    date = datetime.datetime.now().date
+
+    userid = Helper.get_userid(request)
+
+    project = UserTable('Projects', userid=userid).get_records(conditions_list=[
+        f"recordid_='{projectid}'"
+    ])
+    
+    if not project[0]:
+        return HttpResponse("Project not found", status=404)
+    
+    like_record = HelpderDB.sql_query_row(f"SELECT value FROM user_like WHERE project_id='{projectid}' AND user_id='{userid}'")
+
+    if not like_record:
+        like = UserRecord('like',)
+        like.values['project_id'] = projectid
+        like.values['user_id'] = userid
+        like.values['data'] = date
+        # like.save()
+
+        return HttpResponse("Project liked successfully", status=200)
+    else:
+        return HttpResponse("Project already liked", status=400)
+
+
+def unlike_project(request):
+    data = json.loads(request.body)
+
+    project = data.get("project", "")
+    user = Helper.get_userid(request)
