@@ -6924,7 +6924,7 @@ def get_settings_data(request):
             "paese": club_data.get("paese", ""),
             "indirizzo": club_data.get("indirizzo", ""),
             "email": club_data.get("email", ""),
-            "annoFondazione": int(club_data.get("anno_fondazione", 0) or 0),
+            "annoFondazione": club_data.get("anno_fondazione", ""),
             "collegamentiPubblici": club_data.get("colelgamenti_pubblici", ""),
             "direttore": club_data.get("direttore", ""),
             "infrastruttureTuristiche": club_data.get("infrastrutture_turistiche", ""),
@@ -6933,7 +6933,7 @@ def get_settings_data(request):
             "territorioCircostante": club_data.get("territorio_circostante", ""),
             "tipoGestione": club_data.get("tipo_gestione", ""),
             "note": club_data.get("note", ""),
-            "datiAnonimi": club_data.get("dati_anonimi", ""),
+            "datiAnonimi": str(club_data.get("dati_anonimi")).lower() == 'true',
             "lingua": club_data.get("Lingua", ""),
             "valuta": club_data.get("valuta", ""),
             "formatoNumerico": club_data.get("formato_numerico", ""),
@@ -6991,25 +6991,36 @@ def update_club_settings(request):
         club.values['formato_numerico'] = data.get("formatoNumerico", club.values.get('formato_numerico'))
         club.values['formato_data'] = data.get("formatoData", club.values.get('formato_data'))
 
+        logo_file = request.FILES.get("logo")
+        logo_path_from_frontend = data.get("logo_path") 
+        current_logo_in_db = club.values.get('Logo')
+
         # Se è stato caricato un logo, salvalo sul server
         if logo_file:
-            # Percorso completo: BACKUP_DIR/golfclub/<recordid>/logo/
+            if current_logo_in_db:
+                old_file_path = os.path.join(settings.UPLOADS_ROOT, current_logo_in_db)
+                if default_storage.exists(old_file_path):
+                    default_storage.delete(old_file_path)
+
             save_dir = os.path.join(settings.UPLOADS_ROOT, "golfclub", str(recordidgolfclub))
             os.makedirs(save_dir, exist_ok=True)
 
-            # name, ext = logo_file
+            file_name = default_storage.get_available_name(logo_file.name)
+            file_path = os.path.join(save_dir, file_name)
 
-            # Nome del file e percorso finale
-            file_path = os.path.join(save_dir, logo_file.name)
-
-            # Salvataggio fisico del file
             with default_storage.open(file_path, "wb+") as destination:
                 for chunk in logo_file.chunks():
                     destination.write(chunk)
 
-            # Salva il path relativo nel DB (ad esempio per usarlo nel frontend)
-            relative_path = f"golfclub/{recordidgolfclub}/{logo_file.name}"
+            relative_path = f"golfclub/{recordidgolfclub}/{file_name}"
             club.values['Logo'] = relative_path
+        
+        elif not logo_file and logo_path_from_frontend == '' and current_logo_in_db:
+            old_file_path = os.path.join(settings.UPLOADS_ROOT, current_logo_in_db)
+            if default_storage.exists(old_file_path):
+                default_storage.delete(old_file_path)
+            
+            club.values['Logo'] = None
 
         # Salva nel DB
         club.save()
@@ -7100,7 +7111,12 @@ def get_projects(request):
 
         projectid = project.get('recordid_', '')
 
-        like = HelpderDB.sql_query_row(f"SELECT value FROM user_like WHERE recordidprojects_='{projectid}' AND utente='{userid}'")
+        like = HelpderDB.sql_query_row(f"SELECT * FROM user_like WHERE recordidprojects_='{projectid}' AND utente='{userid}'")
+
+        if like:
+            like = True
+        else:
+            like = False
 
         data.append({
             'id':projectid,
@@ -7109,6 +7125,7 @@ def get_projects(request):
             'categories': categories,
             'documents': formatted_documents,
             'data': project_date,
+            'like': like,
         })
     
     
@@ -7118,7 +7135,7 @@ def like_project(request):
     data = json.loads(request.body)
 
     projectid = data.get("project", "")
-    date = datetime.datetime.now().date
+    date = datetime.datetime.now()
 
     userid = Helper.get_userid(request)
 
@@ -7129,18 +7146,21 @@ def like_project(request):
     if not project[0]:
         return HttpResponse("Project not found", status=404)
     
-    like_record = HelpderDB.sql_query_row(f"SELECT value FROM user_like WHERE recordidprojects_='{projectid}' AND utente='{userid}'")
+    like_record = HelpderDB.sql_query_row(f"SELECT * FROM user_like WHERE recordidprojects_='{projectid}' AND utente='{userid}'")
 
-    if not like_record:
-        like = UserRecord('like',)
-        like.values['recordidprojects_'] = projectid
-        like.values['utente'] = userid
-        like.values['data'] = date
-        like.save()
+    try:
+        if not like_record:
+            like = UserRecord('like',)
+            like.values['recordidprojects_'] = projectid
+            like.values['utente'] = userid
+            like.values['data'] = date
+            like.save()
 
-        return HttpResponse("Project liked successfully", status=200)
-    else:
-        return HttpResponse("Project already liked", status=400)
+            return HttpResponse("Project liked successfully", status=200)
+        else:
+            return HttpResponse("Project already liked", status=400)
+    except:
+        return HttpResponse("Error while liking project", status=500)
 
 
 def unlike_project(request):
@@ -7155,7 +7175,7 @@ def unlike_project(request):
         return HttpResponse("Project not liked", status=400)
     
     try:
-        HelpderDB.sql_execute("DELETE FROM user_like WHERE recordidprojects_=%s AND utente=%s", [project, user])
+        HelpderDB.sql_execute(f"DELETE FROM user_like WHERE recordidprojects_='{project}' AND utente='{user}'")
 
         return HttpResponse("Project unliked successfully", status=200)
     except:
