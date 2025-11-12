@@ -7042,7 +7042,7 @@ def get_settings_data(request):
             "territorioCircostante": club_data.get("territorio_circostante", ""),
             "tipoGestione": club_data.get("tipo_gestione", ""),
             "note": club_data.get("note", ""),
-            "datiAnonimi": club_data.get("dati_anonimi", ""),
+            "datiAnonimi": str(club_data.get("dati_anonimi")).lower() == 'true',
             "lingua": club_data.get("Lingua", ""),
             "valuta": club_data.get("valuta", ""),
             "formatoNumerico": club_data.get("formato_numerico", ""),
@@ -7129,9 +7129,33 @@ def update_club_settings(request):
         # Salva nel DB
         club.save()
 
+        updated_settings = {
+            "id": str(recordidgolfclub),
+            "nome": club.values.get("nome_club", ""),
+            "paese": club.values.get("paese", ""),
+            "indirizzo": club.values.get("indirizzo", ""),
+            "email": club.values.get("email", ""),
+            "annoFondazione": club.values.get("anno_fondazione", ""),
+            "collegamentiPubblici": club.values.get("colelgamenti_pubblici", ""),
+            "direttore": club.values.get("direttore", ""),
+            "infrastruttureTuristiche": club.values.get("infrastrutture_turistiche", ""),
+            "pacchettiGolf": club.values.get("pacchetti_golf", ""),
+            "struttureComplementari": club.values.get("strutture_complementari", ""),
+            "territorioCircostante": club.values.get("territorio_circostante", ""),
+            "tipoGestione": club.values.get("tipo_gestione", ""),
+            "note": club.values.get("note", ""),
+            "datiAnonimi": str(club.values.get("dati_anonimi")).lower() == 'true',
+            "lingua": club.values.get("Lingua", ""),
+            "valuta": club.values.get("valuta", ""),
+            "formatoNumerico": club.values.get("formato_numerico", ""),
+            "formatoData": club.values.get("formato_data", ""),
+            "logo": club.values.get("Logo", "")
+        }
+
         return JsonResponse({
             "success": True,
-            "message": "Impostazioni del club aggiornate correttamente."
+            "message": "Impostazioni del club aggiornate correttamente.",
+            "settings": updated_settings
         })
 
     except Exception as e:
@@ -7241,7 +7265,7 @@ def like_project(request):
         f"recordid_='{projectid}'"
     ])
     
-    if not project[0]:
+    if not project:
         return HttpResponse("Project not found", status=404)
     
     like_record = HelpderDB.sql_query_row(f"SELECT value FROM user_like WHERE recordidprojects_='{projectid}' AND utente='{userid}'")
