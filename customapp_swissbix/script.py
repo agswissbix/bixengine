@@ -669,7 +669,7 @@ def sync_bexio_contacts(request):
 
     return JsonResponse(response, safe=False)
 
-def sync_bexio_orders(request):
+def sync_bexio_orders():
     sql="DELETE FROM user_bexio_orders"
     HelpderDB.sql_execute(sql)
     sql="DELETE FROM user_bexio_positions"
@@ -726,14 +726,38 @@ def sync_bexio_orders(request):
         record.values['delivery_address'] = order['delivery_address']
         record.values['is_recurring'] = order['is_recurring']
 
-        order_taxs = order['taxs']
+        if order['is_recurring']=='true' or order['is_recurring'] == True:
+
+            url = f"https://api.bexio.com/2.0/kb_order/{order['id']}/repetition"
+            accesstoken=os.environ.get('BEXIO_ACCESSTOKEN')
+            headers = {
+                'Accept': "application/json",
+                'Content-Type': "application/json",
+                'Authorization': f"Bearer {accesstoken}",
+            }
+
+
+            response = requests.request("GET", url, headers=headers)
+            repetition_response = json.loads(response.text)
+            record.values['repetition_start']=repetition_response.get("start", "")
+            record.values['repetition_end']=repetition_response.get("end", "")
+            repetition=repetition_response['repetition']
+            
+            record.values['repetition_type']=repetition['type']
+            record.values['repetition_interval']=repetition['interval']
+            
+            
+            
+
+
+        #order_taxs = order['taxs']
         #if order_taxs and len(order_taxs) > 0:
         #   record.values['taxs_percentage'] = order_taxs[0]['percentage']
         #  record.values['taxs_value'] = order_taxs[0]['value']
 
         record.save()
 
-        sync_bexio_positions(request, 'kb_order', order['id'])
+        sync_bexio_positions('kb_order', order['id'])
 
     return JsonResponse(response, safe=False)
 
@@ -742,8 +766,8 @@ def sync_bexio_positions_example(request, bexioid):
     return sync_bexio_positions(request,'kb_order',bexioid)
 
 
-def sync_bexio_positions(request,bexiotable,bexioid):
-    url = f"https://api.bexio.com/2.0/{bexiotable}/{bexioid}/kb_position_custom"
+def sync_bexio_positions(bexiotable,bexio_parent_id):
+    url = f"https://api.bexio.com/2.0/{bexiotable}/{bexio_parent_id}/kb_position_custom"
     accesstoken=os.environ.get('BEXIO_ACCESSTOKEN')
     headers = {
         'Accept': "application/json",
@@ -755,7 +779,7 @@ def sync_bexio_positions(request,bexiotable,bexioid):
     response = json.loads(response.text)
 
     for position in response:
-        print(f"Elaborazione riga ordine con bexioid:{bexioid}: {position['text']}")
+        print(f"Elaborazione riga ordine con bexioid:{bexio_parent_id}: {position['text']}")
         field = HelpderDB.sql_query_row(f"select * from user_bexio_positions WHERE bexio_id='{position['id']}'")
         if not field:
             record = UserRecord("bexio_positions")
@@ -782,7 +806,7 @@ def sync_bexio_positions(request,bexiotable,bexioid):
         record.values['position_total'] = position['position_total']
         record.values['pos'] = position['pos']
         record.values['internal_pos'] = position['internal_pos']
-        record.values['parent_id'] = position['parent_id']
+        record.values['parent_id'] = bexio_parent_id
         record.values['is_optional'] = position['is_optional']
 
         record.save()
@@ -1032,11 +1056,11 @@ def sync_table(tableid):
         print("Starting sync of table: " + table['sync_table'])
         columns = HelpderDB.sql_query(f"SELECT * FROM sys_field WHERE tableid='{table['id']}' AND sync_fieldid IS NOT NULL AND sync_fieldid != ''")
 
-        sync_fieldid = table['sync_field']
-        founded_fieldid = [c for c in columns if c.get('sync_fieldid') == sync_fieldid]
+        sync_fieldid_origin = table['sync_field']
+        founded_fieldid = [c for c in columns if c.get('sync_fieldid') == sync_fieldid_origin]
         if not founded_fieldid:
             return JsonResponse({"error": "Missing sync_fieldid"}, status=500)
-        fieldid = founded_fieldid[0]['fieldid']
+        sync_fieldid_target = founded_fieldid[0]['fieldid']
 
         query = f"SELECT * from {table['sync_table']}"
         condition = table['sync_condition']
@@ -1050,14 +1074,27 @@ def sync_table(tableid):
 
         data = HelpderDB.sql_query(query)
 
-        for row in data:
-            id = row[sync_fieldid]
-            
-            field = HelpderDB.sql_query_row(f"SELECT * FROM user_{table['id']} WHERE {fieldid}='{id}'")
+        # --- INIZIO MODIFICHE ---
+        
+        # Ottieni il numero totale di righe
+        total_rows = len(data)
+        print(f"**Found {total_rows} total rows to process from {table['sync_table']}**")
 
-            if field:
-                print("Updating record")
-                record = UserRecord(table['id'], field['recordid_'])
+        # Usa enumerate per ottenere l'indice (i) e la riga (row)
+        # start=1 fa partire il conteggio da 1 invece che da 0
+        for i, row in enumerate(data, start=1):
+            
+            # Stampa il feedback di avanzamento
+            print(f"**Processing row {i}/{total_rows}...**")
+            
+            sync_value = row[sync_fieldid_origin]
+            
+            record_target = HelpderDB.sql_query_row(f"SELECT * FROM user_{table['id']} WHERE {sync_fieldid_target}='{sync_value}'")
+
+            if record_target:
+                # Modificato il print per maggiore chiarezza
+                print(f"  -> Updating record (ID: {id})")
+                record = UserRecord(table['id'], record_target['recordid_'])
 
                 for column in columns:
                     if column['sync_fieldid'] in row:
@@ -1067,7 +1104,8 @@ def sync_table(tableid):
 
                 record.save()
             else:
-                print("Creating record")
+                # Modificato il print per maggiore chiarezza
+                print(f"  -> Creating record (Sync value: {sync_value})")
                 new_record = UserRecord(table['id'])
 
                 for column in columns:
@@ -1077,6 +1115,9 @@ def sync_table(tableid):
                         print("Missing column: " + column['sync_fieldid'])
                 
                 new_record.save()
+        
+        # --- FINE MODIFICHE ---
+
         print("Sync completed of table: " + table['sync_table'])
 
         print("Syncronization completed")
@@ -1084,17 +1125,43 @@ def sync_table(tableid):
     except requests.RequestException as e:  
         return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
 
-def sync_salesorders(request):
+def sync_bixdata_salesorders():
     print("sync_salesorders")
+    sync_output = sync_table('salesorderline')
+    sync_output = sync_table('salesorder')
     sql="UPDATE user_salesorder SET status='Complete'"
+    HelpderDB.sql_execute(sql)
+    sql="UPDATE user_salesorderline SET status='Complete'"
     HelpderDB.sql_execute(sql)
 
     #esecuzione sync_table
-    sync_output = sync_table('salesorder')
+    
 
-    print(sync_output)
 
+    #aggiornamento stato ordini in progress
     sql="UPDATE user_salesorder JOIN user_bexio_orders ON user_salesorder.id_bexio=user_bexio_orders.bexio_id SET user_salesorder.status='In Progress'"
     HelpderDB.sql_execute(sql)
+
+    #aggiornamento company in salesorder
+    sql="UPDATE user_salesorder JOIN user_company ON user_salesorder.id_bexio_company=user_company.id_bexio SET user_salesorder.recordidcompany_=user_company.recordid_"
+    HelpderDB.sql_execute(sql)
+
+    #aggiornamento stato righe ordini in progress
+    sql="UPDATE user_salesorderline JOIN user_bexio_orders ON user_salesorderline.id_bexio_order=user_bexio_orders.bexio_id SET user_salesorderline.status='In Progress',user_salesorderline.bexio_repetition_type=user_bexio_orders.repetition_type,user_salesorderline.bexio_repetition_interval=user_bexio_orders.repetition_interval "
+    HelpderDB.sql_execute(sql)
+
+    # aggiornamento conti nr conti
+    sql="UPDATE user_salesorderline JOIN user_bexio_account ON user_salesorderline.bexio_account_id=user_bexio_account.account_id SET user_salesorderline.account_no=user_bexio_account.account_no,user_salesorderline.account=user_bexio_account.name "
+    HelpderDB.sql_execute(sql)
+
+    #LINK TABLES
+    #linked salesorderline-salesorder e salesorder-company
+    sql="UPDATE user_salesorderline JOIN user_salesorder ON user_salesorderline.id_bexio_order=user_salesorder.id_bexio SET user_salesorderline.recordidsalesorder_=user_salesorder.recordid_, user_salesorderline.recordidcompany_=user_salesorder.recordidcompany_"
+    HelpderDB.sql_execute(sql)
+
+    sql="UPDATE user_salesorderline JOIN user_salesorder ON user_salesorderline.id_bexio_order=user_salesorder.id_bexio SET user_salesorderline.recordidsalesorder_=user_salesorder.recordid_"
+    HelpderDB.sql_execute(sql)
+
+   
     
     return JsonResponse({"status": "completed"}, safe=False)

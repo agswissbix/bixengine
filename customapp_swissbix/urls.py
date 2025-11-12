@@ -37,7 +37,6 @@ urlpatterns = [
     path('print_timesheet/', print_timesheet, name='print_timesheet'),
     path('sync_graph_calendar/', sync_graph_calendar, name='sync_graph_calendar'),
     path('sync_tables/', sync_tables, name='sync_tables'),
-    path('sync_salesorders/', sync_salesorders, name='sync_salesorders'),
     
     
     
