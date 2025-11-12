@@ -7100,6 +7100,12 @@ def update_club_settings(request):
         club.values['formato_numerico'] = data.get("formatoNumerico", club.values.get('formato_numerico'))
         club.values['formato_data'] = data.get("formatoData", club.values.get('formato_data'))
 
+        # Elimino il file se in delete o update
+        if (data.get("logo", None) == "$remove$" and club.values.get('Logo', None)) or (club.values.get('Logo', None) and logo_file):
+            if default_storage.exists(club.values.get('Logo', '')):
+                default_storage.delete(club.values['Logo'])
+            club.values['Logo'] = None
+
         # Se è stato caricato un logo, salvalo sul server
         if logo_file:
             # Percorso completo: BACKUP_DIR/golfclub/<recordid>/logo/
