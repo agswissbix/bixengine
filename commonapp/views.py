@@ -7057,7 +7057,8 @@ def get_documents(request):
     return JsonResponse({"documents": data}, safe=False)
 
 def get_projects(request):
-    project_table = UserTable('projects')
+    userid = Helper.get_userid(request)
+    project_table = UserTable('projects', userid)
     projects = project_table.get_records(conditions_list=[])
 
     data = []
@@ -7097,8 +7098,12 @@ def get_projects(request):
         if project_date:
             project_date = project_date.date().isoformat()
 
+        projectid = project.get('recordid_', '')
+
+        like = HelpderDB.sql_query_row(f"SELECT value FROM user_like WHERE recordidprojects_='{projectid}' AND utente='{userid}'")
+
         data.append({
-            'id': project.get('recordid_', ''),
+            'id':projectid,
             'title': project.get('titolo', ''),
             'description': project.get('descrizione', ''),
             'categories': categories,
@@ -7131,7 +7136,7 @@ def like_project(request):
         like.values['recordidprojects_'] = projectid
         like.values['utente'] = userid
         like.values['data'] = date
-        # like.save()
+        like.save()
 
         return HttpResponse("Project liked successfully", status=200)
     else:
@@ -7143,3 +7148,17 @@ def unlike_project(request):
 
     project = data.get("project", "")
     user = Helper.get_userid(request)
+
+    like_record = HelpderDB.sql_query_row(f"SELECT * FROM user_like WHERE recordidprojects_='{project}' AND utente='{user}'")
+
+    if not like_record:
+        return HttpResponse("Project not liked", status=400)
+    
+    try:
+        HelpderDB.sql_execute("DELETE FROM user_like WHERE recordidprojects_=%s AND utente=%s", [project, user])
+
+        return HttpResponse("Project unliked successfully", status=200)
+    except:
+        return HttpResponse("Error while unliking project", status=500)
+    
+
