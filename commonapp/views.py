@@ -7239,7 +7239,7 @@ def get_projects(request):
 
         projectid = project.get('recordid_', '')
 
-        like = HelpderDB.sql_query_row(f"SELECT value FROM user_like WHERE recordidprojects_='{projectid}' AND utente='{userid}'")
+        like = HelpderDB.sql_query_row(f"SELECT * FROM user_like WHERE recordidprojects_='{projectid}' AND utente='{userid}'")
 
         data.append({
             'id':projectid,
@@ -7248,56 +7248,65 @@ def get_projects(request):
             'categories': categories,
             'documents': formatted_documents,
             'data': project_date,
+            'like': like is not None
         })
     
     
     return JsonResponse({"projects": data}, safe=False)
 
 def like_project(request):
-    data = json.loads(request.body)
+    try:
+        data = json.loads(request.body)
+        projectid = data.get("project", "")
 
-    projectid = data.get("project", "")
-    date = datetime.datetime.now().date
+        date = datetime.datetime.now().date() 
 
-    userid = Helper.get_userid(request)
+        userid = Helper.get_userid(request)
+        if not userid:
+             return JsonResponse({"error": "Autenticazione richiesta"}, status=401)
 
-    project = UserTable('projects', userid=userid).get_records(conditions_list=[
-        f"recordid_='{projectid}'"
-    ])
-    
-    if not project:
-        return HttpResponse("Project not found", status=404)
-    
-    like_record = HelpderDB.sql_query_row(f"SELECT value FROM user_like WHERE recordidprojects_='{projectid}' AND utente='{userid}'")
+        project = UserTable('projects', userid=userid).get_records(conditions_list=[
+            f"recordid_='{projectid}'"
+        ])
+        
+        if not project:
+            return JsonResponse({"error": "Project not found"}, status=404)
+        
+        like_record = HelpderDB.sql_query_row(f"SELECT * FROM user_like WHERE recordidprojects_='{projectid}' AND utente='{userid}'")
 
-    if not like_record:
-        like = UserRecord('like',)
-        like.values['recordidprojects_'] = projectid
-        like.values['utente'] = userid
-        like.values['data'] = date
-        like.save()
-
-        return HttpResponse("Project liked successfully", status=200)
-    else:
-        return HttpResponse("Project already liked", status=400)
-
+        if not like_record:
+            like = UserRecord('like',)
+            like.values['recordidprojects_'] = projectid
+            like.values['utente'] = userid
+            like.values['data'] = date
+            like.save()
+            return JsonResponse({"message": "Project liked successfully"}, status=200)
+        else:
+            return JsonResponse({"error": "Project already liked"}, status=400)
+            
+    except Exception as e:
+        print(f"Error while liking project: {e}")
+        return JsonResponse({"error": "Error while liking project", "detail": str(e)}, status=500)
 
 def unlike_project(request):
-    data = json.loads(request.body)
-
-    project = data.get("project", "")
-    user = Helper.get_userid(request)
-
-    like_record = HelpderDB.sql_query_row(f"SELECT * FROM user_like WHERE recordidprojects_='{project}' AND utente='{user}'")
-
-    if not like_record:
-        return HttpResponse("Project not liked", status=400)
-    
     try:
-        HelpderDB.sql_execute("DELETE FROM user_like WHERE recordidprojects_=%s AND utente=%s", [project, user])
+        data = json.loads(request.body)
+        project = data.get("project", "")
+        user = Helper.get_userid(request)
+        
+        if not user:
+             return JsonResponse({"error": "Autenticazione richiesta"}, status=401)
 
-        return HttpResponse("Project unliked successfully", status=200)
-    except:
-        return HttpResponse("Error while unliking project", status=500)
-    
+        like_record = HelpderDB.sql_query_row(f"SELECT * FROM user_like WHERE recordidprojects_='{project}' AND utente='{user}'")
 
+        if not like_record:
+            return JsonResponse({"error": "Project not liked"}, status=400)
+        
+        query = f"DELETE FROM user_like WHERE recordidprojects_='{project}' AND utente='{user}'"
+        HelpderDB.sql_execute(query)
+
+        return JsonResponse({"message": "Project unliked successfully"}, status=200)
+
+    except Exception as e:
+        print(f"Error while unliking project: {e}")
+        return JsonResponse({"error": "Error while unliking project", "detail": str(e)}, status=500)
