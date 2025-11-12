@@ -2885,6 +2885,9 @@ def duplicate_record(request):
         'totpages_', 'firstpagefilename_', 'recordstatus_', 'deleted_',
     }
 
+    if tableid == 'chart':
+        excluded_fields.add('report_id')
+
     fields_copy = {
         k: v for k, v in source_record.values.items()
         if k not in excluded_fields
@@ -3288,6 +3291,23 @@ def save_record_fields(request):
         else:
             return JsonResponse({"error": "Views value is missing."}, status=400)
 
+        if category_dashboard:
+            # category_dashboard può essere una stringa (es. "marketing,sales") o una lista
+            if isinstance(category_dashboard, str):
+                category_list = [c.strip() for c in category_dashboard.split(",") if c.strip()]
+            elif isinstance(category_dashboard, list):
+                category_list = [str(c).strip() for c in category_dashboard if str(c).strip()]
+            else:
+                category_list = []
+
+            if category_list:
+                # Recupera tutte le dashboard appartenenti a una delle categorie
+                dashboards_by_category = SysDashboard.objects.filter(category__in=category_list)
+                category_dashboard_ids = [str(d.id) for d in dashboards_by_category]
+
+                # Unisci evitando duplicati
+                dashboard_ids = list(set(dashboard_ids + category_dashboard_ids)) if dashboard_ids else list(set(category_dashboard_ids))
+
         # =======================
         # FIELD TYPE (ORM)
         # =======================
@@ -3489,7 +3509,7 @@ def save_record_fields(request):
         )
 
         target_combinations = set()
-        for dashboard_id in (dashboard_ids or [None]):
+        for dashboard_id in (dashboard_ids):
             for view_id in view_ids:
                 target_combinations.add((dashboard_id, view_id))
 
@@ -3581,6 +3601,15 @@ def get_record_badge(request):
     response={ "badgeItems": return_badgeItems}
     return JsonResponse(response)
 
+def get_categories_dashboard(request):
+    categories_dashboard = SysDashboard.objects.values_list('category', flat=True).distinct()
+    categories_dashboard_lookup = [
+        {"value": category, "label": category}
+        for category in categories_dashboard if category
+    ]
+
+    return JsonResponse({"categories_dashboard": categories_dashboard_lookup})
+
 def get_record_card_fields(request):
     data = json.loads(request.body)
     tableid= data.get("tableid")
@@ -3621,6 +3650,13 @@ def get_record_card_fields(request):
             for d in dashboards_qs
         ]
 
+        # Categories dashboard
+        categories_dashboard = SysDashboard.objects.values_list('category', flat=True).distinct()
+        categories_dashboard_lookup = [
+            {"value": category, "label": category}
+            for category in categories_dashboard if category
+        ]
+
         # Views per tableid
         views_qs = SysView.objects.all().values("tableid", "name", "id")
         views_lookup = {}
@@ -3653,6 +3689,7 @@ def get_record_card_fields(request):
             "dashboards": dashboards_lookup,
             "functions": functions_lookup,
             "colors": colors_lookup,
+            "categories_dashboard": categories_dashboard_lookup,
         }
 
     return JsonResponse(response)
@@ -6569,29 +6606,104 @@ def loading(request):
     return render(request, 'loading.html')
 
 def new_dashboard(request):
-
     data = json.loads(request.body)
     dashboard_name = data.get('dashboard_name')
+    category = data.get('category', None)
 
-    userid = request.user.id
-    userid = HelpderDB.sql_query_row(f"SELECT sys_user_id FROM v_users WHERE id = {userid}")['sys_user_id']
+    user = request.user
+    if not user.is_authenticated:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
 
+    # Recupera sys_user_id tramite query parametrizzata
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT sys_user_id FROM v_users WHERE id = %s", [user.id])
+        row = cursor.fetchone()
+    if not row:
+        return JsonResponse({'error': 'User not found in v_users'}, status=404)
 
-    HelpderDB.sql_execute(
-        f"INSERT INTO sys_dashboard (userid, name) VALUES ('1', '{dashboard_name}')"
+    sys_user_id = row[0]
+
+    # Crea la dashboard con l’ORM
+    dashboard = SysDashboard.objects.create(
+        userid=sys_user_id,
+        name=dashboard_name,
+        category=category
     )
 
-    dashboardid = HelpderDB.sql_query_row(
-        f"SELECT id FROM sys_dashboard WHERE userid = '1' AND name = '{dashboard_name}'"
-    )['id']
-
-
-
-
-    HelpderDB.sql_execute(
-        f"INSERT INTO sys_user_dashboard (userid, dashboardid) VALUES ('{userid}', '{dashboardid}')"
+    # Associa l’utente alla dashboard (usando l’ORM)
+    SysUserDashboard.objects.create(
+        userid_id=sys_user_id,
+        dashboardid=dashboard
     )
 
+    if category:
+        # Recupera i grafici legati alla categoria (dalla tabella non-sys user_chart)
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT recordid_
+                FROM user_chart
+                WHERE category_dashboard = %s AND deleted_ = 'N'
+            """, [category])
+            chart_rows = cursor.fetchall()
+
+        for row in chart_rows:
+            recordid = row[0]
+            chart_record = UserRecord("chart", recordid)
+            values = chart_record.values
+
+            # Estraggo i valori da user_chart
+            chartid = values.get("report_id")
+            title = values.get("title")
+            table_name = values.get("table_name")
+            grouping = values.get("grouping")
+            views_str = values.get("views", None)
+
+            # Se non c'è chartid valido, salta
+            if not chartid or chartid == "None":
+                continue
+
+            # Recupero SysChart e la view di default
+            chart_obj = SysChart.objects.filter(id=chartid).first()
+            if not chart_obj:
+                continue  # grafico non trovato, passo oltre
+
+            if isinstance(views_str, str):
+                view_ids = [v.strip() for v in views_str.split(",") if v.strip()]
+            elif isinstance(views_str, list):
+                view_ids = [str(v).strip() for v in views_str if str(v).strip()]
+            else:
+                return JsonResponse({"error": "Views value is missing."}, status=400)
+
+            # View di default se non ne sono state fornite
+            default_view = SysView.objects.filter(tableid=table_name, query_conditions="true").first()
+            if not view_ids and default_view:
+                view_ids = [str(default_view.id)]
+
+            for view_id in view_ids:
+                view_obj = SysView.objects.filter(id=view_id).first() if view_id else None
+
+                # Nome del blocco
+                final_name = f"{title or chart_obj.name} {(view_obj.name if view_obj else '')} {dashboard.name}".strip()
+
+                # Evita duplicati (stesso chart, view e dashboard)
+                exists = SysDashboardBlock.objects.filter(
+                    userid=sys_user_id,
+                    chartid=chart_obj,
+                    dashboardid=dashboard,
+                    viewid=view_obj
+                ).exists()
+                if exists:
+                    continue
+
+                # Crea il blocco
+                SysDashboardBlock.objects.create(
+                    name=final_name,
+                    userid=sys_user_id,
+                    chartid=chart_obj,
+                    dashboardid=dashboard,
+                    viewid=view_obj if view_obj else default_view,
+                    category="benchmark" if grouping == "recordidgolfclub_" else None,
+                )
 
     return JsonResponse({'success': True, 'message': 'New dashboard created successfully.'})
 
@@ -6834,10 +6946,16 @@ def get_benchmark_filters(request):
         clubs.append({'title': golfclub.get('nome_club',''), 'recordid': golfclub.get('recordid_','')})
 
     fields = SysField.objects.filter(tableid='metrica_annuale', fieldtypewebid='Numero').values('fieldid', 'description').order_by('description')
+    
+    fieldsClub = SysField.objects.filter(tableid='golfclub', fieldtypewebid='Numero').values('fieldid', 'description').order_by('description')
     response_data = {
-            'filterOptions': [
+            'filterOptionsNumbers': [
                 {'field': field['fieldid'], 'label': field['description']}
                 for field in fields
+            ],
+            'filterOptionsDemographic': [
+                {'field': field['fieldid'], 'label': field['description']}
+                for field in fieldsClub
             ],
             'availableClubs': clubs
         }
@@ -6851,22 +6969,76 @@ def get_filtered_clubs(request):
     userid = Helper.get_userid(request)
     filters = data.get('filters', {})
     conditions=" TRUE"
-    currentNumericFilters=filters.get('numericFilters',[])
-    for currentNumericFilter in currentNumericFilters:
-        field=currentNumericFilter.get('field')
-        operator=currentNumericFilter.get('operator')
-        value=currentNumericFilter.get('value')
+    current_numeric_filters=filters.get('numericFilters',[])
+    demographic_filters=filters.get('demographicFilters',[])
+    for numeric_filter in current_numeric_filters:
+        field=numeric_filter.get('field')
+        operator=numeric_filter.get('operator')
+        value=numeric_filter.get('value')
         if value:
-            condition=f"{field} {operator} {value}"
+            condition=f"m.{field} {operator} {value}"
             conditions=conditions+f" AND {condition}"
     
     clubs=[]
-
-    sql=f"SELECT g.nome_club as title, g.recordid_ as recordid, g.Logo as logo FROM user_golfclub AS g JOIN user_metrica_annuale  AS m ON g.recordid_=m.recordidgolfclub_ WHERE {conditions} GROUP BY title,recordid "
+    sql=f"SELECT g.nome_club as title, g.recordid_ as recordid, g.Logo as logo, g.paese as paese FROM user_golfclub AS g JOIN user_metrica_annuale  AS m ON g.recordid_=m.recordidgolfclub_ WHERE {conditions} GROUP BY title,recordid "
     
     clubs= HelpderDB.sql_query(sql)
+
+    sql_user_club = f"SELECT paese FROM user_golfclub WHERE utente = '{userid}'"
+    user_country = HelpderDB.sql_query(sql_user_club)[0]['paese']
+
+    for demographic_filter in demographic_filters:
+        field = demographic_filter.get('field', None)
+        operator=demographic_filter.get('operator')
+        value=demographic_filter.get('value')
+
+        if field == 'anno_fondazione':
+            if value:
+                condition=f"g.{field} {operator} {value}"
+                conditions=conditions+f" AND {condition}"
+
+        if field == 'distance':
+            from geopy.distance import geodesic
+
+            latitude, longitude = safe_geocode(user_country)
+            user_coords = (latitude, longitude)
+
+            filtered_clubs = []
+            for club in clubs:
+                country = club.get('paese')
+                if not country:
+                    continue
+                latitude, longitude = safe_geocode(country)
+                if latitude and longitude:
+                    distance = geodesic(user_coords, (latitude, longitude)).km
+                    if operator == '<=' and distance <= value:
+                        filtered_clubs.append(club)
+                    elif operator == '>=' and distance >= value:
+                        filtered_clubs.append(club)
+            clubs = filtered_clubs
    
     return JsonResponse({'availableClubs': clubs}, safe=False)
+
+from geopy.geocoders import Nominatim
+from geopy.exc import GeocoderTimedOut, GeocoderServiceError
+import time
+
+geolocator = Nominatim(user_agent="golf_app")
+
+def safe_geocode(location_name, retries=2):
+    """Tenta di geocodificare un nome paese, con retry e gestione errori."""
+    if not location_name or not isinstance(location_name, str):
+        return None
+    
+    for _ in range(retries):
+        try:
+            loc = geolocator.geocode(location_name, timeout=5)
+            return (loc.latitude, loc.longitude) if loc else None
+        except (GeocoderTimedOut, GeocoderServiceError):
+            time.sleep(1)  # piccolo delay e retry
+        except Exception:
+            break
+    return None
 
 def get_wegolf_welcome_data(request):
     userid = Helper.get_userid(request)
@@ -6924,7 +7096,7 @@ def get_settings_data(request):
             "paese": club_data.get("paese", ""),
             "indirizzo": club_data.get("indirizzo", ""),
             "email": club_data.get("email", ""),
-            "annoFondazione": int(club_data.get("anno_fondazione", 0) or 0),
+            "annoFondazione": club_data.get("anno_fondazione", ""),
             "collegamentiPubblici": club_data.get("colelgamenti_pubblici", ""),
             "direttore": club_data.get("direttore", ""),
             "infrastruttureTuristiche": club_data.get("infrastrutture_turistiche", ""),
@@ -6933,7 +7105,7 @@ def get_settings_data(request):
             "territorioCircostante": club_data.get("territorio_circostante", ""),
             "tipoGestione": club_data.get("tipo_gestione", ""),
             "note": club_data.get("note", ""),
-            "datiAnonimi": club_data.get("dati_anonimi", ""),
+            "datiAnonimi": str(club_data.get("dati_anonimi")).lower() == 'true',
             "lingua": club_data.get("Lingua", ""),
             "valuta": club_data.get("valuta", ""),
             "formatoNumerico": club_data.get("formato_numerico", ""),
@@ -6991,6 +7163,12 @@ def update_club_settings(request):
         club.values['formato_numerico'] = data.get("formatoNumerico", club.values.get('formato_numerico'))
         club.values['formato_data'] = data.get("formatoData", club.values.get('formato_data'))
 
+        # Elimino il file se in delete o update
+        if (data.get("logo", None) == "$remove$" and club.values.get('Logo', None)) or (club.values.get('Logo', None) and logo_file):
+            if default_storage.exists(club.values.get('Logo', '')):
+                default_storage.delete(club.values['Logo'])
+            club.values['Logo'] = None
+
         # Se è stato caricato un logo, salvalo sul server
         if logo_file:
             # Percorso completo: BACKUP_DIR/golfclub/<recordid>/logo/
@@ -7014,9 +7192,33 @@ def update_club_settings(request):
         # Salva nel DB
         club.save()
 
+        updated_settings = {
+            "id": str(recordidgolfclub),
+            "nome": club.values.get("nome_club", ""),
+            "paese": club.values.get("paese", ""),
+            "indirizzo": club.values.get("indirizzo", ""),
+            "email": club.values.get("email", ""),
+            "annoFondazione": club.values.get("anno_fondazione", ""),
+            "collegamentiPubblici": club.values.get("colelgamenti_pubblici", ""),
+            "direttore": club.values.get("direttore", ""),
+            "infrastruttureTuristiche": club.values.get("infrastrutture_turistiche", ""),
+            "pacchettiGolf": club.values.get("pacchetti_golf", ""),
+            "struttureComplementari": club.values.get("strutture_complementari", ""),
+            "territorioCircostante": club.values.get("territorio_circostante", ""),
+            "tipoGestione": club.values.get("tipo_gestione", ""),
+            "note": club.values.get("note", ""),
+            "datiAnonimi": str(club.values.get("dati_anonimi")).lower() == 'true',
+            "lingua": club.values.get("Lingua", ""),
+            "valuta": club.values.get("valuta", ""),
+            "formatoNumerico": club.values.get("formato_numerico", ""),
+            "formatoData": club.values.get("formato_data", ""),
+            "logo": club.values.get("Logo", "")
+        }
+
         return JsonResponse({
             "success": True,
-            "message": "Impostazioni del club aggiornate correttamente."
+            "message": "Impostazioni del club aggiornate correttamente.",
+            "settings": updated_settings
         })
 
     except Exception as e:
@@ -7024,7 +7226,8 @@ def update_club_settings(request):
 
     
 def get_documents(request):
-    documents_table=UserTable('documents')
+    user_id = Helper.get_userid(request)
+    documents_table=UserTable('documents', userid=user_id)
     documents=documents_table.get_records(conditions_list=[])
 
     data = []
@@ -7039,23 +7242,25 @@ def get_documents(request):
         if file:
             file_type = file.split('.')[-1]
 
-        data = document.get('data')
-        if data:
-            data = data.date().isoformat()
+        date = document.get('data')
+        if date:
+            date = date.date().isoformat()
 
         data.append({
+            'id': document.get('recordid_', ''),
             'title': document.get('titolo', ''),
             'description': document.get('descrizione', ''),
             'fileType': file_type,
             'categories': categories,
             'record_id': file,
-            'data': data,
+            'data': date,
         })
 
     return JsonResponse({"documents": data}, safe=False)
 
 def get_projects(request):
-    project_table = UserTable('Projects')
+    userid = Helper.get_userid(request)
+    project_table = UserTable('projects', userid)
     projects = project_table.get_records(conditions_list=[])
 
     data = []
@@ -7082,6 +7287,7 @@ def get_projects(request):
                 document_date = document_date.date().isoformat()
 
             formatted_documents.append({
+                'id': document.get('recordid_', ''),
                 'title': document.get('titolo', ''),
                 'description': document.get('descrizione', ''),
                 'fileType': file_type,
@@ -7094,13 +7300,76 @@ def get_projects(request):
         if project_date:
             project_date = project_date.date().isoformat()
 
+        projectid = project.get('recordid_', '')
+
+        like = HelpderDB.sql_query_row(f"SELECT * FROM user_like WHERE recordidprojects_='{projectid}' AND utente='{userid}'")
+
         data.append({
+            'id':projectid,
             'title': project.get('titolo', ''),
             'description': project.get('descrizione', ''),
             'categories': categories,
             'documents': formatted_documents,
             'data': project_date,
+            'like': like is not None
         })
     
     
     return JsonResponse({"projects": data}, safe=False)
+
+def like_project(request):
+    try:
+        data = json.loads(request.body)
+        projectid = data.get("project", "")
+
+        date = datetime.datetime.now().date() 
+
+        userid = Helper.get_userid(request)
+        if not userid:
+             return JsonResponse({"error": "Autenticazione richiesta"}, status=401)
+
+        project = UserTable('projects', userid=userid).get_records(conditions_list=[
+            f"recordid_='{projectid}'"
+        ])
+        
+        if not project:
+            return JsonResponse({"error": "Project not found"}, status=404)
+        
+        like_record = HelpderDB.sql_query_row(f"SELECT * FROM user_like WHERE recordidprojects_='{projectid}' AND utente='{userid}'")
+
+        if not like_record:
+            like = UserRecord('like',)
+            like.values['recordidprojects_'] = projectid
+            like.values['utente'] = userid
+            like.values['data'] = date
+            like.save()
+            return JsonResponse({"message": "Project liked successfully"}, status=200)
+        else:
+            return JsonResponse({"error": "Project already liked"}, status=400)
+            
+    except Exception as e:
+        print(f"Error while liking project: {e}")
+        return JsonResponse({"error": "Error while liking project", "detail": str(e)}, status=500)
+
+def unlike_project(request):
+    try:
+        data = json.loads(request.body)
+        project = data.get("project", "")
+        user = Helper.get_userid(request)
+        
+        if not user:
+             return JsonResponse({"error": "Autenticazione richiesta"}, status=401)
+
+        like_record = HelpderDB.sql_query_row(f"SELECT * FROM user_like WHERE recordidprojects_='{project}' AND utente='{user}'")
+
+        if not like_record:
+            return JsonResponse({"error": "Project not liked"}, status=400)
+        
+        query = f"DELETE FROM user_like WHERE recordidprojects_='{project}' AND utente='{user}'"
+        HelpderDB.sql_execute(query)
+
+        return JsonResponse({"message": "Project unliked successfully"}, status=200)
+
+    except Exception as e:
+        print(f"Error while unliking project: {e}")
+        return JsonResponse({"error": "Error while unliking project", "detail": str(e)}, status=500)

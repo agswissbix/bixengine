@@ -82,6 +82,7 @@ urlpatterns = [
     path('save_calendar_event/', save_calendar_event, name='save_calendar_event'),
     path('fieldsupdate/', fieldsupdate, name='fieldsupdate'),
     path('save_signature/', save_signature, name='save_signature'),
+    path('get_categories_dashboard/', get_categories_dashboard, name='get_categories_dashboard'),
     
     
      # ------------------  Settings views --------------------------------- 
@@ -115,6 +116,8 @@ urlpatterns = [
     path('get_documents/', get_documents, name='get_documents'),
     path('get_projects/', get_projects, name='get_projects'),
     path('get_wegolf_welcome_data/', get_wegolf_welcome_data, name='get_wegolf_welcome_data'),
+    path('like_project/', like_project, name='like_project'),
+    path('unlike_project/', unlike_project, name='unlike_project'),
 
     
 ]
