@@ -2885,6 +2885,9 @@ def duplicate_record(request):
         'totpages_', 'firstpagefilename_', 'recordstatus_', 'deleted_',
     }
 
+    if tableid == 'chart':
+        excluded_fields.add('report_id')
+
     fields_copy = {
         k: v for k, v in source_record.values.items()
         if k not in excluded_fields
@@ -3303,7 +3306,7 @@ def save_record_fields(request):
                 category_dashboard_ids = [str(d.id) for d in dashboards_by_category]
 
                 # Unisci evitando duplicati
-                dashboard_ids = list(set(dashboard_ids + category_dashboard_ids))
+                dashboard_ids = list(set(dashboard_ids + category_dashboard_ids)) if dashboard_ids else list(set(category_dashboard_ids))
 
         # =======================
         # FIELD TYPE (ORM)
@@ -3506,7 +3509,7 @@ def save_record_fields(request):
         )
 
         target_combinations = set()
-        for dashboard_id in (dashboard_ids or [None]):
+        for dashboard_id in (dashboard_ids):
             for view_id in view_ids:
                 target_combinations.add((dashboard_id, view_id))
 
@@ -6639,7 +6642,7 @@ def new_dashboard(request):
             cursor.execute("""
                 SELECT recordid_
                 FROM user_chart
-                WHERE category_dashboard = %s
+                WHERE category_dashboard = %s AND deleted_ = 'N'
             """, [category])
             chart_rows = cursor.fetchall()
 
@@ -6943,10 +6946,16 @@ def get_benchmark_filters(request):
         clubs.append({'title': golfclub.get('nome_club',''), 'recordid': golfclub.get('recordid_','')})
 
     fields = SysField.objects.filter(tableid='metrica_annuale', fieldtypewebid='Numero').values('fieldid', 'description').order_by('description')
+    
+    fieldsClub = SysField.objects.filter(tableid='golfclub', fieldtypewebid='Numero').values('fieldid', 'description').order_by('description')
     response_data = {
-            'filterOptions': [
+            'filterOptionsNumbers': [
                 {'field': field['fieldid'], 'label': field['description']}
                 for field in fields
+            ],
+            'filterOptionsDemographic': [
+                {'field': field['fieldid'], 'label': field['description']}
+                for field in fieldsClub
             ],
             'availableClubs': clubs
         }
@@ -6960,22 +6969,76 @@ def get_filtered_clubs(request):
     userid = Helper.get_userid(request)
     filters = data.get('filters', {})
     conditions=" TRUE"
-    currentNumericFilters=filters.get('numericFilters',[])
-    for currentNumericFilter in currentNumericFilters:
-        field=currentNumericFilter.get('field')
-        operator=currentNumericFilter.get('operator')
-        value=currentNumericFilter.get('value')
+    current_numeric_filters=filters.get('numericFilters',[])
+    demographic_filters=filters.get('demographicFilters',[])
+    for numeric_filter in current_numeric_filters:
+        field=numeric_filter.get('field')
+        operator=numeric_filter.get('operator')
+        value=numeric_filter.get('value')
         if value:
-            condition=f"{field} {operator} {value}"
+            condition=f"m.{field} {operator} {value}"
             conditions=conditions+f" AND {condition}"
     
     clubs=[]
-
-    sql=f"SELECT g.nome_club as title, g.recordid_ as recordid, g.Logo as logo FROM user_golfclub AS g JOIN user_metrica_annuale  AS m ON g.recordid_=m.recordidgolfclub_ WHERE {conditions} GROUP BY title,recordid "
+    sql=f"SELECT g.nome_club as title, g.recordid_ as recordid, g.Logo as logo, g.paese as paese FROM user_golfclub AS g JOIN user_metrica_annuale  AS m ON g.recordid_=m.recordidgolfclub_ WHERE {conditions} GROUP BY title,recordid "
     
     clubs= HelpderDB.sql_query(sql)
+
+    sql_user_club = f"SELECT paese FROM user_golfclub WHERE utente = '{userid}'"
+    user_country = HelpderDB.sql_query(sql_user_club)[0]['paese']
+
+    for demographic_filter in demographic_filters:
+        field = demographic_filter.get('field', None)
+        operator=demographic_filter.get('operator')
+        value=demographic_filter.get('value')
+
+        if field == 'anno_fondazione':
+            if value:
+                condition=f"g.{field} {operator} {value}"
+                conditions=conditions+f" AND {condition}"
+
+        if field == 'distance':
+            from geopy.distance import geodesic
+
+            latitude, longitude = safe_geocode(user_country)
+            user_coords = (latitude, longitude)
+
+            filtered_clubs = []
+            for club in clubs:
+                country = club.get('paese')
+                if not country:
+                    continue
+                latitude, longitude = safe_geocode(country)
+                if latitude and longitude:
+                    distance = geodesic(user_coords, (latitude, longitude)).km
+                    if operator == '<=' and distance <= value:
+                        filtered_clubs.append(club)
+                    elif operator == '>=' and distance >= value:
+                        filtered_clubs.append(club)
+            clubs = filtered_clubs
    
     return JsonResponse({'availableClubs': clubs}, safe=False)
+
+from geopy.geocoders import Nominatim
+from geopy.exc import GeocoderTimedOut, GeocoderServiceError
+import time
+
+geolocator = Nominatim(user_agent="golf_app")
+
+def safe_geocode(location_name, retries=2):
+    """Tenta di geocodificare un nome paese, con retry e gestione errori."""
+    if not location_name or not isinstance(location_name, str):
+        return None
+    
+    for _ in range(retries):
+        try:
+            loc = geolocator.geocode(location_name, timeout=5)
+            return (loc.latitude, loc.longitude) if loc else None
+        except (GeocoderTimedOut, GeocoderServiceError):
+            time.sleep(1)  # piccolo delay e retry
+        except Exception:
+            break
+    return None
 
 def get_wegolf_welcome_data(request):
     userid = Helper.get_userid(request)
