@@ -7124,7 +7124,7 @@ def update_club_settings(request):
             relative_path = f"golfclub/{recordidgolfclub}/{file_name}"
             club.values['Logo'] = relative_path
         
-        elif not logo_file and logo_path_from_frontend == '' and current_logo_in_db:
+        elif not logo_file and not logo_path_from_frontend and current_logo_in_db:
             old_file_path = os.path.join(settings.UPLOADS_ROOT, current_logo_in_db)
             if default_storage.exists(old_file_path):
                 default_storage.delete(old_file_path)
