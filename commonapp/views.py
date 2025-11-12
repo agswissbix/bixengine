@@ -7033,7 +7033,7 @@ def get_settings_data(request):
             "paese": club_data.get("paese", ""),
             "indirizzo": club_data.get("indirizzo", ""),
             "email": club_data.get("email", ""),
-            "annoFondazione": int(club_data.get("anno_fondazione", 0) or 0),
+            "annoFondazione": club_data.get("anno_fondazione", ""),
             "collegamentiPubblici": club_data.get("colelgamenti_pubblici", ""),
             "direttore": club_data.get("direttore", ""),
             "infrastruttureTuristiche": club_data.get("infrastrutture_turistiche", ""),
