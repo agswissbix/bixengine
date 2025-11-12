@@ -1924,10 +1924,10 @@ def get_table_recordsBAK(request):
 
 
 def get_pitservice_pivot_lavanderiaDEV(request):
-    # response_data_dev.py  – dati di esempio
+    # response_data_dev.py  –   dati di esempio
     response_data_dev = {
         "groups": [
-            {   # Livello 0: Cliente A
+            {   # Livello   0: Cliente   A
                 "groupKey": "ClienteA",
                 "level": 0,
                 "fields": [
@@ -1938,7 +1938,7 @@ def get_pitservice_pivot_lavanderiaDEV(request):
                     {"value": "5000", "css": "font-bold"},
                 ],
                 "subGroups": [
-                    {   # Livello 1: Indirizzo 1
+                    {   # Livello   1: Indirizzo   1
                         "groupKey": "ClienteA-Indirizzo1",
                         "level": 1,
                         "fields": [
@@ -1973,7 +1973,7 @@ def get_pitservice_pivot_lavanderiaDEV(request):
                             },
                         ],
                     },
-                    {   # Livello 1: Indirizzo 2
+                    {   # Livello   1: Indirizzo   2
                         "groupKey": "ClienteA-Indirizzo2",
                         "level": 1,
                         "fields": [
@@ -1999,7 +1999,7 @@ def get_pitservice_pivot_lavanderiaDEV(request):
                     },
                 ],
             },
-            {   # Livello 0: Cliente B
+            {   # Livello   0: Cliente   B
                 "groupKey": "ClienteB",
                 "level": 0,
                 "fields": [
@@ -7134,9 +7134,33 @@ def update_club_settings(request):
         # Salva nel DB
         club.save()
 
+        updated_settings = {
+            "id": str(recordidgolfclub),
+            "nome": club.values.get("nome_club", ""),
+            "paese": club.values.get("paese", ""),
+            "indirizzo": club.values.get("indirizzo", ""),
+            "email": club.values.get("email", ""),
+            "annoFondazione": club.values.get("anno_fondazione", ""),
+            "collegamentiPubblici": club.values.get("colelgamenti_pubblici", ""),
+            "direttore": club.values.get("direttore", ""),
+            "infrastruttureTuristiche": club.values.get("infrastrutture_turistiche", ""),
+            "pacchettiGolf": club.values.get("pacchetti_golf", ""),
+            "struttureComplementari": club.values.get("strutture_complementari", ""),
+            "territorioCircostante": club.values.get("territorio_circostante", ""),
+            "tipoGestione": club.values.get("tipo_gestione", ""),
+            "note": club.values.get("note", ""),
+            "datiAnonimi": str(club.values.get("dati_anonimi")).lower() == 'true',
+            "lingua": club.values.get("Lingua", ""),
+            "valuta": club.values.get("valuta", ""),
+            "formatoNumerico": club.values.get("formato_numerico", ""),
+            "formatoData": club.values.get("formato_data", ""),
+            "logo": club.values.get("Logo", "")
+        }
+
         return JsonResponse({
             "success": True,
-            "message": "Impostazioni del club aggiornate correttamente."
+            "message": "Impostazioni del club aggiornate correttamente.",
+            "settings": updated_settings
         })
 
     except Exception as e:
