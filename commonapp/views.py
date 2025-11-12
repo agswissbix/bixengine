@@ -6860,21 +6860,29 @@ def get_filtered_clubs(request):
             condition=f"{field} {operator} {value}"
             conditions=conditions+f" AND {condition}"
     
-    
-
-
     clubs=[]
-    
-    
 
-    sql=f"SELECT g.nome_club as title, g.recordid_ as recordid FROM user_golfclub AS g JOIN user_metrica_annuale  AS m ON g.recordid_=m.recordidgolfclub_ WHERE {conditions} GROUP BY title,recordid "
+    sql=f"SELECT g.nome_club as title, g.recordid_ as recordid, g.Logo as logo FROM user_golfclub AS g JOIN user_metrica_annuale  AS m ON g.recordid_=m.recordidgolfclub_ WHERE {conditions} GROUP BY title,recordid "
     
     clubs= HelpderDB.sql_query(sql)
-    
-
    
     return JsonResponse({'availableClubs': clubs}, safe=False)
 
+def get_wegolf_welcome_data(request):
+    userid = Helper.get_userid(request)
+    recordidgolfclub = HelpderDB.sql_query_value(
+        f"SELECT recordid_ FROM user_golfclub WHERE utente = {userid}", 
+        "recordid_"
+    )
+    sql = f"SELECT nome_club, logo FROM user_golfclub WHERE recordid_ = '{recordidgolfclub}'"
+    golfclub_name = HelpderDB.sql_query_value(sql, "nome_club")
+    golfclub_logo = HelpderDB.sql_query_value(sql, "logo")
+    response_data = {
+        'golfclubName': golfclub_name or '',
+        'golfclubLogo': golfclub_logo or '',
+        'recordidGolfclub': recordidgolfclub or ''
+    }
+    return JsonResponse(response_data)
 
 
 def fieldsupdate(request):
