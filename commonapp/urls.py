@@ -119,6 +119,8 @@ urlpatterns = [
     path('like_project/', like_project, name='like_project'),
     path('unlike_project/', unlike_project, name='unlike_project'),
     path('get_language/', get_language, name='get_language'),
+
+    path('sync_translation_fields/', sync_translation_fields, name='sync_translation_fields'),
     
 ]
 

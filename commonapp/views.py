@@ -7399,3 +7399,29 @@ def get_language(request):
 
     except Exception as e:
         return JsonResponse({"language": DEFAULT_LANG}, status=500)
+    
+def sync_translation_fields(request):
+    translations_table = UserTable('translations')
+
+    fields = HelpderDB.sql_query("SELECT * from sys_field")
+
+    for field in fields:
+        table_id = field.get('tableid')
+        field_id = field.get('fieldid')
+
+        condition_list = [
+            f"tableid='{table_id}'",
+            f"identifier='{field_id}'"
+        ]
+
+        translation = translations_table.get_records(conditions_list=condition_list)
+
+        if not translation:
+            new_record = UserRecord('translations')
+            new_record.values['type'] = "Field"
+            new_record.values['tableid'] = table_id
+            new_record.values['identifier'] = field_id
+            new_record.values['italian'] = field.get('description')
+            new_record.values['english'] = field.get('description')
+
+            new_record.save()
