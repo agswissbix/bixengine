@@ -6968,55 +6968,103 @@ def get_filtered_clubs(request):
     data = json.loads(request.body)
     userid = Helper.get_userid(request)
     filters = data.get('filters', {})
-    conditions=" TRUE"
-    current_numeric_filters=filters.get('numericFilters',[])
-    demographic_filters=filters.get('demographicFilters',[])
-    for numeric_filter in current_numeric_filters:
-        field=numeric_filter.get('field')
-        operator=numeric_filter.get('operator')
-        value=numeric_filter.get('value')
+
+    conditions = " TRUE"
+    numeric_filters = filters.get('numericFilters', [])
+    demographic_filters = filters.get('demographicFilters', [])
+
+    # --------------------------------------------------------
+    # 1. FILTRI NUMERICI → inclusi nella SQL
+    # --------------------------------------------------------
+    for nf in numeric_filters:
+        field = nf.get('field')
+        operator = nf.get('operator')
+        value = nf.get('value')
+        if value is not None:
+            conditions += f" AND m.{field} {operator} {value}"
+
+    # --------------------------------------------------------
+    # 2. FILTRI DEMOGRAFICI (tranne distance) → inclusi nella SQL
+    # --------------------------------------------------------
+    # li tengo da parte per il filtro distanza
+    distance_filter = None
+
+    for df in demographic_filters:
+        field = df.get('field')
+        operator = df.get('operator')
+        value = df.get('value')
+
+        if field == "distance":
+            distance_filter = df  # verrà gestito DOPO la query
+            continue
+
+        # campi booleani
+        if field in ['colelgamenti_pubblici', 'infrastrutture_turistiche']:
+            if isinstance(value, bool):
+                value_db = 'Si' if value else 'No'
+                conditions += f" AND g.{field} = '{value_db}'"
+            continue
+
+        # anno fondazione
+        if field == "anno_fondazione":
+            if value is not None:
+                conditions += f" AND g.{field} {operator} {value}"
+            continue
+
+        # altri campi testuali
         if value:
-            condition=f"m.{field} {operator} {value}"
-            conditions=conditions+f" AND {condition}"
-    
-    clubs=[]
-    sql=f"SELECT g.nome_club as title, g.recordid_ as recordid, g.Logo as logo, g.paese as paese FROM user_golfclub AS g JOIN user_metrica_annuale  AS m ON g.recordid_=m.recordidgolfclub_ WHERE {conditions} GROUP BY title,recordid "
-    
-    clubs= HelpderDB.sql_query(sql)
+            conditions += f" AND g.{field} = '{value}'"
 
-    sql_user_club = f"SELECT paese FROM user_golfclub WHERE utente = '{userid}'"
-    user_country = HelpderDB.sql_query(sql_user_club)[0]['paese']
+    # --------------------------------------------------------
+    # 3. ESECUZIONE QUERY senza distanza
+    # --------------------------------------------------------
+    sql = f"""
+        SELECT g.nome_club AS title,
+               g.recordid_ AS recordid,
+               g.Logo AS logo,
+               g.paese AS paese
+        FROM user_golfclub AS g
+        JOIN user_metrica_annuale AS m
+           ON g.recordid_ = m.recordidgolfclub_
+        WHERE {conditions}
+        GROUP BY title, recordid
+    """
 
-    for demographic_filter in demographic_filters:
-        field = demographic_filter.get('field', None)
-        operator=demographic_filter.get('operator')
-        value=demographic_filter.get('value')
+    clubs = HelpderDB.sql_query(sql)
 
-        if field == 'anno_fondazione':
-            if value:
-                condition=f"g.{field} {operator} {value}"
-                conditions=conditions+f" AND {condition}"
+    # --------------------------------------------------------
+    # 4. Filtro distanza applicato DOPO la query
+    # --------------------------------------------------------
+    if distance_filter:
+        field = distance_filter.get('field')
+        operator = distance_filter.get('operator')
+        value = distance_filter.get('value')
 
-        if field == 'distance':
-            from geopy.distance import geodesic
+        sql_user_club = f"SELECT paese FROM user_golfclub WHERE utente = '{userid}'"
+        user_country = HelpderDB.sql_query(sql_user_club)[0]['paese']
 
-            latitude, longitude = safe_geocode(user_country)
-            user_coords = (latitude, longitude)
+        from geopy.distance import geodesic
+        latitude, longitude = safe_geocode(user_country)
+        user_coords = (latitude, longitude)
 
-            filtered_clubs = []
-            for club in clubs:
-                country = club.get('paese')
-                if not country:
-                    continue
-                latitude, longitude = safe_geocode(country)
-                if latitude and longitude:
-                    distance = geodesic(user_coords, (latitude, longitude)).km
-                    if operator == '<=' and distance <= value:
-                        filtered_clubs.append(club)
-                    elif operator == '>=' and distance >= value:
-                        filtered_clubs.append(club)
-            clubs = filtered_clubs
-   
+        filtered_clubs = []
+        for club in clubs:
+            country = club.get('paese')
+            if not country:
+                continue
+
+            lat, lng = safe_geocode(country)
+            if lat and lng:
+                distance = geodesic(user_coords, (lat, lng)).km
+
+                if operator == "<=" and distance <= value:
+                    filtered_clubs.append(club)
+                elif operator == ">=" and distance >= value:
+                    filtered_clubs.append(club)
+
+        clubs = filtered_clubs
+
+    # --------------------------------------------------------
     return JsonResponse({'availableClubs': clubs}, safe=False)
 
 from geopy.geocoders import Nominatim
