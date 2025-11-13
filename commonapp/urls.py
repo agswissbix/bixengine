@@ -118,7 +118,7 @@ urlpatterns = [
     path('get_wegolf_welcome_data/', get_wegolf_welcome_data, name='get_wegolf_welcome_data'),
     path('like_project/', like_project, name='like_project'),
     path('unlike_project/', unlike_project, name='unlike_project'),
-
+    path('get_language/', get_language, name='get_language'),
     
 ]
 

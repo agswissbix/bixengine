@@ -7373,3 +7373,29 @@ def unlike_project(request):
     except Exception as e:
         print(f"Error while unliking project: {e}")
         return JsonResponse({"error": "Error while unliking project", "detail": str(e)}, status=500)
+    
+LANG_MAP = {
+    "italiano": "it",
+    "inglese": "en",
+}
+DEFAULT_LANG = "it"
+
+def get_language(request):
+    try:
+        userid = Helper.get_userid(request)
+        if not userid:
+            return JsonResponse({"language": DEFAULT_LANG})
+        
+        golf_club = HelpderDB.sql_query_row(f"SELECT Lingua FROM user_golfclub WHERE utente = {userid}") 
+
+        if not golf_club:
+            return JsonResponse({"language": DEFAULT_LANG})
+        
+        language_string = golf_club.get("Lingua", "")
+
+        language_code = LANG_MAP.get(language_string, DEFAULT_LANG)
+        
+        return JsonResponse({"language": language_code})
+
+    except Exception as e:
+        return JsonResponse({"language": DEFAULT_LANG}, status=500)
