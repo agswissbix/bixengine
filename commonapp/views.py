@@ -7161,8 +7161,21 @@ def get_settings_data(request):
             "logo": club_data.get("Logo", "")
         }
 
+        languages = []
+        available_languages = get_available_languages()
+
+        for lang in available_languages:
+            languages.append(
+                {
+                    "code": lang.get("code"),
+                    "value": lang.get("fieldid"),
+                    "label": get_translation(userid, "translations", lang.get("fieldid"))
+                }
+            )
+
         response = {
-            "settings": settings
+            "settings": settings,
+            "languages": languages
         }
 
         return JsonResponse(response, safe=False, status=200)
@@ -7263,10 +7276,24 @@ def update_club_settings(request):
             "logo": club.values.get("Logo", "")
         }
 
+        languages = []
+        available_languages = get_available_languages()
+
+        for lang in available_languages:
+            languages.append(
+                {
+                    "code": lang.get("code"),
+                    "value": lang.get("fieldid"),
+                    "label": get_translation(userid, "translations", lang.get("fieldid"))
+                }
+            )
+
+
         return JsonResponse({
             "success": True,
             "message": "Impostazioni del club aggiornate correttamente.",
-            "settings": updated_settings
+            "settings": updated_settings,
+            "languages": languages
         })
 
     except Exception as e:
@@ -7422,15 +7449,31 @@ def unlike_project(request):
         print(f"Error while unliking project: {e}")
         return JsonResponse({"error": "Error while unliking project", "detail": str(e)}, status=500)
     
-LANG_MAP = {
-    "italiano": "it",
-    "inglese": "en",
-}
 DEFAULT_LANG = "it"
 
-def get_language(request):
+def get_available_languages():
+    """
+    Recupera la lista delle lingue disponibili
+    """
     try:
-        userid = Helper.get_userid(request)
+        languages_table = UserTable("languages")
+        languages = languages_table.get_records(conditions_list=[])
+        
+        if not languages:
+            languages = [{"language": "italiano", "code": "it"}]
+        
+        return languages
+
+    except Exception as e:
+        languages = [{"language": "italiano", "code": "it"}]
+
+def get_languages(request):
+    languages = get_available_languages()
+
+    return JsonResponse({"languages": languages})
+
+def get_user_language(userid):
+    try:
         if not userid:
             return JsonResponse({"language": DEFAULT_LANG})
         
@@ -7441,35 +7484,94 @@ def get_language(request):
         
         language_string = golf_club.get("Lingua", "")
 
-        language_code = LANG_MAP.get(language_string, DEFAULT_LANG)
-        
-        return JsonResponse({"language": language_code})
+        if not language_string:
+            return JsonResponse({"language": DEFAULT_LANG})
 
+        languages = get_available_languages()
+        language_code = DEFAULT_LANG
+
+        for lang in languages:
+            if lang.get("fieldid") == language_string:
+                language_code = lang.get("code")
+
+        return language_code
     except Exception as e:
-        return JsonResponse({"language": DEFAULT_LANG}, status=500)
+        return DEFAULT_LANG
+
+def get_language(request):
+    userid = Helper.get_userid(request)
+        
+    language_code = get_user_language(userid)
+
+    return JsonResponse({"language": language_code})
+
     
 def sync_translation_fields(request):
+    try :
+        translations_table = UserTable('translations')
+
+        fields = HelpderDB.sql_query("SELECT * from sys_field")
+
+        for field in fields:
+            table_id = field.get('tableid')
+            field_id = field.get('fieldid')
+
+            condition_list = [
+                f"tableid='{table_id}'",
+                f"identifier='{field_id}'"
+            ]
+
+            translation = translations_table.get_records(conditions_list=condition_list)
+
+            if not translation:
+                print("Adding translation")
+                new_record = UserRecord('translations')
+                new_record.values['type'] = "Field"
+                new_record.values['tableid'] = table_id
+                new_record.values['identifier'] = field_id
+
+                # TODO: rendere poi dinamica questa parte con la selezione delle lingue dalla tabella delle lingue
+                new_record.values['italian'] = field.get('description')
+                new_record.values['english'] = ""
+                new_record.values['french'] = ""
+                new_record.values['german'] = ""
+
+                new_record.save()
+            else:
+                print("Translation already exists")
+         
+        return JsonResponse({"success": True})
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+def get_translation(userid, tableid, fieldid):
+    language_code = get_user_language(userid)
+    languages = get_available_languages()
+    
+    language_field = None
+    for lang in languages:
+        if lang.get("code") == language_code:
+            language_field = lang.get("fieldid")
+            break
+    
+    if not language_field:
+        language_field = fieldid
+
     translations_table = UserTable('translations')
 
-    fields = HelpderDB.sql_query("SELECT * from sys_field")
+    condition_list = [
+        f"tableid='{tableid}'",
+        f"identifier='{fieldid}'",
+    ]
 
-    for field in fields:
-        table_id = field.get('tableid')
-        field_id = field.get('fieldid')
+    translation = translations_table.get_records(conditions_list=condition_list)
 
-        condition_list = [
-            f"tableid='{table_id}'",
-            f"identifier='{field_id}'"
-        ]
+    if not translation:
+        return fieldid
+    
+    word =  translation[0].get(language_field)
 
-        translation = translations_table.get_records(conditions_list=condition_list)
+    if not word:
+        return fieldid
 
-        if not translation:
-            new_record = UserRecord('translations')
-            new_record.values['type'] = "Field"
-            new_record.values['tableid'] = table_id
-            new_record.values['identifier'] = field_id
-            new_record.values['italian'] = field.get('description')
-            new_record.values['english'] = field.get('description')
-
-            new_record.save()
+    return word
