@@ -7618,29 +7618,27 @@ def get_languages(request):
     lang_data = get_cached_languages_data()
 
     return JsonResponse({"languages": lang_data["list"]})
-
-@functools.lru_cache(maxsize=1024) 
-def _get_user_language_code(userid):
-    """
-    Funzione interna e velocizzata per ottenere il codice lingua dell'utente.
-    Ora è cacheable per userid.
-    """
-    if not userid:
-        return DEFAULT_LANG
     
+def get_user_language(userid):
     try:
-        golf_club = HelpderDB.sql_query_row(f"SELECT Lingua FROM user_golfclub WHERE utente = {userid}") 
-        if not golf_club:
-            return DEFAULT_LANG
+        if not userid:
+            return JsonResponse({"language": DEFAULT_LANG})
         
-        language_field_id = golf_club.get("Lingua")
-        if not language_field_id:
-            return DEFAULT_LANG
+        golf_club = HelpderDB.sql_query_row(f"SELECT Lingua FROM user_golfclub WHERE utente = {userid}") 
+
+        if not golf_club:
+            return JsonResponse({"language": DEFAULT_LANG})
+        
+        language_string = golf_club.get("Lingua", "")
+
+        if not language_string:
+            return JsonResponse({"language": DEFAULT_LANG})
+
 
         lang_data = get_cached_languages_data()
         
-        language_code = lang_data["field_to_code"].get(language_field_id, DEFAULT_LANG)
-        
+        language_code = lang_data["field_to_code"].get(language_string, DEFAULT_LANG)
+
         return language_code
     
     except Exception as e:
@@ -7648,7 +7646,7 @@ def _get_user_language_code(userid):
 
 def get_language(request):
     userid = Helper.get_userid(request)
-    language_code = _get_user_language_code(userid) 
+    language_code = get_user_language(userid) 
 
     return JsonResponse({"language": language_code})
 
@@ -7750,7 +7748,7 @@ def get_translation(tableid, fieldid, userid=None, code=None, translation_type="
     if code:
         language_code = code
     elif userid:
-        language_code = _get_user_language_code(userid)
+        language_code = get_user_language(userid)
     
     lang_data = get_cached_languages_data()
     language_field = lang_data["code_to_field"].get(language_code, lang_data["code_to_field"][DEFAULT_LANG])
