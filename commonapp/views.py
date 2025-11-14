@@ -7169,7 +7169,7 @@ def get_settings_data(request):
                 {
                     "code": lang.get("code"),
                     "value": lang.get("fieldid"),
-                    "label": get_translation(userid, "translations", lang.get("fieldid"))
+                    "label": get_translation("translations", lang.get("fieldid"), userid= userid)
                 }
             )
 
@@ -7284,7 +7284,7 @@ def update_club_settings(request):
                 {
                     "code": lang.get("code"),
                     "value": lang.get("fieldid"),
-                    "label": get_translation(userid, "translations", lang.get("fieldid"))
+                    "label": get_translation("translations", lang.get("fieldid"), userid= userid)
                 }
             )
 
@@ -7544,8 +7544,15 @@ def sync_translation_fields(request):
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
 
-def get_translation(userid, tableid, fieldid):
-    language_code = get_user_language(userid)
+def get_translation(tableid, fieldid, userid=None, code=None):
+    language_code = "it"
+
+    if code:
+        language_code = code
+
+    if userid:
+        language_code = get_user_language(userid)
+
     languages = get_available_languages()
     
     language_field = None
