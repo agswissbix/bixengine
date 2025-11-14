@@ -5545,32 +5545,42 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
     # ----------------------------------------------------------
     # 6) Placeholder dinamico <colonna>
     # ----------------------------------------------------------
-    match = re.search(r"<([^>]+)>", chart_name)
-    if match:
-        dynamic_column = match.group(1).strip()
+    placeholders = re.findall(r"<([^>]+)>", chart_name)
 
-        # Riutilizzo ESATTAMENTE le condizioni già costruite sopra
+    if placeholders:
+
+        # Condizioni già calcolate precedentemente
         where_clause = " AND ".join(dynamic_conditions) if dynamic_conditions else "1=1"
 
+        # Recupero config del chart per sapere da quale tabella pescare
         chart_record = HelpderDB.sql_query_row(f"SELECT * FROM sys_chart WHERE id={chart_id}")
         if not chart_record:
             return {'error': 'Chart not found'}
 
         config = json.loads(chart_record['config'])
+        from_table = config.get("from_table")
+        if not from_table:
+            return {'error': 'Missing from_table in chart config'}
 
-        dynamic_value = HelpderDB.sql_query_value(
-            f"""
-                SELECT {dynamic_column}
-                FROM user_{config['from_table']}
-                WHERE {where_clause}
-                ORDER BY anno DESC
-                LIMIT 1
-            """,
-            dynamic_column
-        )
+        # Per ogni placeholder <colonna>
+        for col in placeholders:
 
-        if dynamic_value is not None:
-            chart_name = re.sub(r"<[^>]+>", str(dynamic_value), chart_name)
+            dynamic_column = col.strip()
+
+            dynamic_value = HelpderDB.sql_query_value(
+                f"""
+                    SELECT {dynamic_column}
+                    FROM user_{from_table}
+                    WHERE {where_clause}
+                    ORDER BY anno DESC
+                    LIMIT 1
+                """,
+                dynamic_column
+            )
+
+            # Sostituisci SOLO questo placeholder
+            if dynamic_value is not None:
+                chart_name = chart_name.replace(f"<{col}>", str(dynamic_value))
 
     # ----------------------------------------------------------
     # 7) Output finale
