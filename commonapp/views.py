@@ -6269,7 +6269,7 @@ def get_form_fields(request):
             record.save()
         #record=UserRecord('metrica_annuale', '00000000000000000000000000000023')
         values=record.values
-        sys_fields= HelpderDB.sql_query(f"SELECT * FROM sys_user_field_order AS fo JOIN sys_field f ON (fo.tableid=f.tableid AND fo.fieldid=f.id) WHERE fo.tableid='metrica_annuale' AND f.explanation is not null AND f.label != 'Dati' ORDER BY fo.fieldorder ASC")
+        sys_fields= HelpderDB.sql_query(f"SELECT * FROM sys_user_field_order AS fo JOIN sys_field f ON (fo.tableid=f.tableid AND fo.fieldid=f.id) WHERE fo.tableid='metrica_annuale' AND f.explanation is not null AND f.label != 'Dati' AND fo.typepreference='view_fields' AND fo.fieldorder IS NOT null ORDER BY fo.fieldorder ASC")
         fields_settings_list = HelpderDB.sql_query(f"SELECT * FROM sys_user_field_settings WHERE tableid='metrica_annuale'")
 
         # --- Settings Pre-processing (New) ---
