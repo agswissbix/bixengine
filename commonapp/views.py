@@ -5365,6 +5365,14 @@ def get_dashboard_blocks(request):
                 sql = "SELECT * FROM sys_dashboard_block WHERE dashboardid = {dashboard_id} ORDER BY id desc".format(
                     dashboard_id=dashboard_id
                 )
+                # sql = """
+                #     SELECT sdb.*
+                #     FROM sys_dashboard_block sdb
+                #     LEFT JOIN user_chart uc ON uc.report_id = sdb.chartid
+                #     WHERE sdb.dashboardid = {dashboard_id}
+                #     AND (uc.status IS NULL OR uc.status <> 'Riservato')
+                #     ORDER BY sdb.id DESC
+                #     """.format(dashboard_id=dashboard_id)
                 all_blocks = dbh.sql_query(sql)
 
                 for block in all_blocks:
@@ -5377,7 +5385,18 @@ def get_dashboard_blocks(request):
                     sql = "SELECT * FROM sys_dashboard_block WHERE id = {dashboard_block_id}".format(
                         dashboard_block_id=dashboard_block_id
                     )
+                    # sql = """
+                    #     SELECT sdb.*, uc.status
+                    #     FROM sys_dashboard_block sdb
+                    #     LEFT JOIN user_chart uc ON uc.report_id = sdb.chartid
+                    #     WHERE sdb.id = {dashboard_block_id}
+                    #     AND (uc.status IS NULL OR uc.status <> 'Riservato')
+                    # """.format(
+                    #     dashboard_block_id=dashboard_block_id
+                    # )
                     results = dbh.sql_query(sql)
+                    if not results or len(results) == 0:
+                        continue
                     results = results[0]
                     block = dict()
                     block['id'] = data['id']
@@ -5545,32 +5564,42 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
     # ----------------------------------------------------------
     # 6) Placeholder dinamico <colonna>
     # ----------------------------------------------------------
-    match = re.search(r"<([^>]+)>", chart_name)
-    if match:
-        dynamic_column = match.group(1).strip()
+    placeholders = re.findall(r"<([^>]+)>", chart_name)
 
-        # Riutilizzo ESATTAMENTE le condizioni già costruite sopra
+    if placeholders:
+
+        # Condizioni già calcolate precedentemente
         where_clause = " AND ".join(dynamic_conditions) if dynamic_conditions else "1=1"
 
+        # Recupero config del chart per sapere da quale tabella pescare
         chart_record = HelpderDB.sql_query_row(f"SELECT * FROM sys_chart WHERE id={chart_id}")
         if not chart_record:
             return {'error': 'Chart not found'}
 
         config = json.loads(chart_record['config'])
+        from_table = config.get("from_table")
+        if not from_table:
+            return {'error': 'Missing from_table in chart config'}
 
-        dynamic_value = HelpderDB.sql_query_value(
-            f"""
-                SELECT {dynamic_column}
-                FROM user_{config['from_table']}
-                WHERE {where_clause}
-                ORDER BY anno DESC
-                LIMIT 1
-            """,
-            dynamic_column
-        )
+        # Per ogni placeholder <colonna>
+        for col in placeholders:
 
-        if dynamic_value is not None:
-            chart_name = re.sub(r"<[^>]+>", str(dynamic_value), chart_name)
+            dynamic_column = col.strip()
+
+            dynamic_value = HelpderDB.sql_query_value(
+                f"""
+                    SELECT {dynamic_column}
+                    FROM user_{from_table}
+                    WHERE {where_clause}
+                    ORDER BY anno DESC
+                    LIMIT 1
+                """,
+                dynamic_column
+            )
+
+            # Sostituisci SOLO questo placeholder
+            if dynamic_value is not None:
+                chart_name = chart_name.replace(f"<{col}>", str(dynamic_value))
 
     # ----------------------------------------------------------
     # 7) Output finale
@@ -6256,6 +6285,8 @@ def get_form_fields(request):
         if not year:
             return JsonResponse({"error": "Anno mancante"}, status=400)
 
+        tableid = 'metrica_annuale'
+
         fields = {}
         recordidgolfclub=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_golfclub WHERE utente={userid}","recordid_")
         table=UserTable('metrica_annuale')
@@ -6295,10 +6326,25 @@ def get_form_fields(request):
 
         for field in sys_fields:
             # Estrai le informazioni dal campo corrente
-            group_name = field.get("label")
-            sub_group_name = field.get("sublabel")
+            # group_name = field.get("label")
+            group_translation = get_translation(tableid, field.get("label"), userid, translation_type="Label")
+            if not group_translation:
+                group_translation = field.get("label")
+            group_name = group_translation
+
+            # sub_group_name = field.get("sublabel")
+            sub_group_translation = get_translation(tableid, field.get("sublabel"), userid, translation_type="Sublabel")
+            if not sub_group_translation:
+                sub_group_translation = field.get("sublabel")
+            sub_group_name = sub_group_translation
+
             field_name = field.get("fieldid")
-            field_label = field.get("description")
+
+            # field_label = field.get("description")
+            field_label = get_translation(tableid, field.get("fieldid"), userid)
+            if not field_label:
+                field_label = field.get("description")
+
             field_type = field.get("explanation")
 
             # Se il gruppo principale non esiste in form_config, lo inizializzo
@@ -7210,6 +7256,7 @@ def get_settings_data(request):
             "id": str(recordidgolfclub),
             "nome": club_data.get("nome_club", ""),
             "paese": club_data.get("paese", ""),
+            "nazione": club_data.get("nazione", ""),
             "indirizzo": club_data.get("indirizzo", ""),
             "email": club_data.get("email", ""),
             "annoFondazione": club_data.get("anno_fondazione", ""),
@@ -7275,6 +7322,7 @@ def update_club_settings(request):
         # Aggiorna i campi testuali
         club.values['nome_club'] = data.get("nome", club.values.get('nome_club'))
         club.values['paese'] = data.get("paese", club.values.get('paese'))
+        club.values['nazione'] = data.get("nazione", club.values.get('nazione'))
         club.values['indirizzo'] = data.get("indirizzo", club.values.get('indirizzo'))
         club.values['email'] = data.get("email", club.values.get('email'))
         club.values['anno_fondazione'] = data.get("annoFondazione", club.values.get('anno_fondazione'))
@@ -7325,6 +7373,7 @@ def update_club_settings(request):
             "id": str(recordidgolfclub),
             "nome": club.values.get("nome_club", ""),
             "paese": club.values.get("paese", ""),
+            "nazione": club.values.get("nazione", ""),
             "indirizzo": club.values.get("indirizzo", ""),
             "email": club.values.get("email", ""),
             "annoFondazione": club.values.get("anno_fondazione", ""),
@@ -7519,6 +7568,36 @@ def unlike_project(request):
     
 DEFAULT_LANG = "it"
 
+@functools.lru_cache(maxsize=1) 
+def get_cached_languages_data():
+    """
+    Recupera le lingue e le mette in cache
+    """
+    try:
+        languages_table = UserTable("languages")
+        languages_list = languages_table.get_records(conditions_list=[])
+        if not languages_list:
+            languages_list = [{"language": "italiano", "code": "it", "fieldid": "italian"}]
+    except Exception as e:
+        languages_list = [{"language": "italiano", "code": "it", "fieldid": "italian"}]
+
+    code_to_field_map = {}
+    field_to_code_map = {}
+    
+    for lang in languages_list:
+        code = lang.get("code")
+        fieldid = lang.get("fieldid") 
+        
+        if code and fieldid:
+            code_to_field_map[code] = fieldid
+            field_to_code_map[fieldid] = code
+
+    return {
+        "list": languages_list,
+        "code_to_field": code_to_field_map,
+        "field_to_code": field_to_code_map
+    }
+
 def get_available_languages():
     """
     Recupera la lista delle lingue disponibili
@@ -7536,10 +7615,10 @@ def get_available_languages():
         languages = [{"language": "italiano", "code": "it"}]
 
 def get_languages(request):
-    languages = get_available_languages()
+    lang_data = get_cached_languages_data()
 
-    return JsonResponse({"languages": languages})
-
+    return JsonResponse({"languages": lang_data["list"]})
+    
 def get_user_language(userid):
     try:
         if not userid:
@@ -7555,98 +7634,140 @@ def get_user_language(userid):
         if not language_string:
             return JsonResponse({"language": DEFAULT_LANG})
 
-        languages = get_available_languages()
-        language_code = DEFAULT_LANG
 
-        for lang in languages:
-            if lang.get("fieldid") == language_string:
-                language_code = lang.get("code")
+        lang_data = get_cached_languages_data()
+        
+        language_code = lang_data["field_to_code"].get(language_string, DEFAULT_LANG)
 
         return language_code
+    
     except Exception as e:
         return DEFAULT_LANG
 
 def get_language(request):
     userid = Helper.get_userid(request)
-        
-    language_code = get_user_language(userid)
+    language_code = get_user_language(userid) 
 
     return JsonResponse({"language": language_code})
 
     
 def sync_translation_fields(request):
-    try :
+    try:
         translations_table = UserTable('translations')
 
-        fields = HelpderDB.sql_query("SELECT * from sys_field")
+        all_fields = HelpderDB.sql_query("SELECT * from sys_field")
 
-        for field in fields:
+        existing_translations_raw = translations_table.get_records(
+            conditions_list=[],
+            limit=1000
+        )
+        
+        existing_set = set()
+        for tr in existing_translations_raw:
+            existing_set.add((
+                tr.get('type'), 
+                tr.get('tableid'), 
+                tr.get('identifier')
+            ))
+
+        
+        fields_to_translate = set()    # (tableid, fieldid, description)
+        labels_to_translate = set()    # (tableid, label)
+        sublabels_to_translate = set() # (tableid, sublabel)
+
+        for field in all_fields:
             table_id = field.get('tableid')
+            if not table_id:
+                continue
+
             field_id = field.get('fieldid')
+            label = field.get('label')
+            sublabel = field.get('sublabel')
+            description = field.get('description')
 
-            condition_list = [
-                f"tableid='{table_id}'",
-                f"identifier='{field_id}'"
-            ]
+            if field_id and description:
+                fields_to_translate.add((table_id, field_id, description))
+            
+            if label:
+                labels_to_translate.add((table_id, label))
+                
+            if sublabel:
+                sublabels_to_translate.add((table_id, sublabel))
+        
+        new_records_to_save = []
 
-            translation = translations_table.get_records(conditions_list=condition_list)
-
-            if not translation:
-                print("Adding translation")
+        for (table_id, field_id, description) in fields_to_translate:
+            if ('Field', table_id, field_id) not in existing_set:
+                print(f"Aggiungo Field: {table_id}.{field_id}")
                 new_record = UserRecord('translations')
-                new_record.values['type'] = "Field"
+                new_record.values['type'] = 'Field'
                 new_record.values['tableid'] = table_id
                 new_record.values['identifier'] = field_id
+                new_record.values['italian'] = description
+                new_records_to_save.append(new_record)
 
-                # TODO: rendere poi dinamica questa parte con la selezione delle lingue dalla tabella delle lingue
-                new_record.values['italian'] = field.get('description')
-                new_record.values['english'] = ""
-                new_record.values['french'] = ""
-                new_record.values['german'] = ""
+        for (table_id, label) in labels_to_translate:
+            if ('Label', table_id, label) not in existing_set:
+                print(f"Aggiungo Label: {table_id}.{label}")
+                new_record = UserRecord('translations')
+                new_record.values['type'] = 'Label'
+                new_record.values['tableid'] = table_id
+                new_record.values['identifier'] = label
+                new_record.values['italian'] = label 
+                new_records_to_save.append(new_record)
 
-                new_record.save()
-            else:
-                print("Translation already exists")
-         
-        return JsonResponse({"success": True})
+        for (table_id, sublabel) in sublabels_to_translate:
+            if ('Sublabel', table_id, sublabel) not in existing_set:
+                print(f"Aggiungo Sublabel: {table_id}.{sublabel}")
+                new_record = UserRecord('translations')
+                new_record.values['type'] = 'Sublabel'
+                new_record.values['tableid'] = table_id
+                new_record.values['identifier'] = sublabel
+                new_record.values['italian'] = sublabel
+                new_records_to_save.append(new_record)
+
+        if not new_records_to_save:
+            print("Nessuna nuova traduzione da aggiungere. Sincronizzazione completata.")
+        else:
+            print(f"Salvataggio di {len(new_records_to_save)} nuove traduzioni...")
+            for record in new_records_to_save:
+                record.values["english"] = ""
+                record.values["french"] = ""
+                record.values["german"] = ""
+                record.save()
+            print("Salvataggio completato.")
+
+        return JsonResponse({"success": True, "added": len(new_records_to_save)})
+
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
 
-def get_translation(tableid, fieldid, userid=None, code=None):
-    language_code = "it"
+def get_translation(tableid, fieldid, userid=None, code=None, translation_type="Field"):
+    language_code = DEFAULT_LANG
 
     if code:
         language_code = code
-
-    if userid:
+    elif userid:
         language_code = get_user_language(userid)
-
-    languages = get_available_languages()
     
-    language_field = None
-    for lang in languages:
-        if lang.get("code") == language_code:
-            language_field = lang.get("fieldid")
-            break
+    lang_data = get_cached_languages_data()
+    language_field = lang_data["code_to_field"].get(language_code, lang_data["code_to_field"][DEFAULT_LANG])
+
+    try:
+        translations_table = UserTable('translations')
+        condition_list = [
+            f"`type`='{translation_type}'",
+            f"tableid='{tableid}'",
+            f"identifier='{fieldid}'",
+        ]
+
+        translation = translations_table.get_records(conditions_list=condition_list)
+
+        if not translation:
+            return fieldid
+        
+        word = translation[0].get(language_field)
+        return word if word else fieldid
     
-    if not language_field:
-        language_field = fieldid
-
-    translations_table = UserTable('translations')
-
-    condition_list = [
-        f"tableid='{tableid}'",
-        f"identifier='{fieldid}'",
-    ]
-
-    translation = translations_table.get_records(conditions_list=condition_list)
-
-    if not translation:
+    except Exception as e:
         return fieldid
-    
-    word =  translation[0].get(language_field)
-
-    if not word:
-        return fieldid
-
-    return word
