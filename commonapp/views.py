@@ -5584,6 +5584,7 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
     }
 
 
+
 #TODO spostare in un helper e capire perchè è necessario reimportare qui il datetime o va in errore
 def json_date_handler(obj):
     """
@@ -6971,10 +6972,33 @@ def save_calendar_event(request):
 #TODO spostare sotto customapp_wegolf
 def get_benchmark_filters(request):
     golfclub_table=UserTable('golfclub')
-    golfclubs=golfclub_table.get_records(conditions_list=[])
-    clubs=[]
-    for golfclub in golfclubs:
-        clubs.append({'title': golfclub.get('nome_club',''), 'recordid': golfclub.get('recordid_','')})
+    userid = Helper.get_userid(request)
+    
+    sql = f"""
+        SELECT g.nome_club AS title,
+               g.recordid_ AS recordid,
+               g.Logo AS logo,
+               g.paese AS paese
+        FROM user_golfclub AS g
+        JOIN user_metrica_annuale AS m
+           ON g.recordid_ = m.recordidgolfclub_
+        GROUP BY title, recordid
+        ORDER BY title ASC
+    """
+
+    clubs = HelpderDB.sql_query(sql)
+
+    sql_user_club = f"SELECT nome_club as title, recordid_ as recordid, logo, paese FROM user_golfclub WHERE utente = '{userid}'"
+    logged_club = HelpderDB.sql_query(sql_user_club)
+
+    if logged_club:
+        logged_club = logged_club[0]
+
+    already_present = any(c['recordid'] == logged_club['recordid'] for c in clubs)
+
+    if already_present:
+        clubs = [c for c in clubs if c['recordid'] != logged_club['recordid']]
+    clubs.insert(0, logged_club)
 
     fields = SysField.objects.filter(tableid='metrica_annuale', fieldtypewebid='Numero').values('fieldid', 'description').order_by('description')
     
@@ -7059,9 +7083,16 @@ def get_filtered_clubs(request):
            ON g.recordid_ = m.recordidgolfclub_
         WHERE {conditions}
         GROUP BY title, recordid
+        ORDER BY title ASC
     """
 
     clubs = HelpderDB.sql_query(sql)
+
+    sql_user_club = f"SELECT nome_club as title, recordid_ as recordid, logo, paese FROM user_golfclub WHERE utente = '{userid}'"
+    logged_club = HelpderDB.sql_query(sql_user_club)
+
+    if logged_club:
+        logged_club = logged_club[0]
 
     # --------------------------------------------------------
     # 4. Filtro distanza applicato DOPO la query
@@ -7071,8 +7102,7 @@ def get_filtered_clubs(request):
         operator = distance_filter.get('operator')
         value = distance_filter.get('value')
 
-        sql_user_club = f"SELECT paese FROM user_golfclub WHERE utente = '{userid}'"
-        user_country = HelpderDB.sql_query(sql_user_club)[0]['paese']
+        user_country = logged_club['paese']
 
         from geopy.distance import geodesic
         latitude, longitude = safe_geocode(user_country)
@@ -7096,6 +7126,13 @@ def get_filtered_clubs(request):
         clubs = filtered_clubs
 
     # --------------------------------------------------------
+
+    already_present = any(c['recordid'] == logged_club['recordid'] for c in clubs)
+
+    if already_present:
+        clubs = [c for c in clubs if c['recordid'] != logged_club['recordid']]
+    clubs.insert(0, logged_club)
+
     return JsonResponse({'availableClubs': clubs}, safe=False)
 
 from geopy.geocoders import Nominatim
