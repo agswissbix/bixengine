@@ -5457,21 +5457,14 @@ def get_chart_data(request):
 
 
 def build_chart_data(request, chart_id, viewid=None, filters=None, block_category=None):
-    """
-    Costruisce e restituisce i dati completi di un grafico (chart_data + meta),
-    con gestione filtri e logica custom per cliente 'wegolf'.
+    import re
 
-    Parametri:
-      - chart_id: id del chart (obbligatorio)
-      - viewid: id della sys_view collegata (opzionale; serve per query_conditions)
-      - filters: dict opzionale con chiavi: selectedClubs, selectedYears, showAllClubs
-      - block_category: categoria del blocco letta da sys_dashboard_block; se non fornita,
-                        viene ricavata (fallback) interrogando sys_dashboard_block per chart_id.
-    """
     userid = Helper.get_userid(request)
     cliente_id = Helper.get_cliente_id()
 
-    # 1) Chart record
+    # ----------------------------------------------------------
+    # 1) Lettura definizione chart
+    # ----------------------------------------------------------
     chart = HelpderDB.sql_query_row(f"SELECT * FROM sys_chart WHERE id='{chart_id}'")
     if not chart:
         raise ValueError(f"Chart with id {chart_id} not found")
@@ -5482,16 +5475,18 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
     if isinstance(chart_config, str):
         chart_config = json.loads(chart_config)
 
-    # 2) Ricavo (o uso) la block_category dalla sys_dashboard_block
+    # ----------------------------------------------------------
+    # 2) Ricavo categoria del blocco se non fornita
+    # ----------------------------------------------------------
     if block_category is None:
-        # NB: se esistono più blocchi che puntano allo stesso chart_id con categorie diverse,
-        # qui si prende la prima occorrenza. Se vuoi essere più preciso, passa block_category esplicitamente.
         block_category = HelpderDB.sql_query_value(
             f"SELECT category FROM sys_dashboard_block WHERE chartid='{chart_id}' LIMIT 1",
             "category"
         ) or ""
 
-    # 3) Costruzione query_conditions dalla view (se presente)
+    # ----------------------------------------------------------
+    # 3) Query conditions della view
+    # ----------------------------------------------------------
     query_conditions = ""
     if viewid:
         view = HelpderDB.sql_query_row(f"SELECT * FROM sys_view WHERE id='{viewid}'")
@@ -5499,51 +5494,87 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
             raise ValueError(f"View with id {viewid} not found")
         query_conditions = (view.get("query_conditions") or "").replace("$userid$", str(userid))
 
-    # 4) Filtri (wegolf): selectedClubs / selectedYears / showAllClubs
+    # ----------------------------------------------------------
+    # 4) Pre-elaborazione filtri comuni (CLUB e ANNI)
+    # ----------------------------------------------------------
+    selected_years = (filters or {}).get("selectedYears", [])
+    selected_clubs = (filters or {}).get("selectedClubs", [])
+    dynamic_conditions = []  # <-- condizioni riusabili anche nella query per il placeholder
+
+    # CLUB – logica unica
+    user_club = HelpderDB.sql_query_value(
+        f"SELECT recordid_ FROM user_golfclub WHERE utente='{userid}'",
+        "recordid_"
+    )
+
     if cliente_id == "wegolf":
-        selected_clubs = (filters or {}).get("selectedClubs", [])
-        selected_years = (filters or {}).get("selectedYears", [])
 
-        # Se NON è benchmark e NON è richiesto "tutti i club", limita al club dell'utente
         if block_category != "benchmark":
-            recordid_golfclub = HelpderDB.sql_query_value(
-                f"SELECT recordid_ FROM user_golfclub WHERE utente='{userid}'",
-                "recordid_"
-            )
-            if recordid_golfclub:
-                if query_conditions:
-                    query_conditions += f" AND recordidgolfclub_='{recordid_golfclub}'"
-                else:
-                    query_conditions = f"recordidgolfclub_='{recordid_golfclub}'"
+            # Non benchmark → club dell’utente
+            if user_club:
+                dynamic_conditions.append(f"recordidgolfclub_='{user_club}'")
 
-        # Se è benchmark e sono stati scelti club specifici, filtra per quelli
-        if block_category == "benchmark" and selected_clubs:
-            clubs_conditions = " OR ".join(
-                [f"recordidgolfclub_='{club}'" for club in selected_clubs]
-            )
-            if clubs_conditions:
-                if query_conditions:
-                    query_conditions += f" AND ({clubs_conditions})"
-                else:
-                    query_conditions = f"({clubs_conditions})"
+        else:
+            # benchmark → usa clubs selezionati
+            if selected_clubs:
+                club_list = "', '".join(selected_clubs)
+                dynamic_conditions.append(f"recordidgolfclub_ IN ('{club_list}')")
 
-        # Filtro anni (sempre applicabile se presente)
+        # ANNI
         if selected_years:
-            years_conditions = " OR ".join([f"anno='{year}'" for year in selected_years])
-            if years_conditions:
-                if query_conditions:
-                    query_conditions += f" AND ({years_conditions})"
-                else:
-                    query_conditions = f"({years_conditions})"
+            year_list = "', '".join(selected_years)
+            dynamic_conditions.append(f"anno IN ('{year_list}')")
 
-    # 5) Generazione dati dinamici
+    # Applica condizioni a query_conditions
+    if dynamic_conditions:
+        cond = " AND ".join(dynamic_conditions)
+        if query_conditions:
+            query_conditions += f" AND {cond}"
+        else:
+            query_conditions = cond
+
+    # ----------------------------------------------------------
+    # 5) Ottenimento dati dinamici del chart
+    # ----------------------------------------------------------
     chart_data = get_dynamic_chart_data(request, chart_id, query_conditions or "1=1")
     if "datasets" in chart_data and chart_data["datasets"]:
         chart_data["datasets"][0]["view"] = viewid
 
     chart_data_json = json.dumps(chart_data, default=json_date_handler)
 
-    # 6) Output finale
+    # ----------------------------------------------------------
+    # 6) Placeholder dinamico <colonna>
+    # ----------------------------------------------------------
+    match = re.search(r"<([^>]+)>", chart_name)
+    if match:
+        dynamic_column = match.group(1).strip()
+
+        # Riutilizzo ESATTAMENTE le condizioni già costruite sopra
+        where_clause = " AND ".join(dynamic_conditions) if dynamic_conditions else "1=1"
+
+        chart_record = HelpderDB.sql_query_row(f"SELECT * FROM sys_chart WHERE id={chart_id}")
+        if not chart_record:
+            return {'error': 'Chart not found'}
+
+        config = json.loads(chart_record['config'])
+
+        dynamic_value = HelpderDB.sql_query_value(
+            f"""
+                SELECT {dynamic_column}
+                FROM user_{config['from_table']}
+                WHERE {where_clause}
+                ORDER BY anno DESC
+                LIMIT 1
+            """,
+            dynamic_column
+        )
+
+        if dynamic_value is not None:
+            chart_name = re.sub(r"<[^>]+>", str(dynamic_value), chart_name)
+
+    # ----------------------------------------------------------
+    # 7) Output finale
+    # ----------------------------------------------------------
     return {
         "id": chart_id,
         "name": chart_name,
