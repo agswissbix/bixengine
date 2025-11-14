@@ -7239,6 +7239,7 @@ def get_settings_data(request):
             "id": str(recordidgolfclub),
             "nome": club_data.get("nome_club", ""),
             "paese": club_data.get("paese", ""),
+            "nazione": club_data.get("nazione", ""),
             "indirizzo": club_data.get("indirizzo", ""),
             "email": club_data.get("email", ""),
             "annoFondazione": club_data.get("anno_fondazione", ""),
@@ -7304,6 +7305,7 @@ def update_club_settings(request):
         # Aggiorna i campi testuali
         club.values['nome_club'] = data.get("nome", club.values.get('nome_club'))
         club.values['paese'] = data.get("paese", club.values.get('paese'))
+        club.values['nazione'] = data.get("nazione", club.values.get('nazione'))
         club.values['indirizzo'] = data.get("indirizzo", club.values.get('indirizzo'))
         club.values['email'] = data.get("email", club.values.get('email'))
         club.values['anno_fondazione'] = data.get("annoFondazione", club.values.get('anno_fondazione'))
@@ -7354,6 +7356,7 @@ def update_club_settings(request):
             "id": str(recordidgolfclub),
             "nome": club.values.get("nome_club", ""),
             "paese": club.values.get("paese", ""),
+            "nazione": club.values.get("nazione", ""),
             "indirizzo": club.values.get("indirizzo", ""),
             "email": club.values.get("email", ""),
             "annoFondazione": club.values.get("anno_fondazione", ""),
