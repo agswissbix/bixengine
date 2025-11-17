@@ -5313,6 +5313,8 @@ def get_dashboard_blocks(request):
     request_data = json.loads(request.body)
     #TODO custom wegolf
     filters=request_data.get('filters', None)
+    viewMode=request_data.get('viewMode', None)
+    referenceYear=request_data.get('referenceYear', None)
     selected_clubs=None
     selected_years=None
     if filters:
@@ -5442,7 +5444,9 @@ def get_dashboard_blocks(request):
                             results['chartid'],
                             results['viewid'],
                             filters,
-                            block_category=results.get('category', '')
+                            block_category=results.get('category', ''),
+                            viewMode=viewMode,
+                            referenceYear=referenceYear
                         )
                         block['chart_data'] = chart_info['chart_data']
                         block['name'] = chart_info['name']
@@ -5475,7 +5479,7 @@ def get_chart_data(request):
         return JsonResponse({"error": str(e)}, status=500)
 
 
-def build_chart_data(request, chart_id, viewid=None, filters=None, block_category=None):
+def build_chart_data(request, chart_id, viewid=None, filters=None, block_category=None, viewMode=None, referenceYear=None):
     import re
 
     userid = Helper.get_userid(request)
@@ -5555,7 +5559,7 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
     # ----------------------------------------------------------
     # 5) Ottenimento dati dinamici del chart
     # ----------------------------------------------------------
-    chart_data = get_dynamic_chart_data(request, chart_id, query_conditions or "1=1")
+    chart_data = get_dynamic_chart_data(request, chart_id, query_conditions or "1=1", viewMode, referenceYear)
     if "datasets" in chart_data and chart_data["datasets"]:
         chart_data["datasets"][0]["view"] = viewid
 
@@ -5742,7 +5746,7 @@ def _format_datasets_from_rows(aliases, labels, dictrows):
         datasets.append({'label': labels[i], 'data': data})
     return datasets
 
-def _perform_post_calculation(post_calc_def, all_db_datasets, labels):
+def _perform_post_calculation(post_calc_def, all_db_datasets, labels,viewMode=None, referenceYear=None):
     """
     Esegue calcoli post-query, come la media di un altro dataset.
     """
@@ -5767,15 +5771,19 @@ def _perform_post_calculation(post_calc_def, all_db_datasets, labels):
         # --- INIZIO MODIFICA ---
         
         # 1. Ottieni l'anno corrente come STRINGA (es. "2024")
-        current_year_str = str(datetime.date.today().year)
-        
-        # 2. Filtra i dati: escludi i valori il cui label (stringa) corrisponde all'anno corrente
-        # Usiamo zip per accoppiare ogni label (anno come stringa) al suo valore
-        filtered_data = [
-            value for label_str, value in zip(labels, source_data) 
-            if label_str != current_year_str
-        ]
-        
+        if viewMode == 'confronto':
+            current_year_str = referenceYear
+            
+            # 2. Filtra i dati: escludi i valori il cui label (stringa) corrisponde all'anno corrente
+            # Usiamo zip per accoppiare ogni label (anno come stringa) al suo valore
+            filtered_data = [
+                value for label_str, value in zip(labels, source_data) 
+                if label_str != current_year_str
+            ]
+        else:
+            filtered_data = [
+                value for label_str, value in zip(labels, source_data) 
+            ]
         # Nota: questo codice ora gestisce correttamente anche labels che 
         # non sono anni (es. "Gennaio"). "Gennaio" è diverso da "2024" (l'anno corrente),
         # quindi i suoi dati verranno correttamente inclusi nella media.
@@ -5833,7 +5841,7 @@ def _build_chart_context_base(chart_id, chart_record, labels, datasets, datasets
 
 # === SPECIFIC IMPLEMENTATIONS ==============================================
 
-def _handle_record_pivot_chart(config, chart_id, chart_record, query_conditions):
+def _handle_record_pivot_chart(config, chart_id, chart_record, query_conditions,viewMode=None, referenceYear=None):
     """Gestisce la generazione di dati per grafici 'record_pivot'."""
     pivot_fields_map = {item['alias']: item for item in config['pivot_fields']}
     aliases = list(pivot_fields_map.keys())
@@ -5896,7 +5904,7 @@ def _handle_record_pivot_chart(config, chart_id, chart_record, query_conditions)
     return _build_chart_context_base(chart_id, chart_record, final_labels, datasets)
 
 
-def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
+def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions,viewMode=None, referenceYear=None):
     all_defs = config.get('datasets', []) + config.get('datasets2', [])
     db_defs = [ds for ds in all_defs if 'expression' in ds]
     post_calc_defs = [ds for ds in all_defs if 'post_calculation' in ds]
@@ -5983,7 +5991,7 @@ def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
 
     all_post_calc_datasets = []
     for pc_def in post_calc_defs:
-        r = _perform_post_calculation(pc_def, all_db_datasets, labels)
+        r = _perform_post_calculation(pc_def, all_db_datasets, labels, viewMode, referenceYear)
         if r:
             all_post_calc_datasets.append(r)
 
@@ -6061,7 +6069,7 @@ def _aliasize_conditions(query_conditions, main_table, has_lookup=False, lookup_
     return qc
 
 
-def get_dynamic_chart_data(request, chart_id, query_conditions='1=1'):
+def get_dynamic_chart_data(request, chart_id, query_conditions='1=1', viewMode=None, referenceYear=None):
     """Genera dinamicamente i dati per un grafico leggendo la configurazione JSON dal database."""
     chart_record = HelpderDB.sql_query_row(f"SELECT * FROM sys_chart WHERE id={chart_id}")
     if not chart_record:
@@ -6079,7 +6087,7 @@ def get_dynamic_chart_data(request, chart_id, query_conditions='1=1'):
     if not handler:
         return {'error': f'Unknown chart type: {chart_type}'}
 
-    return handler(config, chart_id, chart_record, query_conditions)
+    return handler(config, chart_id, chart_record, query_conditions,viewMode, referenceYear)
 
 
 
