@@ -6233,6 +6233,8 @@ def save_form_data(request):
         request_data = json.loads(request.body)
         year = request_data.get("year")
         payload = request_data.get("payload")
+        completion_stats=request_data.get("completionStats",{})
+        completion_stats_sections=completion_stats.get("sections",{})
         
         if not year:
             return JsonResponse({"error": "Anno mancante"}, status=400)
@@ -6271,6 +6273,22 @@ def save_form_data(request):
 
         # --- 4. Salvataggio nel Database ---
         record.save()
+
+
+        # --- 5. Salvataggio progresso compilazione ---
+        table_dataprogress=UserTable('golfdataprogress')
+        records_found=table_dataprogress.get_table_records_obj(conditions_list=[f"recordidgolfclub_='{recordidgolfclub}'",f"anno='{str(year)}'"])
+        if len(records_found)>0:
+            record_dataprogress=records_found[0]
+        else:   
+            record_dataprogress=UserRecord('golfdataprogress')
+            record_dataprogress.values['recordidgolfclub_']=recordidgolfclub
+            record_dataprogress.values['anno']=year
+        
+        for section_key, section_data in completion_stats_sections.items():
+            chiave_modificata = section_key.lower().replace(" ", "").replace("-", "")
+            record_dataprogress.values[f"prog_{chiave_modificata}"]=section_data
+        record_dataprogress.save()
 
         return JsonResponse({"success": True, "message": "Dati salvati con successo."})
 
