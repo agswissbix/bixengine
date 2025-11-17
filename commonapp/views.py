@@ -7906,15 +7906,15 @@ def get_notifications(request):
             if status == 'Read':
                 read = True
 
-
-        data.append({
-            'id': notification.get('id', ''),
-            'title': notification.get('title', ''),
-            'message': notification.get('message', ''),
-            'date': isodate,
-            'read': read,
-            'status_id': found_status.get('recordid_') if found_status else None
-        })
+            if status != 'Hidden':
+                data.append({
+                    'id': notification.get('id', ''),
+                    'title': notification.get('title', ''),
+                    'message': notification.get('message', ''),
+                    'date': isodate,
+                    'read': read,
+                    'status_id': found_status.get('recordid_') if found_status else None
+                })
 
     return JsonResponse({"notifications": data}, safe=False)
 
@@ -7950,6 +7950,27 @@ def mark_notification_read(request):
         if notifications_statuses:
             record = UserRecord('notification_status', status_id)
             record.values['status'] = 'Read'
+            record.save()
+            return JsonResponse({"success": True}, safe=False)
+        else:
+            return JsonResponse({"success": False}, safe=False)
+    except Exception as e:
+        print(e)
+        return JsonResponse({"success": False, "error": str(e)}, safe=False)
+    
+def mark_notification_hidden(request):
+    try:
+        userid = Helper.get_userid(request)
+
+        data = json.loads(request.body)
+        status_id = data.get('status_id', '')
+
+        notifications_statuses_table  = UserTable('notification_status', userid=userid)
+        notifications_statuses = notifications_statuses_table.get_records(conditions_list=[f"recordid_={status_id}"])
+
+        if notifications_statuses:
+            record = UserRecord('notification_status', status_id)
+            record.values['status'] = 'Hidden'
             record.save()
             return JsonResponse({"success": True}, safe=False)
         else:
