@@ -4846,24 +4846,36 @@ def download_offerta(request):
 def get_dashboard_data(request):
     userid = Helper.get_userid(request)
     data = json.loads(request.body)
-    dashboardCategory = data.get('dashboardCategory', '')   
+    dashboardCategory = data.get('dashboardCategory', '')
 
-    if dashboardCategory!='':
-        dashboards = HelpderDB.sql_query(f"SELECT  id, name from sys_dashboard WHERE category='{dashboardCategory}'")
-    else:
-        dashboards_user = SysUserDashboard.objects.filter(userid=userid).values("dashboardid")
+    # Dashboard dell’utente corrente
+    dashboards_user = SysUserDashboard.objects.filter(userid=userid)\
+                                              .values_list("dashboardid", flat=True)
+
+    # Dashboard dell’utente 1 (default)
+    dashboards_default = SysDashboard.objects.filter(userid=1)\
+                                             .values_list("id", flat=True)
+
+    # Unisco gli ID in un unico set per evitare duplicati
+    dashboard_ids = set(dashboards_default) | set(dashboards_user)
+
+    # Se esiste una categoria, filtro anche per categoria
+    if dashboardCategory:
         dashboards_qs = SysDashboard.objects.filter(
-            id__in=[d["dashboardid"] for d in dashboards_user]
-        ).values("id", "name").order_by("order_dashboard")
+            id__in=dashboard_ids,
+            category=dashboardCategory
+        ).values("id", "name").order_by(F("order_dashboard").asc(nulls_last=True))
+    else:
+        dashboards_qs = SysDashboard.objects.filter(
+            id__in=dashboard_ids
+        ).values("id", "name").order_by(F("order_dashboard").asc(nulls_last=True))
 
-        dashboards = [
-            {"id": str(d["id"]), "name": d["name"]}
-            for d in dashboards_qs
-        ]
+    dashboards = [
+        {"id": str(d["id"]), "name": d["name"]}
+        for d in dashboards_qs
+    ]
 
-    return JsonResponse({
-        'dashboards': dashboards
-    })
+    return JsonResponse({'dashboards': dashboards})
 
 
 
@@ -5314,6 +5326,8 @@ def get_dashboard_blocks(request):
     request_data = json.loads(request.body)
     #TODO custom wegolf
     filters=request_data.get('filters', None)
+    viewMode=request_data.get('viewMode', None)
+    referenceYear=request_data.get('referenceYear', None)
     selected_clubs=None
     selected_years=None
     if filters:
@@ -5443,7 +5457,9 @@ def get_dashboard_blocks(request):
                             results['chartid'],
                             results['viewid'],
                             filters,
-                            block_category=results.get('category', '')
+                            block_category=results.get('category', ''),
+                            viewMode=viewMode,
+                            referenceYear=referenceYear
                         )
                         block['chart_data'] = chart_info['chart_data']
                         block['name'] = chart_info['name']
@@ -5476,7 +5492,7 @@ def get_chart_data(request):
         return JsonResponse({"error": str(e)}, status=500)
 
 
-def build_chart_data(request, chart_id, viewid=None, filters=None, block_category=None):
+def build_chart_data(request, chart_id, viewid=None, filters=None, block_category=None, viewMode=None, referenceYear=None):
     import re
 
     userid = Helper.get_userid(request)
@@ -5526,6 +5542,10 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
         f"SELECT recordid_ FROM user_golfclub WHERE utente='{userid}'",
         "recordid_"
     )
+    user_numeric_format = HelpderDB.sql_query_value(
+        f"SELECT formato_numerico FROM user_golfclub WHERE utente='{userid}'",
+        "formato_numerico"
+    )
 
     if cliente_id == "wegolf":
 
@@ -5556,9 +5576,11 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
     # ----------------------------------------------------------
     # 5) Ottenimento dati dinamici del chart
     # ----------------------------------------------------------
-    chart_data = get_dynamic_chart_data(request, chart_id, query_conditions or "1=1")
+    chart_data = get_dynamic_chart_data(request, chart_id, query_conditions or "1=1", viewMode, referenceYear)
     if "datasets" in chart_data and chart_data["datasets"]:
         chart_data["datasets"][0]["view"] = viewid
+    
+    chart_data['numeric_format'] = str(user_numeric_format).replace('_', '-') if is_valid_locale(user_numeric_format) else "it-CH"
 
     chart_data_json = json.dumps(chart_data, default=json_date_handler)
 
@@ -5743,7 +5765,7 @@ def _format_datasets_from_rows(aliases, labels, dictrows):
         datasets.append({'label': labels[i], 'data': data})
     return datasets
 
-def _perform_post_calculation(post_calc_def, all_db_datasets, labels):
+def _perform_post_calculation(post_calc_def, all_db_datasets, labels,viewMode=None, referenceYear=None):
     """
     Esegue calcoli post-query, come la media di un altro dataset.
     """
@@ -5768,15 +5790,19 @@ def _perform_post_calculation(post_calc_def, all_db_datasets, labels):
         # --- INIZIO MODIFICA ---
         
         # 1. Ottieni l'anno corrente come STRINGA (es. "2024")
-        current_year_str = str(datetime.date.today().year)
-        
-        # 2. Filtra i dati: escludi i valori il cui label (stringa) corrisponde all'anno corrente
-        # Usiamo zip per accoppiare ogni label (anno come stringa) al suo valore
-        filtered_data = [
-            value for label_str, value in zip(labels, source_data) 
-            if label_str != current_year_str
-        ]
-        
+        if viewMode == 'confronto':
+            current_year_str = referenceYear
+            
+            # 2. Filtra i dati: escludi i valori il cui label (stringa) corrisponde all'anno corrente
+            # Usiamo zip per accoppiare ogni label (anno come stringa) al suo valore
+            filtered_data = [
+                value for label_str, value in zip(labels, source_data) 
+                if label_str != current_year_str
+            ]
+        else:
+            filtered_data = [
+                value for label_str, value in zip(labels, source_data) 
+            ]
         # Nota: questo codice ora gestisce correttamente anche labels che 
         # non sono anni (es. "Gennaio"). "Gennaio" è diverso da "2024" (l'anno corrente),
         # quindi i suoi dati verranno correttamente inclusi nella media.
@@ -5834,7 +5860,7 @@ def _build_chart_context_base(chart_id, chart_record, labels, datasets, datasets
 
 # === SPECIFIC IMPLEMENTATIONS ==============================================
 
-def _handle_record_pivot_chart(config, chart_id, chart_record, query_conditions):
+def _handle_record_pivot_chart(config, chart_id, chart_record, query_conditions,viewMode=None, referenceYear=None):
     """Gestisce la generazione di dati per grafici 'record_pivot'."""
     pivot_fields_map = {item['alias']: item for item in config['pivot_fields']}
     aliases = list(pivot_fields_map.keys())
@@ -5897,7 +5923,7 @@ def _handle_record_pivot_chart(config, chart_id, chart_record, query_conditions)
     return _build_chart_context_base(chart_id, chart_record, final_labels, datasets)
 
 
-def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
+def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions,viewMode=None, referenceYear=None):
     all_defs = config.get('datasets', []) + config.get('datasets2', [])
     db_defs = [ds for ds in all_defs if 'expression' in ds]
     post_calc_defs = [ds for ds in all_defs if 'post_calculation' in ds]
@@ -5984,7 +6010,7 @@ def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions):
 
     all_post_calc_datasets = []
     for pc_def in post_calc_defs:
-        r = _perform_post_calculation(pc_def, all_db_datasets, labels)
+        r = _perform_post_calculation(pc_def, all_db_datasets, labels, viewMode, referenceYear)
         if r:
             all_post_calc_datasets.append(r)
 
@@ -6062,7 +6088,7 @@ def _aliasize_conditions(query_conditions, main_table, has_lookup=False, lookup_
     return qc
 
 
-def get_dynamic_chart_data(request, chart_id, query_conditions='1=1'):
+def get_dynamic_chart_data(request, chart_id, query_conditions='1=1', viewMode=None, referenceYear=None):
     """Genera dinamicamente i dati per un grafico leggendo la configurazione JSON dal database."""
     chart_record = HelpderDB.sql_query_row(f"SELECT * FROM sys_chart WHERE id={chart_id}")
     if not chart_record:
@@ -6080,7 +6106,7 @@ def get_dynamic_chart_data(request, chart_id, query_conditions='1=1'):
     if not handler:
         return {'error': f'Unknown chart type: {chart_type}'}
 
-    return handler(config, chart_id, chart_record, query_conditions)
+    return handler(config, chart_id, chart_record, query_conditions,viewMode, referenceYear)
 
 
 
@@ -6301,7 +6327,9 @@ def get_form_fields(request):
             print("Unable to get translations")
 
         fields = {}
-        recordidgolfclub=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_golfclub WHERE utente={userid}","recordid_")
+        sql = f"SELECT recordid_, formato_numerico FROM user_golfclub WHERE utente={userid}"
+        recordidgolfclub=HelpderDB.sql_query_value(sql,"recordid_")
+        formato_numerico=HelpderDB.sql_query_value(sql,"formato_numerico")
         table=UserTable('metrica_annuale')
         records=table.get_table_records_obj(conditions_list=[f"recordidgolfclub_='{recordidgolfclub}'",f"anno='{str(year)}'"])
         if records:
@@ -6446,6 +6474,7 @@ def get_form_fields(request):
                         if field.get('name') in saved_values:
                             # Assegna il valore salvato, gestendo il caso di None
                             field['value'] = saved_values[field['name']] or ""
+                            # field['value'] = safe_format_decimal(saved_values.get(field['name']), locale=formato_numerico) or ""
         final_response = {"config": form_config}
         return JsonResponse(final_response)
 
@@ -6456,6 +6485,24 @@ def get_form_fields(request):
         print(f"Errore in get_form_fields: {e}")
         return JsonResponse({"error": "Errore interno del server"}, status=500)
 
+from babel.numbers import format_decimal
+from babel import Locale
+def safe_format_decimal(value, locale="it_CH"):
+    if value is None:
+        return value
+    if not is_valid_locale(locale):
+        locale = 'it_CH'
+    try:
+        return format_decimal(float(value), format="#,##0.00", locale=locale)
+    except Exception:
+        return value
+    
+def is_valid_locale(locale_str):
+    try:
+        Locale.parse(locale_str)
+        return True
+    except Exception:
+        return False
 
 #TODO
 #TEMP
@@ -6797,6 +6844,61 @@ def new_dashboard(request):
                 )
 
     return JsonResponse({'success': True, 'message': 'New dashboard created successfully.'})
+
+def update_dashboard(request):
+    if request.method != "POST":
+        return JsonResponse({'error': 'Invalid request method'}, status=405)
+
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    dashboard_id = data.get('dashboardid', None)
+    dashboard_name = data.get('dashboard_name', None)
+    userid =Helper.get_userid(request)
+
+    if not dashboard_id:
+        return JsonResponse({'error': 'dashboardid is required'}, status=400)
+
+    # Recupero la dashboard, ma solo se appartiene all’utente
+    try:
+        dashboard = SysDashboard.objects.get(id=dashboard_id, userid=userid)
+        user_dashboard = SysUserDashboard.objects.get(dashboardid_id=dashboard_id, userid_id=userid)
+    except SysDashboard.DoesNotExist:
+        return JsonResponse({'error': 'Dashboard not found'}, status=404)
+
+    blocks = SysDashboardBlock.objects.filter(dashboardid_id=dashboard_id).all()
+
+    # 🔄 1) Se è presente dashboard_name → aggiorno il nome
+    if dashboard_name:
+        for block in blocks:
+            block.name = block.name.replace(dashboard.name, dashboard_name)
+            block.save()
+        dashboard.name = dashboard_name
+        dashboard.save()
+        return JsonResponse({
+            'success': True,
+            'message': 'Dashboard updated successfully',
+            'dashboard': {
+                'id': dashboard.id,
+                'name': dashboard.name
+            }
+        })
+
+    # ❌ 2) Se NON c'è dashboard_name → elimino la dashboard
+    blocks.delete()
+    user_dashboard.delete()
+    dashboard.delete()
+    return JsonResponse({
+        'success': True,
+        'message': 'Dashboard deleted successfully',
+        'dashboardid': dashboard_id
+    })
+    
 
 
 def delete_dashboard_block(request):
