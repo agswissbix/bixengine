@@ -65,6 +65,7 @@ import json
 from django.http import JsonResponse
 import locale
 from commonapp.bixmodels.helper_db import *
+from functools import lru_cache
 
 from . import graph_service
 from dateutil import parser
@@ -7156,32 +7157,37 @@ def get_filtered_clubs(request):
     # 4. Filtro distanza applicato DOPO la query
     # --------------------------------------------------------
     if distance_filter:
-        field = distance_filter.get('field')
         operator = distance_filter.get('operator')
-        value = distance_filter.get('value')
+        max_distance = distance_filter.get('value')
 
+        # paese dell’utente
         user_country = logged_club['paese']
 
-        from geopy.distance import geodesic
-        latitude, longitude = safe_geocode(user_country)
-        user_coords = (latitude, longitude)
+        user_coords = cached_safe_geocode(user_country)
+        if not user_coords:
+            return JsonResponse({'availableClubs': []}, safe=False)
 
-        filtered_clubs = []
+        # costruisci una cache dei paesi dei club → 1 geocode per paese, non per club!
+        unique_countries = {club['paese'] for club in clubs if club.get('paese')}
+        geocoded_countries = {c: cached_safe_geocode(c) for c in unique_countries}
+
+        filtered = []
         for club in clubs:
             country = club.get('paese')
-            if not country:
+            coords = geocoded_countries.get(country)
+
+            if not coords:
                 continue
 
-            lat, lng = safe_geocode(country)
-            if lat and lng:
-                distance = geodesic(user_coords, (lat, lng)).km
+            from geopy.distance import geodesic
+            dist = geodesic(user_coords, coords).km
 
-                if operator == "<=" and distance <= value:
-                    filtered_clubs.append(club)
-                elif operator == ">=" and distance >= value:
-                    filtered_clubs.append(club)
+            if operator == "<=" and dist <= max_distance:
+                filtered.append(club)
+            elif operator == ">=" and dist >= max_distance:
+                filtered.append(club)
 
-        clubs = filtered_clubs
+        clubs = filtered
 
     # --------------------------------------------------------
 
@@ -7198,6 +7204,10 @@ from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 import time
 
 geolocator = Nominatim(user_agent="golf_app")
+
+@lru_cache(maxsize=256)
+def cached_safe_geocode(location_name):
+    return safe_geocode(location_name)
 
 def safe_geocode(location_name, retries=2):
     """Tenta di geocodificare un nome paese, con retry e gestione errori."""
