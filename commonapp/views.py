@@ -6256,6 +6256,10 @@ def save_form_data(request):
             return JsonResponse({"error": "Anno mancante"}, status=400)
         userid=Helper.get_userid(request)
         recordidgolfclub=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_golfclub WHERE utente={userid}","recordid_")
+        user_locale = HelpderDB.sql_query_value(
+            f"SELECT formato_numerico FROM user_golfclub WHERE utente='{userid}'",
+            "formato_numerico"
+        ) or "it_CH"
 
         # Controlla che i dati necessari siano presenti
         if not year or payload is None:
@@ -6471,10 +6475,10 @@ def get_form_fields(request):
         saved_values = record.values
         for section in form_config.values():
                     for field in section['fields']:
+                        field['locale'] = formato_numerico.replace('_', '-') if is_valid_locale(formato_numerico) else 'it-CH'
                         if field.get('name') in saved_values:
                             # Assegna il valore salvato, gestendo il caso di None
                             field['value'] = saved_values[field['name']] or ""
-                            # field['value'] = safe_format_decimal(saved_values.get(field['name']), locale=formato_numerico) or ""
         final_response = {"config": form_config}
         return JsonResponse(final_response)
 
@@ -6485,17 +6489,7 @@ def get_form_fields(request):
         print(f"Errore in get_form_fields: {e}")
         return JsonResponse({"error": "Errore interno del server"}, status=500)
 
-from babel.numbers import format_decimal
 from babel import Locale
-def safe_format_decimal(value, locale="it_CH"):
-    if value is None:
-        return value
-    if not is_valid_locale(locale):
-        locale = 'it_CH'
-    try:
-        return format_decimal(float(value), format="#,##0.00", locale=locale)
-    except Exception:
-        return value
     
 def is_valid_locale(locale_str):
     try:
