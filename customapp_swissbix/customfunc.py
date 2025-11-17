@@ -698,6 +698,8 @@ def save_record_fields(tableid,recordid):
 
         views.create_notification(recordid)
 
+        notification_record.save()
+
 
 def card_task_pianificaperoggi(recordid):
     print("card_task_pianificaperoggi")

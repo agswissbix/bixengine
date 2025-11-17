@@ -7878,11 +7878,15 @@ def create_notification(notification_id):
 def get_notifications(request):
     userid = Helper.get_userid(request)
 
+    golfclub = HelpderDB.sql_query_row(f"SELECT * FROM user_golfclub WHERE utente = {userid}")
+
     data = []
 
     notifications_table = UserTable('notification')
     notifications = notifications_table.get_records(conditions_list=[])
-    notifications_statuses  = UserTable('notification_status', userid=userid).get_records(conditions_list=[f"recordidgolfclub_={userid}"])
+
+    notifications_statuses_table  = UserTable('notification_status', userid=userid)
+    notifications_statuses = notifications_statuses_table.get_records(conditions_list=[f"recordidgolfclub_={golfclub.get('recordid_')}"])
 
     for notification in notifications:
         date = notification.get('date')
@@ -7891,12 +7895,16 @@ def get_notifications(request):
         isodate = f"{date}T{time}"
 
         read = False
+
         found_status = next(
-            (s for s in notifications_statuses if str(s.get('recordidgolfclub_')) == userid),
+            (s for s in notifications_statuses if str(s.get('recordidnotification_')) == str(notification.get('recordid_'))),
             None
         )
+
         if found_status:
-            read = found_status.get('status') == "Read"
+            status = found_status.get('status')
+            if status == 'Read':
+                read = True
 
 
         data.append({
@@ -7904,8 +7912,48 @@ def get_notifications(request):
             'title': notification.get('title', ''),
             'message': notification.get('message', ''),
             'date': isodate,
-            'read': read
+            'read': read,
+            'status_id': found_status.get('recordid_') if found_status else None
         })
 
     return JsonResponse({"notifications": data}, safe=False)
 
+def mark_all_notifications_read(request):
+    try:
+        userid = Helper.get_userid(request)
+        golfclub = HelpderDB.sql_query_row(f"SELECT * FROM user_golfclub WHERE utente = {userid}")
+
+        notifications_statuses_table  = UserTable('notification_status', userid=userid)
+        notifications_statuses = notifications_statuses_table.get_records(conditions_list=[f"recordidgolfclub_={golfclub.get('recordid_')}"])
+
+        for status in notifications_statuses:
+            record = UserRecord('notification_status', status.get('recordid_'))
+            record.values['status'] = 'Read'
+            record.save()
+
+        return JsonResponse({"success": True}, safe=False)
+    except Exception as e:
+        print(e)
+        return JsonResponse({"success": False, "error": str(e)}, safe=False)
+
+
+def mark_notification_read(request):
+    try:
+        userid = Helper.get_userid(request)
+
+        data = json.loads(request.body)
+        status_id = data.get('status_id', '')
+
+        notifications_statuses_table  = UserTable('notification_status', userid=userid)
+        notifications_statuses = notifications_statuses_table.get_records(conditions_list=[f"recordid_={status_id}"])
+
+        if notifications_statuses:
+            record = UserRecord('notification_status', status_id)
+            record.values['status'] = 'Read'
+            record.save()
+            return JsonResponse({"success": True}, safe=False)
+        else:
+            return JsonResponse({"success": False}, safe=False)
+    except Exception as e:
+        print(e)
+        return JsonResponse({"success": False, "error": str(e)}, safe=False)
