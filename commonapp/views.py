@@ -65,6 +65,7 @@ import json
 from django.http import JsonResponse
 import locale
 from commonapp.bixmodels.helper_db import *
+from functools import lru_cache
 
 from . import graph_service
 from dateutil import parser
@@ -7164,32 +7165,37 @@ def get_filtered_clubs(request):
     # 4. Filtro distanza applicato DOPO la query
     # --------------------------------------------------------
     if distance_filter:
-        field = distance_filter.get('field')
         operator = distance_filter.get('operator')
-        value = distance_filter.get('value')
+        max_distance = distance_filter.get('value')
 
+        # paese dell’utente
         user_country = logged_club['paese']
 
-        from geopy.distance import geodesic
-        latitude, longitude = safe_geocode(user_country)
-        user_coords = (latitude, longitude)
+        user_coords = cached_safe_geocode(user_country)
+        if not user_coords:
+            return JsonResponse({'availableClubs': []}, safe=False)
 
-        filtered_clubs = []
+        # costruisci una cache dei paesi dei club → 1 geocode per paese, non per club!
+        unique_countries = {club['paese'] for club in clubs if club.get('paese')}
+        geocoded_countries = {c: cached_safe_geocode(c) for c in unique_countries}
+
+        filtered = []
         for club in clubs:
             country = club.get('paese')
-            if not country:
+            coords = geocoded_countries.get(country)
+
+            if not coords:
                 continue
 
-            lat, lng = safe_geocode(country)
-            if lat and lng:
-                distance = geodesic(user_coords, (lat, lng)).km
+            from geopy.distance import geodesic
+            dist = geodesic(user_coords, coords).km
 
-                if operator == "<=" and distance <= value:
-                    filtered_clubs.append(club)
-                elif operator == ">=" and distance >= value:
-                    filtered_clubs.append(club)
+            if operator == "<=" and dist <= max_distance:
+                filtered.append(club)
+            elif operator == ">=" and dist >= max_distance:
+                filtered.append(club)
 
-        clubs = filtered_clubs
+        clubs = filtered
 
     # --------------------------------------------------------
 
@@ -7206,6 +7212,10 @@ from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 import time
 
 geolocator = Nominatim(user_agent="golf_app")
+
+@lru_cache(maxsize=256)
+def cached_safe_geocode(location_name):
+    return safe_geocode(location_name)
 
 def safe_geocode(location_name, retries=2):
     """Tenta di geocodificare un nome paese, con retry e gestione errori."""
@@ -7516,6 +7526,8 @@ def get_projects(request):
 
         like = HelpderDB.sql_query_row(f"SELECT * FROM user_like WHERE recordidprojects_='{projectid}' AND utente='{userid}'")
 
+        likes = HelpderDB.sql_query(f"SELECT * FROM user_like WHERE recordidprojects_='{projectid}'")
+
         data.append({
             'id':projectid,
             'title': project.get('titolo', ''),
@@ -7523,7 +7535,8 @@ def get_projects(request):
             'categories': categories,
             'documents': formatted_documents,
             'data': project_date,
-            'like': like is not None
+            'like': like is not None,
+            'like_number': len(likes)
         })
     
     
@@ -7823,3 +7836,132 @@ def get_cached_translation(translations, fieldid, userid=None, code=None, transl
 
     except Exception as e:
         return ""
+    
+def sync_notifications(request):
+    print("Sync notifications")
+
+    notification_table = UserTable("notification")
+    notifications = notification_table.get_records(conditions_list=[])
+
+    for notification in notifications:
+        notification_id = notification.get('recordid_')
+
+        create_notification(notification_id)
+
+    return HttpResponse()
+
+
+def create_notification(notification_id):
+    print("Creating notification")
+    try:
+        notification_status_table = UserTable("notification_status")
+        condition_list = [
+            f"recordidnotification_={notification_id}"
+        ]
+
+        notification_statuses = notification_status_table.get_records(conditions_list=condition_list)
+
+        clubs_table = UserTable("golfclub")
+        clubs = clubs_table.get_records(conditions_list=[])
+
+        for club in clubs:
+            print("club")
+            
+            found_status = next(
+                (s for s in notification_statuses if str(s.get('recordidgolfclub_')) == str(club.get('recordid_'))),
+                None
+            )
+
+            if not found_status:
+                new_notification = UserRecord("notification_status")
+                new_notification.values["recordidnotification_"] = notification_id
+                new_notification.values["recordidgolfclub_"] = club.get("recordid_")
+                new_notification.values["status"] = "Unread"
+                new_notification.save()
+
+    except:
+        print("Error creating notification statuses")
+
+
+def get_notifications(request):
+    userid = Helper.get_userid(request)
+
+    golfclub = HelpderDB.sql_query_row(f"SELECT * FROM user_golfclub WHERE utente = {userid}")
+
+    data = []
+
+    notifications_table = UserTable('notification')
+    notifications = notifications_table.get_records(conditions_list=[])
+
+    notifications_statuses_table  = UserTable('notification_status', userid=userid)
+    notifications_statuses = notifications_statuses_table.get_records(conditions_list=[f"recordidgolfclub_={golfclub.get('recordid_')}"])
+
+    for notification in notifications:
+        date = notification.get('date')
+        time = notification.get('time')
+
+        isodate = f"{date}T{time}"
+
+        read = False
+
+        found_status = next(
+            (s for s in notifications_statuses if str(s.get('recordidnotification_')) == str(notification.get('recordid_'))),
+            None
+        )
+
+        if found_status:
+            status = found_status.get('status')
+            if status == 'Read':
+                read = True
+
+
+        data.append({
+            'id': notification.get('id', ''),
+            'title': notification.get('title', ''),
+            'message': notification.get('message', ''),
+            'date': isodate,
+            'read': read,
+            'status_id': found_status.get('recordid_') if found_status else None
+        })
+
+    return JsonResponse({"notifications": data}, safe=False)
+
+def mark_all_notifications_read(request):
+    try:
+        userid = Helper.get_userid(request)
+        golfclub = HelpderDB.sql_query_row(f"SELECT * FROM user_golfclub WHERE utente = {userid}")
+
+        notifications_statuses_table  = UserTable('notification_status', userid=userid)
+        notifications_statuses = notifications_statuses_table.get_records(conditions_list=[f"recordidgolfclub_={golfclub.get('recordid_')}"])
+
+        for status in notifications_statuses:
+            record = UserRecord('notification_status', status.get('recordid_'))
+            record.values['status'] = 'Read'
+            record.save()
+
+        return JsonResponse({"success": True}, safe=False)
+    except Exception as e:
+        print(e)
+        return JsonResponse({"success": False, "error": str(e)}, safe=False)
+
+
+def mark_notification_read(request):
+    try:
+        userid = Helper.get_userid(request)
+
+        data = json.loads(request.body)
+        status_id = data.get('status_id', '')
+
+        notifications_statuses_table  = UserTable('notification_status', userid=userid)
+        notifications_statuses = notifications_statuses_table.get_records(conditions_list=[f"recordid_={status_id}"])
+
+        if notifications_statuses:
+            record = UserRecord('notification_status', status_id)
+            record.values['status'] = 'Read'
+            record.save()
+            return JsonResponse({"success": True}, safe=False)
+        else:
+            return JsonResponse({"success": False}, safe=False)
+    except Exception as e:
+        print(e)
+        return JsonResponse({"success": False, "error": str(e)}, safe=False)
