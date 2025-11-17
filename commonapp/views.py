@@ -4846,24 +4846,36 @@ def download_offerta(request):
 def get_dashboard_data(request):
     userid = Helper.get_userid(request)
     data = json.loads(request.body)
-    dashboardCategory = data.get('dashboardCategory', '')   
+    dashboardCategory = data.get('dashboardCategory', '')
 
-    if dashboardCategory!='':
-        dashboards = HelpderDB.sql_query(f"SELECT  id, name from sys_dashboard WHERE category='{dashboardCategory}'")
-    else:
-        dashboards_user = SysUserDashboard.objects.filter(userid=userid).values("dashboardid")
+    # Dashboard dell’utente corrente
+    dashboards_user = SysUserDashboard.objects.filter(userid=userid)\
+                                              .values_list("dashboardid", flat=True)
+
+    # Dashboard dell’utente 1 (default)
+    dashboards_default = SysDashboard.objects.filter(userid=1)\
+                                             .values_list("id", flat=True)
+
+    # Unisco gli ID in un unico set per evitare duplicati
+    dashboard_ids = set(dashboards_default) | set(dashboards_user)
+
+    # Se esiste una categoria, filtro anche per categoria
+    if dashboardCategory:
         dashboards_qs = SysDashboard.objects.filter(
-            id__in=[d["dashboardid"] for d in dashboards_user]
-        ).values("id", "name").order_by("order_dashboard")
+            id__in=dashboard_ids,
+            category=dashboardCategory
+        ).values("id", "name").order_by(F("order_dashboard").asc(nulls_last=True))
+    else:
+        dashboards_qs = SysDashboard.objects.filter(
+            id__in=dashboard_ids
+        ).values("id", "name").order_by(F("order_dashboard").asc(nulls_last=True))
 
-        dashboards = [
-            {"id": str(d["id"]), "name": d["name"]}
-            for d in dashboards_qs
-        ]
+    dashboards = [
+        {"id": str(d["id"]), "name": d["name"]}
+        for d in dashboards_qs
+    ]
 
-    return JsonResponse({
-        'dashboards': dashboards
-    })
+    return JsonResponse({'dashboards': dashboards})
 
 
 
@@ -6453,7 +6465,7 @@ def get_form_fields(request):
                     for field in section['fields']:
                         if field.get('name') in saved_values:
                             # Assegna il valore salvato, gestendo il caso di None
-                            field['value'] = safe_format_decimal(saved_values.get(field['name']), locale=formato_numerico)
+                            field['value'] = safe_format_decimal(saved_values.get(field['name']), locale=formato_numerico) or ""
         final_response = {"config": form_config}
         return JsonResponse(final_response)
 
@@ -6468,13 +6480,13 @@ from babel.numbers import format_decimal
 from babel import Locale
 def safe_format_decimal(value, locale="it_CH"):
     if value is None:
-        return ""
+        return value
     if not is_valid_locale(locale):
         locale = 'it_CH'
     try:
         return format_decimal(float(value), format="#,##0.00", locale=locale)
     except Exception:
-        return ""
+        return value
     
 def is_valid_locale(locale_str):
     try:
@@ -6823,6 +6835,61 @@ def new_dashboard(request):
                 )
 
     return JsonResponse({'success': True, 'message': 'New dashboard created successfully.'})
+
+def update_dashboard(request):
+    if request.method != "POST":
+        return JsonResponse({'error': 'Invalid request method'}, status=405)
+
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    dashboard_id = data.get('dashboardid', None)
+    dashboard_name = data.get('dashboard_name', None)
+    userid =Helper.get_userid(request)
+
+    if not dashboard_id:
+        return JsonResponse({'error': 'dashboardid is required'}, status=400)
+
+    # Recupero la dashboard, ma solo se appartiene all’utente
+    try:
+        dashboard = SysDashboard.objects.get(id=dashboard_id, userid=userid)
+        user_dashboard = SysUserDashboard.objects.get(dashboardid_id=dashboard_id, userid_id=userid)
+    except SysDashboard.DoesNotExist:
+        return JsonResponse({'error': 'Dashboard not found'}, status=404)
+
+    blocks = SysDashboardBlock.objects.filter(dashboardid_id=dashboard_id).all()
+
+    # 🔄 1) Se è presente dashboard_name → aggiorno il nome
+    if dashboard_name:
+        for block in blocks:
+            block.name = block.name.replace(dashboard.name, dashboard_name)
+            block.save()
+        dashboard.name = dashboard_name
+        dashboard.save()
+        return JsonResponse({
+            'success': True,
+            'message': 'Dashboard updated successfully',
+            'dashboard': {
+                'id': dashboard.id,
+                'name': dashboard.name
+            }
+        })
+
+    # ❌ 2) Se NON c'è dashboard_name → elimino la dashboard
+    blocks.delete()
+    user_dashboard.delete()
+    dashboard.delete()
+    return JsonResponse({
+        'success': True,
+        'message': 'Dashboard deleted successfully',
+        'dashboardid': dashboard_id
+    })
+    
 
 
 def delete_dashboard_block(request):
