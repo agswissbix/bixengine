@@ -6286,6 +6286,18 @@ def get_form_fields(request):
             return JsonResponse({"error": "Anno mancante"}, status=400)
 
         tableid = 'metrica_annuale'
+        try:
+            translations_table = UserTable("translations")
+            condition_list = [
+                f"tableid='{tableid}'"
+            ]
+
+            translations = translations_table.get_records(
+                conditions_list=condition_list,
+                limit=1000
+            )
+        except Exception as e:
+            print("Unable to get translations")
 
         fields = {}
         recordidgolfclub=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_golfclub WHERE utente={userid}","recordid_")
@@ -6327,13 +6339,13 @@ def get_form_fields(request):
         for field in sys_fields:
             # Estrai le informazioni dal campo corrente
             # group_name = field.get("label")
-            group_translation = get_translation(tableid, field.get("label"), userid, translation_type="Label")
+            group_translation = get_cached_translation(translations, field.get("label"), userid, translation_type="Label")
             if not group_translation:
                 group_translation = field.get("label")
             group_name = group_translation
 
             # sub_group_name = field.get("sublabel")
-            sub_group_translation = get_translation(tableid, field.get("sublabel"), userid, translation_type="Sublabel")
+            sub_group_translation = get_cached_translation(translations, field.get("sublabel"), userid, translation_type="Sublabel")
             if not sub_group_translation:
                 sub_group_translation = field.get("sublabel")
             sub_group_name = sub_group_translation
@@ -6341,7 +6353,7 @@ def get_form_fields(request):
             field_name = field.get("fieldid")
 
             # field_label = field.get("description")
-            field_label = get_translation(tableid, field.get("fieldid"), userid)
+            field_label = get_cached_translation(translations, field.get("fieldid"), userid)
             if not field_label:
                 field_label = field.get("description")
 
@@ -6351,7 +6363,7 @@ def get_form_fields(request):
             if group_name not in form_config:
                 form_config[group_name] = {
                     "title": group_name,
-                    "icon": group_name,  # Icona di default
+                    "icon": field.get("label"),  # Icona di default
                     "fields": []
                 }
                 # Inizializzo anche il set per le intestazioni di questo gruppo
@@ -6394,7 +6406,7 @@ def get_form_fields(request):
                     "value": "option2",
                     "label": "Opzione 2"
                 }
-                              ]
+            ]
 
             lookuptableid=field.get("lookuptableid")
             if lookuptableid:
@@ -7771,3 +7783,35 @@ def get_translation(tableid, fieldid, userid=None, code=None, translation_type="
     
     except Exception as e:
         return fieldid
+    
+def get_cached_translation(translations, fieldid, userid=None, code=None, translation_type="Field"):
+    if not translations:
+        return ""
+
+    language_code = DEFAULT_LANG
+
+    if code:
+        language_code = code
+    elif userid:
+        language_code = get_user_language(userid)
+    
+    lang_data = get_cached_languages_data()
+    language_field = lang_data["code_to_field"].get(language_code, lang_data["code_to_field"][DEFAULT_LANG])
+
+    try: 
+        found_translation = next(
+            (item for item in translations if 
+             item.get('type') == translation_type and 
+             item.get('identifier') == fieldid
+            ), 
+            None
+        )
+
+        if not found_translation:
+            return ""
+        
+        word = found_translation.get(language_field)
+        return word if word else ""
+
+    except Exception as e:
+        return ""
