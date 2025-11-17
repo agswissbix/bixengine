@@ -5526,6 +5526,10 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
         f"SELECT recordid_ FROM user_golfclub WHERE utente='{userid}'",
         "recordid_"
     )
+    user_numeric_format = HelpderDB.sql_query_value(
+        f"SELECT formato_numerico FROM user_golfclub WHERE utente='{userid}'",
+        "formato_numerico"
+    )
 
     if cliente_id == "wegolf":
 
@@ -5559,6 +5563,8 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
     chart_data = get_dynamic_chart_data(request, chart_id, query_conditions or "1=1")
     if "datasets" in chart_data and chart_data["datasets"]:
         chart_data["datasets"][0]["view"] = viewid
+    
+    chart_data['numeric_format'] = str(user_numeric_format).replace('_', '-') if is_valid_locale(user_numeric_format) else "it-CH"
 
     chart_data_json = json.dumps(chart_data, default=json_date_handler)
 
@@ -6301,7 +6307,9 @@ def get_form_fields(request):
             print("Unable to get translations")
 
         fields = {}
-        recordidgolfclub=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_golfclub WHERE utente={userid}","recordid_")
+        sql = f"SELECT recordid_, formato_numerico FROM user_golfclub WHERE utente={userid}"
+        recordidgolfclub=HelpderDB.sql_query_value(sql,"recordid_")
+        formato_numerico=HelpderDB.sql_query_value(sql,"formato_numerico")
         table=UserTable('metrica_annuale')
         records=table.get_table_records_obj(conditions_list=[f"recordidgolfclub_='{recordidgolfclub}'",f"anno='{str(year)}'"])
         if records:
@@ -6445,7 +6453,7 @@ def get_form_fields(request):
                     for field in section['fields']:
                         if field.get('name') in saved_values:
                             # Assegna il valore salvato, gestendo il caso di None
-                            field['value'] = saved_values[field['name']] or ""
+                            field['value'] = safe_format_decimal(saved_values.get(field['name']), locale=formato_numerico)
         final_response = {"config": form_config}
         return JsonResponse(final_response)
 
@@ -6456,6 +6464,24 @@ def get_form_fields(request):
         print(f"Errore in get_form_fields: {e}")
         return JsonResponse({"error": "Errore interno del server"}, status=500)
 
+from babel.numbers import format_decimal
+from babel import Locale
+def safe_format_decimal(value, locale="it_CH"):
+    if value is None:
+        return ""
+    if not is_valid_locale(locale):
+        locale = 'it_CH'
+    try:
+        return format_decimal(float(value), format="#,##0.00", locale=locale)
+    except Exception:
+        return ""
+    
+def is_valid_locale(locale_str):
+    try:
+        Locale.parse(locale_str)
+        return True
+    except Exception:
+        return False
 
 #TODO
 #TEMP
