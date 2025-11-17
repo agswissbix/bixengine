@@ -63,6 +63,7 @@ urlpatterns = [
     path('trasferta_pdf/', trasferta_pdf, name='trasferta_pdf'),
     path('loading/', loading, name='loading'),
     path('new_dashboard/', new_dashboard, name='new_dashboard'),
+    path('update_dashboard/', update_dashboard, name='update_dashboard'),
     path('logout_view/', logout_view, name='logout_view'),
     path('delete_dashboard_block/', delete_dashboard_block, name='delete_dashboard_block'),
     path('get_user_theme/', get_user_theme, name='get_user_theme'),
@@ -124,6 +125,7 @@ urlpatterns = [
     path('sync_notifications/', sync_notifications, name='sync_notifications'),
     path('mark_all_notifications_read/', mark_all_notifications_read, name='mark_all_notifications_read'),
     path('mark_notification_read/', mark_notification_read, name='mark_notification_read'),
+    path('mark_notification_hidden/', mark_notification_hidden, name='mark_notification_hidden'),
 
     
 

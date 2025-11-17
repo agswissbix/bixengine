@@ -4846,24 +4846,36 @@ def download_offerta(request):
 def get_dashboard_data(request):
     userid = Helper.get_userid(request)
     data = json.loads(request.body)
-    dashboardCategory = data.get('dashboardCategory', '')   
+    dashboardCategory = data.get('dashboardCategory', '')
 
-    if dashboardCategory!='':
-        dashboards = HelpderDB.sql_query(f"SELECT  id, name from sys_dashboard WHERE category='{dashboardCategory}'")
-    else:
-        dashboards_user = SysUserDashboard.objects.filter(userid=userid).values("dashboardid")
+    # Dashboard dell’utente corrente
+    dashboards_user = SysUserDashboard.objects.filter(userid=userid)\
+                                              .values_list("dashboardid", flat=True)
+
+    # Dashboard dell’utente 1 (default)
+    dashboards_default = SysDashboard.objects.filter(userid=1)\
+                                             .values_list("id", flat=True)
+
+    # Unisco gli ID in un unico set per evitare duplicati
+    dashboard_ids = set(dashboards_default) | set(dashboards_user)
+
+    # Se esiste una categoria, filtro anche per categoria
+    if dashboardCategory:
         dashboards_qs = SysDashboard.objects.filter(
-            id__in=[d["dashboardid"] for d in dashboards_user]
-        ).values("id", "name").order_by("order_dashboard")
+            id__in=dashboard_ids,
+            category=dashboardCategory
+        ).values("id", "name").order_by(F("order_dashboard").asc(nulls_last=True))
+    else:
+        dashboards_qs = SysDashboard.objects.filter(
+            id__in=dashboard_ids
+        ).values("id", "name").order_by(F("order_dashboard").asc(nulls_last=True))
 
-        dashboards = [
-            {"id": str(d["id"]), "name": d["name"]}
-            for d in dashboards_qs
-        ]
+    dashboards = [
+        {"id": str(d["id"]), "name": d["name"]}
+        for d in dashboards_qs
+    ]
 
-    return JsonResponse({
-        'dashboards': dashboards
-    })
+    return JsonResponse({'dashboards': dashboards})
 
 
 
@@ -5530,6 +5542,10 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
         f"SELECT recordid_ FROM user_golfclub WHERE utente='{userid}'",
         "recordid_"
     )
+    user_numeric_format = HelpderDB.sql_query_value(
+        f"SELECT formato_numerico FROM user_golfclub WHERE utente='{userid}'",
+        "formato_numerico"
+    )
 
     if cliente_id == "wegolf":
 
@@ -5563,6 +5579,8 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
     chart_data = get_dynamic_chart_data(request, chart_id, query_conditions or "1=1", viewMode, referenceYear)
     if "datasets" in chart_data and chart_data["datasets"]:
         chart_data["datasets"][0]["view"] = viewid
+    
+    chart_data['numeric_format'] = str(user_numeric_format).replace('_', '-') if is_valid_locale(user_numeric_format) else "it-CH"
 
     chart_data_json = json.dumps(chart_data, default=json_date_handler)
 
@@ -6327,7 +6345,9 @@ def get_form_fields(request):
             print("Unable to get translations")
 
         fields = {}
-        recordidgolfclub=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_golfclub WHERE utente={userid}","recordid_")
+        sql = f"SELECT recordid_, formato_numerico FROM user_golfclub WHERE utente={userid}"
+        recordidgolfclub=HelpderDB.sql_query_value(sql,"recordid_")
+        formato_numerico=HelpderDB.sql_query_value(sql,"formato_numerico")
         table=UserTable('metrica_annuale')
         records=table.get_table_records_obj(conditions_list=[f"recordidgolfclub_='{recordidgolfclub}'",f"anno='{str(year)}'"])
         if records:
@@ -6472,6 +6492,7 @@ def get_form_fields(request):
                         if field.get('name') in saved_values:
                             # Assegna il valore salvato, gestendo il caso di None
                             field['value'] = saved_values[field['name']] or ""
+                            # field['value'] = safe_format_decimal(saved_values.get(field['name']), locale=formato_numerico) or ""
         final_response = {"config": form_config}
         return JsonResponse(final_response)
 
@@ -6482,6 +6503,24 @@ def get_form_fields(request):
         print(f"Errore in get_form_fields: {e}")
         return JsonResponse({"error": "Errore interno del server"}, status=500)
 
+from babel.numbers import format_decimal
+from babel import Locale
+def safe_format_decimal(value, locale="it_CH"):
+    if value is None:
+        return value
+    if not is_valid_locale(locale):
+        locale = 'it_CH'
+    try:
+        return format_decimal(float(value), format="#,##0.00", locale=locale)
+    except Exception:
+        return value
+    
+def is_valid_locale(locale_str):
+    try:
+        Locale.parse(locale_str)
+        return True
+    except Exception:
+        return False
 
 #TODO
 #TEMP
@@ -6823,6 +6862,61 @@ def new_dashboard(request):
                 )
 
     return JsonResponse({'success': True, 'message': 'New dashboard created successfully.'})
+
+def update_dashboard(request):
+    if request.method != "POST":
+        return JsonResponse({'error': 'Invalid request method'}, status=405)
+
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    dashboard_id = data.get('dashboardid', None)
+    dashboard_name = data.get('dashboard_name', None)
+    userid =Helper.get_userid(request)
+
+    if not dashboard_id:
+        return JsonResponse({'error': 'dashboardid is required'}, status=400)
+
+    # Recupero la dashboard, ma solo se appartiene all’utente
+    try:
+        dashboard = SysDashboard.objects.get(id=dashboard_id, userid=userid)
+        user_dashboard = SysUserDashboard.objects.get(dashboardid_id=dashboard_id, userid_id=userid)
+    except SysDashboard.DoesNotExist:
+        return JsonResponse({'error': 'Dashboard not found'}, status=404)
+
+    blocks = SysDashboardBlock.objects.filter(dashboardid_id=dashboard_id).all()
+
+    # 🔄 1) Se è presente dashboard_name → aggiorno il nome
+    if dashboard_name:
+        for block in blocks:
+            block.name = block.name.replace(dashboard.name, dashboard_name)
+            block.save()
+        dashboard.name = dashboard_name
+        dashboard.save()
+        return JsonResponse({
+            'success': True,
+            'message': 'Dashboard updated successfully',
+            'dashboard': {
+                'id': dashboard.id,
+                'name': dashboard.name
+            }
+        })
+
+    # ❌ 2) Se NON c'è dashboard_name → elimino la dashboard
+    blocks.delete()
+    user_dashboard.delete()
+    dashboard.delete()
+    return JsonResponse({
+        'success': True,
+        'message': 'Dashboard deleted successfully',
+        'dashboardid': dashboard_id
+    })
+    
 
 
 def delete_dashboard_block(request):
@@ -7932,15 +8026,15 @@ def get_notifications(request):
             if status == 'Read':
                 read = True
 
-
-        data.append({
-            'id': notification.get('id', ''),
-            'title': notification.get('title', ''),
-            'message': notification.get('message', ''),
-            'date': isodate,
-            'read': read,
-            'status_id': found_status.get('recordid_') if found_status else None
-        })
+            if status != 'Hidden':
+                data.append({
+                    'id': notification.get('id', ''),
+                    'title': notification.get('title', ''),
+                    'message': notification.get('message', ''),
+                    'date': isodate,
+                    'read': read,
+                    'status_id': found_status.get('recordid_') if found_status else None
+                })
 
     return JsonResponse({"notifications": data}, safe=False)
 
@@ -7976,6 +8070,27 @@ def mark_notification_read(request):
         if notifications_statuses:
             record = UserRecord('notification_status', status_id)
             record.values['status'] = 'Read'
+            record.save()
+            return JsonResponse({"success": True}, safe=False)
+        else:
+            return JsonResponse({"success": False}, safe=False)
+    except Exception as e:
+        print(e)
+        return JsonResponse({"success": False, "error": str(e)}, safe=False)
+    
+def mark_notification_hidden(request):
+    try:
+        userid = Helper.get_userid(request)
+
+        data = json.loads(request.body)
+        status_id = data.get('status_id', '')
+
+        notifications_statuses_table  = UserTable('notification_status', userid=userid)
+        notifications_statuses = notifications_statuses_table.get_records(conditions_list=[f"recordid_={status_id}"])
+
+        if notifications_statuses:
+            record = UserRecord('notification_status', status_id)
+            record.values['status'] = 'Hidden'
             record.save()
             return JsonResponse({"success": True}, safe=False)
         else:
