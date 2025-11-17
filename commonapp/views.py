@@ -7508,6 +7508,8 @@ def get_projects(request):
 
         like = HelpderDB.sql_query_row(f"SELECT * FROM user_like WHERE recordidprojects_='{projectid}' AND utente='{userid}'")
 
+        likes = HelpderDB.sql_query(f"SELECT * FROM user_like WHERE recordidprojects_='{projectid}'")
+
         data.append({
             'id':projectid,
             'title': project.get('titolo', ''),
@@ -7515,7 +7517,8 @@ def get_projects(request):
             'categories': categories,
             'documents': formatted_documents,
             'data': project_date,
-            'like': like is not None
+            'like': like is not None,
+            'like_number': len(likes)
         })
     
     
@@ -7815,3 +7818,84 @@ def get_cached_translation(translations, fieldid, userid=None, code=None, transl
 
     except Exception as e:
         return ""
+    
+def sync_notifications(request):
+    print("Sync notifications")
+
+    notification_table = UserTable("notification")
+    notifications = notification_table.get_records(conditions_list=[])
+
+    for notification in notifications:
+        notification_id = notification.get('recordid_')
+
+        create_notification(notification_id)
+
+    return HttpResponse()
+
+
+def create_notification(notification_id):
+    print("Creating notification")
+    try:
+        notification_status_table = UserTable("notification_status")
+        condition_list = [
+            f"recordidnotification_={notification_id}"
+        ]
+
+        notification_statuses = notification_status_table.get_records(conditions_list=condition_list)
+
+        clubs_table = UserTable("golfclub")
+        clubs = clubs_table.get_records(conditions_list=[])
+
+        for club in clubs:
+            print("club")
+            
+            found_status = next(
+                (s for s in notification_statuses if str(s.get('recordidgolfclub_')) == str(club.get('recordid_'))),
+                None
+            )
+
+            if not found_status:
+                new_notification = UserRecord("notification_status")
+                new_notification.values["recordidnotification_"] = notification_id
+                new_notification.values["recordidgolfclub_"] = club.get("recordid_")
+                new_notification.values["status"] = "Unread"
+                new_notification.save()
+
+    except:
+        print("Error creating notification statuses")
+
+
+def get_notifications(request):
+    userid = Helper.get_userid(request)
+
+    data = []
+
+    notifications_table = UserTable('notification')
+    notifications = notifications_table.get_records(conditions_list=[])
+    notifications_statuses  = UserTable('notification_status', userid=userid).get_records(conditions_list=[f"recordidgolfclub_={userid}"])
+
+    for notification in notifications:
+        date = notification.get('date')
+        time = notification.get('time')
+
+        isodate = f"{date}T{time}"
+
+        read = False
+        found_status = next(
+            (s for s in notifications_statuses if str(s.get('recordidgolfclub_')) == userid),
+            None
+        )
+        if found_status:
+            read = found_status.get('status') == "Read"
+
+
+        data.append({
+            'id': notification.get('id', ''),
+            'title': notification.get('title', ''),
+            'message': notification.get('message', ''),
+            'date': isodate,
+            'read': read
+        })
+
+    return JsonResponse({"notifications": data}, safe=False)
+

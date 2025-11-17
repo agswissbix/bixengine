@@ -686,6 +686,18 @@ def save_record_fields(tableid,recordid):
         
         event_record.save()
 
+    # --- NOTIFICATIONS ---
+    if tableid == 'notification':
+        notification_record = UserRecord('notifications', recordid)
+
+        if not notification_record.values['date']:
+            notification_record.values['date'] = datetime.now().strftime("%Y-%m-%d")
+
+        if not notification_record.values['time']:
+            notification_record.values['time'] = datetime.now().strftime("%H:%M")
+
+        views.create_notification(recordid)
+
 
 def card_task_pianificaperoggi(recordid):
     print("card_task_pianificaperoggi")

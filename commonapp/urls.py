@@ -119,6 +119,10 @@ urlpatterns = [
     path('like_project/', like_project, name='like_project'),
     path('unlike_project/', unlike_project, name='unlike_project'),
     path('get_language/', get_language, name='get_language'),
+    path('create_notification/', create_notification, name='create_notification'),
+    path('get_notifications/', get_notifications, name='get_notifications'),
+    path('sync_notifications/', sync_notifications, name='sync_notifications'),
+    
 
     path('sync_translation_fields/', sync_translation_fields, name='sync_translation_fields'),
     path('get_languages/', get_languages, name='get_languages')
