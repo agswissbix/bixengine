@@ -6473,7 +6473,8 @@ def get_form_fields(request):
                     for field in section['fields']:
                         if field.get('name') in saved_values:
                             # Assegna il valore salvato, gestendo il caso di None
-                            field['value'] = safe_format_decimal(saved_values.get(field['name']), locale=formato_numerico) or ""
+                            field['value'] = saved_values[field['name']] or ""
+                            # field['value'] = safe_format_decimal(saved_values.get(field['name']), locale=formato_numerico) or ""
         final_response = {"config": form_config}
         return JsonResponse(final_response)
 
