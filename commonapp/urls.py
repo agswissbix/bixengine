@@ -125,6 +125,7 @@ urlpatterns = [
     path('sync_notifications/', sync_notifications, name='sync_notifications'),
     path('mark_all_notifications_read/', mark_all_notifications_read, name='mark_all_notifications_read'),
     path('mark_notification_read/', mark_notification_read, name='mark_notification_read'),
+    path('mark_notification_hidden/', mark_notification_hidden, name='mark_notification_hidden'),
 
     
 
