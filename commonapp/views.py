@@ -7999,6 +7999,17 @@ def get_notifications(request):
     try:
         userid = Helper.get_userid(request)
 
+        title_field = ""
+        message_field = ""
+        language = get_user_language(userid)
+
+        if not language or language == "it":
+            title_field = "title"
+            message_field = "message"
+        else:
+            title_field = "titolo_" + language
+            message_field = "messaggio_" + language
+
         golfclub = HelpderDB.sql_query_row(f"SELECT * FROM user_golfclub WHERE utente = {userid}")
 
         data = []
@@ -8030,8 +8041,8 @@ def get_notifications(request):
                 if status != 'Hidden':
                     data.append({
                         'id': notification.get('id', ''),
-                        'title': notification.get('title', ''),
-                        'message': notification.get('message', ''),
+                        'title': notification.get(title_field, ''),
+                        'message': notification.get(message_field, ''),
                         'date': isodate,
                         'read': read,
                         'status_id': found_status.get('recordid_') if found_status else None
