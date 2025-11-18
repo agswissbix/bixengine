@@ -771,6 +771,11 @@ def save_new_table(request):
             query_conditions='true'
         )
 
+        SysUserTableOrder.objects.create(
+            userid=user,
+            tableid=table,
+        )
+
         # Imposta le impostazioni utente della tabella (ORM)
         SysUserTableSettings.objects.bulk_create([
             SysUserTableSettings(userid=user, tableid=table, settingid='default_viewid', value=view.id),
