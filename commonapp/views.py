@@ -7990,47 +7990,51 @@ def create_notification(notification_id):
 
 
 def get_notifications(request):
-    userid = Helper.get_userid(request)
+    try:
+        userid = Helper.get_userid(request)
 
-    golfclub = HelpderDB.sql_query_row(f"SELECT * FROM user_golfclub WHERE utente = {userid}")
+        golfclub = HelpderDB.sql_query_row(f"SELECT * FROM user_golfclub WHERE utente = {userid}")
 
-    data = []
+        data = []
 
-    notifications_table = UserTable('notification')
-    notifications = notifications_table.get_records(conditions_list=[])
+        notifications_table = UserTable('notification')
+        notifications = notifications_table.get_records(conditions_list=[])
 
-    notifications_statuses_table  = UserTable('notification_status', userid=userid)
-    notifications_statuses = notifications_statuses_table.get_records(conditions_list=[f"recordidgolfclub_={golfclub.get('recordid_')}"])
+        notifications_statuses_table  = UserTable('notification_status', userid=userid)
+        notifications_statuses = notifications_statuses_table.get_records(conditions_list=[f"recordidgolfclub_={golfclub.get('recordid_')}"])
 
-    for notification in notifications:
-        date = notification.get('date')
-        time = notification.get('time')
+        for notification in notifications:
+            date = notification.get('date')
+            time = notification.get('time')
 
-        isodate = f"{date}T{time}"
+            isodate = f"{date}T{time}"
 
-        read = False
+            read = False
 
-        found_status = next(
-            (s for s in notifications_statuses if str(s.get('recordidnotification_')) == str(notification.get('recordid_'))),
-            None
-        )
+            found_status = next(
+                (s for s in notifications_statuses if str(s.get('recordidnotification_')) == str(notification.get('recordid_'))),
+                None
+            )
 
-        if found_status:
-            status = found_status.get('status')
-            if status == 'Read':
-                read = True
+            if found_status:
+                status = found_status.get('status')
+                if status == 'Read':
+                    read = True
 
-            if status != 'Hidden':
-                data.append({
-                    'id': notification.get('id', ''),
-                    'title': notification.get('title', ''),
-                    'message': notification.get('message', ''),
-                    'date': isodate,
-                    'read': read,
-                    'status_id': found_status.get('recordid_') if found_status else None
-                })
+                if status != 'Hidden':
+                    data.append({
+                        'id': notification.get('id', ''),
+                        'title': notification.get('title', ''),
+                        'message': notification.get('message', ''),
+                        'date': isodate,
+                        'read': read,
+                        'status_id': found_status.get('recordid_') if found_status else None
+                    })
 
-    return JsonResponse({"notifications": data}, safe=False)
+        return JsonResponse({"notifications": data}, safe=False)
+    except Exception as e:
+        print(e)
+        return JsonResponse({"success": False, "error": str(e)}, safe=False)
 
 def mark_all_notifications_read(request):
     try:
