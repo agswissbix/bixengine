@@ -4853,7 +4853,7 @@ def get_dashboard_data(request):
                                               .values_list("dashboardid", flat=True)
 
     # Dashboard dell’utente 1 (default)
-    dashboards_default = SysDashboard.objects.filter(userid=1)\
+    dashboards_default = SysDashboard.objects.filter(userid=22)\
                                              .values_list("id", flat=True)
 
     # Unisco gli ID in un unico set per evitare duplicati
@@ -5328,17 +5328,11 @@ def get_dashboard_blocks(request):
     filters=request_data.get('filters', None)
     viewMode=request_data.get('viewMode', None)
     referenceYear=request_data.get('referenceYear', None)
-    selected_clubs=None
-    selected_years=None
-    if filters:
-        selected_clubs=filters.get('selectedClubs', [])
-        selected_years=filters.get('selectedYears', [])
-    cliente_id = Helper.get_cliente_id()
     #dashboard_id = data.get('dashboardid')
     dashboard_id = request_data.get('dashboardid')  # Default to 1 if not provided
+    reset_dashboard = request_data.get('resetDashboard', False)
     
     user_id = request.user.id
-
 
     dbh = HelpderDB()
     context = {}
@@ -5351,12 +5345,10 @@ def get_dashboard_blocks(request):
             "SELECT sys_user_id FROM v_users WHERE id = %s", [user_id]
         )
         bixid = cursor2.fetchone()[0]
+        default_bixid = None
+        if reset_dashboard:
+            default_bixid = 22
         
-        cursor2.execute(
-            "SELECT dashboardid FROM sys_user_dashboard WHERE userid = %s", [bixid]
-        )
-
-        righe = cursor2.fetchall()
         # dashboard_id = righe[0][0]
         context['dashboardid'] = dashboard_id
 
@@ -5369,6 +5361,20 @@ def get_dashboard_blocks(request):
 
                 size = 'full'
                 context['size'] = size
+
+                if reset_dashboard and default_bixid:
+                    SysUserDashboardBlock.objects.filter(userid_id=bixid, dashboardid_id=dashboard_id).delete()
+                    
+                    # Clono i blocchi dell'utente 22
+                    blocks_to_clone = SysUserDashboardBlock.objects.filter(
+                        userid_id=default_bixid,
+                        dashboardid_id=dashboard_id
+                    )
+
+                    for block in blocks_to_clone:
+                        block.pk = None          # crea un nuovo record
+                        block.userid_id = bixid # assegna lo user corretto
+                        block.save()
 
                 #datas = SysUserDashboardBlock.objects.filter(userid=bixid, size=size, dashboardid=dashboard_id).values()
                 sql = "SELECT * FROM sys_user_dashboard_block WHERE userid = {userid} AND dashboardid = {dashboardid}".format(
@@ -6136,7 +6142,7 @@ Block = namedtuple('Block', ['gsx', 'gsy', 'gsw', 'gsh'])
 
 MAX_GRID_WIDTH = 12
 NEW_GSW = 4
-NEW_GSH = 4
+NEW_GSH = 5
 
 def add_dashboard_block(request):
     json_data = json.loads(request.body)
