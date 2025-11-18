@@ -7761,17 +7761,17 @@ def get_languages(request):
 def get_user_language(userid):
     try:
         if not userid:
-            return JsonResponse({"language": DEFAULT_LANG})
+            return DEFAULT_LANG
         
         golf_club = HelpderDB.sql_query_row(f"SELECT Lingua FROM user_golfclub WHERE utente = {userid}") 
 
         if not golf_club:
-            return JsonResponse({"language": DEFAULT_LANG})
+            return DEFAULT_LANG
         
         language_string = golf_club.get("Lingua", "")
 
         if not language_string:
-            return JsonResponse({"language": DEFAULT_LANG})
+            return DEFAULT_LANG
 
 
         lang_data = get_cached_languages_data()
