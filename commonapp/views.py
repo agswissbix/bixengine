@@ -5553,6 +5553,11 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
         "formato_numerico"
     )
 
+    # Creo adesso ma la uso dopo
+    user_club_has_data = False
+    excluded_clubs = []
+
+
     if cliente_id == "wegolf":
 
         # ANNI
@@ -5585,13 +5590,15 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
                 clubs = HelpderDB.sql_query(sql)
                 selected_clubs = clubs and [club["recordid"] for club in clubs]
 
+            if user_club and user_club in selected_clubs:
+                user_club_has_data = True
             labels = Helper.get_labels_fields_chart(chart_config)
             completeness_checks = [Helper.check_mydata_completeness(club, selected_years, labels) for club in selected_clubs]
-            selected_clubs  = [
-                club
-                for club, check in zip(selected_clubs, completeness_checks)
-                if check["complete"]
-            ]
+            complete_pairs = list(zip(selected_clubs, completeness_checks))
+            selected_clubs = [club for club, check in complete_pairs if check["complete"]]
+            excluded_clubs = [club for club, check in complete_pairs if not check["complete"]]
+            if user_club and user_club_has_data and user_club in selected_clubs:
+                user_club_has_data = False
             club_list = "', '".join(selected_clubs)
             dynamic_conditions.append(f"recordidgolfclub_ IN ('{club_list}')")
 
@@ -5611,6 +5618,15 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
         chart_data["datasets"][0]["view"] = viewid
     
     chart_data['numeric_format'] = str(user_numeric_format).replace('_', '-') if is_valid_locale(user_numeric_format) else "it-CH"
+
+    if user_club_has_data:
+        chart_data['name'] = '$nomydata$'
+    
+    excluded_names = []
+    for club in excluded_clubs:
+        record_club = UserRecord('golfclub', club)
+        excluded_names.append(record_club.values.get('nome_club', 'Unknown Club'))
+    chart_data['excluded_clubs'] = excluded_names
 
     chart_data_json = json.dumps(chart_data, default=json_date_handler)
 
