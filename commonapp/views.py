@@ -5539,6 +5539,21 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
     # ----------------------------------------------------------
     # 4) Pre-elaborazione filtri comuni (CLUB e ANNI)
     # ----------------------------------------------------------
+
+    sql = f"""
+        SELECT g.nome_club AS title,
+               g.recordid_ AS recordid,
+               g.Logo AS logo,
+               g.paese AS paese
+        FROM user_golfclub AS g
+        JOIN user_metrica_annuale AS m
+           ON g.recordid_ = m.recordidgolfclub_
+        GROUP BY title, recordid
+        ORDER BY title ASC
+    """
+
+    clubs = HelpderDB.sql_query(sql)
+
     selected_years = (filters or {}).get("selectedYears", [])
     selected_clubs = (filters or {}).get("selectedClubs", [])
     dynamic_conditions = []  # <-- condizioni riusabili anche nella query per il placeholder
@@ -5562,9 +5577,18 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
 
         else:
             # benchmark → usa clubs selezionati
-            if selected_clubs:
-                club_list = "', '".join(selected_clubs)
-                dynamic_conditions.append(f"recordidgolfclub_ IN ('{club_list}')")
+            if not selected_clubs or selected_clubs == []:
+                selected_clubs = clubs and [club["recordid"] for club in clubs]
+
+            labels = Helper.get_labels_fields_chart(chart_config)
+            completeness_checks = [Helper.check_mydata_completeness(club, selected_years, labels) for club in selected_clubs]
+            selected_clubs  = [
+                club
+                for club, check in zip(selected_clubs, completeness_checks)
+                if check["complete"]
+            ]
+            club_list = "', '".join(selected_clubs)
+            dynamic_conditions.append(f"recordidgolfclub_ IN ('{club_list}')")
 
         # ANNI
         if selected_years:
