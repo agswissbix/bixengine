@@ -5555,6 +5555,7 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
 
     # Creo adesso ma la uso dopo
     user_club_has_data = False
+    logged_club_check = None
     excluded_clubs = []
 
 
@@ -5584,6 +5585,8 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
                     FROM user_golfclub AS g
                     JOIN user_metrica_annuale AS m
                     ON g.recordid_ = m.recordidgolfclub_
+                    WHERE (g.dati_anonimi = 'false' OR g.dati_anonimi IS NULL) 
+                        AND g.deleted_ = 'N' AND m.deleted_ = 'N' 
                     GROUP BY title, recordid
                     ORDER BY title ASC
                 """
@@ -5597,8 +5600,14 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
             complete_pairs = list(zip(selected_clubs, completeness_checks))
             selected_clubs = [club for club, check in complete_pairs if check["complete"]]
             excluded_clubs = [club for club, check in complete_pairs if not check["complete"]]
+
             if user_club and user_club_has_data and user_club in selected_clubs:
                 user_club_has_data = False
+
+            for club, check in complete_pairs:
+                if club == user_club:
+                    logged_club_check = check
+                    break
             club_list = "', '".join(selected_clubs)
             dynamic_conditions.append(f"recordidgolfclub_ IN ('{club_list}')")
 
@@ -5621,6 +5630,11 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
 
     if user_club_has_data:
         chart_data['name'] = '$nomydata$'
+        chart_data["logged_club_incomplete"] = {
+            "missing_years": logged_club_check["missing_years"],
+            "wrong_values": logged_club_check["wrong_values"],
+        }
+
     
     excluded_names = []
     for club in excluded_clubs:
@@ -7187,7 +7201,15 @@ def save_calendar_event(request):
     return JsonResponse(data)
 
 
+def check_data_anonymous(request):
+    userid = Helper.get_userid(request)
+    sql = f"SELECT dati_anonimi FROM user_golfclub WHERE utente = %s"
+    dati_anonimi = HelpderDB.sql_query_value(sql, 'dati_anonimi', [userid])
 
+    if dati_anonimi == 'true':
+        return JsonResponse({'success': False, 'is_anonymous': True})
+
+    return JsonResponse({'success': True, 'is_anonymous': False})
 #TODO spostare sotto customapp_wegolf
 def get_benchmark_filters(request):
     golfclub_table=UserTable('golfclub')
@@ -7201,6 +7223,8 @@ def get_benchmark_filters(request):
         FROM user_golfclub AS g
         JOIN user_metrica_annuale AS m
            ON g.recordid_ = m.recordidgolfclub_
+        WHERE (g.dati_anonimi = 'false' OR g.dati_anonimi IS NULL) 
+            AND g.deleted_ = 'N' AND m.deleted_ = 'N'
         GROUP BY title, recordid
         ORDER BY title ASC
     """
@@ -7300,7 +7324,9 @@ def get_filtered_clubs(request):
         FROM user_golfclub AS g
         JOIN user_metrica_annuale AS m
            ON g.recordid_ = m.recordidgolfclub_
-        WHERE {conditions}
+        WHERE (g.dati_anonimi = 'false' OR g.dati_anonimi IS NULL) 
+            AND g.deleted_ = 'N' AND m.deleted_ = 'N' 
+            AND {conditions}
         GROUP BY title, recordid
         ORDER BY title ASC
     """
