@@ -5539,21 +5539,6 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
     # ----------------------------------------------------------
     # 4) Pre-elaborazione filtri comuni (CLUB e ANNI)
     # ----------------------------------------------------------
-
-    sql = f"""
-        SELECT g.nome_club AS title,
-               g.recordid_ AS recordid,
-               g.Logo AS logo,
-               g.paese AS paese
-        FROM user_golfclub AS g
-        JOIN user_metrica_annuale AS m
-           ON g.recordid_ = m.recordidgolfclub_
-        GROUP BY title, recordid
-        ORDER BY title ASC
-    """
-
-    clubs = HelpderDB.sql_query(sql)
-
     selected_years = (filters or {}).get("selectedYears", [])
     selected_clubs = (filters or {}).get("selectedClubs", [])
     dynamic_conditions = []  # <-- condizioni riusabili anche nella query per il placeholder
@@ -5570,6 +5555,13 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
 
     if cliente_id == "wegolf":
 
+        # ANNI
+        if not selected_years or selected_years == []:
+            selected_years = ['None']
+
+        year_list = "', '".join(selected_years)
+        dynamic_conditions.append(f"anno IN ('{year_list}')")
+
         if block_category != "benchmark":
             # Non benchmark → club dell’utente
             if user_club:
@@ -5578,6 +5570,19 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
         else:
             # benchmark → usa clubs selezionati
             if not selected_clubs or selected_clubs == []:
+                # Se non ci sono club li prendo tutti
+                sql = f"""
+                    SELECT g.nome_club AS title,
+                        g.recordid_ AS recordid,
+                        g.Logo AS logo,
+                        g.paese AS paese
+                    FROM user_golfclub AS g
+                    JOIN user_metrica_annuale AS m
+                    ON g.recordid_ = m.recordidgolfclub_
+                    GROUP BY title, recordid
+                    ORDER BY title ASC
+                """
+                clubs = HelpderDB.sql_query(sql)
                 selected_clubs = clubs and [club["recordid"] for club in clubs]
 
             labels = Helper.get_labels_fields_chart(chart_config)
@@ -5589,11 +5594,6 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
             ]
             club_list = "', '".join(selected_clubs)
             dynamic_conditions.append(f"recordidgolfclub_ IN ('{club_list}')")
-
-        # ANNI
-        if selected_years:
-            year_list = "', '".join(selected_years)
-            dynamic_conditions.append(f"anno IN ('{year_list}')")
 
     # Applica condizioni a query_conditions
     if dynamic_conditions:
