@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     'customapp_pitservice',
     'customapp_belotti',
     'customapp_swissbix',
+    'customapp_wegolf',
     'bixsettings',
     'corsheaders',
 
