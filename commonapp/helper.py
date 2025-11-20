@@ -210,6 +210,116 @@ class Helper:
         return colors
     
     @classmethod
+    def check_mydata_completeness(cls, recordidgolfclub, selected_years, labels=['Soci']):
+        # 1. Prepara i nomi dei campi da verificare
+        normalized_labels = []
+        for label in labels:
+            field = label.strip().replace('-', '').lower()
+            field = f"prog_{field}"
+            normalized_labels.append(field)
+
+        # 2. Recupera tutti i progressi del golf club
+        sql = """
+            SELECT *
+            FROM user_golfdataprogress
+            WHERE recordidgolfclub_ = %s AND deleted_ = 'N'
+        """
+        all_rows = HelpderDB.sql_query(sql, [recordidgolfclub])
+
+        # Trasformo i record in un dizionario indicizzato per anno
+        rows_by_year = {}
+
+        for row in all_rows:
+            raw_year = row["anno"]
+
+            # Esempi:
+            # 2022.0 → "2022"
+            # 2023.5 → "2023.5" (se mai capitasse…)
+            if isinstance(raw_year, float):
+                # Se è intero tipo 2022.0 togli ".0"
+                if raw_year.is_integer():
+                    year = str(int(raw_year))
+                else:
+                    year = str(raw_year)  # fallback
+            else:
+                year = str(raw_year)
+
+            rows_by_year[year] = row
+
+        # Normalizzo anche gli anni selezionati a string
+        selected_years_str = [str(y) for y in selected_years]
+
+        missing_years = []
+        wrong_values = {}
+
+        # 3. Controllo anno per anno
+        for year in selected_years_str:
+
+            # --- A. Verifico che il record esista ---
+            if year not in rows_by_year:
+                missing_years.append(year)
+                continue
+
+            row = rows_by_year[year]
+
+            # --- B. Verifico che ogni label = 100 ---
+            for field in normalized_labels:
+                value = row.get(field)
+
+                if value is None or float(value) != 100:
+                    if year not in wrong_values:
+                        wrong_values[year] = {}
+                    wrong_values[year][field] = value
+
+        # 4. Se mancano anni o valori ≠ 100 → incomplete
+        complete = len(missing_years) == 0 and len(wrong_values) == 0
+
+        return {
+            "complete": complete,
+            "missing_years": missing_years,
+            "wrong_values": wrong_values
+        }
+    
+    @classmethod
+    def get_labels_fields_chart(cls, chart_config):
+        tableid = chart_config.get("from_table")
+        field_ids = []
+
+        # --- recupero alias nei datasets ---
+        for ds in chart_config.get("datasets", []):
+            if "alias" in ds:
+                field_ids.append(ds["alias"])
+
+        # --- recupero alias nei datasets2 (se presenti) ---
+        for ds in chart_config.get("datasets2", []):
+            if "alias" in ds:
+                field_ids.append(ds["alias"])
+
+        # --- recupero alias nel group_by_field ---
+        gb = chart_config.get("group_by_field")
+        if gb and "alias" in gb:
+            field_ids.append(gb["alias"])
+
+        labels = []
+
+        # --- esecuzione query sys_field per ciascun fieldid ---
+        sql = """
+            SELECT label 
+            FROM sys_field
+            WHERE tableid = %s AND fieldid = %s
+        """
+
+        exclude_labels = ['golfclub', 'Dati']
+
+        for fieldid in field_ids:
+            label = HelpderDB.sql_query_value(sql, 'label', [tableid, fieldid])
+            if not label or label in labels or label in exclude_labels:
+                continue
+            labels.append(label)
+
+        return labels
+    
+    @classmethod
     def pivot_to_nested_array(cls,
         pivot_df: pd.DataFrame,
         include_key_in_leaf: bool = True

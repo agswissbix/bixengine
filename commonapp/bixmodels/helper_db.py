@@ -19,11 +19,11 @@ class HelpderDB:
     # ==========================
 
     @classmethod
-    def sql_query(cls, sql: str):
+    def sql_query(cls, sql: str, params = None):
         """Esegue una query SQL e restituisce tutti i risultati come lista di dizionari."""
         try:
             with connections["default"].cursor() as cursor:
-                cursor.execute(sql)
+                cursor.execute(sql, params)
                 rows = cls.dictfetchall(cursor)
             return rows
         except DatabaseError as e:
@@ -31,19 +31,19 @@ class HelpderDB:
             return []
 
     @classmethod
-    def sql_query_row(cls, sql: str):
+    def sql_query_row(cls, sql: str, params = None):
         """Esegue una query SQL e restituisce solo la prima riga."""
         try:
-            rows = cls.sql_query(sql)
+            rows = cls.sql_query(sql, params)
             return rows[0] if rows else None
         except Exception as e:
             print(f"[DB ERROR] sql_query_row: {e}")
             return None
 
     @classmethod
-    def sql_query_value(cls, sql: str, column: str):
+    def sql_query_value(cls, sql: str, column: str, params = None):
         """Esegue una query e restituisce un singolo valore (colonna specifica)."""
-        row = cls.sql_query_row(sql)
+        row = cls.sql_query_row(sql, params)
         return row.get(column) if row else None
 
     @classmethod

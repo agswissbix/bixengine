@@ -102,7 +102,7 @@ def save_activemind(request):
                     SELECT recordid_
                     FROM user_dealline
                     WHERE recordiddeal_ = %s
-                    AND name LIKE 'System assurance%%'
+                    AND name LIKE 'System assurance%%' AND deleted_ = 'N'
                     LIMIT 1
                 """, [recordid_deal])
                 existing_row = cursor.fetchone()
@@ -142,7 +142,7 @@ def save_activemind(request):
                     SELECT recordid_
                     FROM user_dealline
                     WHERE recordiddeal_ = %s
-                    AND name LIKE %s
+                    AND name LIKE %s AND deleted_ = 'N'
                     LIMIT 1
                 """, [recordid_deal, product.values.get('name', '')])
                 existing_row = cursor.fetchone()
@@ -168,6 +168,7 @@ def save_activemind(request):
         section_conditions = data.get('section3', {})
 
         frequency = section_conditions.get('selectedFrequency', 'Mensile')
+        frequency_price = float(section_conditions.get('price', 0))
 
         name_parts = []
         total_price = 0
@@ -179,7 +180,16 @@ def save_activemind(request):
 
             if qty > 0:
                 name_parts.append(f"{title}: qta. {qty}")
-                total_price += qty * unit_price
+
+                service_total = qty * unit_price
+
+                if key == "clientPC" and qty > 1:
+                    discount_multiplier = 1 - (qty - 1) / 100
+                    service_total = service_total * discount_multiplier
+
+                total_price += service_total
+
+        total_price += frequency_price
 
         name_str = "AM - Manutenzione servizi - \n" + ",\n".join(name_parts) if name_parts else "AM - Manutenzione servizi"
 
@@ -189,7 +199,7 @@ def save_activemind(request):
                 SELECT recordid_
                 FROM user_dealline
                 WHERE recordiddeal_ = %s
-                AND name LIKE 'AM - Manutenzione servizi%%'
+                AND name LIKE 'AM - Manutenzione servizi%%' AND deleted_ = 'N'
                 LIMIT 1
             """, [recordid_deal])
             existing_row = cursor.fetchone()
@@ -567,7 +577,7 @@ def get_services_activemind(request):
                 SELECT name
                 FROM user_dealline
                 WHERE recordiddeal_ = %s
-                  AND name LIKE 'AM - Manutenzione servizi%%'
+                  AND name LIKE 'AM - Manutenzione servizi%%' AND deleted_ = 'N'
                 LIMIT 1
             """, [recordid_deal])
             row = cursor.fetchone()
@@ -730,7 +740,7 @@ def get_conditions_activemind(request):
             SELECT frequency
             FROM user_dealline
             WHERE recordiddeal_ = %s
-              AND name LIKE 'AM - Manutenzione servizi%%'
+              AND name LIKE 'AM - Manutenzione servizi%%' AND deleted_ = 'N'
             LIMIT 1
         """, [recordid_deal])
         row = cursor.fetchone()

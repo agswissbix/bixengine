@@ -579,7 +579,6 @@ def get_table_records(request):
     table = UserTable(tableid, Helper.get_userid(request))
 
     # Costruisci la clausola WHERE dai filtri
-    print(filtersList)
     # 1. Ottieni gli oggetti UserRecord GIA' PROCESSATI
     # Passa i filtri a get_table_records_obj
     if not order_fieldid:
@@ -3238,6 +3237,36 @@ def save_record_fields(request):
         # Call save_newuser
         result = save_newuser(request)
 
+    # TODO CUSTOM --- DASHBOARD --- WEGOLF
+    if tableid == 'golfclub':
+        golfclub_record = UserRecord("golfclub", recordid)
+        userid = golfclub_record.values.get('utente', None)
+
+        default_userid = 22
+
+        default_dashboards = SysUserDashboardBlock.objects.filter(
+            userid_id=default_userid
+        ).values_list('dashboardid', flat=True).distinct()
+
+        for dashboard_id in default_dashboards:
+
+            # Verifico se l'utente ha già blocchi per questa dashboard
+            user_has_blocks = SysUserDashboardBlock.objects.filter(
+                userid_id=userid,
+                dashboardid_id=dashboard_id
+            ).exists()
+
+            if not user_has_blocks:
+                blocks_to_clone = SysUserDashboardBlock.objects.filter(
+                    userid_id=default_userid,
+                    dashboardid_id=dashboard_id
+                )
+
+                for block in blocks_to_clone:
+                    block.pk = None              # nuovo record
+                    block.userid_id = userid     # assegno all'utente corretto
+                    block.save()
+
     #CUSTOM ---CHART---
     if tableid == 'chart':
         # =======================
@@ -4848,32 +4877,35 @@ def get_dashboard_data(request):
     data = json.loads(request.body)
     dashboardCategory = data.get('dashboardCategory', '')
 
+    # WEgolf ha 22
+    user_default = 22 if dashboardCategory != '' else 1
+
     # Dashboard dell’utente corrente
     dashboards_user = SysUserDashboard.objects.filter(userid=userid)\
                                               .values_list("dashboardid", flat=True)
 
     # Dashboard dell’utente 1 (default)
-    dashboards_default = SysDashboard.objects.filter(userid=22)\
+    dashboards_default = SysDashboard.objects.filter(userid=user_default)\
                                              .values_list("id", flat=True)
 
     # Unisco gli ID in un unico set per evitare duplicati
     dashboard_ids = set(dashboards_default) | set(dashboards_user)
 
-    # Se esiste una categoria, filtro anche per categoria
+    filters = {"id__in": dashboard_ids}
     if dashboardCategory:
-        dashboards_qs = SysDashboard.objects.filter(
-            id__in=dashboard_ids,
-            category=dashboardCategory
-        ).values("id", "name").order_by(F("order_dashboard").asc(nulls_last=True))
-    else:
-        dashboards_qs = SysDashboard.objects.filter(
-            id__in=dashboard_ids
-        ).values("id", "name").order_by(F("order_dashboard").asc(nulls_last=True))
+        filters["category"] = dashboardCategory
 
-    dashboards = [
-        {"id": str(d["id"]), "name": d["name"]}
-        for d in dashboards_qs
-    ]
+    dashboards_qs = SysDashboard.objects.filter(**filters)\
+        .values("id", "name")\
+        .order_by(F("order_dashboard").asc(nulls_last=True))
+
+    dashboards = []
+    for d in dashboards_qs:
+        dashboards.append({
+            "id": str(d["id"]),
+            "name": d["name"],
+            "isOwner": d["id"] in dashboards_user
+        })
 
     return JsonResponse({'dashboards': dashboards})
 
@@ -5553,7 +5585,20 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
         "formato_numerico"
     )
 
+    # Creo adesso ma la uso dopo
+    user_club_has_data = False
+    logged_club_check = None
+    excluded_clubs = []
+
+
     if cliente_id == "wegolf":
+
+        # ANNI
+        if not selected_years or selected_years == []:
+            selected_years = ['None']
+
+        year_list = "', '".join(selected_years)
+        dynamic_conditions.append(f"anno IN ('{year_list}')")
 
         if block_category != "benchmark":
             # Non benchmark → club dell’utente
@@ -5562,14 +5607,41 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
 
         else:
             # benchmark → usa clubs selezionati
-            if selected_clubs:
-                club_list = "', '".join(selected_clubs)
-                dynamic_conditions.append(f"recordidgolfclub_ IN ('{club_list}')")
+            if not selected_clubs or selected_clubs == []:
+                # Se non ci sono club li prendo tutti
+                sql = f"""
+                    SELECT g.nome_club AS title,
+                        g.recordid_ AS recordid,
+                        g.Logo AS logo,
+                        g.paese AS paese
+                    FROM user_golfclub AS g
+                    JOIN user_metrica_annuale AS m
+                    ON g.recordid_ = m.recordidgolfclub_
+                    WHERE (g.dati_anonimi = 'false' OR g.dati_anonimi IS NULL) 
+                        AND g.deleted_ = 'N' AND m.deleted_ = 'N' 
+                    GROUP BY title, recordid
+                    ORDER BY title ASC
+                """
+                clubs = HelpderDB.sql_query(sql)
+                selected_clubs = clubs and [club["recordid"] for club in clubs]
 
-        # ANNI
-        if selected_years:
-            year_list = "', '".join(selected_years)
-            dynamic_conditions.append(f"anno IN ('{year_list}')")
+            if user_club and user_club in selected_clubs:
+                user_club_has_data = True
+            labels = Helper.get_labels_fields_chart(chart_config)
+            completeness_checks = [Helper.check_mydata_completeness(club, selected_years, labels) for club in selected_clubs]
+            complete_pairs = list(zip(selected_clubs, completeness_checks))
+            selected_clubs = [club for club, check in complete_pairs if check["complete"]]
+            excluded_clubs = [club for club, check in complete_pairs if not check["complete"]]
+
+            if user_club and user_club_has_data and user_club in selected_clubs:
+                user_club_has_data = False
+
+            for club, check in complete_pairs:
+                if club == user_club:
+                    logged_club_check = check
+                    break
+            club_list = "', '".join(selected_clubs)
+            dynamic_conditions.append(f"recordidgolfclub_ IN ('{club_list}')")
 
     # Applica condizioni a query_conditions
     if dynamic_conditions:
@@ -5587,6 +5659,20 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
         chart_data["datasets"][0]["view"] = viewid
     
     chart_data['numeric_format'] = str(user_numeric_format).replace('_', '-') if is_valid_locale(user_numeric_format) else "it-CH"
+
+    if user_club_has_data:
+        chart_data['name'] = '$nomydata$'
+        chart_data["logged_club_incomplete"] = {
+            "missing_years": logged_club_check["missing_years"],
+            "wrong_values": logged_club_check["wrong_values"],
+        }
+
+    
+    excluded_names = []
+    for club in excluded_clubs:
+        record_club = UserRecord('golfclub', club)
+        excluded_names.append(record_club.values.get('nome_club', 'Unknown Club'))
+    chart_data['excluded_clubs'] = excluded_names
 
     chart_data_json = json.dumps(chart_data, default=json_date_handler)
 
@@ -6765,6 +6851,7 @@ def new_dashboard(request):
     data = json.loads(request.body)
     dashboard_name = data.get('dashboard_name')
     category = data.get('category', None)
+    duplicate_from_id = data.get('duplicate_from_id', None)
 
     user = request.user
     if not user.is_authenticated:
@@ -6860,6 +6947,33 @@ def new_dashboard(request):
                     viewid=view_obj if view_obj else default_view,
                     category="benchmark" if grouping == "recordidgolfclub_" else None,
                 )
+
+    # --- DUPLICAZIONE DASHBOARD E BLOCCHI ESISTENTI ---
+    if duplicate_from_id:
+        # Recupera dashboard di origine
+        orig_dashboard = SysDashboard.objects.filter(id=duplicate_from_id).first()
+        if not orig_dashboard:
+            return JsonResponse({
+                'error': 'Dashboard to duplicate not found.'
+            }, status=404)
+
+        # Recupera tutti i blocchi associati all'utente e alla dashboard di origine
+        orig_blocks = SysUserDashboardBlock.objects.filter(
+            userid_id=sys_user_id,
+            dashboardid=orig_dashboard
+        )
+
+        for block in orig_blocks:
+            SysUserDashboardBlock.objects.create(
+                userid=block.userid,
+                dashboardid=dashboard,
+                dashboard_block_id=block.dashboard_block_id,
+                size=block.size,
+                gsx=block.gsx,
+                gsy=block.gsy,
+                gsw=block.gsw,
+                gsh=block.gsh
+            )
 
     return JsonResponse({'success': True, 'message': 'New dashboard created successfully.'})
 
@@ -7147,7 +7261,15 @@ def save_calendar_event(request):
     return JsonResponse(data)
 
 
+def check_data_anonymous(request):
+    userid = Helper.get_userid(request)
+    sql = f"SELECT dati_anonimi FROM user_golfclub WHERE utente = %s"
+    dati_anonimi = HelpderDB.sql_query_value(sql, 'dati_anonimi', [userid])
 
+    if dati_anonimi == 'true':
+        return JsonResponse({'success': False, 'is_anonymous': True})
+
+    return JsonResponse({'success': True, 'is_anonymous': False})
 #TODO spostare sotto customapp_wegolf
 def get_benchmark_filters(request):
     golfclub_table=UserTable('golfclub')
@@ -7161,6 +7283,8 @@ def get_benchmark_filters(request):
         FROM user_golfclub AS g
         JOIN user_metrica_annuale AS m
            ON g.recordid_ = m.recordidgolfclub_
+        WHERE (g.dati_anonimi = 'false' OR g.dati_anonimi IS NULL) 
+            AND g.deleted_ = 'N' AND m.deleted_ = 'N'
         GROUP BY title, recordid
         ORDER BY title ASC
     """
@@ -7260,7 +7384,9 @@ def get_filtered_clubs(request):
         FROM user_golfclub AS g
         JOIN user_metrica_annuale AS m
            ON g.recordid_ = m.recordidgolfclub_
-        WHERE {conditions}
+        WHERE (g.dati_anonimi = 'false' OR g.dati_anonimi IS NULL) 
+            AND g.deleted_ = 'N' AND m.deleted_ = 'N' 
+            AND {conditions}
         GROUP BY title, recordid
         ORDER BY title ASC
     """
