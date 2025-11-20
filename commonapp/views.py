@@ -579,7 +579,6 @@ def get_table_records(request):
     table = UserTable(tableid, Helper.get_userid(request))
 
     # Costruisci la clausola WHERE dai filtri
-    print(filtersList)
     # 1. Ottieni gli oggetti UserRecord GIA' PROCESSATI
     # Passa i filtri a get_table_records_obj
     if not order_fieldid:
