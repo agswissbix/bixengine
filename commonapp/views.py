@@ -3238,6 +3238,36 @@ def save_record_fields(request):
         # Call save_newuser
         result = save_newuser(request)
 
+    # TODO CUSTOM --- DASHBOARD --- WEGOLF
+    if tableid == 'golfclub':
+        golfclub_record = UserRecord("golfclub", recordid)
+        userid = golfclub_record.values.get('utente', None)
+
+        default_userid = 22
+
+        default_dashboards = SysUserDashboardBlock.objects.filter(
+            userid_id=default_userid
+        ).values_list('dashboardid', flat=True).distinct()
+
+        for dashboard_id in default_dashboards:
+
+            # Verifico se l'utente ha già blocchi per questa dashboard
+            user_has_blocks = SysUserDashboardBlock.objects.filter(
+                userid_id=userid,
+                dashboardid_id=dashboard_id
+            ).exists()
+
+            if not user_has_blocks:
+                blocks_to_clone = SysUserDashboardBlock.objects.filter(
+                    userid_id=default_userid,
+                    dashboardid_id=dashboard_id
+                )
+
+                for block in blocks_to_clone:
+                    block.pk = None              # nuovo record
+                    block.userid_id = userid     # assegno all'utente corretto
+                    block.save()
+
     #CUSTOM ---CHART---
     if tableid == 'chart':
         # =======================
@@ -4848,32 +4878,35 @@ def get_dashboard_data(request):
     data = json.loads(request.body)
     dashboardCategory = data.get('dashboardCategory', '')
 
+    # WEgolf ha 22
+    user_default = 22 if dashboardCategory != '' else 1
+
     # Dashboard dell’utente corrente
     dashboards_user = SysUserDashboard.objects.filter(userid=userid)\
                                               .values_list("dashboardid", flat=True)
 
     # Dashboard dell’utente 1 (default)
-    dashboards_default = SysDashboard.objects.filter(userid=22)\
+    dashboards_default = SysDashboard.objects.filter(userid=user_default)\
                                              .values_list("id", flat=True)
 
     # Unisco gli ID in un unico set per evitare duplicati
     dashboard_ids = set(dashboards_default) | set(dashboards_user)
 
-    # Se esiste una categoria, filtro anche per categoria
+    filters = {"id__in": dashboard_ids}
     if dashboardCategory:
-        dashboards_qs = SysDashboard.objects.filter(
-            id__in=dashboard_ids,
-            category=dashboardCategory
-        ).values("id", "name").order_by(F("order_dashboard").asc(nulls_last=True))
-    else:
-        dashboards_qs = SysDashboard.objects.filter(
-            id__in=dashboard_ids
-        ).values("id", "name").order_by(F("order_dashboard").asc(nulls_last=True))
+        filters["category"] = dashboardCategory
 
-    dashboards = [
-        {"id": str(d["id"]), "name": d["name"]}
-        for d in dashboards_qs
-    ]
+    dashboards_qs = SysDashboard.objects.filter(**filters)\
+        .values("id", "name")\
+        .order_by(F("order_dashboard").asc(nulls_last=True))
+
+    dashboards = []
+    for d in dashboards_qs:
+        dashboards.append({
+            "id": str(d["id"]),
+            "name": d["name"],
+            "isOwner": d["id"] in dashboards_user
+        })
 
     return JsonResponse({'dashboards': dashboards})
 
@@ -6819,6 +6852,7 @@ def new_dashboard(request):
     data = json.loads(request.body)
     dashboard_name = data.get('dashboard_name')
     category = data.get('category', None)
+    duplicate_from_id = data.get('duplicate_from_id', None)
 
     user = request.user
     if not user.is_authenticated:
@@ -6914,6 +6948,33 @@ def new_dashboard(request):
                     viewid=view_obj if view_obj else default_view,
                     category="benchmark" if grouping == "recordidgolfclub_" else None,
                 )
+
+    # --- DUPLICAZIONE DASHBOARD E BLOCCHI ESISTENTI ---
+    if duplicate_from_id:
+        # Recupera dashboard di origine
+        orig_dashboard = SysDashboard.objects.filter(id=duplicate_from_id).first()
+        if not orig_dashboard:
+            return JsonResponse({
+                'error': 'Dashboard to duplicate not found.'
+            }, status=404)
+
+        # Recupera tutti i blocchi associati all'utente e alla dashboard di origine
+        orig_blocks = SysUserDashboardBlock.objects.filter(
+            userid_id=sys_user_id,
+            dashboardid=orig_dashboard
+        )
+
+        for block in orig_blocks:
+            SysUserDashboardBlock.objects.create(
+                userid=block.userid,
+                dashboardid=dashboard,
+                dashboard_block_id=block.dashboard_block_id,
+                size=block.size,
+                gsx=block.gsx,
+                gsy=block.gsy,
+                gsw=block.gsw,
+                gsh=block.gsh
+            )
 
     return JsonResponse({'success': True, 'message': 'New dashboard created successfully.'})
 
