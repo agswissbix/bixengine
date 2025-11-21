@@ -104,35 +104,16 @@ urlpatterns = [
     path('settings_get_dashboards_user/', settings_get_dashboards_user, name='settings_get_dashboards_user'),
     path('save_user_dashboard_setting/', save_user_dashboard_setting, name='save_user_dashboard_setting'),
     path('get_all_tables/', get_all_tables, name='get_all_tables'),
-    
-    
-    # ------------------  WeGolf views ---------------------------------
-    path('get_filtered_clubs/', get_filtered_clubs, name='get_filtered_clubs'),
-    path('get_benchmark_filters/', get_benchmark_filters, name='get_benchmark_filters'),
-    path('update_club_settings/', update_club_settings, name='update_club_settings'),
-    path('get_settings_data/', get_settings_data, name='get_settings_data'),
     path('settings_table_steps/', settings_table_steps, name='settings_table_steps'),
     path('settings_table_newstep/', settings_table_newstep, name='settings_table_newstep'),
     path('settings_table_steps_save/', settings_table_steps_save, name='settings_table_steps_save'),
-    path('get_documents/', get_documents, name='get_documents'),
-    path('get_projects/', get_projects, name='get_projects'),
-    path('get_wegolf_welcome_data/', get_wegolf_welcome_data, name='get_wegolf_welcome_data'),
-    path('like_project/', like_project, name='like_project'),
-    path('unlike_project/', unlike_project, name='unlike_project'),
-    path('get_language/', get_language, name='get_language'),
-    path('get_notifications/', get_notifications, name='get_notifications'),
-    path('mark_all_notifications_read/', mark_all_notifications_read, name='mark_all_notifications_read'),
-    path('mark_notification_read/', mark_notification_read, name='mark_notification_read'),
-    path('mark_notification_hidden/', mark_notification_hidden, name='mark_notification_hidden'),
-    path('check_data_anonymous/', check_data_anonymous, name='check_data_anonymous'),
-    path('request_new_project/', request_new_project, name='request_new_project'),
-    path('request_new_document/', request_new_document, name='request_new_document'),
+    
+    
+    # ------------------  WeGolf views ---------------------------------
 
     
 
-    path('sync_translation_fields/', sync_translation_fields, name='sync_translation_fields'),
-    path('sync_translation_dashboards/', sync_translation_dashboards, name='sync_translation_dashboards'),
-    path('get_languages/', get_languages, name='get_languages')
+
     
 ]
 
