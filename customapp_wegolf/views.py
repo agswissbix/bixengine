@@ -152,6 +152,55 @@ def get_filtered_clubs(request):
         ORDER BY title ASC
     """
 
+    # # --------------------------------------------------------
+    # # 2. COSTRUZIONE DEI JOIN DINAMICI PER FILTRI NUMERICI
+    # # --------------------------------------------------------
+    # join_clauses = []
+    # select_fields = []
+
+    # for i, nf in enumerate(numeric_filters, start=1):
+    #     field = nf.get('field')
+    #     operator = nf.get('operator')
+    #     value = nf.get('value')
+
+    #     alias = f"m{i}"
+    #     select_fields.append(f"{alias}.{field} AS {field}_value")
+
+    #     join_clause = f"""
+    #     LEFT JOIN (
+    #         SELECT m.recordidgolfclub_, m.{field}
+    #         FROM user_metrica_annuale m
+    #         WHERE m.deleted_ = 'N'
+    #         AND m.{field} IS NOT NULL
+    #         AND m.anno = (
+    #             SELECT MAX(m2.anno)
+    #             FROM user_metrica_annuale m2
+    #             WHERE m2.recordidgolfclub_ = m.recordidgolfclub_
+    #                 AND m2.deleted_ = 'N'
+    #                 AND m2.{field} IS NOT NULL
+    #         )
+    #         {"AND m." + field + f" {operator} {value}" if value is not None else ""}
+    #     ) {alias} ON {alias}.recordidgolfclub_ = g.recordid_
+    #     """
+    #     join_clauses.append(join_clause)
+
+    # # --------------------------------------------------------
+    # # 3. COSTRUZIONE QUERY FINALE
+    # # --------------------------------------------------------
+    # sql = f"""
+    #     SELECT g.nome_club AS title,
+    #         g.recordid_ AS recordid,
+    #         g.Logo AS logo,
+    #         g.paese AS paese,
+    #         {', '.join(select_fields)}
+    #     FROM user_golfclub AS g
+    #     {" ".join(join_clauses)}
+    #     WHERE (g.dati_anonimi = 'false' OR g.dati_anonimi IS NULL)
+    #     AND g.deleted_ = 'N'
+    #     AND {conditions_g}
+    #     ORDER BY title ASC
+    # """
+
     clubs = HelpderDB.sql_query(sql)
 
     sql_user_club = f"SELECT nome_club as title, recordid_ as recordid, logo, paese FROM user_golfclub WHERE utente = '{userid}'"
