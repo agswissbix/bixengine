@@ -7759,20 +7759,25 @@ def request_new_document(request):
         document.save()
 
         if file_obj:
-            save_dir = os.path.join(settings.UPLOADS_ROOT, "documents")
-            os.makedirs(save_dir, exist_ok=True)
+            target_dir = os.path.join(settings.UPLOADS_ROOT, "documents", document.recordid)
+            
+            os.makedirs(target_dir, exist_ok=True)
 
-            name, ext = file_obj.name.split('.')
+            filename = file_obj.name
+            _, ext = os.path.splitext(filename)
+            ext = ext.lstrip('.')
 
-            file_path = os.path.join(save_dir, document.recordid, f"{name}.{ext}")
+            full_file_path = os.path.join(target_dir, filename)
 
-            with default_storage.open(file_path, "wb+") as destination:
+            with open(full_file_path, "wb+") as destination:
                 for chunk in file_obj.chunks():
                     destination.write(chunk)
 
-            relative_path = f"documents/{document.recordid}/{name}.{ext}"
-            document.values['file'] = relative_path
+            relative_path = f"documents/{document.recordid}/{filename}"
 
+
+            document = UserRecord('documents', document.recordid)
+            document.values['file'] = relative_path
             document.values['file_type'] = ext
 
             document.save()
