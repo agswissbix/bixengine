@@ -44,8 +44,18 @@ def get_benchmark_filters(request):
     clubs.insert(0, logged_club)
 
     fields = SysField.objects.filter(tableid='metrica_annuale', fieldtypewebid='Numero').values('fieldid', 'description').order_by('description')
+
+    for field in fields:
+        translation = WegolfHelper.get_translation('metrica_annuale', field.get('fieldid'), userid = userid, translation_type="Field")
+        if translation:
+            field['description'] = translation
     
     fieldsClub = SysField.objects.filter(tableid='golfclub', fieldtypewebid='Numero').values('fieldid', 'description').order_by('description')
+    for field in fieldsClub:
+        translation = WegolfHelper.get_translation('golfclub', field.get('fieldid'), userid = userid, translation_type="Field")
+        if translation:
+            field['description'] = translation
+
     response_data = {
             'filterOptionsNumbers': [
                 {'field': field['fieldid'], 'label': field['description']}
