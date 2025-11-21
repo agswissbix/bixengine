@@ -3277,7 +3277,7 @@ def save_record_fields(request):
 
         name = values.get("name")
         title = values.get("title")
-        userid = 1
+        userid = Helper.get_userid(request)
         layout = values.get("type")
         grouping = values.get("grouping")
         grouping_type = values.get("grouping_type")
@@ -5415,17 +5415,17 @@ def get_dashboard_blocks(request):
                 datas = dbh.sql_query(sql)
 
                 # all_blocks = SysDashboardBlock.objects.all()
-                sql = "SELECT * FROM sys_dashboard_block WHERE dashboardid = {dashboard_id} ORDER BY id desc".format(
-                    dashboard_id=dashboard_id
-                )
-                # sql = """
-                #     SELECT sdb.*
-                #     FROM sys_dashboard_block sdb
-                #     LEFT JOIN user_chart uc ON uc.report_id = sdb.chartid
-                #     WHERE sdb.dashboardid = {dashboard_id}
-                #     AND (uc.status IS NULL OR uc.status <> 'Riservato')
-                #     ORDER BY sdb.id DESC
-                #     """.format(dashboard_id=dashboard_id)
+                # sql = "SELECT * FROM sys_dashboard_block WHERE dashboardid = {dashboard_id} ORDER BY id desc".format(
+                #     dashboard_id=dashboard_id
+                # )
+                sql = """
+                    SELECT sdb.*, uc.status as status
+                    FROM sys_dashboard_block sdb
+                    LEFT JOIN user_chart uc ON uc.report_id = sdb.chartid
+                    WHERE sdb.dashboardid = {dashboard_id}
+                    AND (uc.status IS NULL OR uc.status <> 'Riservato' OR sdb.userid = {userid})
+                    ORDER BY sdb.id DESC
+                    """.format(dashboard_id=dashboard_id, userid=bixid)
                 all_blocks = dbh.sql_query(sql)
 
                 for block in all_blocks:
@@ -5435,18 +5435,19 @@ def get_dashboard_blocks(request):
 
                 for data in datas:
                     dashboard_block_id = data['dashboard_block_id']
-                    sql = "SELECT * FROM sys_dashboard_block WHERE id = {dashboard_block_id}".format(
-                        dashboard_block_id=dashboard_block_id
-                    )
-                    # sql = """
-                    #     SELECT sdb.*, uc.status
-                    #     FROM sys_dashboard_block sdb
-                    #     LEFT JOIN user_chart uc ON uc.report_id = sdb.chartid
-                    #     WHERE sdb.id = {dashboard_block_id}
-                    #     AND (uc.status IS NULL OR uc.status <> 'Riservato')
-                    # """.format(
+                    # sql = "SELECT * FROM sys_dashboard_block WHERE id = {dashboard_block_id}".format(
                     #     dashboard_block_id=dashboard_block_id
                     # )
+                    sql = """
+                        SELECT sdb.*, uc.status
+                        FROM sys_dashboard_block sdb
+                        LEFT JOIN user_chart uc ON uc.report_id = sdb.chartid
+                        WHERE sdb.id = {dashboard_block_id}
+                        AND (uc.status IS NULL OR uc.status <> 'Riservato' OR sdb.userid = {userid})
+                    """.format(
+                        dashboard_block_id=dashboard_block_id,
+                        userid=bixid
+                    )
                     results = dbh.sql_query(sql)
                     if not results or len(results) == 0:
                         continue
