@@ -42,6 +42,253 @@ class UserTable:
         self._results_columns = None # Cache per le colonne dei risultati
         self._total_records_count = None
 
+    # ============================
+    #   COSTANTI DI CLASSE
+    # ============================
+
+    TEXT_CONDITIONS = {
+        "Valore esatto": lambda self, field, val: field + " = '" + str(val).replace("'", "''") + "'",
+        "Contiene": lambda self, field, val: field + " LIKE '%" + str(val).replace("'", "''") + "%'",
+        "Diverso da": lambda self, field, val: field + " <> '" + str(val).replace("'", "''") + "'",
+        "Nessun valore": lambda self, field, val: f"({field} IS NULL OR {field} = '')",
+        "Almeno un valore": lambda self, field, val: f"({field} IS NOT NULL AND {field} <> '')"
+    }
+
+    LOOKUP_CONDITIONS = {
+        "Valore esatto": lambda self, field, val: f"{field} = '{val}'",
+        "Diverso da": lambda self, field, val: f"{field} <> '{val}'",
+    }
+
+    NUMBER_CONDITIONS = {
+        "Tra": lambda self, field, r: f"({field} BETWEEN {r['min']} AND {r['max']})",
+        "Maggiore di": lambda self, field, r: f"{field} > {r['min']}",
+        "Minore di": lambda self, field, r: f"{field} < {r['max']}",
+        "Diverso da": lambda self, field, r: f"{field} <> {r['min']}",
+    }
+
+    # ============================
+    #   METODI STATICI UTILI
+    # ============================
+
+    @staticmethod
+    def today():
+        from datetime import datetime
+        return datetime.today().strftime("%Y-%m-%d")
+
+    @staticmethod
+    def this_week():
+        from datetime import datetime, timedelta
+        now = datetime.today()
+        start = (now - timedelta(days=now.weekday())).strftime("%Y-%m-%d")
+        end = (datetime.strptime(start, "%Y-%m-%d") + timedelta(days=6)).strftime("%Y-%m-%d")
+        return start, end
+
+    @staticmethod
+    def this_month():
+        from datetime import datetime, timedelta
+        import dateutil.relativedelta as rd
+        now = datetime.today()
+        start = now.replace(day=1).strftime("%Y-%m-%d")
+        end = (now.replace(day=1) + rd.relativedelta(months=1) - timedelta(days=1)).strftime("%Y-%m-%d")
+        return start, end
+
+    # ============================
+    #   CONDIZIONI DATA (usa metodi)
+    # ============================
+
+    def get_date_conditions(self):
+        return {
+            "Oggi": lambda field: f"{field} = '{self.today()}'",
+            "Questa settimana": lambda field: f"{field} BETWEEN '{self.this_week()[0]}' AND '{self.this_week()[1]}'",
+            "Questo mese": lambda field: f"{field} BETWEEN '{self.this_month()[0]}' AND '{self.this_month()[1]}'",
+            "Passato": lambda field: f"{field} < '{self.today()}'",
+            "Futuro": lambda field: f"{field} > '{self.today()}'",
+        }
+
+    # ============================
+    #   MAPPA GENERALE
+    # ============================
+
+    def get_condition_map(self):
+        return {
+            "Text": self.TEXT_CONDITIONS,
+            "Parola": self.TEXT_CONDITIONS,
+            "lookup": self.LOOKUP_CONDITIONS,
+            "Utente": self.LOOKUP_CONDITIONS,
+            "Numero": self.NUMBER_CONDITIONS,
+            "Data": self.get_date_conditions()
+        }
+    
+    @timing_decorator
+    def build_condition(self, filter_type, field_id, filter_value, filter_condition):
+        import json
+
+        # --- NORMALIZZAZIONE DELLA CONDIZIONE ---
+        if isinstance(filter_condition, list):
+            cond_list = filter_condition[:]  # copia
+        else:
+            cond_list = [filter_condition]
+
+        # --- DECODIFICA I VALUE ---
+        try:
+            parsed_value = json.loads(filter_value)
+        except:
+            parsed_value = filter_value
+
+        # forza lista di set (se non lo è)
+        if not isinstance(parsed_value, list):
+            parsed_value = [parsed_value]
+
+        # allinea lunghezze (default condition = "Valore esatto")
+        max_len = max(len(cond_list), len(parsed_value))
+        while len(cond_list) < max_len:
+            cond_list.append("Valore esatto")
+        while len(parsed_value) < max_len:
+            parsed_value.append(None)
+
+        cond_map = self.get_condition_map().get(filter_type)
+        if not cond_map:
+            return None
+
+        date_specials = self.get_date_conditions()
+
+        parts = []  # conterrà le espressioni per ciascuna coppia (cond_i, value_i)
+
+        # --- PROCESSA 1:1 (cond_i, value_i) ---
+        for cond_i, val_i in zip(cond_list, parsed_value):
+
+            # normalizza cond_i (può essere None)
+            if not cond_i:
+                cond_i = "Valore esatto"
+
+            # condizioni globali che ignorano il valore
+            if cond_i == "Nessun valore":
+                parts.append(f"({field_id} IS NULL)")
+                continue
+
+            if cond_i == "Almeno un valore":
+                parts.append(f"({field_id} IS NOT NULL)")
+                continue
+
+            # date speciali (ignorano val_i)
+            if filter_type == "Data" and cond_i in date_specials:
+                parts.append("(" + date_specials[cond_i](field_id) + ")")
+                continue
+
+            # ---- ora gestiamo il caso standard per ciascun tipo ----
+
+            # se val_i è None o vuoto, salta (nessun valore sensato da processare)
+            if val_i is None or (isinstance(val_i, str) and val_i.strip() == ""):
+                # se la condizione non è una di quelle che ignorano il valore, saltiamo
+                # (oppure potremmo considerare Valore esatto su NULL, ma preferisco skip)
+                continue
+
+            # Per ogni coppia usiamo la mappatura cond_map; se mancante -> "Valore esatto"
+            fun = cond_map.get(cond_i, cond_map.get("Valore esatto"))
+
+            # --- TIPO Data con set dict {"from","to"} ---
+            if filter_type == "Data" and isinstance(val_i, dict):
+                from_d = val_i.get("from", "").strip()
+                to_d = val_i.get("to", "").strip()
+
+                if cond_i == "Valore esatto":
+                    if from_d and to_d:
+                        parts.append(f"({field_id} BETWEEN '{from_d}' AND '{to_d}')")
+                    elif from_d:
+                        parts.append(f"({field_id} = '{from_d}')")
+                    elif to_d:
+                        parts.append(f"({field_id} = '{to_d}')")
+                elif cond_i == "Diverso da":
+                    # NOT BETWEEN per range, o <> per valore singolo
+                    if from_d and to_d:
+                        parts.append(f"({field_id} NOT BETWEEN '{from_d}' AND '{to_d}')")
+                    elif from_d:
+                        parts.append(f"({field_id} <> '{from_d}')")
+                    elif to_d:
+                        parts.append(f"({field_id} <> '{to_d}')")
+                else:
+                    # fallback generico (usa funzione mappata se esiste)
+                    # molti cond_map per Data possono definire fun(self, field, v)
+                    try:
+                        parts.append("(" + fun(self, field_id, val_i) + ")")
+                    except Exception:
+                        # se non è callable o fallisce, skip
+                        continue
+
+                continue
+
+            # --- TIPO Numero con set dict {"min","max"} o singolo valore numerico---
+            if filter_type == "Numero":
+                # se è dict con min/max
+                if isinstance(val_i, dict):
+                    # la funzione della mappa si aspetta il dict
+                    parts.append("(" + fun(self, field_id, val_i) + ")")
+                else:
+                    # valore singolo numerico
+                    try:
+                        # prova a convertire per sicurezza
+                        num = float(val_i)
+                        parts.append(f"({field_id} = {num})" if cond_i == "Valore esatto" else "(" + fun(self, field_id, val_i) + ")")
+                    except Exception:
+                        # valore non numerico -> skip
+                        continue
+                continue
+
+            # --- TIPO lookup / Utente con lista o singolo valore ---
+            if filter_type in ["lookup", "Utente"]:
+                # se val_i è lista (es. ["A","B"]), allora per QUESTA coppia dobbiamo:
+                # - se cond_i == "Diverso da" -> usare AND tra i sub-valori (esempio: field <> A AND field <> B)
+                # - altrimenti -> usare OR tra i sub-valori (field = A OR field = B)
+                if isinstance(val_i, list):
+                    sub_fun = cond_map.get(cond_i, cond_map.get("Valore esatto"))
+                    if cond_i == "Diverso da":
+                        sub_join = " AND "
+                    else:
+                        sub_join = " OR "
+                    subs = []
+                    for sv in val_i:
+                        subs.append(sub_fun(self, field_id, str(sv)))
+                    if subs:
+                        parts.append("(" + sub_join.join(subs) + ")")
+                else:
+                    parts.append("(" + fun(self, field_id, str(val_i)) + ")")
+                continue
+
+            # --- TIPO Text / Parola ---
+            if filter_type in ["Text", "Parola"]:
+                # se val_i è lista -> ogni elemento è un valore singolo (1:1 non list-vs-cond handled above)
+                if isinstance(val_i, list):
+                    # comportamento: per la singola coppia (cond_i, val_i_as_list) combiniamo i subvalori
+                    # Diverso da -> AND, altrimenti OR
+                    sub_fun = cond_map.get(cond_i, cond_map.get("Valore esatto"))
+                    sub_join = " AND " if cond_i == "Diverso da" else " OR "
+                    subs = [sub_fun(self, field_id, str(sv)) for sv in val_i if str(sv).strip()]
+                    if subs:
+                        parts.append("(" + sub_join.join(subs) + ")")
+                elif isinstance(val_i, str) and "|" in val_i:
+                    # stringa multivalore separata da |
+                    sub_fun = cond_map.get(cond_i, cond_map.get("Valore esatto"))
+                    sub_join = " AND " if cond_i == "Diverso da" else " OR "
+                    subs = [sub_fun(self, field_id, p.strip()) for p in val_i.split("|") if p.strip()]
+                    if subs:
+                        parts.append("(" + sub_join.join(subs) + ")")
+                else:
+                    # singolo valore stringa
+                    parts.append("(" + fun(self, field_id, str(val_i)) + ")")
+                continue
+
+            # --- DEFAULT: prova ad applicare la funzione mappata ---
+            try:
+                parts.append("(" + fun(self, field_id, val_i) + ")")
+            except Exception:
+                # skip se non è processabile
+                continue
+
+        # --- OR tra le diverse coppie (cond_i, val_i) come richiesto ---
+        if parts:
+            return "(" + " OR ".join(parts) + ")"
+        return None
+
     def get_total_records_count(self):
         return self._total_records_count
 
@@ -73,81 +320,15 @@ class UserTable:
             field_id = filter_item.get('fieldid')
             filter_type = filter_item.get('type')
             filter_value = filter_item.get('value')
+            filter_condition = filter_item.get('conditions', [])
             
             if not field_id or not filter_value:
                 continue
-                
-            if filter_type in ['lookup', 'Utente']:
-                filter_values = json.loads(filter_value)
-                
-                if isinstance(filter_values, list) and filter_values:
-                    conditions = []
-                    for id in filter_values:
-                        if str(id):
-                            conditions.append(f"{field_id}='{id}'")
-                    if conditions:
-                        conditions_list.append(f"({' OR '.join(conditions)})")
-            elif filter_type in ['Parola', 'Text']:
-                # La stringa è già il valore da usare per la clausola LIKE.
-                # NOTA: Usiamo LIKE per una ricerca più flessibile, ma possiamo anche usare '=' per "Valore esatto".
-                # Per ora, come richiesto, ci concentriamo su 'Valore esatto'
-                # Utilizziamo `LIKE` con i caratteri jolly `%` per una ricerca più ampia.
-                # Se la condizione fosse 'Valore esatto', l'operatore sarebbe '='. Per ora, gestiamo solo il valore.
-                
-                values = filter_value.split('|')
+            
+            sql_condition = self.build_condition(filter_type, field_id, filter_value, filter_condition)
 
-                if len(values) > 0:
-                    like_conditions = []
-                    for val in values:
-                        sanitized_val = val.replace("'", "''") 
-                        like_conditions.append(f"{field_id} LIKE '%{sanitized_val}%'")
-                    conditions_list.append(f"({' OR '.join(like_conditions)})")
-                
-            # Gestione del tipo 'Numero'
-            elif filter_type == 'Numero':
-                try:
-                    # Il valore è un JSON che contiene i range. Es: '[{"min":"2","max":"3"},{"min":"4","max":"7"}]'
-                    ranges = json.loads(filter_value)
-                    range_conditions = []
-                    for r in ranges:
-                        min_val = r.get('min', '').strip()
-                        max_val = r.get('max', '').strip()
-                        if min_val and max_val:
-                            range_conditions.append(f"({field_id} BETWEEN {min_val} AND {max_val})")
-                        elif min_val:
-                            range_conditions.append(f"({field_id} >= {min_val})")
-                        elif max_val:
-                            range_conditions.append(f"({field_id} <= {max_val})")
-                    
-                    if range_conditions:
-                        conditions_list.append(f"({' OR '.join(range_conditions)})")
-
-                except (json.JSONDecodeError, ValueError):
-                    print(f"Errore di decodifica JSON o valore non valido per il filtro numerico {field_id}: {filter_value}")
-                    continue
-
-            # Gestione del tipo 'Data'
-            elif filter_type == 'Data':
-                try:
-                    # Il valore è un JSON che contiene i range di date. Es: '[{"from":"2025-09-18","to":"2025-09-25"}]'
-                    ranges = json.loads(filter_value)
-                    range_conditions = []
-                    for r in ranges:
-                        from_date = r.get('from', '').strip()
-                        to_date = r.get('to', '').strip()
-                        if from_date and to_date:
-                            range_conditions.append(f"({field_id} BETWEEN '{from_date}' AND '{to_date}')")
-                        elif from_date:
-                            range_conditions.append(f"({field_id} >= '{from_date}')")
-                        elif to_date:
-                            range_conditions.append(f"({field_id} <= '{to_date}')")
-                    
-                    if range_conditions:
-                        conditions_list.append(f"({' OR '.join(range_conditions)})")
-
-                except (json.JSONDecodeError, ValueError):
-                    print(f"Errore di decodifica JSON o valore non valido per il filtro data {field_id}: {filter_value}")
-                    continue
+            if sql_condition:
+                conditions_list.append(sql_condition)
         
         # --- Fine del blocco di gestione filtri ---
 

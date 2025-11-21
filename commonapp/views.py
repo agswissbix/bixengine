@@ -579,7 +579,6 @@ def get_table_records(request):
     table = UserTable(tableid, Helper.get_userid(request))
 
     # Costruisci la clausola WHERE dai filtri
-    print(filtersList)
     # 1. Ottieni gli oggetti UserRecord GIA' PROCESSATI
     # Passa i filtri a get_table_records_obj
     if not order_fieldid:
@@ -8146,51 +8145,7 @@ def get_cached_translation(translations, fieldid, userid=None, code=None, transl
 
     except Exception as e:
         return ""
-    
-def sync_notifications(request):
-    print("Sync notifications")
-
-    notification_table = UserTable("notification")
-    notifications = notification_table.get_records(conditions_list=[])
-
-    for notification in notifications:
-        notification_id = notification.get('recordid_')
-
-        create_notification(notification_id)
-
-    return HttpResponse()
-
-
-def create_notification(notification_id):
-    print("Creating notification")
-    try:
-        notification_status_table = UserTable("notification_status")
-        condition_list = [
-            f"recordidnotification_={notification_id}"
-        ]
-
-        notification_statuses = notification_status_table.get_records(conditions_list=condition_list)
-
-        clubs_table = UserTable("golfclub")
-        clubs = clubs_table.get_records(conditions_list=[])
-
-        for club in clubs:
-            print("club")
-            
-            found_status = next(
-                (s for s in notification_statuses if str(s.get('recordidgolfclub_')) == str(club.get('recordid_'))),
-                None
-            )
-
-            if not found_status:
-                new_notification = UserRecord("notification_status")
-                new_notification.values["recordidnotification_"] = notification_id
-                new_notification.values["recordidgolfclub_"] = club.get("recordid_")
-                new_notification.values["status"] = "Unread"
-                new_notification.save()
-
-    except:
-        print("Error creating notification statuses")
+ 
 
 
 def get_notifications(request):
