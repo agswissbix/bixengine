@@ -7864,7 +7864,7 @@ def get_projects(request):
             })
 
 
-        project_date = document.get('data')
+        project_date = project.get('data', '')
         
         if project_date:
             if hasattr(project_date, 'date'):
