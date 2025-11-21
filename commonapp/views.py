@@ -4901,9 +4901,20 @@ def get_dashboard_data(request):
 
     dashboards = []
     for d in dashboards_qs:
+        dashboard_id_str = str(d["id"])
+        
+        translated_text = get_translation(
+            tableid='sys_dashboard', 
+            fieldid=dashboard_id_str, 
+            userid=userid, 
+            translation_type='Dashboard'
+        )
+
+        final_name = translated_text if translated_text != dashboard_id_str else d["name"]
+
         dashboards.append({
-            "id": str(d["id"]),
-            "name": d["name"],
+            "id": dashboard_id_str,
+            "name": final_name,
             "isOwner": d["id"] in dashboards_user
         })
 
@@ -6880,6 +6891,8 @@ def new_dashboard(request):
         dashboardid=dashboard
     )
 
+    sync_translation_dashboards(request)
+
     if category:
         # Recupera i grafici legati alla categoria (dalla tabella non-sys user_chart)
         with connection.cursor() as cursor:
@@ -7013,6 +7026,9 @@ def update_dashboard(request):
             block.save()
         dashboard.name = dashboard_name
         dashboard.save()
+
+        sync_translation_dashboards(request)
+
         return JsonResponse({
             'success': True,
             'message': 'Dashboard updated successfully',
@@ -8126,6 +8142,99 @@ def sync_translation_fields(request):
             print("Salvataggio completato.")
 
         return JsonResponse({"success": True, "added": len(new_records_to_save)})
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+    
+def sync_translation_dashboards(request):
+    try:
+        translations_table = UserTable('translations')
+
+        all_dashboards = HelpderDB.sql_query("SELECT id, name, description from sys_dashboard")
+
+        existing_translations_raw = translations_table.get_records(
+            conditions_list=[],
+            limit=2000 
+        )
+        
+        existing_map = {}
+        for tr in existing_translations_raw:
+            key = (
+                tr.get('type'), 
+                tr.get('tableid'), 
+                tr.get('identifier')
+            )
+            existing_map[key] = tr
+
+        new_records_to_save = []
+        updated_count = 0
+
+        for dash in all_dashboards:
+            dash_id = dash.get('id')
+            name = dash.get('name')
+            description = dash.get('description')
+
+            if not dash_id:
+                continue
+
+            if name:
+                key_name = ('Dashboard', 'sys_dashboard', dash_id)
+                
+                if key_name in existing_map:
+                    record = existing_map[key_name]
+                    current_italian = record.get('italian') 
+                    
+                    if current_italian != name:
+                        print(f"Aggiorno Dashboard Name: {name} (prima era: {current_italian})")
+                        record.values['italian'] = name
+                        record.save()
+                        updated_count += 1
+                else:
+                    print(f"Aggiungo Dashboard Name: {name}")
+                    new_record = UserRecord('translations')
+                    new_record.values['type'] = 'Dashboard'
+                    new_record.values['tableid'] = 'sys_dashboard'
+                    new_record.values['identifier'] = dash_id
+                    new_record.values['italian'] = name
+                    new_records_to_save.append(new_record)
+
+            if description:
+                key_desc = ('DashboardDescription', 'sys_dashboard', dash_id)
+                
+                if key_desc in existing_map:
+                    record = existing_map[key_desc]
+                    current_italian = record.get('italian')
+                    
+                    if current_italian != description:
+                        print(f"Aggiorno Dashboard Description per ID {dash_id}")
+                        record.values['italian'] = description
+                        record.save()
+                        updated_count += 1
+                else:
+                    print(f"Aggiungo Dashboard Description: {dash_id}")
+                    new_record = UserRecord('translations')
+                    new_record.values['type'] = 'DashboardDescription'
+                    new_record.values['tableid'] = 'sys_dashboard'
+                    new_record.values['identifier'] = dash_id
+                    new_record.values['italian'] = description
+                    new_records_to_save.append(new_record)
+
+        if not new_records_to_save:
+            print(f"Nessuna nuova dashboard creata. Aggiornati {updated_count} record esistenti.")
+        else:
+            print(f"Salvataggio di {len(new_records_to_save)} nuove traduzioni...")
+            for record in new_records_to_save:
+                record.values["english"] = ""
+                record.values["french"] = ""
+                record.values["german"] = ""
+                record.save()
+            print("Salvataggio nuovi record completato.")
+
+        return JsonResponse({
+            "success": True, 
+            "added": len(new_records_to_save), 
+            "updated": updated_count
+        })
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)

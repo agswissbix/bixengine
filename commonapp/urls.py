@@ -131,6 +131,7 @@ urlpatterns = [
     
 
     path('sync_translation_fields/', sync_translation_fields, name='sync_translation_fields'),
+    path('sync_translation_dashboards/', sync_translation_dashboards, name='sync_translation_dashboards'),
     path('get_languages/', get_languages, name='get_languages')
     
 ]
