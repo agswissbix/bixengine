@@ -7775,10 +7775,8 @@ def request_new_document(request):
 
             relative_path = f"documents/{document.recordid}/{filename}"
 
-
             document = UserRecord('documents', document.recordid)
             document.values['file'] = relative_path
-            document.values['file_type'] = ext
 
             document.save()
         
