@@ -7706,8 +7706,16 @@ def get_documents(request):
             file_type = file.split('.')[-1]
 
         date = document.get('data')
+        
         if date:
-            date = date.date().isoformat()
+            if hasattr(date, 'date'):
+                date = date.date().isoformat()
+            elif hasattr(date, 'isoformat'):
+                date = date.isoformat()
+            elif isinstance(date, str):
+                date = date[:10]
+        else:
+            date = ""
 
         if document.get('stato', '') == "Pubblicato":
             data.append({
@@ -7814,8 +7822,16 @@ def get_projects(request):
                 file_type = file.split('.')[-1]
 
             document_date = document.get('data')
+        
             if document_date:
-                document_date = document_date.date().isoformat()
+                if hasattr(document_date, 'date'):
+                    document_date = document_date.date().isoformat()
+                elif hasattr(document_date, 'isoformat'):
+                    document_date = document_date.isoformat()
+                elif isinstance(document_date, str):
+                    document_date = document_date[:10]
+            else:
+                document_date = ""
 
             formatted_documents.append({
                 'id': document.get('recordid_', ''),
@@ -7827,9 +7843,18 @@ def get_projects(request):
                 'data': document_date,
             })
 
-        project_date = project.get('data')
+
+        project_date = document.get('data')
+        
         if project_date:
-            project_date = project_date.date().isoformat()
+            if hasattr(project_date, 'date'):
+                project_date = project_date.date().isoformat()
+            elif hasattr(project_date, 'isoformat'):
+                project_date = project_date.isoformat()
+            elif isinstance(project_date, str):
+                project_date = project_date[:10]
+        else:
+            project_date = ""
 
         projectid = project.get('recordid_', '')
 
