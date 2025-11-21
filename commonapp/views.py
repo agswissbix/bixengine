@@ -7755,10 +7755,27 @@ def request_new_document(request):
         document.values['data'] = datetime.datetime.now() 
         document.values['stato'] = "Bozza"
         
-        if file_obj:
-             pass 
 
         document.save()
+
+        if file_obj:
+            save_dir = os.path.join(settings.UPLOADS_ROOT, "documents")
+            os.makedirs(save_dir, exist_ok=True)
+
+            name, ext = file_obj.name.split('.')
+
+            file_path = os.path.join(save_dir, document.recordid, f"{name}.{ext}")
+
+            with default_storage.open(file_path, "wb+") as destination:
+                for chunk in file_obj.chunks():
+                    destination.write(chunk)
+
+            relative_path = f"documents/{document.recordid}/{name}.{ext}"
+            document.values['file'] = relative_path
+
+            document.values['file_type'] = ext
+
+            document.save()
         
         return JsonResponse({'success': True})
 
