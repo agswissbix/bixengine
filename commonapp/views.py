@@ -7695,7 +7695,10 @@ def get_documents(request):
 
     for document in documents:
         categories = []
-        categories.append(document.get('categoria', ''))
+        categorie = document.get('categoria', '').split(',')
+
+        for category in categorie:
+            categories.append(category.strip())
 
         file = document.get('file', '')
 
@@ -7707,17 +7710,81 @@ def get_documents(request):
         if date:
             date = date.date().isoformat()
 
-        data.append({
-            'id': document.get('recordid_', ''),
-            'title': document.get('titolo', ''),
-            'description': document.get('descrizione', ''),
-            'fileType': file_type,
-            'categories': categories,
-            'record_id': file,
-            'data': date,
-        })
+        if document.get('stato', '') == "Pubblicato":
+            data.append({
+                'id': document.get('recordid_', ''),
+                'title': document.get('titolo', ''),
+                'description': document.get('descrizione', ''),
+                'fileType': file_type,
+                'categories': categories,
+                'record_id': file,
+                'data': date,
+            })
 
     return JsonResponse({"documents": data}, safe=False)
+
+def request_new_document(request):
+    user_id = Helper.get_userid(request)
+    
+    try:
+        title = request.POST.get('title', '')
+        description = request.POST.get('description', '')
+        
+        categories_str = request.POST.get('categories', '[]') 
+        try:
+            categories = json.loads(categories_str)
+        except:
+            categories = []
+
+        categorie = ",".join(categories)
+
+        file_obj = request.FILES.get('file')
+
+        document = UserRecord('documents', userid=user_id)
+        document.values['titolo'] = title
+        document.values['descrizione'] = description
+        document.values['categoria'] = categorie
+        
+        document.values['data'] = datetime.datetime.now() 
+        document.values['stato'] = "Bozza"
+        
+        if file_obj:
+             pass 
+
+        document.save()
+        
+        return JsonResponse({'success': True})
+
+    except Exception as e:
+        print(f"Errore nel salvataggio documento: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+def request_new_project(request):
+    user_id = Helper.get_userid(request)
+    data = json.loads(request.body)
+
+    try:
+        title = data.get('title', '')
+        description = data.get('description', '')
+
+        categorie = ""
+        categories = data.get('categories', [])
+        for category in categories:
+            categorie += category + ","
+        categorie = categorie[:-1]
+
+        document = UserRecord('projects', userid=user_id)
+        document.values['titolo'] = title
+        document.values['descrizione'] = description
+        document.values['categoria'] = categorie
+        document.values['data'] = datetime.datetime.now() 
+        document.values['stato'] = "Bozza"
+        document.save()
+        
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
 
 def get_projects(request):
     userid = Helper.get_userid(request)
@@ -7727,6 +7794,10 @@ def get_projects(request):
     data = []
 
     for project in projects:
+        stato = project.get('stato', '')
+        if stato != "Pubblicato":
+            continue
+
         categories = []
         categories.append(project.get('categoria', ''))
 

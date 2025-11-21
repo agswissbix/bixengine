@@ -127,6 +127,8 @@ urlpatterns = [
     path('mark_notification_read/', mark_notification_read, name='mark_notification_read'),
     path('mark_notification_hidden/', mark_notification_hidden, name='mark_notification_hidden'),
     path('check_data_anonymous/', check_data_anonymous, name='check_data_anonymous'),
+    path('request_new_project/', request_new_project, name='request_new_project'),
+    path('request_new_document/', request_new_document, name='request_new_document'),
 
     
 
