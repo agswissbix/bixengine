@@ -1119,8 +1119,8 @@ def _map_and_save_event(event_data, user_email):
         if event:
             saved_event = UserRecord('events', event.record_id) 
             
-            saved_event.values['user_id'] = user_id
-            saved_event.values['table_id'] = table_id
+            saved_event.values['userid'] = user_id
+            saved_event.values['tableid'] = table_id
             saved_event.values['owner'] = user_email
             saved_event.values['subject'] = subject
             saved_event.values['body_content'] = body_content
@@ -1137,8 +1137,8 @@ def _map_and_save_event(event_data, user_email):
         else:
             saved_event = UserRecord('events')
             
-            saved_event.values['user_id'] = user_id
-            saved_event.values['table_id'] = table_id
+            saved_event.values['userid'] = user_id
+            saved_event.values['tableid'] = table_id
             saved_event.values['owner'] = user_email
             saved_event.values['subject'] = subject
             saved_event.values['body_content'] = body_content
@@ -1152,6 +1152,37 @@ def _map_and_save_event(event_data, user_email):
 
             saved_event.save()
             created = True
+
+        linked_recordid = saved_event.values.get('recordidtable')
+        linked_tableid = saved_event.values.get('tableid')
+
+        # Se manca uno dei due valori → niente da aggiornare
+        if not linked_recordid or not linked_tableid:
+            return saved_event, created
+
+        # Prendiamo i settings dinamici per la tabella a cui è collegato
+        tablesettings_obj = TableSettings(tableid=linked_tableid, userid=user_id)
+        tablesettings = tablesettings_obj.get_settings()
+
+        title_field = tablesettings.get('table_planner_title_field', {}).get('value')
+        color_field = tablesettings.get('table_planner_color_field', {}).get('value')
+        resource_field = tablesettings.get('table_planner_resource_field', {}).get('value')
+        date_from_field = tablesettings.get('table_planner_date_from_field', {}).get('value')
+        date_to_field = tablesettings.get('table_planner_date_to_field', {}).get('value')
+        time_from_field = tablesettings.get('table_planner_time_from_field', {}).get('value')
+        time_to_field = tablesettings.get('table_planner_time_to_field', {}).get('value')
+
+        linked_record = UserRecord(linked_tableid, linked_recordid)
+
+        linked_record.values[title_field] = subject
+        linked_record.values[date_from_field] = start_dt.date().strftime('%Y-%m-%d')
+        linked_record.values[date_to_field] = end_dt.date().strftime('%Y-%m-%d')
+        linked_record.values[time_from_field] = start_dt.time().strftime('%H:%M')
+        linked_record.values[time_to_field] = end_dt.time().strftime('%H:%M')
+        # task.values[color_field] = categories_str or None
+        # task.values[resource_field] = organizer_email or None
+
+        linked_record.save()
 
         return saved_event, created
 
@@ -1301,11 +1332,11 @@ def sync_graph_calendar(request):
             for local_event in local_unsynced_events:
                 try:
 
-                    table=local_event.values['table_id']
+                    table=local_event.values['tableid']
                     subject=local_event.values['subject']
                     start_date=local_event.values['start_date']
                     end_date=local_event.values['end_date']
-                    user=local_event.values['user_id']
+                    user=local_event.values['userid']
                     owner=local_event.values['owner']
                     body_content=local_event.values['body_content']
                     timezone=local_event.values['timezone']
@@ -1661,7 +1692,7 @@ def get_records_matrixcalendar(request):
             })
             processed_resources.add(resource_id) # Aggiungi l'ID al set per non ripeterlo
             
-        # 3. Creazione degli Eventi (Assenze)
+        # 3. Creazione degli Eventi
         record_id = record.recordid
         event_id = record.fields['id']['convertedvalue']
         event_title = record.fields[title_field]['convertedvalue']
@@ -1756,10 +1787,10 @@ def matrixcalendar_save_record(request):
     try:
         start_dt = None
         if start_date_str:
-            start_dt = datetime.datetime.fromisoformat(start_date_str.replace("Z", "+00:00")).date()
+            start_dt = datetime.datetime.fromisoformat(start_date_str.replace("Z", "+00:00"))
         end_dt = None
         if end_date_str:
-            end_dt = datetime.datetime.fromisoformat(end_date_str.replace("Z", "+00:00")).date()
+            end_dt = datetime.datetime.fromisoformat(end_date_str.replace("Z", "+00:00"))
     except ValueError:
         return JsonResponse({"success": False, "detail": "Formato data/ora non valido"}, status=400)
 
@@ -1773,9 +1804,9 @@ def matrixcalendar_save_record(request):
 
         # Campi opzionali: orari
         if time_from_field:
-            record.values[time_from_field] = start_dt.strftime('%H:%M:%S')
+            record.values[time_from_field] = start_dt.strftime('%H:%M')
         if time_to_field and end_dt:
-            record.values[time_to_field] = end_dt.strftime('%H:%M:%S')
+            record.values[time_to_field] = end_dt.strftime('%H:%M')
 
         if resource_field and resource_id:
             record.values[resource_field] = resource_id
