@@ -1,5 +1,6 @@
 import os
 from re import match
+from bixsettings.views.businesslogic.models.table_settings import TableSettings
 from commonapp.models import *
 from commonapp.bixmodels.helper_db import *
 from commonapp.bixmodels.helper_sys import *
@@ -172,7 +173,72 @@ class UserRecord:
                 # self.values[master_fieldid] = self.master_recordid
 
    
+    def save_record_for_event(self, event_body_content=""):
+        event_exist = UserEvents.objects.filter(recordidtable=self.recordid, tableid=self.tableid, deleted_flag='N').first()
+        event_record = UserRecord('events', event_exist.record_id if event_exist else None)
 
+        tablesettings_obj = TableSettings(tableid=self.tableid, userid=self.userid)
+        tablesettings = tablesettings_obj.get_settings()
+
+        title_field = tablesettings.get('table_planner_title_field').get('value')
+        date_from_field = tablesettings.get('table_planner_date_from_field').get('value')
+        date_to_field = tablesettings.get('table_planner_date_to_field').get('value')
+        time_from_field = tablesettings.get('table_planner_time_from_field').get('value')
+        time_to_field = tablesettings.get('table_planner_time_to_field').get('value')
+
+        from_date = self.values[date_from_field] if date_from_field else None
+        if from_date:
+            start_str = self.values.get(time_from_field)
+            end_str = self.values.get(time_to_field)
+            to_date = self.values.get(date_to_field) or from_date
+            duration = self.values.get('duration')
+
+            # Default se non presenti
+            if not start_str and not end_str:
+                start_str = "08:00"
+                end_str = "17:00"
+
+            start_date = from_date
+            end_date = to_date
+
+            start_time = None
+            end_time = None
+
+            if start_str:
+                start_time = datetime.datetime.strptime(start_str, "%H:%M").time()
+            if end_str:
+                end_time = datetime.datetime.strptime(end_str, "%H:%M").time()
+
+            start_datetime = datetime.datetime.combine(start_date, start_time or datetime.time(0, 0))
+            end_datetime = datetime.datetime.combine(end_date, end_time or datetime.time(0, 0))
+
+            duration_task = 1
+            if duration and int(duration) > 0:
+                duration_task = int(duration)
+
+            if not end_str:
+                end_datetime = start_datetime + datetime.timedelta(hours=duration_task)
+            elif not start_str:
+                start_datetime = end_datetime - datetime.timedelta(hours=duration_task)
+
+            # Salvo nei valori dell’evento
+            event_record.values['start_date'] = start_datetime
+            event_record.values['end_date'] = end_datetime
+
+        owner_email = SysUser.objects.filter(id=self.userid).values('email').first()
+
+        event_record.values['recordidtable'] = self.recordid
+        event_record.values['tableid'] = self.tableid
+        event_record.values['subject'] = self.fields[title_field]['convertedvalue'] if title_field else 'No Title'
+        event_record.values['userid'] = self.userid
+        event_record.values['timezone'] = 'Europe/Zurich'
+        event_record.values['body_content'] = event_body_content
+        event_record.values['owner'] = owner_email.get('email')
+        event_record.values['organizer_email'] = owner_email.get('email')
+
+        event_record.save()
+
+        return event_record
 
     def get_record_badge_fields(self):
         return_fields=[]

@@ -1174,11 +1174,20 @@ def _map_and_save_event(event_data, user_email):
 
         linked_record = UserRecord(linked_tableid, linked_recordid)
 
-        linked_record.values[title_field] = subject
-        linked_record.values[date_from_field] = start_dt.date().strftime('%Y-%m-%d')
-        linked_record.values[date_to_field] = end_dt.date().strftime('%Y-%m-%d')
-        linked_record.values[time_from_field] = start_dt.time().strftime('%H:%M')
-        linked_record.values[time_to_field] = end_dt.time().strftime('%H:%M')
+        if title_field:
+            linked_record.values[title_field] = subject
+
+        if date_from_field:
+            linked_record.values[date_from_field] = start_dt.date().strftime('%Y-%m-%d')
+
+        if date_to_field:
+            linked_record.values[date_to_field] = end_dt.date().strftime('%Y-%m-%d')
+
+        if time_from_field:
+            linked_record.values[time_from_field] = start_dt.time().strftime('%H:%M')
+
+        if time_to_field:
+            linked_record.values[time_to_field] = end_dt.time().strftime('%H:%M')
         # task.values[color_field] = categories_str or None
         # task.values[resource_field] = organizer_email or None
 
@@ -3050,56 +3059,19 @@ def save_record_fields(request):
     # record.save()
 
     if tableid == 'task':
-        event_exist = UserEvents.objects.filter(recordidtable=recordid, tableid='task').first()
-        event_record = UserRecord('events', event_exist.record_id if event_exist else None)
-        due_date = record.values['duedate']
-        if due_date:
-            end_str = record.values.get('end')
-            start_str = record.values.get('start')
-            planned_date = record.values.get('planneddate') or due_date
-            duration = record.values.get('duration')
+        task_record = UserRecord(tableid, recordid)
+        task_record.userid = task_record.values['user']
+        event_record = task_record.save_record_for_event()
 
-            # Default se non presenti
-            if not start_str and not end_str:
-                start_str = "08:00"
-                end_str = "17:00"
+        custom_save_record_fields('events', event_record.recordid)
+    
+    if tableid == 'assenze':
+        task_record = UserRecord(tableid, recordid)
+        employee_record = UserRecord('dipendente', task_record.values['recordiddipendente_'])
+        task_record.userid = employee_record.values['utente']
+        event_record = task_record.save_record_for_event()
 
-            start_date = datetime.datetime.strptime(planned_date, "%Y-%m-%d").date()
-            end_date = datetime.datetime.strptime(due_date, "%Y-%m-%d").date()
-
-            start_time = None
-            end_time = None
-
-            if start_str:
-                start_time = datetime.datetime.strptime(start_str, "%H:%M").time()
-            if end_str:
-                end_time = datetime.datetime.strptime(end_str, "%H:%M").time()
-
-            start_datetime = datetime.datetime.combine(start_date, start_time or datetime.time(0, 0))
-            end_datetime = datetime.datetime.combine(end_date, end_time or datetime.time(0, 0))
-
-            duration_task = 1
-            if duration and int(duration) > 0:
-                duration_task = int(duration)
-
-            if not end_str:
-                end_datetime = start_datetime + datetime.timedelta(hours=duration_task)
-            elif not start_str:
-                start_datetime = end_datetime - datetime.timedelta(hours=duration_task)
-
-            # Salvo nei valori dell’evento
-            event_record.values['start_date'] = start_datetime
-            event_record.values['end_date'] = end_datetime
-
-
-        event_record.values['recordidtable'] = recordid
-        event_record.values['tableid'] = 'task'
-        event_record.values['subject'] = record.values['description']
-        event_record.values['userid'] = record.values['user']
-        event_record.values['timezone'] = 'Europe/Zurich'
-        event_record.values['body_content'] = record.values['note']
-
-        event_record.save()
+        custom_save_record_fields('events', event_record.recordid)
 
     if tableid == 'stabile':
         stabile_record = UserRecord('stabile', recordid)

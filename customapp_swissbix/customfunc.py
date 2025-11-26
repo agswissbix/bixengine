@@ -615,11 +615,11 @@ def save_record_fields(tableid,recordid):
         event_record = UserRecord('events', recordid)
         
         graph_event_id = event_record.values['graph_event_id']
-        table=event_record.values['table_id']
+        table=event_record.values['tableid']
         subject=event_record.values['subject']
         start_date=event_record.values['start_date']
         end_date=event_record.values['end_date']
-        user=event_record.values['user_id']
+        user=event_record.values['userid']
         owner=event_record.values['owner']
         body_content=event_record.values['body_content']
         timezone=event_record.values['timezone']
