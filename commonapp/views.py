@@ -24,7 +24,7 @@ from commonapp.bixmodels import helper_db
 from .bixmodels.user_record import *
 from .bixmodels.user_table import *
 from commonapp.models import SysCustomFunction, SysUser, SysUserSettings, SysTable
-from django.db.models import F, OuterRef, Subquery, IntegerField
+from django.db.models import F, OuterRef, Subquery, IntegerField, Q
 from commonapp.helper import *
 
 import pyotp
@@ -1621,62 +1621,54 @@ def get_records_matrixcalendar(request):
     master_tableid = data.get("masterTableid")
     master_recordid = data.get("masterRecordid")
 
-    userid = Helper.get_userid(request)
+    # ➕ nuovo parametro opzionale
+    requestEventsForTable = data.get("requestEventsForTable", None)
 
+    userid = Helper.get_userid(request)
     table = UserTable(tableid, userid)
 
     if not viewid:
         viewid = table.get_default_viewid()
 
-    # 1. Ottieni gli oggetti UserRecord con i dati grezzi
-    # Questo metodo è già ottimizzato per caricare i dati base in una sola query.
+    # ---------------------------
+    # 1️⃣ RECORD TABELLA PRINCIPALE (ORIGINALE)
+    # ---------------------------
     record_objects = table.get_table_records_obj(
         viewid=viewid,
         searchTerm=searchTerm,
-        conditions_list=[], # La lista viene creata dentro il metodo
+        conditions_list=[],
         master_tableid=master_tableid,
         master_recordid=master_recordid,
     )
 
-    response_data_dev = {
+    response_data = {
         'resources': [],
         'events': [],
         'unplannedEvents': [],
+        'extraEventTables': [],   # ➕ nuove tabelle disponibili negli eventi
         'viewMode': 'Settimanale',
         'counter': len(record_objects),
     }
 
     processed_resources = set()
-    
-    available_colors = [
-        '#3b82f6',  # Blu
-        '#ef4444',  # Rosso
-        '#eab308',  # Giallo
-        '#10b981',  # Verde
-        '#8b5cf6',  # Viola
-        '#f97316',  # Arancione
-        '#ec4899',  # Rosa
-        '#14b8a6',  # Turchese
-    ]
 
-    # Dizionario globale o definito prima del loop
+    # Colori dinamici (ORIGINALE)
+    available_colors = ['#3b82f6','#ef4444','#eab308','#10b981','#8b5cf6','#f97316','#ec4899','#14b8a6']
     dynamic_colors = {}
 
     def get_color_for_title(title):
         if title not in dynamic_colors:
             if available_colors:
-                # Se ci sono ancora colori disponibili, prendine uno
                 color = available_colors.pop(0)
             else:
-                # Se finiscono, genera un colore casuale (fallback)
                 color = "#{:06x}".format(random.randint(0, 0xFFFFFF))
             dynamic_colors[title] = color
         return dynamic_colors[title]
 
+    # Impostazioni tabella
     tablesettings_obj = TableSettings(tableid=tableid, userid=userid)
     tablesettings = tablesettings_obj.get_settings()
-
-    response_data_dev['viewMode'] = tablesettings.get('table_planner_default_view', 'week').get('value')
+    response_data['viewMode'] = tablesettings.get('table_planner_default_view', 'week').get('value')
 
     title_field = tablesettings.get('table_planner_title_field').get('value')
     color_field = tablesettings.get('table_planner_color_field').get('value')
@@ -1685,23 +1677,24 @@ def get_records_matrixcalendar(request):
     date_to_field = tablesettings.get('table_planner_date_to_field').get('value')
     time_from_field = tablesettings.get('table_planner_time_from_field').get('value')
     time_to_field = tablesettings.get('table_planner_time_to_field').get('value')
+
     if not date_from_field:
         return JsonResponse({"error": "Non è stato configurato alcun campo di tipo data."}, status=400)
 
+    # ---------------------------
+    # 2️⃣ PROCESSA RECORD ORIGINALI
+    # ---------------------------
     for record in record_objects:
-        # Estrae il valore della risorsa dal record corrente
         resource_id = record.fields[resource_field]['value']
         resource_value = record.fields[resource_field]['convertedvalue']
-                
-        # Se il dipendente non è ancora stato processato, aggiungilo alla lista 'resources'.
+
         if resource_id not in processed_resources:
-            response_data_dev['resources'].append({
+            response_data['resources'].append({
                 'id': resource_id,
                 'name': resource_value
             })
-            processed_resources.add(resource_id) # Aggiungi l'ID al set per non ripeterlo
-            
-        # 3. Creazione degli Eventi
+            processed_resources.add(resource_id)
+
         record_id = record.recordid
         event_id = record.fields['id']['convertedvalue']
         event_title = record.fields[title_field]['convertedvalue']
@@ -1711,14 +1704,11 @@ def get_records_matrixcalendar(request):
         start_time = record.fields[time_from_field]['convertedvalue'] if time_from_field else datetime.time(8,0).strftime('%H:%M:%S')
         end_time = record.fields[time_to_field]['convertedvalue'] if time_to_field else datetime.time(12,0).strftime('%H:%M:%S')
 
-        
-        print(f"Processing event for {resource_value}: {event_title} from {start_date} to {end_date}")
-        # Crea il dizionario per l'evento
         event_data = {
             'id': str(event_id),
             'resourceId': resource_id,
             'title': event_title,
-            'description': f"Assenza per {event_title} di {resource_value}",
+            'description': f"{event_title} - {resource_value}",
             'start': Helper.to_iso_datetime(start_date, start_time),
             'end': Helper.to_iso_datetime(end_date, end_time),
             'color': get_color_for_title(event_color),
@@ -1726,11 +1716,82 @@ def get_records_matrixcalendar(request):
         }
 
         if event_data['start'] and event_data['end']:
-            response_data_dev['events'].append(event_data)
+            response_data['events'].append(event_data)
         else:
-            response_data_dev['unplannedEvents'].append(event_data)
+            response_data['unplannedEvents'].append(event_data)
 
-    return JsonResponse(response_data_dev)
+    # ---------------------------
+    # 3️⃣ EVENTI AGGIUNTIVI (user_events)
+    # ---------------------------
+    user_events = UserEvents.objects.filter(deleted_flag='N')
+
+    # elenco tabelle disponibili negli eventi
+    available_event_tables = (
+        user_events.values_list("tableid", flat=True)
+        .distinct()
+    )
+
+    extra_tables = []
+
+    if tableid in available_event_tables:
+        extra_tables.append({
+            "id": tableid,
+            "name": tableid.capitalize()
+        })
+
+    # poi aggiungi tutte le altre tabelle in ordine, escludendo quella principale
+    for t in available_event_tables:
+        if t and t != tableid:
+            extra_tables.append({
+                "id": t,
+                "name": t.capitalize()
+            })
+
+    extra_tables.append({
+        "id": "all",
+        "name": "Tutti"
+    })
+    # eventi senza tableid → categoria "neutri"
+    if user_events.filter(Q(tableid__isnull=True) | Q(recordidtable__isnull=True)).exists():
+        extra_tables.append({
+            "id": "neutral",
+            "name": "Neutri"
+        })
+
+    response_data["extraEventTables"] = extra_tables
+
+    # 🟦 se NON richiesto dal FE → ritorna solo la lista delle tabelle e STOP
+    if not requestEventsForTable or requestEventsForTable == tableid:
+        return JsonResponse(response_data)
+
+    # altrimenti: ritorna gli eventi della tabella specificata
+    if requestEventsForTable == "all":
+        filtered_events = user_events.exclude(tableid=tableid)
+    elif requestEventsForTable == "neutral":
+        filtered_events = user_events.filter(Q(tableid__isnull=True) | Q(recordidtable__isnull=True))
+    else:
+        filtered_events = user_events.filter(tableid=requestEventsForTable)
+
+    NEUTRAL_COLOR = "#9CA3AF"   # grigio-disabilitato
+
+    for ev in filtered_events:
+        response_data["events"].append({
+            "id": str(ev.id),
+            "recordid": ev.recordidtable,
+            # "tableid": str(ev.tableid.id) or "neutri",
+            "title": ev.subject or "",
+            "description": ev.body_content or "",
+            "start": ev.start_date,
+            "end": ev.end_date,
+            "color": NEUTRAL_COLOR,
+            "resourceId": ev.userid.id if ev.userid else None,
+            "disabled": True
+        })
+
+    response_data['counter'] = len(response_data['events'])
+
+    return JsonResponse(response_data)
+
 
 
 def matrixcalendar_save_record(request):
@@ -1821,6 +1882,11 @@ def matrixcalendar_save_record(request):
             record.values[resource_field] = resource_id
 
         record.save()
+
+        record.userid = record.values['user']
+        event = record.save_record_for_event()
+
+        custom_save_record_fields('events', event.recordid)
 
         return JsonResponse({"success": True, "detail": "Record aggiornato con successo"})
 
