@@ -49,7 +49,7 @@ class UserRecord:
                 )
                 
                 # NUOVO: Arricchiamo il field con dati utili al frontend
-                if field_instance.get('fieldtypeid') == 'Utente' and raw_value:
+                if field_instance.get('fieldtypewebid') == 'Utente' and raw_value:
                     try:
                         field_instance['userid'] = int(raw_value)
                     except (ValueError, TypeError):
@@ -86,7 +86,7 @@ class UserRecord:
         raw_value = field_definition.get('value')
         if raw_value is None: return ""
 
-        field_type = field_definition.get('fieldtypeid')
+        field_type = field_definition.get('fieldtypewebid')
         table_link = field_definition.get('tablelink')
         
         try:
@@ -267,7 +267,7 @@ class UserRecord:
                 newvalue=HelpderDB.sql_query_value(sql,field['keyfieldlink'])
                 value=newvalue
             
-            if field['fieldtypeid']=='Utente':
+            if field['fieldtypewebid']=='Utente':
                 if value:
                     sql=f"SELECT firstname,lastname FROM sys_user WHERE id='{value}' "
                     user=HelpderDB.sql_query_row(sql)

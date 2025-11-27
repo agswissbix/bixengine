@@ -29,6 +29,21 @@ environ.Env.read_env()
 
 def save_record_fields(tableid,recordid):
 
+    if tableid == 'task':
+        task_record = UserRecord(tableid, recordid)
+        task_record.userid = task_record.values['user']
+        event_record = task_record.save_record_for_event()
+
+        save_record_fields('events', event_record.recordid)
+
+    if tableid == 'assenze':
+        task_record = UserRecord(tableid, recordid)
+        employee_record = UserRecord('dipendente', task_record.values['recordiddipendente_'])
+        task_record.userid = employee_record.values['utente']
+        event_record = task_record.save_record_for_event()
+
+        save_record_fields('events', event_record.recordid)
+
     # ---TIMESHEET---
     if tableid == 'timesheet':
         flat_service_contract = None

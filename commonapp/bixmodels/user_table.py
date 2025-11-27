@@ -448,7 +448,7 @@ class UserTable:
                 fieldid = column.get('fieldid')
                 if not fieldid:
                     continue
-                fieldtypeid = column.get('fieldtypeid')
+                fieldtypeid = column.get('fieldtypewebid')
                 # NOTA: Per unire le tabelle in base al recordid_ del campo collegato
                 # l'approccio migliore è estrarre l'ID della tabella collegata
                 # dal nome del campo (es. recordidclienti_)

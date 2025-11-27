@@ -255,7 +255,7 @@ def get_sidebarmenu_items(request):
             workspaces_tables[workspace] = {}
             workspaces_tables[workspace]["id"]=table['workspace']
             workspaces_tables[workspace]["title"]=table['workspace']
-            workspaces_tables[workspace]["icon"]=workspace_record.icon
+            workspaces_tables[workspace]["icon"]=workspace_record.icon if workspace_record else 'Home'
             workspaces_tables[workspace]["order"]=table['workspace_order']
         subitem={}
         subitem['id']=table['id']
@@ -3124,20 +3124,7 @@ def save_record_fields(request):
 
     # record.save()
 
-    if tableid == 'task':
-        task_record = UserRecord(tableid, recordid)
-        task_record.userid = task_record.values['user']
-        event_record = task_record.save_record_for_event()
-
-        custom_save_record_fields('events', event_record.recordid)
-    
-    if tableid == 'assenze':
-        task_record = UserRecord(tableid, recordid)
-        employee_record = UserRecord('dipendente', task_record.values['recordiddipendente_'])
-        task_record.userid = employee_record.values['utente']
-        event_record = task_record.save_record_for_event()
-
-        custom_save_record_fields('events', event_record.recordid)
+        
 
     if tableid == 'stabile':
         stabile_record = UserRecord('stabile', recordid)
