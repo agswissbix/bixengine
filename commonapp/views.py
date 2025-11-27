@@ -7361,3 +7361,99 @@ def fieldsupdate(request):
     fields= params
     return JsonResponse({'status': 'ok', 'message': 'Fields updated successfully.'})
 
+def print_deal(request):
+    data = json.loads(request.body)
+    recordid_deal = data.get('recordid')
+
+    tableid= 'deal'
+  
+    # Percorso al template Word
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    template_path = os.path.join(base_dir, 'templates', 'template_deal.docx')
+
+
+    if not os.path.exists(template_path):
+        return HttpResponse("File non trovato", status=404)
+
+    
+    deal_record = UserRecord(tableid, recordid_deal)
+    deal_nr = deal_record.values.get('nr_deal', 'N/A')
+    deal_status = deal_record.values.get('status', 'N/A')
+    deal_project = deal_record.values.get('project', 'N/A')
+    deal_place = deal_record.values.get('place', 'N/A')
+    deal_sector = deal_record.values.get('sector', 'N/A')
+    internal_contact = deal_record.values.get('main_contact', 'N/A')
+    deal_entry_date = deal_record.values.get('deal_entry_date', 'N/A')
+
+    client_id = deal_record.values.get('recordidclient_', '')
+    client = UserRecord("client", client_id)
+
+    company_name = 'N/A'
+    client_address = 'N/A'
+    client_street_number = 'N/A'
+    cap = 'N/A'
+    city = 'N/A'
+    client_email = 'N/A'
+    client_phone = 'N/A'
+
+    if client:
+        company_name = client.values.get('company_name', 'N/A')
+        client_address = client.values.get('address', 'N/A')
+        client_street_number = client.values.get('street_number', 'N/A')
+        cap = client.values.get('cap', 'N/A')
+        city = client.values.get('city', 'N/A')
+        client_email = client.values.get('email', 'N/A')
+        client_phone = client.values.get('phone', 'N/A')
+
+    contact_id = deal_record.values.get('recordidcontact_', 'N/A')
+    contact = UserRecord('contact', contact_id)
+
+    contact_role = 'N/A'
+    contact_email = 'N/A'
+    contact_phone = 'N/A'
+
+    if contact:
+        contact_role = contact.values.get('role', 'N/A')
+        contact_email = contact.values.get('email', 'N/A')
+        contact_phone = contact.values.get('phone', 'N/A')
+
+
+    dati_offerta = {
+        "deal_nr": f"{deal_nr}",
+        "status": deal_status,
+        "project": deal_project,
+        "place": deal_place,
+        "sector": deal_sector,
+        "internal_contact": internal_contact,
+        "deal_entry_date": deal_entry_date,
+        "client": company_name,
+        "client_address": client_address,
+        "client_street_number": client_street_number,
+        "cap": cap,
+        "city": city,
+        "client_email": client_email,
+        "client_phone": client_phone,
+        "contact": internal_contact,
+        "contact_role": contact_role,
+        "contact_email": contact_email,
+        "contact_phone": contact_phone
+
+    }
+
+    filename = f"offerta_{deal_nr}"
+
+    # Carica il template e fai il rendering
+    doc = DocxTemplate(template_path)
+    doc.render(dati_offerta)
+
+    # Salva il documento in memoria
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+
+    response = HttpResponse(
+        buffer.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}.docx"'
+    return response
