@@ -84,6 +84,9 @@ urlpatterns = [
     path('fieldsupdate/', fieldsupdate, name='fieldsupdate'),
     path('save_signature/', save_signature, name='save_signature'),
     path('get_categories_dashboard/', get_categories_dashboard, name='get_categories_dashboard'),
+
+    
+    path('print_deal/', print_deal, name='print_deal'),
     
     
      # ------------------  Settings views --------------------------------- 
