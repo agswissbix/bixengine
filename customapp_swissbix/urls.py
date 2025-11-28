@@ -38,6 +38,8 @@ urlpatterns = [
     path('sync_graph_calendar/', sync_graph_calendar, name='sync_graph_calendar'),
     path('sync_tables/', sync_tables, name='sync_tables'),
     
+    path('print_servicecontract/', print_servicecontract, name='print_servicecontract'),
+    path('renew_servicecontract/', renew_servicecontract, name='renew_servicecontract'),
     
     
 ]
