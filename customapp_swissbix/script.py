@@ -1242,27 +1242,6 @@ def print_servicecontract(request):
                 if ticket_record:
                     ticket_subject = ticket_record.values.get('subject', '')
 
-            raw_desc = timesheet.get('description', '') or ''
-            
-            clean_desc = raw_desc.replace('\r\n', '\n').replace('\r', '\n').replace('/n', '\n')
-
-            MAX_LINES = 40
-            MAX_CHARS = 1000
-            
-            line_count = clean_desc.count('\n')
-            char_count = len(clean_desc)
-            
-            final_desc = clean_desc
-            
-            if line_count > MAX_LINES:
-                lines = clean_desc.split('\n')
-                final_desc = "\n".join(lines[:MAX_LINES]) + "\n... [TESTO TAGLIATO]"
-            
-            elif char_count > MAX_CHARS:
-                final_desc = clean_desc[:MAX_CHARS] + " ... [TESTO TAGLIATO]"
-
-            final_desc = final_desc.replace('\n', '<br/>')
-
             tms = {
                 'date': timesheet.get('date'), 
                 'firstname': firstname,
@@ -1271,7 +1250,7 @@ def print_servicecontract(request):
                 'invoiceoption': invoice_opt,
                 'traveltime_decimal': travel_time if travel_time > 0 else None, 
                 'ticket_subject': ticket_subject,
-                'description': final_desc
+                'description': timesheet.get('description', '')
             }
 
             timesheets_updated.append(tms)
