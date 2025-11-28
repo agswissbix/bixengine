@@ -1325,7 +1325,7 @@ def renew_servicecontract(request):
         new_record.values['residualhours'] = float(contracthours) if str(contracthours).replace('.','',1).isdigit() else 0.0 + old_record.values['residualhours']
         new_record.values['invoiceno'] = data.get('invoiceno')
         new_record.values['startdate'] = data.get('startdate')
-        new_record.values['status'] = 'In progress'
+        new_record.values['status'] = 'In Progress'
         new_record.values['progress'] = 0
         new_record.values['recordidcompany_'] = old_record.values['recordidcompany_']
 
