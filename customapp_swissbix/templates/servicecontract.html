@@ -1,0 +1,142 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Service Contract Report</title>
+    <style>
+        @page {
+            size: A4;
+            margin-top: 1.5cm;
+            margin-left: 1.5cm;
+            margin-right: 1.5cm;
+            margin-bottom: 3.5cm;
+
+            @frame footer_frame {
+                -pdf-frame-content: footerContent;
+                bottom: 0.5cm; left: 1.5cm; right: 1.5cm; height: 2cm;
+            }
+        }
+
+        body {
+            font-family: Helvetica, Arial, sans-serif;
+            font-size: 10px;
+            color: #333;
+            line-height: 1.2;
+        }
+
+        .pricing-table {
+            width: 100%;
+            border-collapse: collapse; 
+            margin-top: 15px;
+        }
+
+        .pricing-table th, 
+        .pricing-table td {
+            border: 1px solid #aaa;
+            padding: 4px;
+            vertical-align: top;
+        }
+
+        .pricing-table th {
+            background-color: #f1a871;
+            color: black;
+            font-weight: bold;
+            text-align: left;
+        }
+
+        .layout-table { width: 100%; border: none; margin-bottom: 20px; }
+        .layout-table td { border: none; vertical-align: top; padding: 0; }
+        .bold { font-weight: bold; }
+        #footerContent { font-size: 9px; color: #555; border-top: 1px solid #ccc; padding-top: 10px; }
+        .small-note { font-size: 9px; font-style: italic; color: #555; }
+        .nowrap { white-space: nowrap; }
+    </style>
+</head>
+<body>
+
+    <div id="footerContent">
+        <table class="layout-table">
+            <tr>
+                <td>Swissbix SA<br>Via Lisano 3 - Massagno<br>091 960 22 00</td>
+                <td style="text-align: right; vertical-align: bottom;">
+                    Pagina <pdf:pagenumber> di <pdf:pagecount>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <table class="layout-table">
+        <tr>
+            <td style="width: 50%;">
+                <img src="{% static 'images/logo_w.png' %}" style="width: 150px; height: auto;">
+            </td>
+            <td style="width: 50%; text-align: right;">
+                <p>
+                    <strong>{{ companyname }}</strong><br>
+                    {{ address }}<br>
+                    {{ city }}
+                </p>
+            </td>
+        </tr>
+    </table>
+
+    <div style="margin-bottom: 20px;">
+        <table class="layout-table" style="width: 60%;"> 
+            <tr><td class="bold" style="width: 120px;">Data:</td><td>{{ date }}</td></tr>
+            <tr><td class="bold">Pacchetto ore:</td><td>{{ contracthours }} (Rif: {{ invoiceno }})</td></tr>
+            <tr><td class="bold">Riporto ore:</td><td>{{ previousresidual|default:"-" }}</td></tr>
+        </table>
+    </div>
+
+    <table class="pricing-table" repeat="1">
+        <thead>
+            <tr>
+                <th width="15%">Data</th>
+                <th width="20%">Tecnico</th>
+                <th width="10%" align="center">Tempo</th>
+                
+                {% if excludetravel != 'Si' %}
+                    <th width="10%" align="center">Trasf.</th>
+                    <th width="45%">Descrizione</th>
+                {% else %}
+                    <th width="55%">Descrizione</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for tms in timesheets %}
+                <tr>
+                    <td width="15%" class="nowrap">{{ tms.date|date:"d/m/Y" }}</td>
+                    <td width="20%">{{ tms.firstname }} {{ tms.lastname }}</td>
+                    
+                    <td width="10%" align="center">
+                        {{ tms.worktime_decimal }}
+                        {% if tms.invoiceoption == 'Under Warranty' %}<br><span class="small-note">(Garanzia)</span>{% endif %}
+                        {% if tms.invoiceoption == 'Commercial support' %}<br><span class="small-note">(Comm.)</span>{% endif %}
+                    </td>
+
+                    {% if excludetravel != 'Si' %}
+                        <td width="10%" align="center">{{ tms.traveltime_decimal|default:"-" }}</td>
+                    {% endif %}
+
+                    <td {% if excludetravel != 'Si' %}width="45%"{% else %}width="55%"{% endif %}>
+                        {% if tms.ticket_subject %}<b>Ticket: {{ tms.ticket_subject }}</b><br>{% endif %}
+                        {{ tms.description|default:""|safe }}
+                    </td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="5" align="center" style="padding: 20px;">Nessun intervento.</td></tr>
+            {% endfor %}
+
+            <tr style="background-color: #f1a871; font-weight: bold; border-top: 2px solid #666;">
+                <td width="15%" style="border: 1px solid #aaa;"></td>
+                <td width="20%" align="right" style="border: 1px solid #aaa;">Saldo Ore:</td>
+                <td width="10%" align="center" style="border: 1px solid #aaa;">{{ residualhours }}</td>
+                <td style="border: 1px solid #aaa;" colspan="{% if excludetravel != 'Si' %}2{% else %}1{% endif %}"></td>
+            </tr>
+        </tbody>
+    </table>
+
+</body>
+</html>

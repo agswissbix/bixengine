@@ -1489,3 +1489,10 @@ def save_email_timesheet(request):
     except Exception as e:
         print("Error in save_email_timesheet:", e)
         return JsonResponse({"error": str(e)}, status=500)
+def print_servicecontract(request):
+    from customapp_swissbix.script import print_servicecontract
+    return print_servicecontract(request)
+
+def renew_servicecontract(request):
+    from customapp_swissbix.script import renew_servicecontract
+    return renew_servicecontract(request)
