@@ -1300,4 +1300,38 @@ def print_servicecontract(request):
         return JsonResponse({'error': f'Errore nella generazione del PDF: {str(e)}'}, status=500)
 
 def renew_servicecontract(request):
-    print("renew_servicecontract")
+    try:
+        data = json.loads(request.body)
+        old_recordid = data.get('recordid')
+        old_record = UserRecord('servicecontract', old_recordid)
+
+        old_record.values['status'] = 'Complete'
+        old_record.save()
+
+        contracthours = data.get('contracthours')
+
+        new_record = UserRecord('servicecontract')
+
+        new_record.values['recordidcompany_'] = old_record.values['recordidcompany_']
+        new_record.values['subject'] = old_record.values['subject']
+        new_record.values['service'] = old_record.values['service']
+        new_record.values['type'] = old_record.values['type']
+        new_record.values['excludetravel'] = old_record.values['excludetravel']
+        new_record.values['note'] = old_record.values['note']
+
+        new_record.values['previousinvoiceno'] = old_record.values['invoiceno']
+        new_record.values['previousresidual'] = old_record.values['residualhours']
+        new_record.values['contracthours'] = float(contracthours) if str(contracthours).replace('.','',1).isdigit() else 0.0
+        new_record.values['residualhours'] = float(contracthours) if str(contracthours).replace('.','',1).isdigit() else 0.0 + old_record.values['residualhours']
+        new_record.values['invoiceno'] = data.get('invoiceno')
+        new_record.values['startdate'] = data.get('startdate')
+        new_record.values['status'] = 'In progress'
+        new_record.values['progress'] = 0
+        new_record.values['recordidcompany_'] = old_record.values['recordidcompany_']
+
+        new_record.save()
+
+        return HttpResponse(f"Nuovo rinnovo effettuato")
+    except Exception as e:
+        logger.error(f"Errore nel rinnovo: {str(e)}")
+        return JsonResponse({'error': f'Errore nel rinnovo: {str(e)}'}, status=500)
