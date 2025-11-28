@@ -914,6 +914,8 @@ class UserEmail(BaseUserTable):
     cc = models.CharField(max_length=255, null=True, blank=True)
     ccn = models.CharField(max_length=255, null=True, blank=True)
     status = models.CharField(max_length=255, null=True, blank=True)
+    attachment = models.CharField(max_length=255, null=True, blank=True)
+    attachment_name = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
         db_table = 'user_email'

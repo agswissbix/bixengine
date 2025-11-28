@@ -39,13 +39,15 @@ FIELD_TYPE_MAPPING = {
         "id": "Seriale",
         "subject": "Parola",
         "recipients": "Parola",
-        "mail_body": "Memo",
+        "mailbody": "html",
         "note": "Memo",
-        "sent_date": "Data",
+        "date": "Data",
         "sent_timestamp": "Parola",
         "cc": "Parola",
         "bcc": "Parola",
         "status": "lookup",
+        "attachment": "Attachment",
+        "attachment_name": "Parola",
     },
 }
 

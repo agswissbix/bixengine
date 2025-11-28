@@ -36,6 +36,7 @@ from customapp_swissbix.customfunc import save_record_fields
 from xhtml2pdf import pisa
 from types import SimpleNamespace
 from commonapp.models import SysUser
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -1169,3 +1170,322 @@ def sync_graph_calendar(request):
 def sync_tables(request):
     from customapp_swissbix.script import sync_tables
     return sync_tables(request)
+
+
+
+def print_timesheet(request):
+    """
+    Restituisce un PDF già generato, passato come file_path nel body.
+    Serve per scaricare il PDF firmato precedentemente salvato.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Invalid method'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        recordid = data.get('recordid')
+
+        if not recordid:
+            return JsonResponse({'error': 'Missing recordid'}, status=400)
+
+
+        record_timesheet = UserRecord('attachment', recordid)
+        file_path = record_timesheet.values['file']
+
+        # Percorso assoluto
+        abs_path = os.path.join(settings.UPLOADS_ROOT, file_path)
+
+        if not os.path.exists(abs_path):
+            return JsonResponse({'error': f'File not found: {file_path}'}, status=404)
+
+        # Legge il PDF e lo restituisce
+        with open(abs_path, 'rb') as f:
+            pdf_data = f.read()
+
+        response = HttpResponse(pdf_data, content_type='application/pdf')
+        filename = os.path.basename(file_path)
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+    except Exception as e:
+        print(f"Error in sign_timesheet (download): {e}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+@csrf_exempt
+def save_signature(request):
+    """
+    Riceve una firma in base64, genera il PDF del timesheet con la firma
+    e salva il file come allegato nel DB (tabella attachment).
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Invalid method'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        recordid = data.get('recordid')
+        img_base64 = data.get('image')
+
+        if not recordid:
+            return JsonResponse({'error': 'Missing recordid'}, status=400)
+        if not img_base64:
+            return JsonResponse({'error': 'No image data'}, status=400)
+
+        # -------------------------
+        # 1️⃣ Salva la firma come immagine PNG
+        # -------------------------
+        if ',' in img_base64:
+            _, img_base64 = img_base64.split(',', 1)
+        img_data = base64.b64decode(img_base64)
+
+        base_path = os.path.join(settings.STATIC_ROOT, 'pdf')
+        os.makedirs(base_path, exist_ok=True)
+
+        filename_firma = f"firma_{recordid}_{uuid.uuid4().hex}.png"
+        firma_path = os.path.join(base_path, filename_firma)
+
+        img_pil = Image.open(BytesIO(img_data))
+        if img_pil.mode in ('RGBA', 'LA') or (img_pil.mode == 'P' and 'transparency' in img_pil.info):
+            background = Image.new('RGB', img_pil.size, (255, 255, 255))
+            background.paste(img_pil, mask=img_pil.split()[-1])
+            img_pil = background
+        else:
+            img_pil = img_pil.convert('RGB')
+        img_pil.save(firma_path, format='PNG')
+
+        # -------------------------
+        # 2️⃣ Genera QR Code
+        # -------------------------
+        uid = uuid.uuid4().hex
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=10,
+            border=0,
+        )
+        qrcontent = f"timesheet_{recordid}"
+        qr.add_data(qrcontent)
+        qr.make(fit=True)
+
+        img_qr = qr.make_image(fill_color="black", back_color="white")
+        qr_name = f"qrcode_{uid}.png"
+        qr_path = os.path.join(base_path, qr_name)
+        img_qr.save(qr_path)
+
+        # -------------------------
+        # 3️⃣ Recupera i dati del timesheet
+        # -------------------------
+        rows = HelpderDB.sql_query(f"""
+            SELECT t.*, c.companyname, c.address, c.city, c.email, c.phonenumber, 
+                   u.firstname, u.lastname 
+            FROM user_timesheet AS t 
+            JOIN user_company AS c ON t.recordidcompany_=c.recordid_ 
+            JOIN sys_user AS u ON t.user = u.id 
+            WHERE t.recordid_='{recordid}'
+        """)
+
+        if not rows:
+            return JsonResponse({'error': f'Timesheet {recordid} non trovato'}, status=404)
+
+        row = rows[0]
+        for value in row:
+            row[value] = row[value] or ''
+
+        server = os.environ.get('BIXENGINE_SERVER')
+        firma_url = f"{server}/static/pdf/{filename_firma}"
+        qr_url = f"{server}/static/pdf/{qr_name}"
+
+        # -------------------------
+        # 4️⃣ Prepara i dati per il template
+        # -------------------------
+        row['recordid'] = recordid
+        row['qrUrl'] = qr_url
+        row['signatureUrl'] = firma_url
+
+        timesheetlines = HelpderDB.sql_query(
+            f"SELECT * FROM user_timesheetline WHERE recordidtimesheet_='{recordid}'"
+        )
+        for line in timesheetlines:
+            line['note'] = line.get('note') or ''
+            line['expectedquantity'] = line.get('expectedquantity') or ''
+            line['actualquantity'] = line.get('actualquantity') or ''
+        row['timesheetlines'] = timesheetlines
+
+        # -------------------------
+        # 5️⃣ Genera il PDF
+        # -------------------------
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        wkhtmltopdf_path = os.path.join(script_dir, 'wkhtmltopdf.exe')
+        config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
+        content = render_to_string('pdf/timesheet_signature.html', row)
+
+        pdf_filename = f"allegato.pdf"
+        pdf_path = os.path.join(base_path, pdf_filename)
+        pdfkit.from_string(content, pdf_path, configuration=config)
+
+        # -------------------------
+        # 6️⃣ Crea il record allegato
+        # -------------------------
+        attachment_record = UserRecord('attachment')
+        attachment_record.values['type'] = "Signature"
+        attachment_record.values['recordidtimesheet_'] = recordid
+        attachment_record.save()
+
+        uploads_dir = os.path.join(settings.UPLOADS_ROOT, f'timesheet/{attachment_record.values['recordidtimesheet_']}')
+        os.makedirs(uploads_dir, exist_ok=True)
+
+        final_pdf_path = os.path.join(uploads_dir, pdf_filename)
+        shutil.copy(pdf_path, final_pdf_path)
+
+        relative_path = f'timesheet/{attachment_record.values['recordidtimesheet_']}/{pdf_filename}'
+        attachment_record.values['file'] = relative_path
+        attachment_record.values['filename'] = pdf_filename
+        attachment_record.save()
+
+        # -------------------------
+        # 7️⃣ Risposta finale
+        # -------------------------
+        return JsonResponse({
+            'success': True,
+            'message': 'PDF con firma salvato con successo',
+            'recordid': recordid,
+            'attachment_recordid': attachment_record.recordid,
+            'pdf_filename': pdf_filename,
+            'pdf_path': relative_path
+        })
+
+    except Exception as e:
+        print(f"Error in save_signature: {e}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+     
+
+from commonapp.utils.email_sender import *
+def save_email_timesheet(request):
+    """
+    Crea un record email collegato ad un timesheet e allega il PDF del timesheet.
+    Si aspetta:
+    {
+        "recordidTimesheet": "XXXX",
+        "recordidAttachment": "YYYY",   # opzionale
+        "mailbody": "",
+        "subject": "",
+        "recipient": ""
+    }
+    """
+    if request.method != "POST":
+        return JsonResponse({"error": "Invalid method"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+
+        recordid_timesheet = data.get("recordid")
+        recordid_attachment = data.get("recordidAttachment")
+
+        if not recordid_timesheet:
+            return JsonResponse({"error": "Missing recordidTimesheet"}, status=400)
+
+        timesheet = UserRecord("timesheet", recordid_timesheet)
+
+        # INFO PRINCIPALI
+        user_id = timesheet.values.get("user")                    # chi ha svolto il lavoro
+        creator_id = timesheet.values.get("creatorid_")          # chi ha creato il record
+        company_name = timesheet.fields["recordidcompany_"]["convertedvalue"]
+
+        # DESTINATARIO EMAIL
+        # esempio: email al responsabile (creator)
+        recipient = SysUser.objects.filter(id=creator_id).values_list("email", flat=True).first()
+
+        # SUBJECT
+        subject = f"Nuovo timesheet registrato per {company_name}"
+
+        # DATI PER IL CORPO EMAIL
+        descrizione = timesheet.values.get("description", "")
+        data_lavoro = timesheet.values.get("date", "")
+        worktime = timesheet.values.get("worktime", "")
+        traveltime = timesheet.values.get("traveltime", "")
+        totalprice = timesheet.values.get("totalprice", "")
+
+        # PROGETTO
+        project = timesheet.fields["recordidproject_"]["convertedvalue"] \
+            if timesheet.values.get("recordidproject_") else ""
+
+        # TASK (opzionale)
+        task = timesheet.fields["recordidtask_"]["convertedvalue"] \
+            if timesheet.values.get("recordidtask_") else ""
+
+        # UTENTE CHE HA FATTO IL LAVORO
+        worker_name = timesheet.fields["user"]["convertedvalue"]
+
+        # ----------------------------------------------------
+        #               CORPO EMAIL HTML
+        # ----------------------------------------------------
+        mailbody = f"""
+        <p style="margin:0 0 6px 0;">Ciao,</p>
+
+        <p style="margin:0 0 10px 0;">
+            È stato registrato un nuovo timesheet. Ecco i dettagli:
+        </p>
+
+        <table style="border-collapse:collapse; width:100%; font-size:14px;">
+            <tr><td style="padding:4px 0; font-weight:bold;">Utente:</td><td>{worker_name}</td></tr>
+            <tr><td style="padding:4px 0; font-weight:bold;">Data:</td><td>{data_lavoro}</td></tr>
+            <tr><td style="padding:4px 0; font-weight:bold;">Descrizione:</td><td>{descrizione}</td></tr>
+            <tr><td style="padding:4px 0; font-weight:bold;">Tempo lavoro:</td><td>{worktime}</td></tr>
+            <tr><td style="padding:4px 0; font-weight:bold;">Tempo viaggio:</td><td>{traveltime}</td></tr>
+            <tr><td style="padding:4px 0; font-weight:bold;">Prezzo totale:</td><td>{totalprice}</td></tr>
+        """
+
+        if project:
+            mailbody += f"""
+            <tr><td style="padding:4px 0; font-weight:bold;">Progetto:</td><td>{project}</td></tr>
+            """
+
+        if task:
+            mailbody += f"""
+            <tr><td style="padding:4px 0; font-weight:bold;">Task associato:</td><td>{task}</td></tr>
+            """
+
+        mailbody += "</table>"
+
+        # link piattaforma
+        link_web = "https://bixportal.dc.swissbix.ch/home"
+
+        mailbody += f"""
+        <p style="margin:16px 0 0 0;">
+            Puoi vedere maggiori informazioni accedendo alla piattaforma:
+            <a href="{link_web}">{link_web}</a>
+        </p>
+
+        <p style="margin:0;">Cordiali saluti,</p>
+        <p style="margin:0;">Il team</p>
+        """
+
+
+        # Dati email da salvare
+
+        # --- Gestione allegato ---
+        if recordid_attachment:
+            try:
+                attach_record = UserRecord("attachment", recordid_attachment)
+                file_rel_path = attach_record.values.get("file", "")
+
+
+            except Exception as ex:
+                print("Errore nel recupero allegato:", ex)
+
+        email_data = {
+            "to": recipient,
+            "subject": subject,
+            "text": mailbody,
+            "cc": "",
+            "bcc": "",
+            "attachment_relativepath": file_rel_path if file_rel_path else "",
+            "attachment_name": os.path.basename(file_rel_path) if file_rel_path else ""
+        }
+        # Salvataggio finale email
+        EmailSender.save_email("timesheet", recordid_timesheet, email_data)
+
+        return JsonResponse({"success": True})
+
+    except Exception as e:
+        print("Error in save_email_timesheet:", e)
+        return JsonResponse({"error": str(e)}, status=500)

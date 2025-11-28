@@ -3058,6 +3058,8 @@ def save_record_fields(request):
 
     uploaded_files = request.FILES if request.FILES else None
 
+    old_record = UserRecord(tableid, recordid)
+
     # 4️⃣ Chiama la funzione comune
     record = _save_record_data(
         tableid=tableid,
@@ -3634,12 +3636,12 @@ def save_record_fields(request):
                 chartid=chart_obj, dashboardid_id=dashboard_id, viewid_id=view_id
             ).update(name=final_name)
 
-    custom_save_record_fields(tableid, recordid)
+    custom_save_record_fields(tableid, recordid, old_record)
     return JsonResponse({"success": True, "detail": "Campi del record salvati con successo", "recordid": record.recordid})
 
 
 
-def custom_save_record_fields(tableid, recordid):
+def custom_save_record_fields(tableid, recordid, params):
     idcliente = Helper.get_cliente_id()
     # Nome del modulo dinamico
     module_name = f"customapp_{idcliente}.customfunc"
@@ -3650,7 +3652,7 @@ def custom_save_record_fields(tableid, recordid):
 
         # Chiama la funzione se esiste
         if hasattr(customfunc, "save_record_fields"):
-            return customfunc.save_record_fields(tableid, recordid)
+            return customfunc.save_record_fields(tableid, recordid, old_record=params)
         else:
             print(f"Funzione 'save_record_fields' non trovata in {module_name}")
     except ModuleNotFoundError:
@@ -4072,50 +4074,8 @@ def save_email(request):
     email_data = data.get('emailData')
     tableid = data.get('tableid')
     recordid = data.get('recordid')
-    #TODO 
-    if tableid == 'rendicontolavanderia':
-        record_rendiconto=UserRecord('rendicontolavanderia',recordid)
-        if record_rendiconto.values['stato']=='Nessuna ricarica':
-            record_rendiconto.values['stato']="Inviato - Nessuna ricarica"
-        else:
-            record_rendiconto.values['stato']="Inviato"
-        record_rendiconto.save()
-    record_email=UserRecord('email')
-    record_email.values['recipients']=email_data['to']
-    record_email.values['subject']=email_data['subject']  
-    mail_body=email_data['text']
-    if mail_body:
-        mail_body=mail_body.replace('<p>','<p style="margin:0 0 4px 0;">')  
-    record_email.values['mailbody']=mail_body
-    record_email.values['cc']=email_data['cc']
-    record_email.values['ccn']=email_data['bcc']
     
-    record_email.values['status']="Da inviare"
-    record_email.save()
-
-    attachment_relativepath=email_data['attachment_relativepath']
-    if attachment_relativepath != '':   
-        record_email.values['attachment_name']=email_data['attachment_name'] 
-        if attachment_relativepath.startswith("commonapp/static"):
-            base_dir=settings.BASE_DIR
-            file_path = os.path.join(settings.BASE_DIR, attachment_relativepath)
-            #fullpath_originale = default_storage.path(file_path)
-            fullpath_originale = Path(file_path)
-            fullpath_originale=str(fullpath_originale)
-        else:
-                fullpath_originale=HelpderDB.get_uploadedfile_fullpath(tableid,recordid,'allegato')
-        
-        fullpath_email=HelpderDB.get_upload_fullpath('email',record_email.recordid,'attachment')
-        #  Assicurati che la cartella di destinazione esista
-        os.makedirs(os.path.dirname(fullpath_email), exist_ok=True)
-
-        # ------------------ copia dell’allegato -------------
-        if os.path.isfile(fullpath_originale):
-            shutil.copy2(fullpath_originale, fullpath_email)
-        
-        record_email.values['attachment']=f"email/{record_email.recordid}/attachment.pdf"
-
-    record_email.save()
+    EmailSender.save_email(tableid, recordid, email_data)
 
     return JsonResponse({"success": True})
 
@@ -5212,190 +5172,6 @@ def generate_timesheet_pdf(recordid, signature_path):
         print(f"Errore in generate_timesheet_pdf: {e}")
         raise
 
-def print_timesheet(request):
-    """
-    Restituisce un PDF già generato, passato come file_path nel body.
-    Serve per scaricare il PDF firmato precedentemente salvato.
-    """
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Invalid method'}, status=405)
-
-    try:
-        data = json.loads(request.body)
-        recordid = data.get('recordid')
-
-        if not recordid:
-            return JsonResponse({'error': 'Missing recordid'}, status=400)
-
-
-        record_timesheet = UserRecord('attachment', recordid)
-        file_path = record_timesheet.values['file']
-
-        # Percorso assoluto
-        abs_path = os.path.join(settings.UPLOADS_ROOT, file_path)
-
-        if not os.path.exists(abs_path):
-            return JsonResponse({'error': f'File not found: {file_path}'}, status=404)
-
-        # Legge il PDF e lo restituisce
-        with open(abs_path, 'rb') as f:
-            pdf_data = f.read()
-
-        response = HttpResponse(pdf_data, content_type='application/pdf')
-        filename = os.path.basename(file_path)
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        return response
-
-    except Exception as e:
-        print(f"Error in sign_timesheet (download): {e}")
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
-@csrf_exempt
-def save_signature(request):
-    """
-    Riceve una firma in base64, genera il PDF del timesheet con la firma
-    e salva il file come allegato nel DB (tabella attachment).
-    """
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Invalid method'}, status=405)
-
-    try:
-        data = json.loads(request.body)
-        recordid = data.get('recordid')
-        img_base64 = data.get('image')
-
-        if not recordid:
-            return JsonResponse({'error': 'Missing recordid'}, status=400)
-        if not img_base64:
-            return JsonResponse({'error': 'No image data'}, status=400)
-
-        # -------------------------
-        # 1️⃣ Salva la firma come immagine PNG
-        # -------------------------
-        if ',' in img_base64:
-            _, img_base64 = img_base64.split(',', 1)
-        img_data = base64.b64decode(img_base64)
-
-        base_path = os.path.join(settings.STATIC_ROOT, 'pdf')
-        os.makedirs(base_path, exist_ok=True)
-
-        filename_firma = f"firma_{recordid}_{uuid.uuid4().hex}.png"
-        firma_path = os.path.join(base_path, filename_firma)
-
-        img_pil = Image.open(BytesIO(img_data))
-        if img_pil.mode in ('RGBA', 'LA') or (img_pil.mode == 'P' and 'transparency' in img_pil.info):
-            background = Image.new('RGB', img_pil.size, (255, 255, 255))
-            background.paste(img_pil, mask=img_pil.split()[-1])
-            img_pil = background
-        else:
-            img_pil = img_pil.convert('RGB')
-        img_pil.save(firma_path, format='PNG')
-
-        # -------------------------
-        # 2️⃣ Genera QR Code
-        # -------------------------
-        uid = uuid.uuid4().hex
-        qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_H,
-            box_size=10,
-            border=0,
-        )
-        qrcontent = f"timesheet_{recordid}"
-        qr.add_data(qrcontent)
-        qr.make(fit=True)
-
-        img_qr = qr.make_image(fill_color="black", back_color="white")
-        qr_name = f"qrcode_{uid}.png"
-        qr_path = os.path.join(base_path, qr_name)
-        img_qr.save(qr_path)
-
-        # -------------------------
-        # 3️⃣ Recupera i dati del timesheet
-        # -------------------------
-        rows = HelpderDB.sql_query(f"""
-            SELECT t.*, c.companyname, c.address, c.city, c.email, c.phonenumber, 
-                   u.firstname, u.lastname 
-            FROM user_timesheet AS t 
-            JOIN user_company AS c ON t.recordidcompany_=c.recordid_ 
-            JOIN sys_user AS u ON t.user = u.id 
-            WHERE t.recordid_='{recordid}'
-        """)
-
-        if not rows:
-            return JsonResponse({'error': f'Timesheet {recordid} non trovato'}, status=404)
-
-        row = rows[0]
-        for value in row:
-            row[value] = row[value] or ''
-
-        server = os.environ.get('BIXENGINE_SERVER')
-        firma_url = f"{server}/static/pdf/{filename_firma}"
-        qr_url = f"{server}/static/pdf/{qr_name}"
-
-        # -------------------------
-        # 4️⃣ Prepara i dati per il template
-        # -------------------------
-        row['recordid'] = recordid
-        row['qrUrl'] = qr_url
-        row['signatureUrl'] = firma_url
-
-        timesheetlines = HelpderDB.sql_query(
-            f"SELECT * FROM user_timesheetline WHERE recordidtimesheet_='{recordid}'"
-        )
-        for line in timesheetlines:
-            line['note'] = line.get('note') or ''
-            line['expectedquantity'] = line.get('expectedquantity') or ''
-            line['actualquantity'] = line.get('actualquantity') or ''
-        row['timesheetlines'] = timesheetlines
-
-        # -------------------------
-        # 5️⃣ Genera il PDF
-        # -------------------------
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        wkhtmltopdf_path = os.path.join(script_dir, 'wkhtmltopdf.exe')
-        config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
-        content = render_to_string('pdf/timesheet_signature.html', row)
-
-        pdf_filename = f"timesheet_signature_{recordid}_{uuid.uuid4().hex}.pdf"
-        pdf_path = os.path.join(base_path, pdf_filename)
-        pdfkit.from_string(content, pdf_path, configuration=config)
-
-        # -------------------------
-        # 6️⃣ Crea il record allegato
-        # -------------------------
-        attachment_record = UserRecord('attachment')
-        attachment_record.values['type'] = "Signature"
-        attachment_record.values['recordidtimesheet_'] = recordid
-        attachment_record.save()
-
-        uploads_dir = os.path.join(settings.UPLOADS_ROOT, f'attachments/{attachment_record.recordid}')
-        os.makedirs(uploads_dir, exist_ok=True)
-
-        final_pdf_path = os.path.join(uploads_dir, pdf_filename)
-        shutil.copy(pdf_path, final_pdf_path)
-
-        relative_path = f'attachments/{attachment_record.recordid}/{pdf_filename}'
-        attachment_record.values['file'] = relative_path
-        attachment_record.values['filename'] = pdf_filename
-        attachment_record.save()
-
-        # -------------------------
-        # 7️⃣ Risposta finale
-        # -------------------------
-        return JsonResponse({
-            'success': True,
-            'message': 'PDF con firma salvato con successo',
-            'recordid': recordid,
-            'attachment_recordid': attachment_record.recordid,
-            'pdf_filename': pdf_filename,
-            'pdf_path': relative_path
-        })
-
-    except Exception as e:
-        print(f"Error in save_signature: {e}")
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
-     
 @csrf_exempt
 def update_user_profile_pic(request):
     if request.method != 'POST':
@@ -7340,12 +7116,14 @@ def fieldsupdate(request):
     params = data.get('params',{})
     tableid= params.get('tableid',None)
     recordid= params.get('recordid',None)
+    old_record = UserRecord(tableid, recordid)
     for param, value in params.items():
         if param in ['tableid','recordid']:
             continue
         value=str(value).replace("'","''")
         HelpderDB.sql_execute(f"UPDATE user_{tableid} SET {param}='{value}' WHERE recordid_='{recordid}' ")
     fields= params
+    custom_save_record_fields(tableid, recordid, old_record)
     return JsonResponse({'status': 'ok', 'message': 'Fields updated successfully.'})
 
 def print_deal(request):
