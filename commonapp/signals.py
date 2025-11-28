@@ -1,6 +1,7 @@
 from django.db.models.signals import post_migrate
 from django.dispatch import receiver
 from django.utils import timezone
+from django.db import connection
 
 
 DISABLE_SCRIPT = True
@@ -13,7 +14,7 @@ FIELD_TYPE_MAPPING = {
         "description": "Memo",
         "type": "lookup",
         "fields": "multiselect",
-        "dynamic_field_1": "lookup",
+        "dynamic_field_1": "Parola",
         "dynamic_field_1_label": "Parola",
         "operation": "lookup",
         "grouping": "lookup",
@@ -32,6 +33,7 @@ FIELD_TYPE_MAPPING = {
         "views": "multiselect",
         "date_granularity": "lookup",
         "function_button": "lookup",
+        "colors": "lookup",
     },
     "email": {
         "id": "Seriale",
@@ -82,6 +84,9 @@ def register_sys_metadata(sender, app_config, **kwargs):
     from django.db import transaction
 
     if DISABLE_SCRIPT:
+        return
+    
+    if sender.label != "commonapp":
         return
 
     SysTable = apps.get_model("commonapp", "SysTable")
@@ -200,12 +205,21 @@ def register_sys_metadata(sender, app_config, **kwargs):
                         SysLookupTableItem.objects.filter(lookuptableid=lookuptableid, itemcode__in=to_delete).delete()
 
                     # 🔄 Aggiungi nuovi item
-                    for value in new_values - existing_items:
-                        SysLookupTableItem.objects.create(
-                            lookuptableid=lookuptableid,
-                            itemcode=value,
-                            itemdesc=value,
-                        )
+                    for value in new_values:
+                        with connection.cursor() as cursor:
+                            cursor.execute("""
+                                INSERT IGNORE INTO sys_lookup_table_item
+                                (lookuptableid, itemcode, itemdesc)
+                                VALUES (%s, %s, %s)
+                            """, [lookuptableid, value, value])
+                        # SysLookupTableItem.objects.update_or_create(
+                        #     lookuptableid=lookuptableid,
+                        #     itemcode=value,
+                        #     defaults={
+                        #         "itemdesc": value,
+                        #         # Aggiungi qui altri campi se presenti nel modello e se devono essere aggiornati
+                        #     }
+                        # )
 
                 # 👤 5️⃣ Ordine campi utente
                 if user:

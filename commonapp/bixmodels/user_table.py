@@ -355,7 +355,7 @@ class UserTable:
         for column in all_field_defs:
             fieldid = column.get('fieldid')
             
-            if column.get('fieldtypeid') == 'Utente':
+            if column.get('fieldtypewebid') == 'Utente':
                 for record_data in raw_records_data:
                     id = record_data.get(fieldid)
                     if id:
