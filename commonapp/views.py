@@ -5824,7 +5824,7 @@ def _handle_record_pivot_chart(config, chart_id, chart_record, query_conditions,
     dataset_label = config.get('dataset_label', 'Dati')
 
     if not record_data:
-        return {'id': chart_id, 'name': chart_record['name']}
+        return {'id': chart_id, 'name': chart_record['name'], 'error': '$empty$'}
 
     # --- Costruzione dataset finale ---
     final_labels, final_data = [], []
@@ -5938,7 +5938,7 @@ def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions,vie
 
     dictrows = HelpderDB.sql_query(query)
     if not dictrows:
-        return {'id': chart_id, 'name': chart_record['name']}
+        return {'id': chart_id, 'name': chart_record['name'], 'error': '$empty$'}
 
     labels = [row[group_by_alias] for row in dictrows]
     all_db_datasets = _format_datasets_from_rows(db_aliases, db_labels, dictrows)
