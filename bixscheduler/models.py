@@ -10,6 +10,9 @@ class ScheduleExtra(models.Model):
     send_to_endpoint = models.BooleanField(
         default=False, help_text=("Send task data to endpoint")
     )
+    save_monitoring = models.BooleanField(
+        default=False, help_text=("Monitor the task")
+    )
 
     class Meta:
         proxy = False 

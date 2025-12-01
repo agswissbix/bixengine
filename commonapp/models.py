@@ -926,6 +926,7 @@ class UserEmail(BaseUserTable):
 class UserSchedulerLog(BaseUserTable):
     date = models.DateField(null=True, blank=True)
     hour = models.CharField(max_length=255, null=True, blank=True)
+    name = models.CharField(max_length=255, null=True, blank=True)
     function = models.CharField(max_length=255, null=True, blank=True)
     output = models.TextField(null=True, blank=True)
 
@@ -933,7 +934,19 @@ class UserSchedulerLog(BaseUserTable):
         db_table = 'user_scheduler_log'
         verbose_name_plural = 'Log scheduler'
 
+class UserMonitoring(BaseUserTable):
+    date = models.DateField(null=True, blank=True)
+    hour = models.CharField(max_length=255, null=True, blank=True)
+    clientid = models.CharField(max_length=255, null=True, blank=True)
+    name = models.CharField(max_length=255, null=True, blank=True)
+    function = models.CharField(max_length=255, null=True, blank=True)
+    status = models.CharField(max_length=255, null=True, blank=True)
+    monitoring_output = models.TextField(null=True, blank=True)
+    scheduleid = models.IntegerField(null=True, blank=True)
 
+    class Meta:
+        db_table = 'user_monitoring'
+        verbose_name_plural = 'Monitoring'
 
 class UserSystemLog(BaseUserTable):
     date = models.DateField(null=True, blank=True)
@@ -1005,6 +1018,10 @@ class UserJobStatus(BaseUserTable):
     context = models.CharField(max_length=255, null=True, blank=True)
     title = models.CharField(max_length=255, null=True, blank=True)
     file = models.CharField(max_length=255, null=True, blank=True)
+    clientid = models.CharField(max_length=255, null=True, blank=True)
+    reporter =  models.CharField(max_length=255, null=True, blank=True)
+    type = models.CharField(max_length=255, null=True, blank=True)
+    duration = models.IntegerField(max_length=255, null=True, blank=True)
 
     class Meta:
         db_table = 'user_job_status'
