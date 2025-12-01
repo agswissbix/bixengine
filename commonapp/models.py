@@ -993,3 +993,19 @@ class UserEvents(BaseUserTable):
     class Meta:
         db_table = 'user_events'
         verbose_name_plural = 'Eventi'
+
+class UserJobStatus(BaseUserTable):
+    description = models.TextField(null=True, blank=True)
+    source = models.CharField(max_length=255, null=True, blank=True)
+    sourcenote = models.TextField(null=True, blank=True)
+    status = models.CharField(max_length=255, null=True, blank=True)
+    creationdate = models.DateField(null=True, blank=True)
+    closedate = models.DateField(null=True, blank=True)
+    technote = models.TextField(null=True, blank=True)
+    context = models.CharField(max_length=255, null=True, blank=True)
+    title = models.CharField(max_length=255, null=True, blank=True)
+    file = models.CharField(max_length=255, null=True, blank=True)
+
+    class Meta:
+        db_table = 'user_job_status'
+        verbose_name_plural = 'Stato Lavori'
