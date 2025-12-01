@@ -70,6 +70,7 @@ from . import graph_service
 from dateutil import parser
 
 from customapp_wegolf.helper import Helper as WegolfHelper
+from customapp_wegolf.views import sync_translation_dashboards as wegolf_sync_translation_dashboards
 
 
 env = environ.Env()
@@ -6701,6 +6702,11 @@ def new_dashboard(request):
     user = request.user
     if not user.is_authenticated:
         return JsonResponse({'error': 'Unauthorized'}, status=401)
+    
+    active_server = Helper.get_cliente_id()
+    
+    if not user.is_superuser and active_server != "wegolf":
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
 
     # Recupera sys_user_id tramite query parametrizzata
     with connection.cursor() as cursor:
@@ -6724,7 +6730,8 @@ def new_dashboard(request):
         dashboardid=dashboard
     )
 
-    WegolfHelper.sync_translation_dashboards(request)
+    if active_server == 'wegolf':
+        wegolf_sync_translation_dashboards(request)
 
     if category:
         # Recupera i grafici legati alla categoria (dalla tabella non-sys user_chart)
@@ -6830,6 +6837,11 @@ def update_dashboard(request):
 
     if not request.user.is_authenticated:
         return JsonResponse({'error': 'Unauthorized'}, status=401)
+    
+    active_server = Helper.get_cliente_id()
+    
+    if not request.user.is_superuser and active_server != "wegolf":
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
 
     try:
         data = json.loads(request.body)
@@ -6860,7 +6872,8 @@ def update_dashboard(request):
         dashboard.name = dashboard_name
         dashboard.save()
 
-        WegolfHelper.sync_translation_dashboards(request)
+        if active_server == "wegolf":
+            wegolf_sync_translation_dashboards(request)
 
         return JsonResponse({
             'success': True,
