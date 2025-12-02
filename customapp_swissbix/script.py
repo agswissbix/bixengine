@@ -1370,3 +1370,44 @@ def renew_servicecontract(request):
     except Exception as e:
         logger.error(f"Errore nel rinnovo: {str(e)}")
         return JsonResponse({'error': f'Errore nel rinnovo: {str(e)}'}, status=500)
+    
+def sync_job_status(request):
+    print("sync_job_status")
+
+    try: 
+        url = "https://bixdata.swissbix.com/sync_job_status.php"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+        }
+
+        payload = []
+
+        data = UserTable('job_status').get_records(conditions_list=[])
+
+        for job in data:
+            job_dict = {
+                'recordid_': job['recordid_'],
+                'id': job['id'],
+                'description': job['description'],
+                'source': job['source'],
+                'sourcenote': job['sourcenote'],
+                'status': job['status'],
+                'creationdate': str(job['creationdate']),
+                'closedate': str(job['closedate']) if job['closedate'] else None,
+                'technote': job['technote'],
+                'context': job['context'],
+                'title': job['title'],
+                'file': job['file'],
+                'clientid': job['clientid'],
+                'duration': job['duration'],
+                'reporter': job['reporter'],
+                'type': job['type']
+            }
+            payload.append(job_dict)
+
+        response = requests.post(url, json=payload, headers=headers)
+        
+
+        return JsonResponse(response.json(), safe=False)
+    except requests.RequestException as e:  
+        return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)

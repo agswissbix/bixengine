@@ -1500,3 +1500,7 @@ def renew_servicecontract(request):
 def sync_contacts(request):
     from customapp_swissbix.script import sync_contacts
     return sync_contacts(request)
+
+def sync_job_status(request):
+    from customapp_swissbix.script import sync_job_status
+    return sync_job_status(request)
