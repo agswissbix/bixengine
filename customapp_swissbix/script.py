@@ -631,8 +631,8 @@ def sync_freshdesk_tickets(request):
     return JsonResponse(response, safe=False)
 
 
-def sync_bexio_contacts(request):
-    url = "https://api.bexio.com/2.0/contact?order_by=id_desc&limit=100&offset=0"
+def sync_bexio_contacts():
+    url = "https://api.bexio.com/2.0/contact?order_by=id_desc&limit=10&offset=0"
     accesstoken=os.environ.get('BEXIO_ACCESSTOKEN')
     headers = {
         'Accept': "application/json",
@@ -644,13 +644,13 @@ def sync_bexio_contacts(request):
     response = json.loads(response.text)
 
     for contact in response:
+        print(f"Syncing contact: {contact['name_1']} Bexio nr: {contact['nr']}")
         field = HelpderDB.sql_query_row(f"select * from user_bexio_contact WHERE bexio_id='{contact['id']}'")
         if not field:
             record = UserRecord("bexio_contact")
 
         else:
             record = UserRecord("bexio_contact", field['recordid_'])
-
         record.values['bexio_id'] = contact['id']
         record.values['nr'] = contact['nr']
         record.values['contact_type_id'] = contact['contact_type_id']
