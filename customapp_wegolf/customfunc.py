@@ -28,11 +28,18 @@ from commonapp import views
 env = environ.Env()
 environ.Env.read_env()
 
-def save_record_fields(tableid,recordid):
-    
+def save_record_fields(tableid,recordid, old_record=""):
 
-    # ---TIMETRACKING---
+    # --- NOTIFICATIONS ---
     if tableid == 'notification':
         notification_record = UserRecord('notification', recordid)
-        notification_record.save()
+
+        if not notification_record.values['date']:
+            notification_record.values['date'] = datetime.datetime.now().strftime("%Y-%m-%d")
+
+        if not notification_record.values['time']:
+            notification_record.values['time'] = datetime.datetime.now().strftime("%H:%M")
+
         create_notification(recordid)
+
+        notification_record.save()
