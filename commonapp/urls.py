@@ -114,7 +114,7 @@ urlpatterns = [
 
     
 
-
+    path('sync_monitoring/', sync_monitoring, name='sync_monitoring'),
     
 ]
 
