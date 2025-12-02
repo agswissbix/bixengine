@@ -648,11 +648,11 @@ def save_record_fields(tableid,recordid, old_record=""):
     if tableid == 'timetracking':
         timetracking_record = UserRecord('timetracking', recordid)
         if timetracking_record.values['stato'] == 'Terminato':
-            if timetracking_record.values['end'] == '':
-                timetracking_record.values['end'] = datetime.now().strftime("%H:%M")
+            if not timetracking_record.values['end']:
+                timetracking_record.values['end'] = datetime.datetime.now().strftime("%H:%M")
             time_format = '%H:%M'
-            start = datetime.strptime(timetracking_record.values['start'], time_format)
-            end = datetime.strptime(timetracking_record.values['end'], time_format)
+            start = datetime.datetime.strptime(timetracking_record.values['start'], time_format)
+            end = datetime.datetime.strptime(timetracking_record.values['end'], time_format)
             time_difference = end - start
 
             total_minutes = time_difference.total_seconds() / 60
@@ -664,8 +664,8 @@ def save_record_fields(tableid,recordid, old_record=""):
             hours = time_difference.total_seconds() / 3600
             timetracking_record.values['worktime'] = round(hours, 2)
 
-        if timetracking_record.values['start'] == '':
-            timetracking_record.values['start'] =  datetime.now().strftime("%H:%M")
+        if not timetracking_record.values['start']:
+            timetracking_record.values['start'] =  datetime.datetime.now().strftime("%H:%M")
         timetracking_record.save()
 
     # ---ATTACHMENT---
