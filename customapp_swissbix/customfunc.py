@@ -496,7 +496,7 @@ def save_record_fields(tableid,recordid, old_record=""):
             product_fixedprice = 'No'
             if product_recordid and product_recordid != '':
                 product_record = UserRecord('product', product_recordid)
-                if not Helper.isempty(product_record.recordid):
+                if not Helper.isempty(product_record.recordid) and not Helper.isempty(product_record.values):
                     product_fixedprice = product_record.values['fixedprice']
             if not dealline_record_dict['expectedhours']:
                 dealline_record_dict['expectedhours'] = 0
