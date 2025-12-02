@@ -47,4 +47,5 @@ urlpatterns = [
     path('sync_contacts/', sync_contacts, name='sync_contacts'),
     
     path('get_monitoring/', get_monitoring, name='get_monitoring'),
+    path('sync_job_status/', sync_job_status, name='sync_job_status'),
 ]

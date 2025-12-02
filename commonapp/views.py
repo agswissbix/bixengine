@@ -7303,3 +7303,38 @@ def get_job_status(request):
 
     except requests.RequestException as e:
         return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
+def sync_monitoring(request):
+    print("monitoring sync start")
+
+    try: 
+        url = "https://bixdata.swissbix.com/sync_monitoring.php"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+        }
+
+        payload = []
+
+        data = UserTable('monitoring').get_records(conditions_list=[])
+
+        clientid = Helper.get_cliente_id()
+
+        for job in data:
+            job_dict = {
+                'recordid_': job['recordid_'],
+                'date': str(job['date']) if job['date'] else '',
+                'hour': str(job['hour']) if job['hour'] else '',
+                'clientid': clientid,
+                'name': job['name'],
+                'function': job['function'],
+                'status': job['status'],
+                'monitoring_output': job['monitoring_output'],
+                'scheduleid': job['scheduleid']
+            }
+            payload.append(job_dict)
+
+        response = requests.post(url, json=payload, headers=headers)
+        
+
+        return JsonResponse(response.json(), safe=False)
+    except requests.RequestException as e:  
+        return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
