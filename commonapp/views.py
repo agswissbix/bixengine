@@ -6073,8 +6073,23 @@ from collections import namedtuple
 Block = namedtuple('Block', ['gsx', 'gsy', 'gsw', 'gsh'])
 
 MAX_GRID_WIDTH = 12
-NEW_GSW = 4
-NEW_GSH = 5
+DEFAULT_W = 4
+DEFAULT_H = 7
+
+CHART_SIZES = {
+    "value":                {"w": 4, "h": 3},
+    "multibarchart":        {"w": 7, "h": 9},
+    "multibarlinechart":    {"w": 4, "h": 7},
+    "table":                {"w": 7, "h": 9},
+}
+
+def get_chart_size(chart_type: str):
+    """
+    Restituisce le dimensioni consigliate per un dato chart_type.
+    Se il tipo non esiste nella mappa, ritorna dimensioni di default.
+    """
+    chart_type = chart_type.lower().strip()
+    return CHART_SIZES.get(chart_type, {"w": DEFAULT_W, "h": DEFAULT_H})
 
 def add_dashboard_block(request):
     json_data = json.loads(request.body)
@@ -6083,12 +6098,17 @@ def add_dashboard_block(request):
     # size = json_data.get('size') 
     dashboardid = json_data.get('dashboardid')
     user_id = request.user.id
-    
+
     # Coordinate e dimensioni di default del nuovo blocco
+    chartid = SysDashboardBlock.objects.filter(id=blockid).values_list("chartid", flat=True).first()
+    chart_type_value = SysChart.objects.filter(id=chartid).values_list("layout", flat=True).first()
+
+    size = get_chart_size(chart_type_value)
+
     new_gsx = 0
     new_gsy = 0
-    new_gsw = NEW_GSW
-    new_gsh = NEW_GSH
+    new_gsw = size["w"]
+    new_gsh = size["h"]
     
     # 1. Recupera l'ID utente di sistema
     # ... (Il codice per recuperare bixid rimane invariato)
