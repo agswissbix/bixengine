@@ -1496,3 +1496,7 @@ def print_servicecontract(request):
 def renew_servicecontract(request):
     from customapp_swissbix.script import renew_servicecontract
     return renew_servicecontract(request)
+
+def sync_contacts(request):
+    from customapp_swissbix.script import sync_contacts
+    return sync_contacts(request)
