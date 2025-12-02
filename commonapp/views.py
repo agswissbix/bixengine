@@ -6080,7 +6080,7 @@ CHART_SIZES = {
     "value":                {"w": 4, "h": 3},
     "multibarchart":        {"w": 7, "h": 9},
     "multibarlinechart":    {"w": 4, "h": 7},
-    "table":                {"w": 7, "h": 9},
+    "table":                {"w": 10, "h": 11},
 }
 
 def get_chart_size(chart_type: str):
@@ -7255,3 +7255,51 @@ def print_deal(request):
     )
     response['Content-Disposition'] = f'attachment; filename="{filename}.docx"'
     return response
+
+
+def get_job_status(request):
+    try:
+        clientid = Helper.get_cliente_id()
+
+        url = f"https://bixdata.swissbix.com/get_job_status.php?clientid={clientid}"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+        }
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+
+        for item in data:
+            job_id = item.get("id")
+
+            sql = "SELECT recordid_ FROM user_job_status WHERE id = %s"
+            exists = HelpderDB.sql_query_value(sql, "recordid_", [job_id]) 
+            job_recordid = None
+            if exists:
+                job_recordid = exists
+
+            # job_table = UserTable('userjobstatus')
+            rec = UserRecord('job_status', job_recordid)
+            
+            rec.values['id'] = job_id
+            rec.values['description'] = item.get("description")
+            rec.values['source'] = item.get("source")
+            rec.values['sourcenote'] = item.get("sourcenote")
+            rec.values['status'] = item.get("status")
+            rec.values['creationdate'] = item.get("creationdate")
+            rec.values['closedate'] = item.get("closedate")
+            rec.values['technote'] = item.get("technote")
+            rec.values['context'] = item.get("context")
+            rec.values['title'] = item.get("title")
+            rec.values['file'] = item.get("file")
+            rec.values['clientid'] = item.get("clientid")
+            rec.values['reporter'] = item.get("reporter")
+            rec.values['type'] = item.get("type")
+            rec.values['duration'] = item.get("duration")
+
+            rec.save()
+
+        return JsonResponse(data, safe=False)
+
+    except requests.RequestException as e:
+        return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)

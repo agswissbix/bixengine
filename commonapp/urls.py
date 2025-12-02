@@ -111,6 +111,7 @@ urlpatterns = [
     
     
     # ------------------  WeGolf views ---------------------------------
+    path('get_job_status/', get_job_status, name='get_job_status'),
 
     
 
