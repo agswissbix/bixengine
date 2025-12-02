@@ -94,7 +94,8 @@ def lista_schedule_get(request):
             "repeats": s.repeats,
             "hook": s.hook,
             "output": output if output else "",
-            "send_to_endpoint": getattr(extra, "send_to_endpoint", False)
+            "send_to_endpoint": getattr(extra, "send_to_endpoint", False),
+            "save_monitoring": getattr(extra, "save_monitoring", False)
         })
 
     return JsonResponse({"schedules": data, "available_tasks": available_tasks})
@@ -145,8 +146,10 @@ def lista_schedule_post(request):
             schedule_obj.next_run = dt - timedelta(hours=2)
 
     send_to_endpoint = schedule_data.get('send_to_endpoint', False)
+    save_monitoring = schedule_data.get('save_monitoring', False)
     extra, created = ScheduleExtra.objects.get_or_create(schedule=schedule_obj)
     extra.send_to_endpoint = bool(send_to_endpoint)
+    extra.save_monitoring = bool(save_monitoring)
     extra.save()
 
     schedule_obj.save()

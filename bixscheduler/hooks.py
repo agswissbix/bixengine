@@ -43,6 +43,15 @@ def on_task_success(task):
 
         extra = getattr(schedule, "extra", None)  # ScheduleExtra (OneToOne)
         send_to_endpoint = getattr(extra, "send_to_endpoint", False)
+        monitoring = getattr(extra, "save_monitoring", False)
+
+        if monitoring:
+            try:
+                create_monitoring(schedule, task)
+            except Exception as e:
+                logger.error(f"[HOOK ERROR] impossibile creare monitoring nel DB: {e}")
+                # In caso di errore, l'hook deve comunque ritornare None.
+                pass
 
         if not send_to_endpoint:
             return None
@@ -122,6 +131,7 @@ def create_scheduler_log(task):
         # Crea un'istanza di UserRecord
         scheduler_log = UserRecord('scheduler_log')
         
+        scheduler_log.values['name'] = task.name
         scheduler_log.values['date'] = lastupdate_date.date()
         scheduler_log.values['function'] = function_name
         scheduler_log.values['output'] = output
@@ -134,3 +144,39 @@ def create_scheduler_log(task):
         logger.error(f"[HOOK ERROR] Errore nel salvataggio: {e}")
         raise # Rilanciamo l'eccezione per farla gestire dal blocco try di on_task_success.
 
+def create_monitoring(schedule, task):
+    """
+    Crea un log del task nel database usando la connessione di Django.
+    """
+    try:
+        # Prepara i dati da inserire
+        function_name = task.func
+        output = str(task.result) if task.result is not None else "Nessun output"
+        lastupdate_date = task.stopped if task.stopped else timezone.now()
+        lastupdate_date += datetime.timedelta(hours=2)
+
+        sql = "SELECT recordid_ FROM user_monitoring WHERE scheduleid = %s"
+        record = HelpderDB.sql_query_value(sql, 'recordid_', [schedule.id])
+        
+
+        recordid = None 
+        if record:
+            recordid = record
+        # Crea un'istanza di UserRecord
+        monitoring = UserRecord('monitoring', recordid)
+        
+        monitoring.values['name'] = schedule.name
+        monitoring.values['date'] = lastupdate_date.date()
+        monitoring.values['function'] = function_name
+        monitoring.values['monitoring_output'] = output
+        monitoring.values['hour'] = lastupdate_date.strftime('%H:%M:%S')
+        monitoring.values['status'] = task.result['status']
+        monitoring.values['clientid'] = Helper.get_cliente_id()
+        monitoring.values['scheduleid'] = schedule.id
+
+        # Salva il record nel DB
+        monitoring.save_safe()
+            
+    except Exception as e:
+        logger.error(f"[HOOK ERROR] Errore nel salvataggio: {e}")
+        raise # Rilanciamo l'eccezione per farla gestire dal blocco try di on_task_success.

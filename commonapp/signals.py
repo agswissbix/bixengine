@@ -49,6 +49,29 @@ FIELD_TYPE_MAPPING = {
         "attachment": "Attachment",
         "attachment_name": "Parola",
     },
+    "job_status": {
+        "description" : "Memo",
+        "source" : "Parola",
+        "sourcenote" : "html",
+        "status" : "lookup",
+        "creationdate" : "Data",
+        "closedate" : "Data",
+        "technote" : "html",
+        "context" : "Parola",
+        "title" : "Parola",
+        "file" : "Attachment",
+    },
+    "scheduler_log": {
+        "date": "Data",
+        "hour": "Ora",
+        "output": "html"
+    },
+    "monitoring": {
+        "date": "Data",
+        "hour": "Ora",
+        "status": "lookup",
+        "monitoring_output": "html"
+    },
 }
 
 LOOKUP_ITEMS_MAP = {
@@ -64,8 +87,8 @@ LOOKUP_ITEMS_MAP = {
     "date_granularity_chart": ["year", "month", "day"],
 }
 
-INDIFFERENT_FIELDS = {  }
-INCLUDE_FIELDS = {"commonapp.UserChart","commonapp.UserEmail", "commonapp.UserSchedulerLog", "commonapp.UserSystemLog","commonapp.UserEvents", "commonapp.UserUserLog"}
+INDIFFERENT_FIELDS = {"commonapp.UserEmail","commonapp.UserChart", "commonapp.UserSystemLog","commonapp.UserEvents", "commonapp.UserUserLog" }
+INCLUDE_FIELDS = {"commonapp.UserJobStatus","commonapp.UserSchedulerLog","commonapp.UserMonitoring", }
 
 EXCLUDED_FIELDS = {
     "record_id",
