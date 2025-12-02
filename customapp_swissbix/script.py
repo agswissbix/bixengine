@@ -1370,3 +1370,46 @@ def renew_servicecontract(request):
     except Exception as e:
         logger.error(f"Errore nel rinnovo: {str(e)}")
         return JsonResponse({'error': f'Errore nel rinnovo: {str(e)}'}, status=500)
+    
+
+def get_monitoring(request):
+    try:
+        url = "https://bixdata.swissbix.com/get_monitoring.php"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+        }
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+
+        for item in data:
+            mon_id = item.get("id")
+
+            # Controllo se il record esiste già in user_monitoring
+            sql = "SELECT recordid_ FROM user_monitoring WHERE id = %s"
+            exists = HelpderDB.sql_query_value(sql, "recordid_", [mon_id])
+
+            monitoring_recordid = None
+            if exists:
+                monitoring_recordid = exists
+
+            # Creo o aggiorno il record
+            rec = UserRecord('monitoring', monitoring_recordid)
+
+            # assegno i valori
+            rec.values['id'] = mon_id
+            rec.values['date'] = item.get('date')
+            rec.values['hour'] = item.get("hour")
+            rec.values['clientid'] = item.get("clientid")
+            rec.values['name'] = item.get("name")
+            rec.values['function'] = item.get("function")
+            rec.values['status'] = item.get("status")
+            rec.values['monitoring_output'] = item.get("monitoring_output")
+            rec.values['scheduleid'] = item.get("scheduleid")
+
+            rec.save()
+
+        return JsonResponse(data, safe=False)
+
+    except requests.RequestException as e:
+        return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)

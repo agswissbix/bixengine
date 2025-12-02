@@ -45,4 +45,6 @@ urlpatterns = [
     path('renew_servicecontract/', renew_servicecontract, name='renew_servicecontract'),
     
     path('sync_contacts/', sync_contacts, name='sync_contacts'),
+    
+    path('get_monitoring/', get_monitoring, name='get_monitoring'),
 ]
