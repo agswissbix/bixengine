@@ -11,8 +11,12 @@ from django.db.models.functions import Coalesce
 from django.db.models import F, OuterRef, Subquery, IntegerField, Case, When, Value
 from django.utils import timezone
 from commonapp.helper import *
+from commonapp.decorators.is_superuser import superuser_required
+from django.db import connection, transaction
+from django.http import JsonResponse
+from .models import *
 
-
+@superuser_required
 def get_users_and_groups(request):
     """
     API per ottenere la lista di utenti e gruppi.
@@ -42,7 +46,7 @@ def get_users_and_groups(request):
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=500)
     
-
+@superuser_required
 def settings_table_usertables(request):
     data = json.loads(request.body)
     userid = data.get('userid', None)
@@ -71,6 +75,7 @@ type_preference_options = [
     "kanban_fields",
 ]
 
+@superuser_required
 def settings_table_fields(request):
     data = json.loads(request.body)
     tableid = data.get('tableid')
@@ -117,6 +122,7 @@ def settings_table_fields(request):
     })
 
 
+@superuser_required
 def get_master_linked_tables(request):
     data = json.loads(request.body)
     tableid = data.get('tableid')
@@ -126,6 +132,7 @@ def get_master_linked_tables(request):
     return JsonResponse({"linked_tables": linked_tables})
 
 
+@superuser_required
 def settings_table_settings(request):
     tableid = json.loads(request.body).get('tableid')
     userid = json.loads(request.body).get('userid')
@@ -139,6 +146,7 @@ def settings_table_settings(request):
     return JsonResponse({"tablesettings": tablesettings})
 
 
+@superuser_required
 def settings_table_fields_settings_save(request):
     data = json.loads(request.body)
     settings_list = data.get('settings')
@@ -167,6 +175,7 @@ def settings_table_fields_settings_save(request):
     return JsonResponse({'success': True, 'updated': updated})
 
 
+@superuser_required
 @transaction.atomic
 def settings_table_usertables_save(request):
     data = json.loads(request.body)
@@ -210,6 +219,8 @@ def settings_table_usertables_save(request):
 
     return JsonResponse({'success': True, 'errors': errors})
 
+
+@superuser_required
 @transaction.atomic
 def settings_table_tablefields_save(request):
     data = json.loads(request.body)
@@ -255,6 +266,7 @@ def settings_table_tablefields_save(request):
     return JsonResponse({'success': True})
 
 
+@superuser_required
 @transaction.atomic
 def settings_table_fields_settings_fields_save(request):
     data = json.loads(request.body)
@@ -356,6 +368,7 @@ FIELDTYPES = {
     "linked": "VARCHAR(255)"
 }
 
+@superuser_required
 def settings_table_fields_new_field(request):
     data = json.loads(request.body)
 
@@ -468,6 +481,9 @@ def settings_table_fields_new_field(request):
             with connection.cursor() as cursor:
                 cursor.execute(alter_sql_1)
                 cursor.execute(alter_sql_2)
+                cursor.execute(
+                    f"INSERT INTO sys_table_link (tableid, tablelinkid) VALUES ('{linkedtableid}', '{tableid}')"
+                )
         except Exception as e:
             transaction.set_rollback(True)
             print(f"Errore SQL durante la creazione delle colonne Linked: {e}")
@@ -518,11 +534,13 @@ def settings_table_fields_new_field(request):
     return JsonResponse({"success": True})
 
 
+@superuser_required
 def get_all_tables(request):
     tables = list(SysTable.objects.all().values('id', 'description').order_by('description'))
     return JsonResponse({"tables": tables})
 
 
+@superuser_required
 def settings_table_fields_settings_block(request):
     data = json.loads(request.body)
     tableid = data.get('tableid')
@@ -580,6 +598,7 @@ def settings_table_fields_settings_block(request):
     })
 
 
+@superuser_required
 def settings_table_linkedtables(request):
     data = json.loads(request.body)
     tableid = data.get('tableid')
@@ -640,6 +659,7 @@ def settings_table_linkedtables(request):
         "linked_tables": linked_tables
     })
 
+@superuser_required
 @transaction.atomic
 def settings_table_linkedtables_save(request):
     data = json.loads(request.body)
@@ -687,10 +707,9 @@ def settings_table_linkedtables_save(request):
     return JsonResponse({'success': True})
 
 
-from django.db import connection, transaction
-from django.http import JsonResponse
-from .models import *
 
+
+@superuser_required
 def save_new_table(request):
     data = json.loads(request.body)
     tableid = data.get('tableid')
@@ -786,6 +805,7 @@ def save_new_table(request):
     return JsonResponse({'success': True})
 
 
+@superuser_required
 def settings_table_newstep(request):
     """
     Crea un nuovo Step per una tabella specifica (es. timesheet)
@@ -838,6 +858,7 @@ def settings_table_newstep(request):
         'step': step
     })
 
+@superuser_required
 def settings_table_steps(request):
     """
     Restituisce tutti gli step di una tabella.
@@ -1076,6 +1097,7 @@ def settings_table_steps(request):
         "steps": steps_data
     })
 
+@superuser_required
 def settings_table_steps_save(request):
     """
     Salva l’ordine degli step e l’ordine dei loro items (campi o tabelle collegate)
@@ -1168,6 +1190,7 @@ def settings_table_steps_save(request):
     })
 
 
+@superuser_required
 def settings_get_dashboards_user(request):
     data = json.loads(request.body)
     userid = data.get('userid')
@@ -1186,6 +1209,7 @@ def settings_get_dashboards_user(request):
     return JsonResponse({"dashboards": dashboards})
 
 
+@superuser_required
 def save_user_dashboard_setting(request):
     data = json.loads(request.body)
     userid = data.get('userid')
