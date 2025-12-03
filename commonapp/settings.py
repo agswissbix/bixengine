@@ -859,6 +859,95 @@ def save_new_table(request):
     # Risposta JSON
     return JsonResponse({'success': True})
 
+@superuser_required
+def delete_table(request):
+    data = json.loads(request.body)
+
+    tableid = data.get("tableid")
+    userid = data.get("userid", 1)
+
+    if userid != 1:
+        return JsonResponse({"success": False, "error": "L'utente deve essere l'utente di default"}, status=400)
+
+    if not tableid:
+        return JsonResponse({"success": False, "error": "tableid mancante"}, status=400)
+
+    table = SysTable.objects.filter(id=tableid).first()
+    if not table:
+        return JsonResponse({"success": False, "error": "Tabella non trovata"}, status=404)
+
+    user_table_name = f"user_{tableid}"
+
+    # ------------------------------
+    # 1. Elimina la tabella fisica SQL
+    # ------------------------------
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(f"DROP TABLE IF EXISTS {user_table_name}")
+    except Exception as e:
+        return JsonResponse({"success": False, "error": f"Errore SQL DROP TABLE: {e}"}, status=500)
+
+    # ------------------------------
+    # 2. Elimina SysField della tabella
+    #    + lookup tables
+    #    + campi linkati
+    # ------------------------------
+    fields = SysField.objects.filter(tableid=tableid)
+
+    for field in fields:
+
+        # lookup / multiselect / checkbox → rimuovi lookup table
+        if field.lookuptableid:
+            SysLookupTableItem.objects.filter(lookuptableid=field.lookuptableid).delete()
+            SysLookupTable.objects.filter(tableid=field.lookuptableid).delete()
+
+        # se è campo linkato → elimina i campi derivati nella tabella linkata
+        if field.tablelink:
+            linked = field.tablelink
+
+            # elimina campi generati nella tabella linkata
+            derived_fieldid = f"recordid{tableid}_"
+            SysField.objects.filter(tableid=linked, fieldid=derived_fieldid).delete()
+
+            # elimina record in SysTableLink
+            SysTableLink.objects.filter(tableid_id=linked, tablelinkid_id=tableid).delete()
+
+    # elimina tutti i campi della tabella principale
+    SysUserFieldOrder.objects.filter(tableid=tableid).delete()
+    SysField.objects.filter(tableid=tableid).delete()
+
+    # ------------------------------
+    # 3. Elimina SysUserFieldOrder
+    # ------------------------------
+
+    # ------------------------------
+    # 4. Elimina SysView (viste utente)
+    # ------------------------------
+    SysView.objects.filter(tableid=tableid).delete()
+
+    # ------------------------------
+    # 5. Elimina SysUserTableOrder
+    # ------------------------------
+    SysUserTableOrder.objects.filter(tableid=tableid).delete()
+
+    # ------------------------------
+    # 6. Elimina SysUserTableSettings
+    # ------------------------------
+    SysUserTableSettings.objects.filter(tableid=tableid).delete()
+
+    # ------------------------------
+    # 7. Elimina eventuali collegamenti
+    # ------------------------------
+    SysTableLink.objects.filter(tableid_id=tableid).delete()
+    SysTableLink.objects.filter(tablelinkid_id=tableid).delete()
+
+    # ------------------------------
+    # 8. Elimina la riga principale in SysTable
+    # ------------------------------
+    table.delete()
+
+    return JsonResponse({"success": True})
+
 
 @superuser_required
 def settings_table_newstep(request):
