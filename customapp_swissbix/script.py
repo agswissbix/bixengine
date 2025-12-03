@@ -1,4 +1,6 @@
 from datetime import date, datetime
+import hashlib
+import hmac
 import os
 import pprint
 import subprocess
@@ -1374,82 +1376,149 @@ def renew_servicecontract(request):
 
 def get_monitoring(request):
     try:
-        url = "https://bixdata.swissbix.com/get_monitoring.php"
+        clientid = Helper.get_cliente_id()
+        
+        timestamp = str(int(time.time()))
+
+        string_to_sign = f"clientid={clientid}&timestamp={timestamp}"
+        
+        hmac_key_str = os.environ.get("HMAC_KEY")
+        if not hmac_key_str:
+            return JsonResponse({"error": "HMAC Key missing"}, status=500)
+            
+        hmac_key = hmac_key_str.encode()
+        signature = hmac.new(hmac_key, string_to_sign.encode("utf-8"), hashlib.sha256).hexdigest()
+
+        url = f"https://bixdata.swissbix.com/get_monitoring.php?{string_to_sign}"
+        
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+            'X-Signature': signature
         }
+    
         response = requests.get(url, headers=headers)
         response.raise_for_status()
+
         data = response.json()
 
+        key = os.environ.get('LOGS_ENCRYPTION_KEY')
+        if not key: return JsonResponse({"error": "Key missing"}, status=500)
+        f = Fernet(key)
+
+        def safe_decrypt(encrypted_val):
+            if not encrypted_val: return ""
+            try: return f.decrypt(encrypted_val.encode('utf-8')).decode('utf-8')
+            except: return ""
+
+        count = 0
         for item in data:
+            dec_clientid = safe_decrypt(item.get("clientid"))
+            dec_date = safe_decrypt(item.get("date"))
+            dec_hour = safe_decrypt(item.get("hour"))
+            dec_name = safe_decrypt(item.get("name"))
+            dec_function = safe_decrypt(item.get("function"))
+
             mon_id = item.get("id")
 
-            # Controllo se il record esiste già in user_monitoring
             sql = "SELECT recordid_ FROM user_monitoring WHERE id = %s"
             exists = HelpderDB.sql_query_value(sql, "recordid_", [mon_id])
 
-            monitoring_recordid = None
+            rec = None
             if exists:
-                monitoring_recordid = exists
+                rec = UserRecord('monitoring', exists)
+            else:
+                rec = UserRecord('monitoring')
 
-            # Creo o aggiorno il record
-            rec = UserRecord('monitoring', monitoring_recordid)
-
-            # assegno i valori
-            rec.values['id'] = mon_id
-            rec.values['date'] = item.get('date')
-            rec.values['hour'] = item.get("hour")
-            rec.values['clientid'] = item.get("clientid")
-            rec.values['name'] = item.get("name")
-            rec.values['function'] = item.get("function")
-            rec.values['status'] = item.get("status")
-            rec.values['monitoring_output'] = item.get("monitoring_output")
-            rec.values['scheduleid'] = item.get("scheduleid")
+            rec.values['clientid'] = dec_clientid
+            rec.values['date'] = dec_date
+            rec.values['hour'] = dec_hour
+            rec.values['name'] = dec_name
+            rec.values['function'] = dec_function
+            
+            rec.values['scheduleid'] = safe_decrypt(item.get("scheduleid"))
+            rec.values['status'] = safe_decrypt(item.get("status"))
+            rec.values['monitoring_output'] = safe_decrypt(item.get("monitoring_output"))
 
             rec.save()
+            count += 1
 
-        return JsonResponse(data, safe=False)
+        return JsonResponse({"status": "success", "processed": count}, safe=False)
 
-    except requests.RequestException as e:
-        return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+    
+def encrypt_data(fernet_instance, plaintext):
+    """Cifra una stringa con Fernet. Gestisce None e altri tipi."""
+    
+    if plaintext is None:
+        plaintext = ""
+        
+    if not isinstance(plaintext, str):
+        plaintext = str(plaintext)
+
+    return fernet_instance.encrypt(plaintext.encode("utf-8")).decode("utf-8")
+
 def sync_job_status(request):
     print("sync_job_status")
 
     try: 
-        url = "https://bixdata.swissbix.com/sync_job_status.php"
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-        }
-
         payload = []
+
+        hmac_key_str = os.environ.get("HMAC_KEY")
+        encryption_key = os.environ.get("LOGS_ENCRYPTION_KEY")
+        endpoint_url = os.environ.get("SYNC_JOB_STATUS_ENDPOINT_URL")
+
+        if not hmac_key_str or not encryption_key or not endpoint_url:
+            return JsonResponse({"error": "Missing environment variables"}, status=500)
+
+        hmac_key = hmac_key_str.encode()
+        fernet = Fernet(encryption_key)
 
         data = UserTable('job_status').get_records(conditions_list=[])
 
         for job in data:
+            hashing_string = f"{job['recordid_']}"
+
             job_dict = {
-                'recordid_': job['recordid_'],
-                'id': job['id'],
-                'description': job['description'],
-                'source': job['source'],
-                'sourcenote': job['sourcenote'],
-                'status': job['status'],
-                'creationdate': str(job['creationdate']),
-                'closedate': str(job['closedate']) if job['closedate'] else None,
-                'technote': job['technote'],
-                'context': job['context'],
-                'title': job['title'],
-                'file': job['file'],
-                'clientid': job['clientid'],
-                'duration': job['duration'],
-                'reporter': job['reporter'],
-                'type': job['type']
+                "log_hash": hmac.new(hmac_key, hashing_string.encode(), hashlib.sha256).hexdigest(),
+                'recordid_': encrypt_data(fernet, job['recordid_']),
+                'id': encrypt_data(fernet, job['id']),
+                'description': encrypt_data(fernet, job['description']),
+                'source': encrypt_data(fernet, job['source']),
+                'sourcenote': encrypt_data(fernet, job['sourcenote']),
+                'status': encrypt_data(fernet, job['status']),
+                'creationdate': encrypt_data(fernet, str(job['creationdate'])),
+                'closedate': encrypt_data(fernet, str(job['closedate']  if job['closedate'] else "")),
+                'technote': encrypt_data(fernet, job['technote']),
+                'context': encrypt_data(fernet, job['context']),
+                'title': encrypt_data(fernet, job['title']),
+                'file': encrypt_data(fernet, job['file']),
+                'clientid': encrypt_data(fernet, job['clientid']),
+                'duration': encrypt_data(fernet, job['duration']),
+                'reporter': encrypt_data(fernet, job['reporter']),
+                'type': encrypt_data(fernet, job['type'])
             }
             payload.append(job_dict)
 
-        response = requests.post(url, json=payload, headers=headers)
-        
+        try:
+            payload_as_string = json.dumps(payload)
+        except TypeError as e:
+            for k, v in payload.items():
+                print(f"{k}: {type(v)} → {v}")
+            raise
+        signature = hmac.new(hmac_key, payload_as_string.encode("utf-8"), hashlib.sha256).hexdigest()
 
-        return JsonResponse(response.json(), safe=False)
+        headers = {
+            "Content-Type": "application/json",
+            "X-Signature": signature,
+        }
+
+        response = requests.post(endpoint_url, data=payload_as_string, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        logger.info("Job status sync completed successfully.")
+
+        return JsonResponse(data, safe=False)
     except requests.RequestException as e:  
         return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
