@@ -1,3 +1,6 @@
+from asyncio.log import logger
+import hashlib
+import hmac
 import uuid
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.http import JsonResponse
@@ -72,6 +75,7 @@ from dateutil import parser
 from customapp_wegolf.helper import Helper as WegolfHelper
 from customapp_wegolf.views import sync_translation_dashboards as wegolf_sync_translation_dashboards
 
+from cryptography.fernet import Fernet, InvalidToken
 
 env = environ.Env()
 environ.Env.read_env()
@@ -7260,42 +7264,64 @@ def print_deal(request):
 def get_job_status(request):
     try:
         clientid = Helper.get_cliente_id()
+        
+        timestamp = str(int(time.time()))
 
-        url = f"https://bixdata.swissbix.com/get_job_status.php?clientid={clientid}"
+        string_to_sign = f"clientid={clientid}&timestamp={timestamp}"
+        
+        hmac_key_str = os.environ.get("HMAC_KEY")
+        if not hmac_key_str:
+            return JsonResponse({"error": "HMAC Key missing"}, status=500)
+            
+        hmac_key = hmac_key_str.encode()
+        signature = hmac.new(hmac_key, string_to_sign.encode("utf-8"), hashlib.sha256).hexdigest()
+
+        url = f"https://bixdata.swissbix.com/get_job_status.php?{string_to_sign}"
+        
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+            'X-Signature': signature
         }
+        
         response = requests.get(url, headers=headers)
         response.raise_for_status()
         data = response.json()
 
+        key = os.environ.get('LOGS_ENCRYPTION_KEY')
+        f = Fernet(key)
+
         for item in data:
-            job_id = item.get("id")
+            job_id = f.decrypt(item.get("id").encode()).decode()
+            clientid = f.decrypt(item.get("clientid").encode()).decode()
+
+            if clientid != Helper.get_cliente_id():
+                continue
 
             sql = "SELECT recordid_ FROM user_job_status WHERE id = %s"
             exists = HelpderDB.sql_query_value(sql, "recordid_", [job_id]) 
             job_recordid = None
+            rec = None
             if exists:
                 job_recordid = exists
-
-            # job_table = UserTable('userjobstatus')
-            rec = UserRecord('job_status', job_recordid)
+                rec = UserRecord('job_status', job_recordid)
+            else:
+                rec = UserRecord('job_status')
             
             rec.values['id'] = job_id
-            rec.values['description'] = item.get("description")
-            rec.values['source'] = item.get("source")
-            rec.values['sourcenote'] = item.get("sourcenote")
-            rec.values['status'] = item.get("status")
-            rec.values['creationdate'] = item.get("creationdate")
-            rec.values['closedate'] = item.get("closedate")
-            rec.values['technote'] = item.get("technote")
-            rec.values['context'] = item.get("context")
-            rec.values['title'] = item.get("title")
-            rec.values['file'] = item.get("file")
-            rec.values['clientid'] = item.get("clientid")
-            rec.values['reporter'] = item.get("reporter")
-            rec.values['type'] = item.get("type")
-            rec.values['duration'] = item.get("duration")
+            rec.values['description'] = f.decrypt(item.get("description").encode()).decode()
+            rec.values['source'] = f.decrypt(item.get("source").encode()).decode()
+            rec.values['sourcenote'] = f.decrypt(item.get("sourcenote").encode()).decode()
+            rec.values['status'] = f.decrypt(item.get("status").encode()).decode()
+            rec.values['creationdate'] = f.decrypt(item.get("creationdate").encode()).decode()
+            rec.values['closedate'] = f.decrypt(item.get("closedate").encode()).decode()
+            rec.values['technote'] = f.decrypt(item.get("technote").encode()).decode()
+            rec.values['context'] = f.decrypt(item.get("context").encode()).decode()
+            rec.values['title'] = f.decrypt(item.get("title").encode()).decode()
+            rec.values['file'] = f.decrypt(item.get("file").encode()).decode()
+            rec.values['clientid'] = clientid
+            rec.values['reporter'] = f.decrypt(item.get("reporter").encode()).decode()
+            rec.values['type'] = f.decrypt(item.get("type").encode()).decode()
+            rec.values['duration'] = f.decrypt(item.get("duration").encode()).decode()
 
             rec.save()
 
@@ -7303,38 +7329,86 @@ def get_job_status(request):
 
     except requests.RequestException as e:
         return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
+    
+def encrypt_data(fernet_instance, plaintext):
+    """Cifra una stringa con Fernet. Gestisce None e altri tipi."""
+    
+    if plaintext is None:
+        plaintext = ""
+        
+    if not isinstance(plaintext, str):
+        plaintext = str(plaintext)
+
+    return fernet_instance.encrypt(plaintext.encode("utf-8")).decode("utf-8")
+
 def sync_monitoring(request):
     print("monitoring sync start")
 
     try: 
-        url = "https://bixdata.swissbix.com/sync_monitoring.php"
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-        }
-
         payload = []
 
-        data = UserTable('monitoring').get_records(conditions_list=[])
+        hmac_key_str = os.environ.get("HMAC_KEY")
+        encryption_key = os.environ.get("LOGS_ENCRYPTION_KEY")
+        endpoint_url = os.environ.get("MONITORING_SYNC_ENDPOINT_URL")
 
+        if not hmac_key_str or not encryption_key or not endpoint_url:
+            return JsonResponse({"error": "Missing environment variables"}, status=500)
+
+        hmac_key = hmac_key_str.encode()
+        fernet = Fernet(encryption_key)
+
+        data = UserTable('monitoring').get_records(conditions_list=[])
         clientid = Helper.get_cliente_id()
 
         for job in data:
+            raw_recordid = str(job.get('recordid_') or '')
+            raw_clientid = str(clientid or '')
+            
+            hashing_string = f"{raw_recordid}{raw_clientid}"
+            unique_hash = hmac.new(hmac_key, hashing_string.encode(), hashlib.sha256).hexdigest()
+
             job_dict = {
-                'recordid_': job['recordid_'],
-                'date': str(job['date']) if job['date'] else '',
-                'hour': str(job['hour']) if job['hour'] else '',
-                'clientid': clientid,
-                'name': job['name'],
-                'function': job['function'],
-                'status': job['status'],
-                'monitoring_output': job['monitoring_output'],
-                'scheduleid': job['scheduleid']
+                "log_hash": unique_hash,
+                
+                'recordid_': encrypt_data(fernet, raw_recordid),
+                'clientid': encrypt_data(fernet, raw_clientid),
+                'scheduleid': encrypt_data(fernet, str(job.get('scheduleid') or '')),
+
+                'date': encrypt_data(fernet, str(job['date']) if job['date'] else ''),
+                'hour': encrypt_data(fernet, str(job['hour']) if job['hour'] else ''),
+                'name': encrypt_data(fernet, job.get('name')),
+                'function': encrypt_data(fernet, job.get('function')),
+                'status': encrypt_data(fernet, job.get('status')),
+                'monitoring_output': encrypt_data(fernet, job.get('monitoring_output'))
             }
             payload.append(job_dict)
 
-        response = requests.post(url, json=payload, headers=headers)
-        
+        try:
+            payload_as_string = json.dumps(payload)
+        except TypeError as e:
+            raise
+            
+        signature = hmac.new(hmac_key, payload_as_string.encode("utf-8"), hashlib.sha256).hexdigest()
 
-        return JsonResponse(response.json(), safe=False)
-    except requests.RequestException as e:  
-        return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
+        headers = {
+            "Content-Type": "application/json",
+            "X-Signature": signature,
+        }
+
+        response = requests.post(endpoint_url, data=payload_as_string, headers=headers, timeout=10)
+        response.raise_for_status()
+
+        logger.info("Monitoring sync completed successfully.")
+
+        return JsonResponse(payload, safe=False)
+        
+    except requests.RequestException as e:
+        server_response = ""
+        if hasattr(e, 'response') and e.response is not None:
+             server_response = e.response.text
+        
+        return JsonResponse({
+            "error": "Failed to fetch external data", 
+            "details": str(e),
+            "server_response": server_response
+        }, status=500)
