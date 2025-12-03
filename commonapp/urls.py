@@ -108,6 +108,7 @@ urlpatterns = [
     path('settings_table_steps/', settings_table_steps, name='settings_table_steps'),
     path('settings_table_newstep/', settings_table_newstep, name='settings_table_newstep'),
     path('settings_table_steps_save/', settings_table_steps_save, name='settings_table_steps_save'),
+    path('settings_table_fields_delete_field/', settings_table_fields_delete_field, name='settings_table_fields_delete_field'),
     
     
     # ------------------  WeGolf views ---------------------------------
