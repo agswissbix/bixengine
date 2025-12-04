@@ -632,7 +632,7 @@ def save_record_fields(tableid,recordid, old_record=""):
 
         #aggiornamento deal
         #TODO valutare se ha senso aggiornarlo qui o meglio spostare direttamente nel save del deal
-        if not isempty(deal_record.recordid):
+        if not Helper.isempty(deal_record.recordid):
             deal_record.values['usedhours'] = usedhours
             deal_record.values['fixedpricehours'] = fixedpricehours
             deal_record.values['servicecontracthours'] = servicecontracthours
@@ -647,6 +647,8 @@ def save_record_fields(tableid,recordid, old_record=""):
     # ---TIMETRACKING---
     if tableid == 'timetracking':
         timetracking_record = UserRecord('timetracking', recordid)
+        if Helper.isempty(timetracking_record.values['start']):
+                timetracking_record.values['start'] = datetime.now().strftime("%H:%M")
         if timetracking_record.values['stato'] == 'Terminato':
             if not timetracking_record.values['end']:
                 timetracking_record.values['end'] = datetime.datetime.now().strftime("%H:%M")
