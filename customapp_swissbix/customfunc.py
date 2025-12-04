@@ -650,11 +650,11 @@ def save_record_fields(tableid,recordid, old_record=""):
         if Helper.isempty(timetracking_record.values['start']):
                 timetracking_record.values['start'] = datetime.now().strftime("%H:%M")
         if timetracking_record.values['stato'] == 'Terminato':
-            if Helper.isempty(timetracking_record.values['end']):
-                timetracking_record.values['end'] = datetime.now().strftime("%H:%M")
+            if not timetracking_record.values['end']:
+                timetracking_record.values['end'] = datetime.datetime.now().strftime("%H:%M")
             time_format = '%H:%M'
-            start = datetime.strptime(timetracking_record.values['start'], time_format)
-            end = datetime.strptime(timetracking_record.values['end'], time_format)
+            start = datetime.datetime.strptime(timetracking_record.values['start'], time_format)
+            end = datetime.datetime.strptime(timetracking_record.values['end'], time_format)
             time_difference = end - start
 
             total_minutes = time_difference.total_seconds() / 60
@@ -666,8 +666,8 @@ def save_record_fields(tableid,recordid, old_record=""):
             hours = time_difference.total_seconds() / 3600
             timetracking_record.values['worktime'] = round(hours, 2)
 
-        if timetracking_record.values['start'] == '':
-            timetracking_record.values['start'] =  datetime.now().strftime("%H:%M")
+        if not timetracking_record.values['start']:
+            timetracking_record.values['start'] =  datetime.datetime.now().strftime("%H:%M")
         timetracking_record.save()
 
     # ---ATTACHMENT---
@@ -811,10 +811,10 @@ def save_record_fields(tableid,recordid, old_record=""):
         notification_record = UserRecord('notifications', recordid)
 
         if not notification_record.values['date']:
-            notification_record.values['date'] = datetime.now().strftime("%Y-%m-%d")
+            notification_record.values['date'] = datetime.datetime.now().strftime("%Y-%m-%d")
 
         if not notification_record.values['time']:
-            notification_record.values['time'] = datetime.now().strftime("%H:%M")
+            notification_record.values['time'] = datetime.datetime.now().strftime("%H:%M")
 
         views.create_notification(recordid)
 
@@ -848,7 +848,7 @@ def printing_katun_bexio_api_set_invoice(request):
             bexio_contact_id = 297 #contact id di Swissbix SA
             invoice_title = "Conteggio copie stampanti/Multifunzioni Swissbix SA "+invoice['title']
         # 1. Ottieni la data e ora correnti come oggetto datetime
-        now = datetime.now()
+        now = datetime.datetime.now()
 
         # 2. Aggiungi 20 giorni utilizzando timedelta
         future_date = now + timedelta(days=30)

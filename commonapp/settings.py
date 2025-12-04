@@ -11,8 +11,12 @@ from django.db.models.functions import Coalesce
 from django.db.models import F, OuterRef, Subquery, IntegerField, Case, When, Value
 from django.utils import timezone
 from commonapp.helper import *
+from commonapp.decorators.is_superuser import superuser_required
+from django.db import connection, transaction
+from django.http import JsonResponse
+from .models import *
 
-
+@superuser_required
 def get_users_and_groups(request):
     """
     API per ottenere la lista di utenti e gruppi.
@@ -42,7 +46,7 @@ def get_users_and_groups(request):
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=500)
     
-
+@superuser_required
 def settings_table_usertables(request):
     data = json.loads(request.body)
     userid = data.get('userid', None)
@@ -71,6 +75,7 @@ type_preference_options = [
     "kanban_fields",
 ]
 
+@superuser_required
 def settings_table_fields(request):
     data = json.loads(request.body)
     tableid = data.get('tableid')
@@ -117,6 +122,7 @@ def settings_table_fields(request):
     })
 
 
+@superuser_required
 def get_master_linked_tables(request):
     data = json.loads(request.body)
     tableid = data.get('tableid')
@@ -126,6 +132,7 @@ def get_master_linked_tables(request):
     return JsonResponse({"linked_tables": linked_tables})
 
 
+@superuser_required
 def settings_table_settings(request):
     tableid = json.loads(request.body).get('tableid')
     userid = json.loads(request.body).get('userid')
@@ -139,6 +146,7 @@ def settings_table_settings(request):
     return JsonResponse({"tablesettings": tablesettings})
 
 
+@superuser_required
 def settings_table_fields_settings_save(request):
     data = json.loads(request.body)
     settings_list = data.get('settings')
@@ -167,6 +175,7 @@ def settings_table_fields_settings_save(request):
     return JsonResponse({'success': True, 'updated': updated})
 
 
+@superuser_required
 @transaction.atomic
 def settings_table_usertables_save(request):
     data = json.loads(request.body)
@@ -210,6 +219,8 @@ def settings_table_usertables_save(request):
 
     return JsonResponse({'success': True, 'errors': errors})
 
+
+@superuser_required
 @transaction.atomic
 def settings_table_tablefields_save(request):
     data = json.loads(request.body)
@@ -255,6 +266,7 @@ def settings_table_tablefields_save(request):
     return JsonResponse({'success': True})
 
 
+@superuser_required
 @transaction.atomic
 def settings_table_fields_settings_fields_save(request):
     data = json.loads(request.body)
@@ -356,6 +368,7 @@ FIELDTYPES = {
     "linked": "VARCHAR(255)"
 }
 
+@superuser_required
 def settings_table_fields_new_field(request):
     data = json.loads(request.body)
 
@@ -468,6 +481,9 @@ def settings_table_fields_new_field(request):
             with connection.cursor() as cursor:
                 cursor.execute(alter_sql_1)
                 cursor.execute(alter_sql_2)
+                cursor.execute(
+                    f"INSERT INTO sys_table_link (tableid, tablelinkid) VALUES ('{linkedtableid}', '{tableid}')"
+                )
         except Exception as e:
             transaction.set_rollback(True)
             print(f"Errore SQL durante la creazione delle colonne Linked: {e}")
@@ -483,25 +499,7 @@ def settings_table_fields_new_field(request):
             label=linkedtableid,
             keyfieldlink=keyfieldlink,
             tablelink=linkedtableid,
-        )
-
-        # Crea il campo corrispondente nella tabella collegata
-        SysField.objects.create(
-            tableid=linkedtableid,
-            fieldid=fieldid2,
-            description=fielddescription,
-            fieldtypewebid=fieldtype,
-            length=255,
-            label=tableid,
-            keyfieldlink=keyfieldlink,
-            tablelink=tableid,
-        )
-
-        # Registra il legame tra le due tabelle
-        SysTableLink.objects.create(
-            tableid_id=linkedtableid,
-            tablelinkid_id=tableid
-        )
+        ) 
 
         # Crea anche la seconda colonna di riferimento nel sistema dei campi
         SysField.objects.create(
@@ -517,12 +515,87 @@ def settings_table_fields_new_field(request):
 
     return JsonResponse({"success": True})
 
+@superuser_required
+def settings_table_fields_delete_field(request):
+    data = json.loads(request.body)
 
+    tableid = data.get("tableid")
+    field_id = data.get("fieldid")
+    userid = data.get("userid")
+
+    if userid != 1:
+        return JsonResponse({"success": False, "error": "L'utente deve essere l'utente di default"}, status=400)
+
+    if not tableid or not field_id:
+        return JsonResponse({"success": False, "error": "Dati mancanti"}, status=400)
+
+    field = SysField.objects.filter(tableid=tableid, id=field_id).first()
+    if not field:
+        return JsonResponse({"success": False, "error": "Campo non trovato"}, status=404)
+
+    user_table_name = f"user_{tableid}"
+    fieldid = field.fieldid
+    # --------------------------
+    # 1. Rimozione colonna SQL
+    # --------------------------
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(f"ALTER TABLE {user_table_name} DROP COLUMN {fieldid}")
+    except Exception as e:
+        print("Errore DROP COLUMN:", e)
+        # Non blocchiamo: la colonna potrebbe non esistere
+
+    # --------------------------
+    # 2. Se è un campo lookup → elimina lookup table e valori
+    # --------------------------
+    if field.fieldtypewebid in ["lookup", "multiselect", "Checkbox"]:
+        if field.lookuptableid:
+            SysLookupTableItem.objects.filter(lookuptableid=field.lookuptableid).delete()
+            SysLookupTable.objects.filter(tableid=field.lookuptableid).delete()
+
+    # --------------------------
+    # 3. Se è un campo collegato → eliminare TUTTE le cose derivate
+    # --------------------------
+    if field.tablelink or fieldid.startswith('_'):
+        linked_table = field.tablelink
+        linked_table_name = f"user_{linked_table}"
+
+        # nomi colonne che avevi creato
+        col1 = f"recordid{linked_table}_"
+        col2 = f"_recordid{linked_table}"
+
+        # elimina le colonne nella tabella originale
+        for col in [col1, col2]:
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute(f"ALTER TABLE {user_table_name} DROP COLUMN {col}")
+            except Exception:
+                pass
+
+        # elimina il campo corrispondente nella tabella collegata
+        SysField.objects.filter(tableid=tableid, fieldid=col1).delete()
+
+        # elimina il link tra tabelle
+        SysTableLink.objects.filter(tableid_id=linked_table, tablelinkid_id=tableid).delete()
+
+        SysUserOrder.objects.filter(tableid=linked_table, fieldid=tableid, typepreference='keylabel').delete()
+
+    # --------------------------
+    # 4. Cancella il SysField principale
+    # --------------------------
+    SysUserFieldOrder.objects.filter(tableid=tableid, fieldid=field_id).delete()
+    field.delete()
+
+    return JsonResponse({"success": True})
+
+
+@superuser_required
 def get_all_tables(request):
     tables = list(SysTable.objects.all().values('id', 'description').order_by('description'))
     return JsonResponse({"tables": tables})
 
 
+@superuser_required
 def settings_table_fields_settings_block(request):
     data = json.loads(request.body)
     tableid = data.get('tableid')
@@ -580,6 +653,7 @@ def settings_table_fields_settings_block(request):
     })
 
 
+@superuser_required
 def settings_table_linkedtables(request):
     data = json.loads(request.body)
     tableid = data.get('tableid')
@@ -640,6 +714,7 @@ def settings_table_linkedtables(request):
         "linked_tables": linked_tables
     })
 
+@superuser_required
 @transaction.atomic
 def settings_table_linkedtables_save(request):
     data = json.loads(request.body)
@@ -687,10 +762,9 @@ def settings_table_linkedtables_save(request):
     return JsonResponse({'success': True})
 
 
-from django.db import connection, transaction
-from django.http import JsonResponse
-from .models import *
 
+
+@superuser_required
 def save_new_table(request):
     data = json.loads(request.body)
     tableid = data.get('tableid')
@@ -785,7 +859,97 @@ def save_new_table(request):
     # Risposta JSON
     return JsonResponse({'success': True})
 
+@superuser_required
+def delete_table(request):
+    data = json.loads(request.body)
 
+    tableid = data.get("tableid")
+    userid = data.get("userid", 1)
+
+    if userid != 1:
+        return JsonResponse({"success": False, "error": "L'utente deve essere l'utente di default"}, status=400)
+
+    if not tableid:
+        return JsonResponse({"success": False, "error": "tableid mancante"}, status=400)
+
+    table = SysTable.objects.filter(id=tableid).first()
+    if not table:
+        return JsonResponse({"success": False, "error": "Tabella non trovata"}, status=404)
+
+    user_table_name = f"user_{tableid}"
+
+    # ------------------------------
+    # 1. Elimina la tabella fisica SQL
+    # ------------------------------
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(f"DROP TABLE IF EXISTS {user_table_name}")
+    except Exception as e:
+        return JsonResponse({"success": False, "error": f"Errore SQL DROP TABLE: {e}"}, status=500)
+
+    # ------------------------------
+    # 2. Elimina SysField della tabella
+    #    + lookup tables
+    #    + campi linkati
+    # ------------------------------
+    fields = SysField.objects.filter(tableid=tableid)
+
+    for field in fields:
+
+        # lookup / multiselect / checkbox → rimuovi lookup table
+        if field.lookuptableid:
+            SysLookupTableItem.objects.filter(lookuptableid=field.lookuptableid).delete()
+            SysLookupTable.objects.filter(tableid=field.lookuptableid).delete()
+
+        # se è campo linkato → elimina i campi derivati nella tabella linkata
+        if field.tablelink:
+            linked = field.tablelink
+
+            # elimina campi generati nella tabella linkata
+            derived_fieldid = f"recordid{tableid}_"
+            SysField.objects.filter(tableid=linked, fieldid=derived_fieldid).delete()
+
+            # elimina record in SysTableLink
+            SysTableLink.objects.filter(tableid_id=linked, tablelinkid_id=tableid).delete()
+
+    # elimina tutti i campi della tabella principale
+    SysUserFieldOrder.objects.filter(tableid=tableid).delete()
+    SysField.objects.filter(tableid=tableid).delete()
+
+    # ------------------------------
+    # 3. Elimina SysUserFieldOrder
+    # ------------------------------
+
+    # ------------------------------
+    # 4. Elimina SysView (viste utente)
+    # ------------------------------
+    SysView.objects.filter(tableid=tableid).delete()
+
+    # ------------------------------
+    # 5. Elimina SysUserTableOrder
+    # ------------------------------
+    SysUserTableOrder.objects.filter(tableid=tableid).delete()
+
+    # ------------------------------
+    # 6. Elimina SysUserTableSettings
+    # ------------------------------
+    SysUserTableSettings.objects.filter(tableid=tableid).delete()
+
+    # ------------------------------
+    # 7. Elimina eventuali collegamenti
+    # ------------------------------
+    SysTableLink.objects.filter(tableid_id=tableid).delete()
+    SysTableLink.objects.filter(tablelinkid_id=tableid).delete()
+
+    # ------------------------------
+    # 8. Elimina la riga principale in SysTable
+    # ------------------------------
+    table.delete()
+
+    return JsonResponse({"success": True})
+
+
+@superuser_required
 def settings_table_newstep(request):
     """
     Crea un nuovo Step per una tabella specifica (es. timesheet)
@@ -838,6 +1002,7 @@ def settings_table_newstep(request):
         'step': step
     })
 
+@superuser_required
 def settings_table_steps(request):
     """
     Restituisce tutti gli step di una tabella.
@@ -1076,6 +1241,7 @@ def settings_table_steps(request):
         "steps": steps_data
     })
 
+@superuser_required
 def settings_table_steps_save(request):
     """
     Salva l’ordine degli step e l’ordine dei loro items (campi o tabelle collegate)
@@ -1168,6 +1334,7 @@ def settings_table_steps_save(request):
     })
 
 
+@superuser_required
 def settings_get_dashboards_user(request):
     data = json.loads(request.body)
     userid = data.get('userid')
@@ -1186,6 +1353,7 @@ def settings_get_dashboards_user(request):
     return JsonResponse({"dashboards": dashboards})
 
 
+@superuser_required
 def save_user_dashboard_setting(request):
     data = json.loads(request.body)
     userid = data.get('userid')

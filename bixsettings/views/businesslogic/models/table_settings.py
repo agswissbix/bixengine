@@ -102,6 +102,7 @@ class TableSettings:
                 {'name': 'Analitica', 'selected': True},
                 {'name': 'Storico', 'selected': True},
                 {'name': 'Custom', 'selected': True},
+                {'name': 'Checklist', 'selected': True},
             ],
             'value': 'Campi, Collegati'
         },

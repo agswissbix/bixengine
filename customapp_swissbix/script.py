@@ -1,4 +1,6 @@
 from datetime import date, datetime
+import hashlib
+import hmac
 import os
 import pprint
 import subprocess
@@ -860,47 +862,82 @@ def sync_bexio_invoices(request):
 
     return JsonResponse(response, safe=False)
 
-
+def sync_contacts(request):
+    return syncdata(request,'company')
 
 # DO NOT EXECUTE
-def syncdata(request,tableid):
-    sync_table = HelpderDB.sql_query_value(f"SELECT * FROM sys_table WHERE id='{tableid}'", 'sync_table')
-    sync_field = HelpderDB.sql_query_value(f"SELECT * FROM sys_table WHERE id='{tableid}'", 'sync_field')
-    sync_condition = HelpderDB.sql_query_value(f"SELECT * FROM sys_table WHERE id='{tableid}'", 'sync_condition')
-    sync_order = HelpderDB.sql_query_value(f"SELECT * FROM sys_table WHERE id='{tableid}'", 'sync_order')
+def syncdata(request, tableid):
+    sql_table = f"SELECT * FROM sys_table WHERE id='{tableid}'"
+    sys_table_rows = HelpderDB.sql_query(sql_table)
+    
+    if not sys_table_rows:
+        return HttpResponse(f"Errore: Configurazione per {tableid} non trovata", status=404)
+        
+    config = sys_table_rows[0]
+    
+    sync_table_name = config.get('sync_table') 
+    sync_key_source = config.get('sync_field') 
+    sync_condition = config.get('sync_condition')
+    sync_order = config.get('sync_order')
 
-    bixdata_fields=dict()
+    if sync_table_name == "user_bexio_contacts":
+        sync_table_name = "user_bexio_contact"
 
-    rows = HelpderDB.sql_query(f"SELECT * FROM sys_field WHERE tableid='{tableid}' AND sync_fieldid is not null AND sync_fieldid<>'' ")
+    dest_table_name = tableid 
 
-    for row in rows:
-        bixdata_fields[row['sync_fieldid']]=row['fieldid']
+    sql_fields = f"SELECT sync_fieldid, fieldid FROM sys_field WHERE tableid='{tableid}' AND sync_fieldid IS NOT NULL AND sync_fieldid <> ''"
+    field_rows = HelpderDB.sql_query(sql_fields)
 
-    if sync_condition:
-        condition=sync_condition
-    else:
-        condition='true'
+    mapping_map = {row['sync_fieldid']: row['fieldid'] for row in field_rows}
+    
+    sync_key_dest = mapping_map.get(sync_key_source)
 
-    if sync_order:
-        order=f"ORDER BY {sync_order}"
-    else:
-        order=''
+    if not sync_key_dest:
+        return HttpResponse(f"Errore: Il campo chiave '{sync_key_source}' non è mappato in sys_field.", status=400)
 
-    sql=f"""
-        SELECT *
-        FROM {sync_table}
-        WHERE {condition}
-        {order}
-    """
-    syncrows=HelpderDB.sql_query(sql)
+    condition = sync_condition if sync_condition else '1=1'
+    order_clause = f"ORDER BY {sync_order}" if sync_order else ''
+    
+    source_sql = f"SELECT * FROM {sync_table_name} WHERE {condition} {order_clause}"
+    source_rows = HelpderDB.sql_query(source_sql)
 
-    for syncrow in syncrows:
-        sync_fields=dict()
-        for key, field in syncrow.items():
-            if key in bixdata_fields:
-                sync_fields[bixdata_fields[key]]=field
-    bixdata_sync_field=bixdata_fields[sync_field]
-    print(sync_fields)
+    records_created = 0
+    records_updated = 0
+
+    for source_row in source_rows:
+        raw_key_value = source_row.get(sync_key_source)
+        
+        if not raw_key_value:
+            continue 
+
+        key_value_escaped = str(raw_key_value).replace("'", "''")
+
+        check_sql = f"SELECT * FROM user_{dest_table_name} WHERE {sync_key_dest} = '{key_value_escaped}'"
+        existing_match = HelpderDB.sql_query(check_sql)
+
+        if existing_match:
+            row_match = existing_match[0]
+            if 'recordid_' in row_match:
+                recordid_value = row_match['recordid_']
+                record = UserRecord(dest_table_name, recordid_value)
+                print(f"Aggiornamento record esistente: {dest_table_name} - {recordid_value}")
+                records_updated += 1
+            else:
+                print(f"ERRORE: Record trovato ma colonna 'recordid_' mancante per tabella {dest_table_name}")
+                continue 
+        else:
+            record = UserRecord(dest_table_name)
+            print(f"Creazione nuovo record: {dest_table_name}")
+            records_created += 1
+
+        for src_col, src_val in source_row.items():
+            if src_col in mapping_map:
+                dest_col = mapping_map[src_col]
+                record.values[dest_col] = src_val
+        
+        record.save()
+
+    return HttpResponse(f"Sync completato: {records_created} inseriti, {records_updated} aggiornati.")
 
 def get_scheduler_logs(request):
     try: 
@@ -1335,3 +1372,153 @@ def renew_servicecontract(request):
     except Exception as e:
         logger.error(f"Errore nel rinnovo: {str(e)}")
         return JsonResponse({'error': f'Errore nel rinnovo: {str(e)}'}, status=500)
+    
+
+def get_monitoring(request):
+    try:
+        clientid = Helper.get_cliente_id()
+        
+        timestamp = str(int(time.time()))
+
+        string_to_sign = f"clientid={clientid}&timestamp={timestamp}"
+        
+        hmac_key_str = os.environ.get("HMAC_KEY")
+        if not hmac_key_str:
+            return JsonResponse({"error": "HMAC Key missing"}, status=500)
+            
+        hmac_key = hmac_key_str.encode()
+        signature = hmac.new(hmac_key, string_to_sign.encode("utf-8"), hashlib.sha256).hexdigest()
+
+        url = f"https://bixdata.swissbix.com/get_monitoring.php?{string_to_sign}"
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+            'X-Signature': signature
+        }
+    
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+
+        data = response.json()
+
+        key = os.environ.get('LOGS_ENCRYPTION_KEY')
+        if not key: return JsonResponse({"error": "Key missing"}, status=500)
+        f = Fernet(key)
+
+        def safe_decrypt(encrypted_val):
+            if not encrypted_val: return ""
+            try: return f.decrypt(encrypted_val.encode('utf-8')).decode('utf-8')
+            except: return ""
+
+        count = 0
+        for item in data:
+            dec_clientid = safe_decrypt(item.get("clientid"))
+            dec_date = safe_decrypt(item.get("date"))
+            dec_hour = safe_decrypt(item.get("hour"))
+            dec_name = safe_decrypt(item.get("name"))
+            dec_function = safe_decrypt(item.get("function"))
+
+            mon_id = item.get("id")
+
+            sql = "SELECT recordid_ FROM user_monitoring WHERE id = %s"
+            exists = HelpderDB.sql_query_value(sql, "recordid_", [mon_id])
+
+            rec = None
+            if exists:
+                rec = UserRecord('monitoring', exists)
+            else:
+                rec = UserRecord('monitoring')
+
+            rec.values['clientid'] = dec_clientid
+            rec.values['date'] = dec_date
+            rec.values['hour'] = dec_hour
+            rec.values['name'] = dec_name
+            rec.values['function'] = dec_function
+            
+            rec.values['scheduleid'] = safe_decrypt(item.get("scheduleid"))
+            rec.values['status'] = safe_decrypt(item.get("status"))
+            rec.values['monitoring_output'] = safe_decrypt(item.get("monitoring_output"))
+
+            rec.save()
+            count += 1
+
+        return JsonResponse({"status": "success", "processed": count}, safe=False)
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+    
+def encrypt_data(fernet_instance, plaintext):
+    """Cifra una stringa con Fernet. Gestisce None e altri tipi."""
+    
+    if plaintext is None:
+        plaintext = ""
+        
+    if not isinstance(plaintext, str):
+        plaintext = str(plaintext)
+
+    return fernet_instance.encrypt(plaintext.encode("utf-8")).decode("utf-8")
+
+def sync_job_status(request):
+    print("sync_job_status")
+
+    try: 
+        payload = []
+
+        hmac_key_str = os.environ.get("HMAC_KEY")
+        encryption_key = os.environ.get("LOGS_ENCRYPTION_KEY")
+        endpoint_url = os.environ.get("SYNC_JOB_STATUS_ENDPOINT_URL")
+
+        if not hmac_key_str or not encryption_key or not endpoint_url:
+            return JsonResponse({"error": "Missing environment variables"}, status=500)
+
+        hmac_key = hmac_key_str.encode()
+        fernet = Fernet(encryption_key)
+
+        data = UserTable('job_status').get_records(conditions_list=[])
+
+        for job in data:
+            hashing_string = f"{job['recordid_']}"
+
+            job_dict = {
+                "log_hash": hmac.new(hmac_key, hashing_string.encode(), hashlib.sha256).hexdigest(),
+                'recordid_': encrypt_data(fernet, job['recordid_']),
+                'id': encrypt_data(fernet, job['id']),
+                'description': encrypt_data(fernet, job['description']),
+                'source': encrypt_data(fernet, job['source']),
+                'sourcenote': encrypt_data(fernet, job['sourcenote']),
+                'status': encrypt_data(fernet, job['status']),
+                'creationdate': encrypt_data(fernet, str(job['creationdate'])),
+                'closedate': encrypt_data(fernet, str(job['closedate']  if job['closedate'] else "")),
+                'technote': encrypt_data(fernet, job['technote']),
+                'context': encrypt_data(fernet, job['context']),
+                'title': encrypt_data(fernet, job['title']),
+                'file': encrypt_data(fernet, job['file']),
+                'clientid': encrypt_data(fernet, job['clientid']),
+                'duration': encrypt_data(fernet, job['duration']),
+                'reporter': encrypt_data(fernet, job['reporter']),
+                'type': encrypt_data(fernet, job['type'])
+            }
+            payload.append(job_dict)
+
+        try:
+            payload_as_string = json.dumps(payload)
+        except TypeError as e:
+            for k, v in payload.items():
+                print(f"{k}: {type(v)} → {v}")
+            raise
+        signature = hmac.new(hmac_key, payload_as_string.encode("utf-8"), hashlib.sha256).hexdigest()
+
+        headers = {
+            "Content-Type": "application/json",
+            "X-Signature": signature,
+        }
+
+        response = requests.post(endpoint_url, data=payload_as_string, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        logger.info("Job status sync completed successfully.")
+
+        return JsonResponse(data, safe=False)
+    except requests.RequestException as e:  
+        return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
