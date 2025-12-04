@@ -50,4 +50,7 @@ urlpatterns = [
     
     path('get_monitoring/', get_monitoring, name='get_monitoring'),
     path('sync_job_status/', sync_job_status, name='sync_job_status'),
+
+    path('get_timesheets_to_invoice/', get_timesheets_to_invoice, name='get_timesheets_to_invoice'),
+    path('upload_timesheet_in_bexio/', upload_timesheet_in_bexio, name='upload_timesheet_in_bexio'),
 ]

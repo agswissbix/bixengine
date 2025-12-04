@@ -1624,3 +1624,10 @@ def save_project_as_template(request):
     except Exception as e:
         print("Errore:", e)
         return JsonResponse({"error": str(e)}, status=500)
+def get_timesheets_to_invoice(request):
+    from customapp_swissbix.script import get_timesheets_to_invoice
+    return get_timesheets_to_invoice(request)
+
+def upload_timesheet_in_bexio(request):
+    from customapp_swissbix.script import upload_timesheet_in_bexio
+    return upload_timesheet_in_bexio(request)

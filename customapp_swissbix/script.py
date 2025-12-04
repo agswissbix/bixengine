@@ -1273,7 +1273,7 @@ def print_servicecontract(request):
                     lastname = user_rec.lastname
 
             ticket_subject = ''
-            ticket_id = timesheet.get('recordidticket_')
+            ticket_id = timesheet.get('recordidticketbixdata_', '')
             if ticket_id:
                 ticket_record = UserRecord('ticket', ticket_id)
                 if ticket_record:
@@ -1281,8 +1281,8 @@ def print_servicecontract(request):
 
             tms = {
                 'date': timesheet.get('date'), 
-                'firstname': firstname,
-                'lastname': lastname,
+                'firstname': firstname or "",
+                'lastname': lastname or "",
                 'worktime_decimal': work_time, 
                 'invoiceoption': invoice_opt,
                 'traveltime_decimal': travel_time if travel_time > 0 else None, 
@@ -1522,3 +1522,24 @@ def sync_job_status(request):
         return JsonResponse(data, safe=False)
     except requests.RequestException as e:  
         return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
+    
+def get_timesheets_to_invoice(request):
+    print("get_timesheets_to_invoice")
+
+    try:
+        timesheets = []
+
+        return JsonResponse(timesheets, safe=False)
+    except Exception as e:
+        logger.error(f"Errore nel recupero dei timesheet da fatturare: {str(e)}")
+        return JsonResponse({'error': f'Errore nel recupero dei timesheet da fatturare: {str(e)}'}, status=500)
+    
+def upload_timesheet_in_bexio(request):
+    print("upload_timesheet_in_bexio")
+
+    try:
+
+        return JsonResponse({'status': 'Timesheet uploaded successfully'})
+    except Exception as e:
+        logger.error(f"Errore nell'upload del timesheet in Bexio: {str(e)}")
+        return JsonResponse({'error': f'Errore nell\'upload del timesheet in Bexio: {str(e)}'}, status=500)
