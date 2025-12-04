@@ -1527,9 +1527,46 @@ def get_timesheets_to_invoice(request):
     print("get_timesheets_to_invoice")
 
     try:
+        bexio_accounts = UserTable('bexio_account').get_records(conditions_list=["servicecontract_service IS NOT NULL"])
+
+        condition_list = []
+        condition_list.append("invoicestatus='To Invoice'")
+        condition_list.append("validated='Si'")
+        ts = UserTable('timesheet').get_records(conditions_list=condition_list)
+
         timesheets = []
 
-        return JsonResponse(timesheets, safe=False)
+        for timesheet in ts:
+            company_record = UserRecord('company', timesheet['recordidcompany_'])
+            company_name = company_record.values.get('companyname', '') if company_record else ''
+
+            user = SysUser.objects.get(id=timesheet['user'])
+            if user:
+                fullname = f"{user.firstname} {user.lastname}"
+            else:
+                fullname = "N/A"
+
+            servicecontract_service = timesheet.get('service', '')
+            conto = next((acc['account_no'] for acc in bexio_accounts if acc['servicecontract_service'] == servicecontract_service), None)
+            contoTravel = "3780" # TODO: trovare il numero corretto per le trasferte
+
+            timesheet_data = {
+                'id': timesheet['recordid_'],
+                'conto': conto if conto else "",
+                'contoTravel': contoTravel,
+                'company': company_name,
+                'description': timesheet['description'],
+                'date': timesheet['date'],
+                'user': fullname,
+                'worktime_decimal': timesheet['worktime_decimal'],
+                'workprice': timesheet['workprice'],
+                'hourprice': timesheet['hourprice'],
+                'travelprice': timesheet['travelprice'],
+                'total_price': timesheet['totalprice'],
+            }
+            timesheets.append(timesheet_data)
+
+        return JsonResponse({"timesheets": timesheets}, safe=False)
     except Exception as e:
         logger.error(f"Errore nel recupero dei timesheet da fatturare: {str(e)}")
         return JsonResponse({'error': f'Errore nel recupero dei timesheet da fatturare: {str(e)}'}, status=500)
@@ -1538,6 +1575,9 @@ def upload_timesheet_in_bexio(request):
     print("upload_timesheet_in_bexio")
 
     try:
+        data = json.loads(request.body)
+        invoice_date = data.get('invoiceDate')
+        timesheet_ids = data.get('selectedTimesheets', [])
 
         return JsonResponse({'status': 'Timesheet uploaded successfully'})
     except Exception as e:
