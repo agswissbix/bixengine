@@ -40,6 +40,8 @@ urlpatterns = [
     path('save_email_timesheet/', save_email_timesheet, name='save_email_timesheet'),
     path('print_timesheet/', print_timesheet, name='print_timesheet'),
     path('save_signature/', save_signature, name='save_signature'),
+    path('get_project_templates/', get_project_templates, name='get_project_templates'),
+    path('save_project_as_template/', save_project_as_template, name='save_project_as_template'),
     
     path('print_servicecontract/', print_servicecontract, name='print_servicecontract'),
     path('renew_servicecontract/', renew_servicecontract, name='renew_servicecontract'),

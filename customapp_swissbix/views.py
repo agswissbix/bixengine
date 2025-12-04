@@ -1504,3 +1504,123 @@ def sync_contacts(request):
 def sync_job_status(request):
     from customapp_swissbix.script import sync_job_status
     return sync_job_status(request)
+
+
+def get_project_templates(request):
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT recordid_, templatename
+                FROM user_projecttemplate
+                WHERE deleted_ = 'N'
+            """)
+            rows = cursor.fetchall()
+
+        # Mappo i risultati per il FE
+        templates = [
+            {
+                "id": str(row[0]),
+                "value": row[1]
+            }
+            for row in rows
+        ]
+
+        return JsonResponse({"templates": templates}, safe=False)
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+    
+def save_project_as_template(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "Metodo non permesso"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+
+        project_id = data.get("recordid")
+        template_id = data.get("template")
+
+        if not project_id or not template_id:
+            return JsonResponse({"error": "Parametri mancanti"}, status=400)
+
+        # 🔹 Carico il record del progetto
+        project_record = UserRecord("project", project_id)
+
+        if not project_record.values:
+            return JsonResponse({"error": "Record progetto non trovato"}, status=404)
+
+        # 🔹 Carico il record del template
+        template_record = UserRecord("projecttemplate", template_id)
+
+        if not template_record.values:
+            return JsonResponse({"error": "Template non trovato"}, status=404)
+
+        # 🔥 Sovrascrivo i valori del progetto con quelli del template
+        project_values = project_record.values
+        template_values = template_record.values
+
+        exclueded_fields = ['id', 'recordid_', 'creatorid_', 'creation_', 'lastupdaterid_', 'lastupdate_', 'totpages_', 'firstpagefilename_', 'recordstatus_', 'deleted_',]
+
+        for fieldid, template_value in template_values.items():
+            # ❗ non sovrascrivere ID o altre chiavi protette
+            if fieldid in exclueded_fields:
+                continue
+
+            # aggiorna solo se esiste anche nel progetto
+            if fieldid in project_values:
+                project_values[fieldid] = template_value
+
+        # 🔥 Salvo le modifiche
+        project_record.save()
+
+        tables = template_record.get_linked_tables()
+
+        linked_tables_real_raw = project_record.get_linked_tables()
+        linked_tables_real = [t["tableid"] for t in linked_tables_real_raw]
+
+        for table in tables:
+            template_table_id = table["tableid"]
+            
+            # es: da "projecttemplatechecklist" → "projectchecklist"
+            real_table_id = template_table_id.replace("projecttemplate", "")
+
+            if real_table_id not in linked_tables_real:
+                continue
+
+            old_records = project_record.get_linkedrecords_dict(real_table_id)
+
+            for old in old_records:
+                old_rec = UserRecord(real_table_id, old["recordid_"])
+                old_rec.values["deleted_"] = "Y"
+                old_rec.save()
+
+            linked_records = template_record.get_linkedrecords_dict(template_table_id)
+
+            for record in linked_records:
+
+                # 🔥 CREO NUOVO RECORD NELLA TABELLA REALE
+                new_rec = UserRecord(real_table_id)
+
+                # Copio tutti i campi tranne quelli di sistema
+                for fieldid, val in record.items():
+                    if fieldid in exclueded_fields:
+                        continue
+
+                    # Se il campo contiene "projecttemplate", trasformalo in "project"
+                    # Es: recordidprojecttemplate_ → recordidproject_
+                    new_fieldid = fieldid.replace("projecttemplate", "project")
+
+                    # TODO handle fields type FILE
+                    new_rec.values[new_fieldid] = val
+
+                # Imposto il recordid del progetto (campo di relazione)
+                new_rec.values[f"recordidproject_"] = project_id
+
+                # Salvo il nuovo record
+                new_rec.save()
+
+        return JsonResponse({"success": True, "message": "Template applicato correttamente."})
+
+    except Exception as e:
+        print("Errore:", e)
+        return JsonResponse({"error": str(e)}, status=500)
