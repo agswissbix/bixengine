@@ -1504,3 +1504,11 @@ def sync_contacts(request):
 def sync_job_status(request):
     from customapp_swissbix.script import sync_job_status
     return sync_job_status(request)
+
+def get_timesheets_to_invoice(request):
+    from customapp_swissbix.script import get_timesheets_to_invoice
+    return get_timesheets_to_invoice(request)
+
+def upload_timesheet_in_bexio(request):
+    from customapp_swissbix.script import upload_timesheet_in_bexio
+    return upload_timesheet_in_bexio(request)
