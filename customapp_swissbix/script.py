@@ -11,6 +11,7 @@ from django.db import connection
 import psutil, shutil
 
 import requests
+from bixsettings.models import *
 from commonapp.bixmodels.user_record import UserRecord
 from commonapp.utils.email_sender import EmailSender
 from commonapp.bixmodels.helper_db import *
@@ -1547,13 +1548,14 @@ def get_timesheets_to_invoice(request):
                 fullname = "N/A"
 
             servicecontract_service = timesheet.get('service', '')
-            conto = next((acc['account_no'] for acc in bexio_accounts if acc['servicecontract_service'] == servicecontract_service), None)
-            contoTravel = next((acc['account_no'] for acc in bexio_accounts if acc['servicecontract_service'] == "Trasferta"), None)
+            count = next((acc['account_no'] for acc in bexio_accounts if acc['servicecontract_service'] == servicecontract_service), None)
+            countTravel = next((acc['account_no'] for acc in bexio_accounts if acc['servicecontract_service'] == "Trasferta"), None)
 
             timesheet_data = {
                 'id': timesheet['recordid_'],
-                'conto': conto if conto else "",
-                'contoTravel': contoTravel,
+                'count': count if count else "",
+                'countTravel': countTravel,
+                'company_id': timesheet['recordidcompany_'],
                 'company': company_name,
                 'description': timesheet['description'],
                 'date': timesheet['date'],
@@ -1572,14 +1574,117 @@ def get_timesheets_to_invoice(request):
         return JsonResponse({'error': f'Errore nel recupero dei timesheet da fatturare: {str(e)}'}, status=500)
     
 def upload_timesheet_in_bexio(request):
-    print("upload_timesheet_in_bexio")
+    print("upload_invoices_in_bexio")
+    bexio_accesstoken = os.environ.get('BEXIO_ACCESSTOKEN')
+
+    headers = {
+        'Accept': "application/json",
+        'Authorization': f"Bearer {bexio_accesstoken}"
+    }
+
+    url = "https://api.bexio.com/2.0/kb_invoice"
 
     try:
         data = json.loads(request.body)
         invoice_date = data.get('invoiceDate')
-        timesheet_ids = data.get('selectedTimesheets', [])
+        invoices = data.get('invoices', [])
 
-        return JsonResponse({'status': 'Timesheet uploaded successfully'})
+        for invoice in invoices:
+            request_body = {}
+
+            datefrom = invoice_date
+            dateto = datetime.datetime.strptime(datefrom, "%Y-%m-%d") + datetime.timedelta(days=20)
+
+            companyname = invoice['company']
+            company = UserRecord('company', invoice['company_id'])
+            bexioid = ''
+            if company:
+                bexioid = company.values.get('id_bexio')
+
+            positions = []
+
+            # Texts
+            text = {}
+            text['type'] = 'KbPositionText'
+            text['description'] = "<b>Interventi</b>"
+            positions.append(text)
+
+            total = 0
+            # Timesheets
+            for timesheet in invoice['timesheets']:
+                position = {}
+
+                count = timesheet['count']
+                countid = ''
+                if count:
+                    condition_list = []
+                    condition_list.append(f"account_no={count}")
+                    accounts = UserTable('bexio_account').get_records(conditions_list=condition_list)
+                    countid = accounts[0].get('id')
+
+                position['tax_id'] = "39"
+                position['account_id'] = countid
+                position['unit_id'] = 2
+                position['amount'] = timesheet['worktime_decimal']
+                position['unit_price'] = timesheet['hourprice']
+                position['type'] = 'KbPositionCustom'
+
+                travelprice = timesheet['travelprice']
+                if travelprice > 0:
+                    travel = {}
+
+                    count = timesheet['countTravel']
+                    countid = ''
+                    if count:
+                        condition_list = []
+                        condition_list.append(f"account_no={count}")
+                        accounts = UserTable('bexio_account').get_records(conditions_list=condition_list)
+                        countid = accounts[0].get('id')
+
+                    travel['tax_id'] = "39"
+                    travel['account_id'] = countid
+                    travel['unit_id'] = 2
+                    travel['amount'] = 1
+                    travel['unit_price'] = travelprice
+                    travel['type'] = 'KbPositionCustom'
+                    positions.append(travel)
+
+                positions.append(position)
+                total += timesheet['total_price']
+
+            request_body['title'] = "ICT: Supporto Cliente"
+            request_body['contact_id'] = bexioid
+            request_body['user_id'] = 1
+            request_body['logopaper_id'] = 1
+            request_body['language_id'] = 3
+            request_body['currency_id'] = 1
+            request_body['payment_type_id'] = 1
+            request_body['header'] = ""
+            request_body['footer'] = "Vi ringraziamo per la vostra fiducia, in caso di disaccordo, vi preghiamo di notificarcelo entro 7 giorni. <br/>Rimaniamo a vostra disposizione per qualsiasi domanda,<br/><br/>Con i nostri più cordiali saluti, Swissbix SA"
+            request_body['mwst_type'] = 0
+            request_body['mwst_is_net'] = True
+            request_body['show_position_taxes'] = False
+            request_body['is_valid_from']=datefrom.strftime("%Y-%m-%d")
+            request_body['is_valid_to']=dateto.strftime("%Y-%m-%d")
+            request_body['positions'] = positions
+
+            # request_body_json = json.dumps(request_body)
+
+            # response = requests.post(url, headers=headers, data=request_body_json)
+            # response_json = response.content.decode('utf-8')
+            # response_json = json.loads(response_json)
+            # bexio_invoice_nr = response_json.get('document_nr', '')
+            # bexio_id = response_json.get('id', '')
+
+            # for row in timesheet:
+            #     timesheetid = row['id']
+            #     timesheet = UserRecord('timesheet', timesheetid)
+            #     timesheet.values['invoicenr'] = bexio_invoice_nr
+            #     timesheet.save()
+
+            # print(f"Account name: {companyname} - Bexio Invoice Nr: {bexio_invoice_nr} - Bexio ID: {bexio_id}")
+
+        return JsonResponse({'status': 'Invoices uploaded successfully'})
     except Exception as e:
         logger.error(f"Errore nell'upload del timesheet in Bexio: {str(e)}")
         return JsonResponse({'error': f'Errore nell\'upload del timesheet in Bexio: {str(e)}'}, status=500)
