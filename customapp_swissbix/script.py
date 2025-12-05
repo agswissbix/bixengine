@@ -1548,7 +1548,7 @@ def get_timesheets_to_invoice(request):
 
             servicecontract_service = timesheet.get('service', '')
             conto = next((acc['account_no'] for acc in bexio_accounts if acc['servicecontract_service'] == servicecontract_service), None)
-            contoTravel = "3780" # TODO: trovare il numero corretto per le trasferte
+            contoTravel = next((acc['account_no'] for acc in bexio_accounts if acc['servicecontract_service'] == "Trasferta"), None)
 
             timesheet_data = {
                 'id': timesheet['recordid_'],
