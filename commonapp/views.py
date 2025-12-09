@@ -632,6 +632,14 @@ def get_table_records(request):
         except ValueError as e:
             print(f"Condizione non valida per alert {alert.get('id')}: {e}")
 
+    totals = defaultdict(float)
+    numeric_fields = set()
+    
+    for c in table_columns:
+        ftype = c.get("fieldtypewebid", "").lower()
+        if ftype in ["numero"]:
+            numeric_fields.add(c["fieldid"])
+
     # --- COSTRUZIONE RISPOSTA JSON (ORA MOLTO PIU' SEMPLICE) ---
     rows = []
     for record in record_objects:
@@ -662,18 +670,27 @@ def get_table_records(request):
             # Recupera la definizione completa del campo dall'oggetto record
             field_definition = record.fields.get(fieldid, {})
 
+            value = field_definition.get("convertedvalue", field_definition.get("value"))
+
             # I valori sono già pronti!
             field_data = {
                 "recordid": record.recordid,
                 "css": ' '.join(field_css_map.get(str(fieldid), [])),
                 "type": field_definition.get("fieldtypewebid", "standard"),
-                "value": field_definition.get("convertedvalue", field_definition.get("value")), # Usa il valore convertito
+                "value": value,
                 "fieldid": fieldid,
                 
                 # Aggiungi le chiavi extra se esistono (ora sono dentro field_definition)
                 **{k: v for k, v in field_definition.items() if k in ['userid', 'linkedmaster_tableid', 'linkedmaster_recordid']}
             }
             row["fields"].append(field_data)
+
+            if fieldid in numeric_fields:
+                try:
+                    num = float(value)
+                    totals[fieldid] += num
+                except (ValueError, TypeError):
+                    pass
         
         rows.append(row)
 
@@ -691,6 +708,10 @@ def get_table_records(request):
         "order": {
             "fieldid": order_fieldid,
             "direction": order_direction
+        },
+        "totals": {
+            fieldid: round(value, 2)
+            for fieldid, value in totals.items()
         }
     }
     return JsonResponse(response_data)
