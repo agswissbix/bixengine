@@ -528,3 +528,36 @@ class Helper:
         updated['expectedmargin'] = round(updated['price'] - updated['expectedcost'], 2)
 
         return updated
+    
+    def get_changed_fields(new_record, old_record):
+        """
+        Confronta i valori tra un nuovo e un vecchio record, 
+        rilevando solo le modifiche dei valori per le chiavi comuni.
+        
+        Args:
+            new_record (UserRecord): Il record più recente.
+            old_record (UserRecord): Il record precedente.
+            
+        Returns:
+            dict: Un dizionario con i campi modificati, 
+                nel formato {'chiave': {'old': vecchio_valore, 'new': nuovo_valore}}.
+        """
+        changed_fields = {}
+        
+        new_values = new_record.values
+        old_values = old_record.values
+        
+        common_keys = new_values.keys() & old_values.keys()
+        
+        for key in common_keys:
+            new_value = new_values[key]
+            old_value = old_values[key]
+            
+            # Confrontiamo i valori.
+            if new_value != old_value:
+                changed_fields[key] = {
+                    'old': old_value,
+                    'new': new_value
+                }
+
+        return changed_fields

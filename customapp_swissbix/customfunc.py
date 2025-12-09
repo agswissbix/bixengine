@@ -592,7 +592,9 @@ def save_record_fields(tableid,recordid, old_record=""):
     # ---DEALLINE
     if tableid == 'dealline':
         dealline_record = UserRecord('dealline', recordid)
-        save_record_fields(tableid='deal', recordid=dealline_record.values['recordiddeal_'])
+        changed_fields = Helper.get_changed_fields(dealline_record, old_record)
+        if "linkedorder_" not in changed_fields:
+            save_record_fields(tableid='deal', recordid=dealline_record.values['recordiddeal_'])
 
 
     # ---PROJECT

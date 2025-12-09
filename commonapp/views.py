@@ -646,6 +646,7 @@ def get_table_records(request):
         row = {
             "recordid": record.recordid,
             "css": "",
+            "linkedorder": record.values['linkedorder_'] if 'linkedorder_' in record.values else None,
             "fields": []
         }
 

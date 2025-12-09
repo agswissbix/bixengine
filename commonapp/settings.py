@@ -803,6 +803,7 @@ def save_new_table(request):
                 totpages_ INT(11),
                 firstpagefilename_ VARCHAR(255),
                 recordstatus_ VARCHAR(255),
+                linkedorder_ INT(11),
                 deleted_ CHAR(1) DEFAULT 'N',
                 id INT(11)
             ) CHARACTER SET utf8 COLLATE utf8_general_ci
