@@ -67,178 +67,162 @@ def get_activemind(request):
 
 def save_activemind(request):
     if request.method != 'POST':
-        return JsonResponse({
-            'success': False,
-            'message': 'Metodo non permesso. Utilizza POST.'
-        }, status=405)
+        return JsonResponse({'success': False, 'message': 'Metodo non permesso. Utilizza POST.'}, status=405)
 
     try:
-        request_body = json.loads(request.body)
-        data=request_body.get('data', {})
-        recordid_deal = data.get('recordIdTrattativa', None)
+        request_body = json.loads(request.body or "{}")
+        data = request_body.get('data', {})
+        recordid_deal = data.get('recordIdTrattativa')
 
         if not recordid_deal:
-            return JsonResponse({
-                'success': False,
-                'message': 'recordIdTrattativa mancante.'
-            }, status=400)
+            return JsonResponse({'success': False, 'message': 'recordIdTrattativa mancante.'}, status=400)
 
-        # =====================
-        # 🔸 SECTION 1
-        # =====================
+        # -------------------------------------------------
+        # Helper Functions
+        # -------------------------------------------------
+        def fetch_existing_dealline(recordid_deal, name_pattern):
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT recordid_
+                    FROM user_dealline
+                    WHERE recordiddeal_ = %s
+                      AND name LIKE %s
+                      AND deleted_ = 'N'
+                    LIMIT 1
+                """, [recordid_deal, name_pattern])
+                row = cursor.fetchone()
+                return row[0] if row else None
+
+        def save_dealline(values):
+            rec_id = values.get('recordid_')
+            record = UserRecord('dealline', rec_id) if rec_id else UserRecord('dealline')
+
+            for k, v in values.items():
+                if k != 'recordid_':
+                    record.values[k] = v
+
+            computed = Helper.compute_dealline_fields(record.values, UserRecord)
+            record.values.update(computed)
+            record.save()
+            save_record_fields('dealline', record.recordid)
+            return record.recordid
+
+        # -------------------------------------------------
+        # SECTION 1 — Prodotto principale
+        # -------------------------------------------------
         section1 = data.get('section1', {})
-        price = section1.get('price', '')
-        product_id = section1.get('selectedTier', '')
+        product_id = section1.get('selectedTier')
+        price = section1.get('price', 0)
 
         if product_id:
             product = UserRecord('product', product_id)
             if not product or not product.values:
-                return JsonResponse({
-                    'success': False,
-                    'message': f'Prodotto con ID {product_id} non trovato.'
-                }, status=404)
+                return JsonResponse({'success': False, 'message': f'Prodotto con ID {product_id} non trovato.'}, status=404)
 
-            with connection.cursor() as cursor:
-                cursor.execute("""
-                    SELECT recordid_
-                    FROM user_dealline
-                    WHERE recordiddeal_ = %s
-                    AND name LIKE 'System assurance%%' AND deleted_ = 'N'
-                    LIMIT 1
-                """, [recordid_deal])
-                existing_row = cursor.fetchone()
+            existing_id = fetch_existing_dealline(recordid_deal, "System assurance%")
 
-            record_dealline = UserRecord('dealline')
-            if existing_row:
-                record_dealline = UserRecord('dealline', existing_row[0])
+            save_dealline({
+                'recordid_': existing_id,
+                'recordiddeal_': recordid_deal,
+                'recordidproduct_': product.values.get('recordid_'),
+                'name': product.values.get('name'),
+                'unitprice': price,
+                'unitexpectedcost': 0,
+                'quantity': 1
+            })
 
-            record_dealline.values['recordiddeal_'] = recordid_deal
-            record_dealline.values['recordidproduct_'] = product.values.get('recordid_', '')
-            record_dealline.values['name'] = product.values.get('name', '')
-            record_dealline.values['unitprice'] = price
-            record_dealline.values['unitexpectedcost'] = 0
-            record_dealline.values['quantity'] = 1
-            record_dealline.save()
+        # -------------------------------------------------
+        # SECTION 2 — Prodotti multipli
+        # -------------------------------------------------
+        for product_key, product_data in data.get('section2Products', {}).items():
+            product = UserRecord('product', product_key)
+            if not product or not product.values:
+                continue
 
-            save_record_fields('dealline', record_dealline.recordid)
-
-        # =====================
-        # 🔸 SECTION 2 (prodotti multipli)
-        # =====================
-        section2_products = data.get('section2Products', {})
-
-        for product_key, product_data in section2_products.items():
             quantity = product_data.get('quantity', 1)
             unit_price = product_data.get('unitPrice', 0)
             billing_type = product_data.get('billingType', 'monthly')
 
-            # Trova il recordid_ del prodotto
-            product = UserRecord('product', product_key)
-            if not product or not product.values:
-                # se non trova il prodotto → logga o salta
-                continue
+            existing_id = fetch_existing_dealline(recordid_deal, product.values.get('name', ''))
 
-            with connection.cursor() as cursor:
-                cursor.execute("""
-                    SELECT recordid_
-                    FROM user_dealline
-                    WHERE recordiddeal_ = %s
-                    AND name LIKE %s AND deleted_ = 'N'
-                    LIMIT 1
-                """, [recordid_deal, product.values.get('name', '')])
-                existing_row = cursor.fetchone()
+            save_dealline({
+                'recordid_': existing_id,
+                'recordiddeal_': recordid_deal,
+                'recordidproduct_': product.values.get('recordid_'),
+                'name': product.values.get('name'),
+                'unitprice': unit_price,
+                'unitexpectedcost': 0,
+                'quantity': quantity,
+                'frequency': 'Annuale' if billing_type == 'yearly' else 'Mensile'
+            })
 
-            record_dealline = UserRecord('dealline')
-            if existing_row:
-                record_dealline = UserRecord('dealline', existing_row[0])
-            record_dealline.values['recordiddeal_'] = recordid_deal
-            record_dealline.values['recordidproduct_'] = product.values.get('recordid_', '')
-            record_dealline.values['name'] = product.values.get('name', '')
-            record_dealline.values['unitprice'] = unit_price
-            record_dealline.values['unitexpectedcost'] = 0
-            record_dealline.values['quantity'] = quantity
-            record_dealline.values['frequency'] = 'Annuale' if billing_type == 'yearly' else 'Mensile'
-            record_dealline.save()
+        # -------------------------------------------------
+        # SECTION 3 — Servizi
+        # -------------------------------------------------
+        services = data.get('section2Services', {})
+        if not services:
+            return JsonResponse({'success': True, 'message': 'Dati ricevuti e processati con successo.'}, status=200)
 
-            save_record_fields('dealline', record_dealline.recordid)
+        conditions = data.get('section3', {})
+        frequency = conditions.get('selectedFrequency', 'Mensile')
+        frequency_price = float(conditions.get('price', 0))
 
-        # =====================
-        # 🔸 SECTION 3 (servizi)
-        # =====================
-        section_services = data.get('section2Services', {})
-        section_conditions = data.get('section3', {})
-
-        frequency = section_conditions.get('selectedFrequency', 'Mensile')
-        frequency_price = float(section_conditions.get('price', 0))
-
-        name_parts = []
         total_price = 0
+        name_parts = []
 
-        for key, service in section_services.items():
+        for key, service in services.items():
             qty = int(service.get('quantity', 0))
             unit_price = float(service.get('unitPrice', 0))
             title = service.get('title', '')
 
-            if qty > 0:
-                name_parts.append(f"{title}: qta. {qty}")
+            if qty <= 0:
+                continue
 
-                service_total = qty * unit_price
+            name_parts.append(f"{title}: qta. {qty}")
+            service_total = qty * unit_price
 
-                if key == "clientPC" and qty > 1:
-                    discount_multiplier = 1 - (qty - 1) / 100
-                    service_total = service_total * discount_multiplier
+            # Sconto speciale solo per clientPC
+            if key == "clientPC" and qty > 1:
+                discount = 1 - (qty - 1) / 100
+                service_total *= discount
 
-                total_price += service_total
+            total_price += service_total
 
         total_price += frequency_price
-
         name_str = "AM - Manutenzione servizi - \n" + ",\n".join(name_parts) if name_parts else "AM - Manutenzione servizi"
 
-        # 2. Controllo se esiste già un record dealline per questa trattativa
+        # Recupera productid del servizio
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT recordid_
-                FROM user_dealline
-                WHERE recordiddeal_ = %s
-                AND name LIKE 'AM - Manutenzione servizi%%' AND deleted_ = 'N'
-                LIMIT 1
-            """, [recordid_deal])
-            existing_row = cursor.fetchone()
-
-            cursor.execute("""
-                SELECT recordid_
                 FROM user_product
-                WHERE name LIKE 'AM - Manutenzione servizi%%' AND deleted_ = 'N'
+                WHERE name LIKE 'AM - Manutenzione servizi%%'
+                  AND deleted_ = 'N'
                 LIMIT 1
             """)
             product_row = cursor.fetchone()
 
-        # 3. Se esiste → UPDATE
-        record = UserRecord('dealline')
-        if existing_row:
-            record = UserRecord('dealline', existing_row[0])
-        
-        record.values['recordidproduct_'] = product_row[0] if product_row else None
-        record.values['recordiddeal_'] = recordid_deal
-        record.values['name'] = name_str
-        record.values['unitprice'] = total_price
-        record.values['unitexpectedcost'] = 0
-        record.values['quantity'] = 1
-        record.values['frequency'] = frequency
-        record.save()
-        save_record_fields('dealline', record.recordid)
+        product_id = product_row[0] if product_row else None
 
-        return JsonResponse({
-            'success': True,
-            'message': 'Dati ricevuti e processati con successo.'
-        }, status=200)
+        # Check esistenza dealline
+        existing_id = fetch_existing_dealline(recordid_deal, "AM - Manutenzione servizi%")
+
+        save_dealline({
+            'recordid_': existing_id,
+            'recordiddeal_': recordid_deal,
+            'recordidproduct_': product_id,
+            'name': name_str,
+            'unitprice': total_price,
+            'unitexpectedcost': 0,
+            'quantity': 1,
+            'frequency': frequency
+        })
+
+        return JsonResponse({'success': True, 'message': 'Dati ricevuti e processati con successo.'}, status=200)
 
     except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'message': f'Si è verificato un errore inatteso: {str(e)}'
-        }, status=500)
-    
+        return JsonResponse({'success': False, 'message': f'Errore inatteso: {str(e)}'}, status=500)
+
 
 def build_offer_data(recordid_deal):
     offer_data = {}

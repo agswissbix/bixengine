@@ -491,3 +491,40 @@ class Helper:
         return True
 
     
+    def compute_dealline_fields(fields, UserRecord):
+        """
+        Calcola i campi price, expectedcost, expectedmargin per una riga dealline.
+        Ritorna SOLO i campi calcolati e quelli che vengono auto-derivati da recordidproduct.
+        """
+        updated = {}
+
+        quantity = fields.get('quantity', 0)
+        unitprice = fields.get('unitprice', 0)
+        unitexpectedcost = fields.get('unitexpectedcost', 0)
+
+        # Se arriva un product id, recupera i valori
+        recordidproduct = fields.get('recordidproduct_', None)
+        if recordidproduct:
+            product = UserRecord('product', recordidproduct)
+            if product and product.values:
+                if unitprice in ['', None]:
+                    updated['unitprice'] = product.values.get('price', 0)
+                    unitprice = updated['unitprice']
+
+                if unitexpectedcost in ['', None]:
+                    updated['unitexpectedcost'] = product.values.get('cost', 0)
+                    unitexpectedcost = updated['unitexpectedcost']
+
+        # Normalize values
+        try: quantity = float(quantity)
+        except: quantity = 0
+        try: unitprice = float(unitprice)
+        except: unitprice = 0
+        try: unitexpectedcost = float(unitexpectedcost)
+        except: unitexpectedcost = 0
+
+        updated['price'] = round(quantity * unitprice, 2)
+        updated['expectedcost'] = round(quantity * unitexpectedcost, 2)
+        updated['expectedmargin'] = round(updated['price'] - updated['expectedcost'], 2)
+
+        return updated
