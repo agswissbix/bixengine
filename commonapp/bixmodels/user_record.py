@@ -367,12 +367,11 @@ class UserRecord:
                 next_order = max_order+1
             
             current_datetime=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            # sqlinsert=f"INSERT INTO user_{self.tableid} (recordid_,creatorid_,creation_,id,linkedorder_) VALUES ('{next_recordid}',{self.userid},'{current_datetime}',{next_id},{next_order}) "
-            sqlinsert=f"INSERT INTO user_{self.tableid} (recordid_,creatorid_,creation_,id,linkedorder_) VALUES ('{next_recordid}',{self.userid},'{current_datetime}',{next_id}) "
+            sqlinsert=f"INSERT INTO user_{self.tableid} (recordid_,creatorid_,creation_,id,linkedorder_) VALUES ('{next_recordid}',{self.userid},'{current_datetime}',{next_id},{next_order}) "
             HelpderDB.sql_execute(sqlinsert)
             self.values['id']=next_id
             self.recordid=next_recordid
-            # self.values['linkedorder_'] = next_order
+            self.values['linkedorder_'] = next_order
             self.save()
 
 
@@ -419,16 +418,14 @@ class UserRecord:
                 next_order = max_order+1
             
             current_datetime=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            # sqlinsert=f"INSERT INTO user_{self.tableid} (recordid_,creatorid_,creation_,id) VALUES (%s,%s,%s,%s,%s) "
-            # params_list=[next_recordid,self.userid,current_datetime,next_id, next_order]
-            sqlinsert=f"INSERT INTO user_{self.tableid} (recordid_,creatorid_,creation_,id) VALUES (%s,%s,%s,%s) "
-            params_list=[next_recordid,self.userid,current_datetime,next_id]
+            sqlinsert=f"INSERT INTO user_{self.tableid} (recordid_,creatorid_,creation_,id) VALUES (%s,%s,%s,%s,%s) "
+            params_list=[next_recordid,self.userid,current_datetime,next_id, next_order]
 
             HelpderDB.sql_execute_safe(sqlinsert, params_list)
 
             self.values['id']=next_id
             self.recordid=next_recordid
-            # self.values['linkedorder_'] = next_order
+            self.values['linkedorder_'] = next_order
             self.save_safe()
         
 
