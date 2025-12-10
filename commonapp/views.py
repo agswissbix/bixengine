@@ -7182,7 +7182,10 @@ def fieldsupdate(request):
         value=str(value).replace("'","''")
         HelpderDB.sql_execute(f"UPDATE user_{tableid} SET {param}='{value}' WHERE recordid_='{recordid}' ")
     fields= params
-    custom_save_record_fields(tableid, recordid, old_record)
+    dealline_record = UserRecord(tableid, recordid)
+    changed_fields = Helper.get_changed_fields(dealline_record, old_record)
+    if "linkedorder_" not in changed_fields:
+        custom_save_record_fields(tableid, recordid, old_record)
     return JsonResponse({'status': 'ok', 'message': 'Fields updated successfully.'})
 
 def print_deal(request):
