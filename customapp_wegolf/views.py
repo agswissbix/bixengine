@@ -1041,3 +1041,22 @@ def mark_notification_hidden(request):
     except Exception as e:
         print(e)
         return JsonResponse({"success": False, "error": str(e)}, safe=False)
+    
+def get_data_formats(request):
+    userid = Helper.get_userid(request)
+
+    try:
+        golf_club = HelpderDB.sql_query_row(f"SELECT formato_numerico, formato_data, valuta FROM user_golfclub WHERE utente = {userid}") 
+        
+        formato_numerico = golf_club.get("formato_numerico", "")
+        formato_data = golf_club.get("formato_data", "")
+        valuta = golf_club.get("valuta", "")
+
+        return JsonResponse({
+            "numberFormat": formato_numerico,
+            "dateFormat": formato_data,
+            "currency": valuta
+        }, safe=False)
+    except Exception as e:
+        print(e)
+        return JsonResponse({"success": False, "error": str(e)}, safe=False)

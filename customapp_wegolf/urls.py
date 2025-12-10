@@ -27,7 +27,7 @@ urlpatterns = [
     path('get_languages/', get_languages, name='get_languages'),
     path('update_club_settings/', update_club_settings, name='update_club_settings'),
     path('get_settings_data/', get_settings_data, name='get_settings_data'),
-    
+    path('get_data_formats/', get_data_formats, name='get_data_formats')
     
     
 ]
