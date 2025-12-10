@@ -145,7 +145,7 @@
             list-style-type: square;
         }
         .service-details li {
-            margin-bottom: 2px;
+            margin-bottom: 0px;
             font-size: 14px;
         }
         
@@ -295,7 +295,7 @@
                 <table class="pricing-table">
                     <tr>
                         <th colspan="2">System Assurance</th>
-                        <th>Qt.</th>
+                        <th>Quantità</th>
                         <th>Prezzo unitario</th>
                     </tr>
                     {% for tier in offer_data.tiers %}
@@ -312,7 +312,7 @@
                                 - Reportistica sull'infrastruttura informatica
                             </td>
                             <td>1</td>
-                            <td class="price">CHF {{ tier.price|default:"0.00"|floatformat:2 }}.-</td>
+                            <td class="price">CHF {{ tier.price|default:"0.00"|floatformat:0 }}.-</td>
                         </tr>
                         {% endif %}
                     {% endfor %}
@@ -403,9 +403,9 @@
                                 <th>Costo totale</th>
                             </tr>
                             <tr>
-                                <td>CHF {{ product.unitPrice|default:"0.00"|floatformat:2 }}.-</td>
+                                <td>CHF {{ product.unitPrice|default:"0.00"|floatformat:0 }}.-</td>
                                 <td>{{ product.quantity }}</td>
-                                <td class="price">CHF {{ product.total|default:"0.00"|floatformat:2 }}.-</td>
+                                <td class="price">CHF {{ product.total|default:"0.00"|floatformat:0 }}.-</td>
                             </tr>
                         </table>
 
@@ -488,6 +488,11 @@
                 {% if forloop.first %}
                     <div class="section-subtitle" style="font-weight: bold; margin-bottom: 10px;">
                         Elenco Servizi ActiveMind
+                        {% for freq in offer_data.frequencies %}
+                        {% if freq.selected %}
+                        - Programmazione {{ freq.label }}
+                        {% endif %}
+                        {%endfor%}
                     </div>
                 {% endif %}
 
@@ -501,9 +506,9 @@
                                 <th>Costo totale</th>
                             </tr>
                             <tr>
-                                <td>CHF {{ service.unitPrice|default:"0.00"|floatformat:2 }}.-</td>
+                                <td>CHF {{ service.unitPrice|default:"0.00"|floatformat:0 }}.-</td>
                                 <td>{{ service.quantity }}</td>
-                                <td class="price">CHF {{ service.total|default:"0.00"|floatformat:2 }}.-</td>
+                                <td class="price">CHF {{ service.total|default:"0.00"|floatformat:0 }}.-</td>
                             </tr>
                         </table>
 
@@ -533,6 +538,7 @@
                     {% if freq.selected %}
                         <h3><strong>Pianificazione intervento</strong></h3>
                         <p><strong>{{ freq.label }}</strong> programmato anticipatamente</p>
+                        <p style="text-align: right; font-weight: bold">CHF {{freq.price|floatformat:0}}.-</p>
                         <br>
                         <h3><strong>Intervento in loco programmato</strong></h3>
                         <ul>
@@ -569,8 +575,8 @@
                 <tr>
                     <td>{{ tier.label }}</td>
                     <td>1</td>
-                    <td class="price">CHF {{ tier.price|default:"0.00"|floatformat:2 }}.-</td>
-                    <td class="price">CHF {{ tier.total|default:"0.00"|floatformat:2 }}.-</td>
+                    <td class="price">CHF {{ tier.price|default:"0.00"|floatformat:0 }}.-</td>
+                    <td class="price">CHF {{ tier.total|default:"0.00"|floatformat:0 }}.-</td>
                 </tr>
                 {% endif %}
             {% endfor %}
@@ -587,8 +593,8 @@
                         {% endif %}
                     </td>
                     <td>{{ product.quantity }}</td>
-                    <td class="price">CHF {{ product.unitPrice|default:"0.00"|floatformat:2 }}.-</td>
-                    <td class="price">CHF {{ product.total|default:"0.00"|floatformat:2 }}.-</td>
+                    <td class="price">CHF {{ product.unitPrice|default:"0.00"|floatformat:0 }}.-</td>
+                    <td class="price">CHF {{ product.total|default:"0.00"|floatformat:0 }}.-</td>
                 </tr>
                 {% endif %}
             {% endfor %}
@@ -596,10 +602,10 @@
             {% for service in offer_data.services %}
                 {% if service.quantity > 0 %}
                 <tr {% if forloop.first %}style="border-top: 2px solid #555"{% endif %}>
-                    <td>{{ service.title }} (Base Intervento)</td>
+                    <td>{{ service.title }} <span style="font-size: 10px; color: #555;">(Base Intervento)</span></td>
                     <td>{{ service.quantity }}</td>
-                    <td class="price">CHF {{ service.unitPrice|default:"0.00"|floatformat:2 }}.-</td>
-                    <td class="price">CHF {{ service.total|default:"0.00"|floatformat:2 }}.-</td>
+                    <td class="price">CHF {{ service.unitPrice|default:"0.00"|floatformat:0 }}.-</td>
+                    <td class="price">CHF {{ service.total|default:"0.00"|floatformat:0 }}.-</td>
                 </tr>
                 {% endif %}
             {% endfor %}
@@ -607,34 +613,52 @@
             {% if offer_data.totals.monthly > 0 %}
             <tr style="background-color: #f8f8f8; font-weight: bold;">
                 <td colspan="3">SUBTOTALE MENSILE (ricorrente)</td>
-                <td class="price">CHF {{ offer_data.totals.monthly|floatformat:2 }}</td>
+                <td class="price">
+                    CHF {{ offer_data.totals.monthly|floatformat:0 }}.-
+                    <br/>
+                    <span style="font-weight: normal; font-size: 11px;">
+                        CHF {{ offer_data.totals.monthly_annual|floatformat:0 }}.- /anno
+                    </span>
+                </td>
             </tr>
             {% endif %}
 
             {% if offer_data.totals.quarterly > 0 %}
             <tr style="background-color: #f8f8f8; font-weight: bold;">
                 <td colspan="3">SUBTOTALE TRIMESTRALE (ricorrente)</td>
-                <td class="price">CHF {{ offer_data.totals.quarterly|floatformat:2 }}</td>
+                <td class="price">
+                    CHF {{ offer_data.totals.quarterly|floatformat:0 }}.-
+                    <br/>
+                    <span style="font-weight: normal; font-size: 11px;">
+                        CHF {{ offer_data.totals.quarterly_annual|floatformat:0 }}.- /anno
+                    </span>
+                </td>
             </tr>
             {% endif %}
 
             {% if offer_data.totals.biannual > 0 %}
             <tr style="background-color: #f8f8f8; font-weight: bold;">
                 <td colspan="3">SUBTOTALE SEMESTRALE (ricorrente)</td>
-                <td class="price">CHF {{ offer_data.totals.biannual|floatformat:2 }}</td>
+                <td class="price">
+                    CHF {{ offer_data.totals.biannual|floatformat:0 }}.-
+                    <br/>
+                    <span style="font-weight: normal; font-size: 11px;">
+                        CHF {{ offer_data.totals.biannual_annual|floatformat:0 }}.- /anno
+                    </span>
+                </td>
             </tr>
             {% endif %}
 
             {% if offer_data.totals.yearly > 0 %}
             <tr style="background-color: #f8f8f8; font-weight: bold;">
                 <td colspan="3">SUBTOTALE ANNUALE (ricorrente)</td>
-                <td class="price">CHF {{ offer_data.totals.yearly|floatformat:2 }}</td>
+                <td class="price">CHF {{ offer_data.totals.yearly|floatformat:0 }}.-</td>
             </tr>
             {% endif %}
 
             <tr style="background-color: #dc2626; color: white; font-weight: bold;">
                 <td colspan="3">TOTALE COMPLESSIVO</td>
-                <td class="price">CHF {{ offer_data.totals.grand_total|floatformat:2 }}</td>
+                <td class="price">CHF {{ offer_data.totals.grand_total|floatformat:0 }}.-</td>
             </tr>
         </table>
     </div>
@@ -663,7 +687,7 @@
         <ul>
             <li>Le presenti condizioni generali di vendita sono disponibili al seguente link: <a href="https://www.swissbix.ch/cgv.pdf">https://www.swissbix.ch/cgv.pdf</a> e si intendono accettate automaticamente con l’emissione dell’ordine.</li>
             <li>L’offerta prevede un servizio “chiavi in mano”, conforme agli standard qualitativi svizzeri.</li>
-            <li>Validità dell’offerta: fino al {{data_chiusura_vendita}} o salvo esaurimento scorte.</li>
+            <li>Validità dell’offerta: fino al {{limit_acceptance_date}} o salvo esaurimento scorte.</li>
             <li>Swissbix SA declina ogni responsabilità per ritardi imputabili a cause di forza maggiore, a inefficienze dei fornitori o a disservizi di soggetti terzi coinvolti nella logistica, in conformità alla normativa svizzera.</li>
         </ul>
 
@@ -706,7 +730,7 @@
 
     <!-- FIRMA DIGITALE (ripristinata) -->
     <div class="signature-section">
-        <p>Massagno, __________________</p>
+        <p>Massagno, {{date}}</p>
         <div class="signature-row">
             <div class="signature-box" style="border-bottom: none; padding-bottom: 0; margin-left: 0;">
                 <strong>Mauro Gallani</strong><br>

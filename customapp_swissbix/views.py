@@ -224,22 +224,101 @@ def save_activemind(request):
         return JsonResponse({'success': False, 'message': f'Errore inatteso: {str(e)}'}, status=500)
 
 
-def build_offer_data(recordid_deal):
-    offer_data = {}
+def build_offer_data(recordid_deal, fe_data=None):
+    offer_data = fe_data or {}
 
-    # --- 1) Tiers ---
-    req_sa = type('Req', (object,), {"body": json.dumps({"trattativaid": recordid_deal})})
-    sa_resp = get_system_assurance_activemind(req_sa)
-    tiers = json.loads(sa_resp.content)["tiers"]
-    for t in tiers:
-        t["total"] = float(t.get("price") or 0.0) if t.get("selected") else 0.0
-    offer_data["tiers"] = tiers
+    # -----------------------------
+    # 1. SECTION 1 → System Assurance
+    # -----------------------------
+    if fe_data.get("section1").get('selectedTier'):
+        req_sa = type('Req', (object,), {"body": json.dumps({"trattativaid": recordid_deal})})
+        sa_resp = get_system_assurance_activemind(req_sa)
+        tiers = json.loads(sa_resp.content)["tiers"]
+        for t in tiers:
+            t["total"] = float(t.get("price") or 0.0) if t.get("selected") else 0.0
+        offer_data["tiers"] = tiers
+    else:
+        offer_data["tiers"] = []  # SEZIONE NON ATTIVA
 
-    # --- 2) Frequenze ---
-    req_freq = type('Req', (object,), {"body": json.dumps({"dealid": recordid_deal})})
-    freq_resp = get_conditions_activemind(req_freq)
-    frequencies = json.loads(freq_resp.content)["frequencies"]
-    offer_data["frequencies"] = frequencies
+    # -----------------------------
+    # 2. SECTION 3 → Frequenze
+    # -----------------------------
+    total_frequencies = 0
+    if fe_data.get("section3") and fe_data.get("section2Services"):
+        req_freq = type('Req', (object,), {"body": json.dumps({"dealid": recordid_deal})})
+        freq_resp = get_conditions_activemind(req_freq)
+        frequencies = json.loads(freq_resp.content)["frequencies"]
+        offer_data["frequencies"] = frequencies
+        selected_frequency_label = None
+        for f in frequencies:
+            if f.get("selected"):
+                total_frequencies = float(f.get('price', 0))
+                selected_frequency_label = f.get("label")
+                break
+    else:
+        offer_data["frequencies"] = []  # SEZIONE NON ATTIVA
+
+    # -----------------------------
+    # 3. SECTION 2 → Servizi
+    # -----------------------------
+    if fe_data.get("section2Services"):
+        req_srv = type('Req', (object,), {"body": json.dumps({"dealid": recordid_deal})})
+        srv_resp = get_services_activemind(req_srv)
+        services = json.loads(srv_resp.content)["services"]
+        for s in services:
+            s["billingType"] = selected_frequency_label  # usiamo la frequenza selezionata
+        offer_data["services"] = services
+    else:
+        offer_data["services"] = []
+
+    # -----------------------------
+    # 4. SECTION 2 → Prodotti
+    # -----------------------------
+    if fe_data.get("section2Products"):
+        req_prod = type('Req', (object,), {"body": json.dumps({"trattativaid": recordid_deal})})
+        prod_resp = get_products_activemind(req_prod)
+        products = json.loads(prod_resp.content)["servicesCategory"]
+        for cat in products:
+            for p in cat.get("services", []):
+                if p['billingType'] == 'yearly':
+                    p["total"] = float(p.get("yearlyPrice") or 0.0) * int(p.get("quantity") or 0)
+                else:
+                    p["total"] = float(p.get("monthlyPrice") or 0.0) * int(p.get("quantity") or 0)
+        offer_data["products"] = products
+    else:
+        offer_data["products"] = []
+
+    # -----------------------------
+    # 5. CALCOLO TOTALE → solo su ciò che è stato caricato
+    # -----------------------------
+
+    tiers = offer_data.get("tiers", [])
+    services = offer_data.get("services", [])
+    products = offer_data.get("products", [])
+    frequencies = offer_data.get("frequencies", [])
+
+    total_tiers = sum(t.get("total", 0.0) for t in tiers)
+    total_services = sum(s.get("total", 0.0) for s in services)
+    total_products = sum(
+        p.get("total", 0.0)
+        for c in products
+        for p in c.get("services", [])
+    )
+
+    monthly_total = 0.0
+    quarterly_total = 0.0
+    biannual_total = 0.0
+    yearly_total = 0.0
+
+    for c in products:
+        for p in c.get("services", []):
+            total = p.get("total", 0.0)
+            billing = (p.get("billingType") or "").lower()
+
+            if billing == "monthly":
+                monthly_total += total
+            elif billing == "annual" or billing == "yearly":
+                yearly_total += total
 
     selected_frequency_label = None
     for f in frequencies:
@@ -247,50 +326,11 @@ def build_offer_data(recordid_deal):
             selected_frequency_label = f.get("label")
             break
 
-    # --- 3) Servizi ---
-    req_srv = type('Req', (object,), {"body": json.dumps({"dealid": recordid_deal})})
-    srv_resp = get_services_activemind(req_srv)
-    services = json.loads(srv_resp.content)["services"]
-    for s in services:
-        s["total"] = float(s.get("unitPrice") or 0.0) * int(s.get("quantity") or 0)
-        s["billingType"] = selected_frequency_label  # usiamo la frequenza selezionata
-
-    offer_data["services"] = services
-
-    # --- 4) Prodotti ---
-    req_prod = type('Req', (object,), {"body": json.dumps({"trattativaid": recordid_deal})})
-    prod_resp = get_products_activemind(req_prod)
-    products = json.loads(prod_resp.content)["servicesCategory"]
-    for cat in products:
-        for p in cat.get("services", []):
-            p["total"] = float(p.get("unitPrice") or 0.0) * int(p.get("quantity") or 0)
-    offer_data["products"] = products
-
-    # --- 5) Totali ---
-    total_tiers = sum(t.get("total", 0.0) for t in tiers)
-    total_services = sum(s.get("total", 0.0) for s in services)
-    total_products = sum(p.get("total", 0.0) for c in products for p in c.get("services", []))
-
-    # 📊 Subtotali ricorrenti
-    monthly_total = 0.0
-    quarterly_total = 0.0
-    biannual_total = 0.0
-    yearly_total = 0.0
-
-    # Prodotti
-    for c in products:
-        for p in c.get("services", []):
-            total = p.get("total", 0.0)
-            billing = (p.get("billingType") or "").lower()
-            if billing == "monthly":
-                monthly_total += total
-            elif billing == "yearly":
-                yearly_total += total
-
-    # Servizi (basati sulla frequenza selezionata)
     if selected_frequency_label:
+        temp_total_freq = total_frequencies
         for s in services:
-            total = s.get("total", 0.0)
+            total = s.get("total", 0.0) + temp_total_freq
+
             if selected_frequency_label == "Mensile":
                 monthly_total += total
             elif selected_frequency_label == "Trimestrale":
@@ -299,17 +339,22 @@ def build_offer_data(recordid_deal):
                 biannual_total += total
             elif selected_frequency_label == "Annuale":
                 yearly_total += total
+            temp_total_freq = 0
 
-    grand_total = total_tiers + total_services + total_products
+    grand_total = total_tiers + total_services + total_products + total_frequencies
 
     offer_data["totals"] = {
         "tiers": total_tiers,
         "services": total_services,
         "products": total_products,
         "monthly": monthly_total,
+        "monthly_annual": monthly_total*12,
         "quarterly": quarterly_total,
+        "quarterly_annual": quarterly_total * 4,
         "biannual": biannual_total,
+        "biannual_annual": biannual_total*2,
         "yearly": yearly_total,
+        "frequencies": total_frequencies,
         "grand_total": grand_total,
     }
 
@@ -387,7 +432,7 @@ def print_pdf_activemind(request):
                 logger.error(f"Errore salvataggio firma: {e}")
 
         # 1) ricostruzione offerta
-        offer_data = build_offer_data(recordid_deal)
+        offer_data = build_offer_data(recordid_deal, data.get('data'))
 
         # 2) preparo oggetti per impaginazione (chunk)
         # servizi (flat -> oggetti)
@@ -577,8 +622,18 @@ def get_services_activemind(request):
 
         # 4️⃣ Aggiorno quantità e totale
         for key, s in services_dict.items():
-            s["quantity"] = quantities_map.get(key, 0)
-            s["total"] = float(s["unitPrice"]) * s["quantity"]
+            qty = quantities_map.get(key, 0)
+            unit_price = float(s.get('unitPrice', 0))
+
+            service_total = qty * unit_price
+
+            # Sconto speciale solo per clientPC
+            if s['id'] == "clientPC" and qty > 1:
+                discount = 1 - (qty - 1) / 100
+                service_total *= discount
+            
+            s["quantity"] = qty
+            s["total"] = service_total
             s["selected"] = s["quantity"] > 0
 
         # 5️⃣ Lista finale mantenendo l’ordine del mock
