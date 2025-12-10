@@ -311,7 +311,7 @@
                                 - Switch/router<br>
                                 - Reportistica sull'infrastruttura informatica
                             </td>
-                            <td>1</td>
+                            <td style="text-align: center">1</td>
                             <td class="price">CHF {{ tier.price|default:"0.00"|floatformat:0 }}.-</td>
                         </tr>
                         {% endif %}
@@ -404,7 +404,7 @@
                             </tr>
                             <tr>
                                 <td>CHF {{ product.unitPrice|default:"0.00"|floatformat:0 }}.-</td>
-                                <td>{{ product.quantity }}</td>
+                                <td style="text-align: center">{{ product.quantity|floatformat:0 }}</td>
                                 <td class="price">CHF {{ product.total|default:"0.00"|floatformat:0 }}.-</td>
                             </tr>
                         </table>
@@ -507,7 +507,7 @@
                             </tr>
                             <tr>
                                 <td>CHF {{ service.unitPrice|default:"0.00"|floatformat:0 }}.-</td>
-                                <td>{{ service.quantity }}</td>
+                                <td style="text-align: center">{{ service.quantity }}</td>
                                 <td class="price">CHF {{ service.total|default:"0.00"|floatformat:0 }}.-</td>
                             </tr>
                         </table>
@@ -560,6 +560,7 @@
     {% endif %}
 
     <!-- RIEPILOGO ECONOMICO -->
+     {% if offer_data.services or offer_data.products %}
     <div class="total-section page-break">
         <h1 class="total-section-title">Definizione Economica</h1>
         <table class="pricing-table">
@@ -569,17 +570,6 @@
                 <th>Prezzo unitario</th>
                 <th>Prezzo totale</th>
             </tr>
-
-            {% for tier in offer_data.tiers %}
-                {% if tier.selected %}
-                <tr>
-                    <td>{{ tier.label }}</td>
-                    <td>1</td>
-                    <td class="price">CHF {{ tier.price|default:"0.00"|floatformat:0 }}.-</td>
-                    <td class="price">CHF {{ tier.total|default:"0.00"|floatformat:0 }}.-</td>
-                </tr>
-                {% endif %}
-            {% endfor %}
 
             {% for product in section2_products %}
                 {% if product.quantity > 0 %}
@@ -592,7 +582,7 @@
                             <span style="font-size: 10px; color: #555;">(Fatt. Mensile)</span>
                         {% endif %}
                     </td>
-                    <td>{{ product.quantity }}</td>
+                    <td style="text-align: center">{{ product.quantity|floatformat:0 }}</td>
                     <td class="price">CHF {{ product.unitPrice|default:"0.00"|floatformat:0 }}.-</td>
                     <td class="price">CHF {{ product.total|default:"0.00"|floatformat:0 }}.-</td>
                 </tr>
@@ -603,7 +593,7 @@
                 {% if service.quantity > 0 %}
                 <tr {% if forloop.first %}style="border-top: 2px solid #555"{% endif %}>
                     <td>{{ service.title }} <span style="font-size: 10px; color: #555;">(Base Intervento)</span></td>
-                    <td>{{ service.quantity }}</td>
+                    <td style="text-align: center">{{ service.quantity }}</td>
                     <td class="price">CHF {{ service.unitPrice|default:"0.00"|floatformat:0 }}.-</td>
                     <td class="price">CHF {{ service.total|default:"0.00"|floatformat:0 }}.-</td>
                 </tr>
@@ -662,6 +652,7 @@
             </tr>
         </table>
     </div>
+    {% endif %}
 
 
     <!-- CONDIZIONI CONTRATTUALI HARDCODED (ripristinate) -->
