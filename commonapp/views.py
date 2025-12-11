@@ -447,6 +447,15 @@ def delete_record(request):
         if not recordid or not tableid:
             return JsonResponse({"success": False, "detail": "recordid o tableid mancante"}, status=400)
 
+        query = HelpderDB.sql_query_row(f"SELECT sys_user_id FROM v_users WHERE id = {request.user.id}")
+        userid = query['sys_user_id'] 
+
+        tablesettings = TableSettings(tableid, userid)
+        can_delete = tablesettings.get_specific_settings('delete')['delete']
+
+        if can_delete['value'] == 'false':
+            return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
+
         # Esegui l'UPDATE marcando il record come cancellato
         sql = f"UPDATE user_{tableid} SET deleted_='Y' WHERE recordid_={recordid}"
         HelpderDB.sql_execute(sql)  # usa i parametri per evitare SQL injection
@@ -3070,6 +3079,16 @@ def save_record_fields(request):
             saved_fields = data.get('fields', saved_fields)
         except (json.JSONDecodeError, AttributeError):
             return JsonResponse({'error': 'Invalid or missing data'}, status=400)
+        
+    # check permissions
+    query = HelpderDB.sql_query_row(f"SELECT sys_user_id FROM v_users WHERE id = {request.user.id}")
+    userid = query['sys_user_id'] 
+
+    tablesettings = TableSettings(tableid, userid)
+    can_edit = tablesettings.get_specific_settings('edit')['edit']
+
+    if can_edit['value'] == 'false':
+        return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
 
     # 3. Parsing del campo fields
     try:

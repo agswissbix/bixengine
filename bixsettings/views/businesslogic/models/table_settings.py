@@ -527,6 +527,56 @@ class TableSettings:
                 if not view_options:
                     setting_info['value'] = '0'
 
+    def get_specific_settings(self, settingids):
+        """
+        Restituisce solo i settingids richiesti, caricando esclusivamente
+        i valori necessari e applicando eventuali user overrides.
+        
+        settingids: int/str o lista di int/str
+        """
+
+        # Normalizza la lista
+        if not isinstance(settingids, (list, tuple)):
+            settingids = [settingids]
+
+        # Filtra solo i setting richiesti dalla configurazione base
+        base_settings = {
+            key: value.copy()
+            for key, value in self.settings.items()
+            if key in settingids
+        }
+
+        if not base_settings:
+            return {}
+
+        # Applica solo le popolate necessarie
+        # Evita le due chiamate globali se non servono
+        if any("field_options" in v for v in base_settings.values()):
+            self._populate_field_options(base_settings)
+
+        if any("workspace_options" in v for v in base_settings.values()):
+            self._populate_workspace_options(base_settings)
+
+        # Carica SOLO gli user settings necessari (non tutti!)
+        user_settings = SysUserTableSettings.objects.filter(
+            tableid=self.tableid,
+            userid=self.userid,
+            settingid__in=settingids
+        ).values('settingid', 'value')
+
+        # Fallback su admin solo per quelli richiesti
+        if not user_settings.exists():
+            user_settings = SysUserTableSettings.objects.filter(
+                tableid=self.tableid,
+                userid=1,
+                settingid__in=settingids
+            ).values('settingid', 'value')
+
+        # Applica solo le impostazioni richieste
+        self._apply_user_settings(base_settings, user_settings)
+
+        return base_settings
+
     def save(self):
         table_settings = self.settings
 

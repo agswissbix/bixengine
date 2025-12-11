@@ -727,7 +727,7 @@ class UserRecord:
             if field['fieldtypewebid'] == 'Memo':
                 fieldtype='Memo'
             if field['fieldtypewebid'] == 'html':
-                fieldtype='LongText'
+                fieldtype='html'
 
             
 
