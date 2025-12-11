@@ -5812,12 +5812,12 @@ def _get_clubs_currency_map(club_ids):
     if not club_ids:
         return {}
     ids = "', '".join([str(i) for i in club_ids])
-    sql = f"SELECT recordid_, valuta FROM user_golfclub WHERE nome_club IN ('{ids}')"
+    sql = f"SELECT recordid_, nome_club, valuta FROM user_golfclub WHERE nome_club IN ('{ids}')"
     rows = HelpderDB.sql_query(sql)
     out = {}
     for r in rows:
-        if r.get('recordid_'):
-            out[str(r['recordid_'])] = (r.get('valuta') or 'CHF').upper()
+        if r.get('nome_club'):
+            out[str(r['nome_club'])] = (r.get('valuta') or 'CHF').upper()
     return out
 
 
