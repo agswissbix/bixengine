@@ -113,6 +113,7 @@ def save_activemind(request):
         section1 = data.get('section1', {})
         product_id = section1.get('selectedTier')
         price = section1.get('price', 0)
+        cost = section1.get('cost', 0)
 
         if product_id:
             product = UserRecord('product', product_id)
@@ -127,7 +128,7 @@ def save_activemind(request):
                 'recordidproduct_': product.values.get('recordid_'),
                 'name': product.values.get('name'),
                 'unitprice': price,
-                'unitexpectedcost': 0,
+                'unitexpectedcost': cost,
                 'quantity': 1
             })
 
@@ -141,6 +142,7 @@ def save_activemind(request):
 
             quantity = product_data.get('quantity', 1)
             unit_price = product_data.get('unitPrice', 0)
+            unit_cost = product_data.get('unitCost', 0)
             billing_type = product_data.get('billingType', 'monthly')
 
             existing_id = fetch_existing_dealline(recordid_deal, product.values.get('name', ''))
@@ -151,7 +153,7 @@ def save_activemind(request):
                 'recordidproduct_': product.values.get('recordid_'),
                 'name': product.values.get('name'),
                 'unitprice': unit_price,
-                'unitexpectedcost': 0,
+                'unitexpectedcost': unit_cost,
                 'quantity': quantity,
                 'frequency': 'Annuale' if billing_type == 'yearly' else 'Mensile'
             })
@@ -168,11 +170,13 @@ def save_activemind(request):
         frequency_price = float(conditions.get('price', 0))
 
         total_price = 0
+        total_cost = 0
         name_parts = []
 
         for key, service in services.items():
             qty = int(service.get('quantity', 0))
             unit_price = float(service.get('unitPrice', 0))
+            unit_cost = float(service.get('unitCost', 0))
             title = service.get('title', '')
 
             if qty <= 0:
@@ -187,6 +191,7 @@ def save_activemind(request):
                 service_total *= discount
 
             total_price += service_total
+            total_cost += qty * unit_cost
 
         total_price += frequency_price
         name_str = "AM - Manutenzione servizi - \n" + ",\n".join(name_parts) if name_parts else "AM - Manutenzione servizi"
@@ -213,7 +218,7 @@ def save_activemind(request):
             'recordidproduct_': product_id,
             'name': name_str,
             'unitprice': total_price,
-            'unitexpectedcost': 0,
+            'unitexpectedcost': total_cost,
             'quantity': 1,
             'frequency': frequency
         })
@@ -518,7 +523,7 @@ def get_system_assurance_activemind(request):
     with connection.cursor() as cursor:
         # 1. Prendo i prodotti che iniziano con "System Assurance"
         cursor.execute("""
-            SELECT recordid_, name, price
+            SELECT recordid_, name, price, cost
             FROM user_product
             WHERE name LIKE %s AND deleted_ = 'N'
         """, ["System Assurance%"])
@@ -535,11 +540,12 @@ def get_system_assurance_activemind(request):
 
         # 3. Costruisco i tiers
         for product in products:
-            prod_id, name, price = product
+            prod_id, name, price, cost = product
             tiers.append({
                 "id": str(prod_id),
                 "label": name.replace("System assurance - ", ""),
                 "price": float(price) if price is not None else 0.0,
+                "cost": float(cost) if cost is not None else 0.0,
                 "selected": prod_id in selected_ids
             })
 
@@ -571,7 +577,7 @@ def get_services_activemind(request):
         # 2️⃣ Recupero dal DB i prodotti validi
         with connection.cursor() as cursor:
             cursor.execute("""
-                SELECT recordid_, name, price, note
+                SELECT recordid_, name, price, cost, note
                 FROM user_product
                 WHERE name LIKE 'AM %%'
                   AND name NOT LIKE 'AM - Annuale'
@@ -582,7 +588,7 @@ def get_services_activemind(request):
             """)
             db_products = cursor.fetchall()
 
-        for recordid_product, name, price, note in db_products:
+        for recordid_product, name, price, cost, note in db_products:
             clean_name = name.replace("AM - ", "").strip()
             key = clean_name.lower()
             if key not in services_dict:
@@ -594,6 +600,7 @@ def get_services_activemind(request):
             s["recordid_product"] = recordid_product
             s["title"] = clean_name
             s["unitPrice"] = float(price or 0)
+            s["unitCost"] = float(cost or 0)
             s["selected"] = False
 
             # estraggo le features dal campo note (una per riga)
@@ -685,7 +692,7 @@ def get_products_activemind(request):
     with connection.cursor() as cursor:
         # 1. Prendo tutti i prodotti AM
         cursor.execute("""
-            SELECT recordid_, name, description, note, price
+            SELECT recordid_, name, description, note, price, cost
             FROM user_product
             WHERE name LIKE 'AM - %' AND deleted_ = 'N'
         """)
@@ -702,7 +709,7 @@ def get_products_activemind(request):
         frequency_map = {row[0]: row[2] for row in deal_rows}
 
     # 3. Per ogni prodotto DB → mappo alla categoria mock
-    for recordid_, name, description, note, price in db_products:
+    for recordid_, name, description, note, price, cost in db_products:
         matched_category_id = None
         matched_icon = None
 
@@ -727,6 +734,7 @@ def get_products_activemind(request):
             "id": str(recordid_),
             "title": name.replace("AM - ", ""),
             "unitPrice": float(price) if price else 0.0,
+            "unitCost": float(cost) if cost else 0.0,
             "icon": matched_icon,
             "category": matched_category_id,
             "description": description,
