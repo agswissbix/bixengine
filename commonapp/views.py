@@ -5974,6 +5974,8 @@ def _handle_record_pivot_chart(request, config, chart_id, chart_record, query_co
                     except Exception:
                         pass
 
+        final_data = [_safe_get_value(record_data, a) for a in aliases]
+
     datasets = [{'label': dataset_label, 'data': final_data}]
     return _build_chart_context_base(chart_id, chart_record, final_labels, datasets)
 
@@ -6058,7 +6060,7 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
     if not dictrows:
         return {'id': chart_id, 'name': chart_record['name'], 'error': '$empty$'}
 
-    # --- wegolf: tentativo di conversione di campi valuta nella valuta deall'utente corrente ---
+    # --- wegolf: tentativo di conversione di campi valuta nella valuta dell'utente corrente ---
     try:
         active_server = Helper.get_activeserver(request).get('value')
     except Exception:
