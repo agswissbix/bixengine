@@ -648,7 +648,7 @@ def save_record_fields(tableid,recordid, old_record=""):
     if tableid == 'timetracking':
         timetracking_record = UserRecord('timetracking', recordid)
         if Helper.isempty(timetracking_record.values['start']):
-                timetracking_record.values['start'] = datetime.now().strftime("%H:%M")
+                timetracking_record.values['start'] = datetime.datetime.now().strftime("%H:%M")
         if timetracking_record.values['stato'] == 'Terminato':
             if not timetracking_record.values['end']:
                 timetracking_record.values['end'] = datetime.datetime.now().strftime("%H:%M")

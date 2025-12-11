@@ -1688,3 +1688,112 @@ def upload_timesheet_in_bexio(request):
     except Exception as e:
         logger.error(f"Errore nell'upload del timesheet in Bexio: {str(e)}")
         return JsonResponse({'error': f'Errore nell\'upload del timesheet in Bexio: {str(e)}'}, status=500)
+
+def get_timetracking(request):
+    print("get_timetracking")
+    
+    try:
+        userid = Helper.get_userid(request)
+        current_date = datetime.datetime.now().date()
+
+        condition_list = []
+        condition_list.append(f"user={userid}")
+
+        timetrackings_list = UserTable('timetracking').get_records(conditions_list=condition_list)
+        timetrackings = []
+
+        for timetracking in timetrackings_list:
+            raw_date = timetracking['date']
+            if not raw_date:
+                continue
+
+            if isinstance(raw_date, datetime.datetime):
+                timetracking_date = raw_date.date()
+            elif isinstance(raw_date, datetime.date):
+                timetracking_date = raw_date
+            elif isinstance(raw_date, str):
+                try:
+                    timetracking_date = datetime.datetime.strptime(raw_date, '%Y-%m-%d').date()
+                except ValueError:
+                    continue 
+            else:
+                continue
+
+            if timetracking_date != current_date:
+                continue
+
+            timetracking_data = {
+                'id': timetracking['recordid_'],
+                'description': timetracking['description'],
+                'date': timetracking['date'],
+                'start': timetracking['start'],
+                'end': timetracking['end'],
+                'worktime': timetracking['worktime'],
+                'worktime_string': timetracking['worktime_string'],
+                'status': timetracking['stato']
+            }
+            timetrackings.append(timetracking_data)
+
+        return JsonResponse({"timetracking": timetrackings}, safe=False)
+
+    except Exception as e:
+        logger.error(f"Errore nell'ottenimento dei timetracker per l'utente: {str(e)}")
+        return JsonResponse({'error': f"Errore  nell'ottenimento dei timetracker per l'utente: {str(e)}"}, status=500)    
+    
+def save_timetracking(request):
+    print("save_timetracking")
+
+    try:
+        data = json.loads(request.body)
+
+        userid = Helper.get_userid(request)
+
+        timetracking = UserRecord('timetracking')
+
+        timetracking.values['user'] = userid
+        timetracking.values['description'] = data.get('description')
+        timetracking.values['date'] = datetime.datetime.now().strftime("%Y-%m-%d")
+        timetracking.values['start'] = datetime.datetime.now().strftime("%H:%M")
+        timetracking.values['stato'] = "Attivo"
+
+        timetracking.save()
+
+        return JsonResponse({"status": "completed"}, safe=False)
+    except Exception as e:
+        logger.error(f"Errore nell'avviare il timetracking: {str(e)}")
+        return JsonResponse({'error': f"Errore nell'avviare il timetracking: {str(e)}"}, status=500)    
+
+
+def stop_timetracking(request):
+    print("stop_timetracking")
+
+    try:
+        data = json.loads(request.body)
+        recordid = data.get('timetracking')
+
+        if recordid:
+            timetracking = UserRecord('timetracking', recordid)
+
+            timetracking.values['end'] = datetime.datetime.now().strftime("%H:%M")
+            timetracking.values['stato'] = "Terminato"
+
+            time_format = '%H:%M'
+            start = datetime.datetime.strptime(timetracking.values['start'], time_format)
+            end = datetime.datetime.strptime(timetracking.values['end'], time_format)
+            time_difference = end - start
+
+            total_minutes = time_difference.total_seconds() / 60
+            hours, minutes = divmod(total_minutes, 60)
+            formatted_time = "{:02}:{:02}".format(int(hours), int(minutes))
+
+            timetracking.values['worktime_string'] = str(formatted_time)
+
+            hours = time_difference.total_seconds() / 3600
+            timetracking.values['worktime'] = round(hours, 2)
+
+            timetracking.save()
+
+        return JsonResponse({"status": "completed"}, safe=False)
+    except Exception as e:
+        logger.error(f"Errore nel fermare il timetracking: {str(e)}")
+        return JsonResponse({'error': f"Errore nel fermare il timetracking: {str(e)}"}, status=500)    
