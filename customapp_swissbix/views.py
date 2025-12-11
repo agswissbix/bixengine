@@ -113,6 +113,7 @@ def save_activemind(request):
         section1 = data.get('section1', {})
         product_id = section1.get('selectedTier')
         price = section1.get('price', 0)
+        cost = section1.get('cost', 0)
 
         if product_id:
             product = UserRecord('product', product_id)
@@ -127,7 +128,7 @@ def save_activemind(request):
                 'recordidproduct_': product.values.get('recordid_'),
                 'name': product.values.get('name'),
                 'unitprice': price,
-                'unitexpectedcost': 0,
+                'unitexpectedcost': cost,
                 'quantity': 1
             })
 
@@ -522,7 +523,7 @@ def get_system_assurance_activemind(request):
     with connection.cursor() as cursor:
         # 1. Prendo i prodotti che iniziano con "System Assurance"
         cursor.execute("""
-            SELECT recordid_, name, price
+            SELECT recordid_, name, price, cost
             FROM user_product
             WHERE name LIKE %s AND deleted_ = 'N'
         """, ["System Assurance%"])
@@ -539,11 +540,12 @@ def get_system_assurance_activemind(request):
 
         # 3. Costruisco i tiers
         for product in products:
-            prod_id, name, price = product
+            prod_id, name, price, cost = product
             tiers.append({
                 "id": str(prod_id),
                 "label": name.replace("System assurance - ", ""),
                 "price": float(price) if price is not None else 0.0,
+                "cost": float(cost) if cost is not None else 0.0,
                 "selected": prod_id in selected_ids
             })
 
