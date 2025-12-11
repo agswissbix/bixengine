@@ -4371,6 +4371,7 @@ from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
+from commonapp.currency import get_frankfurter_rates, convert_amount, normalize_currency
 import uuid
 
 
@@ -5806,6 +5807,20 @@ def _safe_get_value(record, key):
         return 0
 
 
+def _get_clubs_currency_map(club_ids):
+    """Restituisce una mappa {recordid_: valuta} per i club nella lista passata."""
+    if not club_ids:
+        return {}
+    ids = "', '".join([str(i) for i in club_ids])
+    sql = f"SELECT recordid_, valuta FROM user_golfclub WHERE nome_club IN ('{ids}')"
+    rows = HelpderDB.sql_query(sql)
+    out = {}
+    for r in rows:
+        if r.get('recordid_'):
+            out[str(r['recordid_'])] = (r.get('valuta') or 'CHF').upper()
+    return out
+
+
 def _build_chart_context_base(chart_id, chart_record, labels, datasets, datasets2=None):
     """Costruisce il contesto standard per un grafico."""
     context = {
@@ -5824,7 +5839,7 @@ def _build_chart_context_base(chart_id, chart_record, labels, datasets, datasets
 
 # === SPECIFIC IMPLEMENTATIONS ==============================================
 
-def _handle_record_pivot_chart(config, chart_id, chart_record, query_conditions,viewMode=None, referenceYear=None):
+def _handle_record_pivot_chart(request, config, chart_id, chart_record, query_conditions,viewMode=None, referenceYear=None):
     """Gestisce la generazione di dati per grafici 'record_pivot'."""
     pivot_fields_map = {item['alias']: item for item in config['pivot_fields']}
     aliases = list(pivot_fields_map.keys())
@@ -5883,11 +5898,89 @@ def _handle_record_pivot_chart(config, chart_id, chart_record, query_conditions,
         final_labels = [item['label'] for item in config['pivot_fields']]
         final_data = [_safe_get_value(record_data, a) for a in aliases]
 
+    # --- wegolf: tentativo di conversione di campi valuta nella valuta deall'utente corrente ---
+    try:
+        active_server = Helper.get_activeserver(request).get('value')
+    except Exception:
+        active_server = Helper.get_cliente_id()
+
+    if str(active_server).lower() == 'wegolf':
+        currency_aliases = []
+        for item in config.get('pivot_fields', []):
+            alias = item.get('alias')
+            fld = None
+            try:
+                fld = SysField.objects.get(fieldid=alias)
+            except Exception:
+                fld = None
+
+            if not fld:
+                fieldid = item.get('field')
+                if fieldid:
+                    try:
+                        fld = SysField.objects.get(fieldid=fieldid)
+                    except Exception:
+                        fld = None
+
+            is_currency = False
+            if fld:
+                expr_field = (getattr(fld, 'explanation', '') or '').lower()
+                if 'number_currency' in expr_field:
+                    is_currency = True
+
+            if is_currency:
+                currency_aliases.append(item['alias'])
+
+        if currency_aliases:
+            clubid = record_data.get('recordidgolfclub_')
+            if not clubid:
+                clubid = HelpderDB.sql_query_value(f"SELECT recordidgolfclub_ FROM {from_table} WHERE {query_conditions} LIMIT 1", "recordidgolfclub_")
+
+            target_currency = 'CHF'
+            if clubid:
+                try:
+                    tc = HelpderDB.sql_query_value(f"SELECT valuta FROM user_golfclub WHERE recordid_='{clubid}' LIMIT 1", 'valuta')
+                    if tc:
+                        target_currency = tc
+                except Exception:
+                    pass
+
+            target_currency = normalize_currency(target_currency) or 'CHF'
+
+            source_currency = None
+            if clubid:
+                clubs_map_single = _get_clubs_currency_map([clubid])
+                source_currency = normalize_currency(clubs_map_single.get(str(clubid))) if str(clubid) in clubs_map_single else None
+
+            if not source_currency:
+                try:
+                    src = HelpderDB.sql_query_value(f"SELECT valuta FROM {from_table} WHERE {query_conditions} LIMIT 1", 'valuta')
+                    source_currency = normalize_currency(src) if src else None
+                except Exception:
+                    source_currency = None
+
+            if source_currency and source_currency != normalize_currency(target_currency):
+                rates = get_frankfurter_rates(base=normalize_currency(target_currency), to_list=[source_currency])
+                for alias in currency_aliases:
+                    try:
+                        raw_val = record_data.get(alias)
+                        conv = convert_amount(raw_val, source_currency, normalize_currency(target_currency), rates)
+                        if conv is not None:
+                            try:
+                                conv = round(conv, 2)
+                            except Exception:
+                                pass
+                            record_data[alias] = conv
+                    except Exception:
+                        pass
+
+        final_data = [_safe_get_value(record_data, a) for a in aliases]
+
     datasets = [{'label': dataset_label, 'data': final_data}]
     return _build_chart_context_base(chart_id, chart_record, final_labels, datasets)
 
 
-def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions,viewMode=None, referenceYear=None):
+def _handle_aggregate_chart(request, config, chart_id, chart_record, query_conditions,viewMode=None, referenceYear=None):
     all_defs = config.get('datasets', []) + config.get('datasets2', [])
     db_defs = [ds for ds in all_defs if 'expression' in ds]
     post_calc_defs = [ds for ds in all_defs if 'post_calculation' in ds]
@@ -5966,6 +6059,86 @@ def _handle_aggregate_chart(config, chart_id, chart_record, query_conditions,vie
     dictrows = HelpderDB.sql_query(query)
     if not dictrows:
         return {'id': chart_id, 'name': chart_record['name'], 'error': '$empty$'}
+
+    # --- wegolf: tentativo di conversione di campi valuta nella valuta dell'utente corrente ---
+    try:
+        active_server = Helper.get_activeserver(request).get('value')
+    except Exception:
+        active_server = Helper.get_cliente_id()
+
+    if str(active_server).lower() == 'wegolf':
+        currency_aliases = []
+        for ds in db_defs:
+            alias = ds.get('alias')
+            fld = None
+            try:
+                fld = SysField.objects.get(fieldid=alias)
+            except Exception:
+                fld = None
+
+            if not fld:
+                fieldid = ds.get('field') or ds.get('fieldid')
+                if fieldid:
+                    try:
+                        fld = SysField.objects.get(fieldid=fieldid)
+                    except Exception:
+                        fld = None
+
+            is_currency = False
+            if fld:
+                expr_field = (getattr(fld, 'explanation', '') or '').lower()
+                if 'number_currency' in expr_field:
+                    is_currency = True
+
+            if is_currency:
+                currency_aliases.append(alias)
+
+        clubs = set()
+        for r in dictrows:
+            cid = r.get('recordidgolfclub_')
+            if cid:
+                clubs.add(cid)
+
+        clubs_map = _get_clubs_currency_map(clubs) if clubs else {}
+
+        try:
+            userid = Helper.get_userid(request)
+            user_target = HelpderDB.sql_query_value(f"SELECT valuta FROM user_golfclub WHERE utente='{userid}' LIMIT 1", 'valuta') or 'CHF'
+            user_target = normalize_currency(user_target) or 'CHF'
+        except Exception:
+            user_target = 'CHF'
+
+        source_currencies = set()
+        for cid, tc in clubs_map.items():
+            if tc:
+                source_currencies.add(normalize_currency(tc))
+
+        source_currencies = {c for c in source_currencies if c}
+
+        if source_currencies:
+            rates = get_frankfurter_rates(base=user_target, to_list=list(source_currencies))
+
+            for r in dictrows:
+                cid = r.get('recordidgolfclub_')
+                src = None
+                if cid and str(cid) in clubs_map:
+                    src = normalize_currency(clubs_map.get(str(cid)))
+                if not src:
+                    src = normalize_currency(r.get('valuta') or r.get('currency'))
+                if not src or src == user_target:
+                    continue
+                for alias in currency_aliases:
+                    try:
+                        raw_val = r.get(alias)
+                        conv = convert_amount(raw_val, src, user_target, rates)
+                        if conv is not None:
+                            try:
+                                conv = round(conv, 2)
+                            except Exception:
+                                pass
+                            r[alias] = conv
+                    except Exception:
+                        pass
 
     labels = [row[group_by_alias] for row in dictrows]
     all_db_datasets = _format_datasets_from_rows(db_aliases, db_labels, dictrows)
@@ -6070,7 +6243,7 @@ def get_dynamic_chart_data(request, chart_id, query_conditions='1=1', viewMode=N
     if not handler:
         return {'error': f'Unknown chart type: {chart_type}'}
 
-    return handler(config, chart_id, chart_record, query_conditions,viewMode, referenceYear)
+    return handler(request, config, chart_id, chart_record, query_conditions,viewMode, referenceYear)
 
 
 
