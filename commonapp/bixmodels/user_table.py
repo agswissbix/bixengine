@@ -502,6 +502,12 @@ class UserTable:
                 # view_query_conditions = view_query_conditions.replace('$today$', today) # Rimuovi se non usato
                 where_clauses.append(view_query_conditions)
 
+        tablesettings = TableSettings(self.tableid, self.userid)
+        can_view = tablesettings.get_specific_settings('view')['view']
+
+        if can_view['value'] == 'true' and 'where_list' in can_view:
+            where_clauses.append(f" {can_view['where_list']}")
+
         # 4. Aggiungi i campi specifici se richiesti
         if fields:
             select_fields = [f"user_{self.tableid}.{field}" for field in fields]

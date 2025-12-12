@@ -33,6 +33,11 @@ bixdata_server = os.environ.get('BIXDATA_SERVER')
 
 class TableSettings:
     settings = {
+        'view': {
+            'type': 'select',
+            'options': ['true', 'false'],
+            'value': 'true'
+        },
         'edit': {
             'type': 'select',
             'options': ['true', 'false'],
@@ -519,11 +524,13 @@ class TableSettings:
                 setting_info['conditions'] = conditions
 
                 try:
-                    valid_records = self._evaluate_conditions(conditions)
+                    valid_records, where_list = self._evaluate_conditions(conditions)
                 except (json.JSONDecodeError, AttributeError):
                     valid_records = []
+                    where_list = ""
 
                 setting_info['valid_records'] = valid_records
+                setting_info['where_list'] = where_list
 
             # Caso speciale per default_viewid
             if setting_id == 'default_viewid':
@@ -553,6 +560,7 @@ class TableSettings:
         
         Ritorna:
         - lista di recordid validi per cui la condizione passa
+        - le where conditions
         """
         table_name = f'user_{self.tableid}'
         logic = conditions.get("logic", "AND").upper()
@@ -590,13 +598,13 @@ class TableSettings:
 
         # Combina con AND/OR
         sql_where = f" {logic} ".join(where_clauses)
-        sql = f"SELECT recordid_ FROM {table_name} WHERE {sql_where}"
+        sql = f"SELECT recordid_ FROM {table_name} WHERE deleted_='N' AND {sql_where}"
 
         with connection.cursor() as cursor:
             cursor.execute(sql)
             records = [row[0] for row in cursor.fetchall()]
 
-        return records
+        return records, sql_where
 
     def get_specific_settings(self, settingids):
         """

@@ -452,8 +452,7 @@ def delete_record(request):
         tablesettings = TableSettings(tableid, userid)
         can_delete = tablesettings.get_specific_settings('delete')['delete']
 
-        test = tablesettings.has_permission_for_record(can_delete, recordid)
-        if not test:
+        if not tablesettings.has_permission_for_record(can_delete, recordid):
             return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
 
         # Esegui l'UPDATE marcando il record come cancellato
