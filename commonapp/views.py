@@ -447,13 +447,13 @@ def delete_record(request):
         if not recordid or not tableid:
             return JsonResponse({"success": False, "detail": "recordid o tableid mancante"}, status=400)
 
-        query = HelpderDB.sql_query_row(f"SELECT sys_user_id FROM v_users WHERE id = {request.user.id}")
-        userid = query['sys_user_id'] 
+        userid = Helper.get_userid(request) 
 
         tablesettings = TableSettings(tableid, userid)
         can_delete = tablesettings.get_specific_settings('delete')['delete']
 
-        if can_delete['value'] == 'false':
+        test = tablesettings.has_permission_for_record(can_delete, recordid)
+        if not test:
             return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
 
         # Esegui l'UPDATE marcando il record come cancellato
@@ -3086,7 +3086,7 @@ def save_record_fields(request):
     tablesettings = TableSettings(tableid, userid)
     can_edit_settings = tablesettings.get_specific_settings('edit')['edit']
 
-    if not tablesettings.can_user_edit(can_edit_settings, recordid):
+    if not tablesettings.has_permission_for_record(can_edit_settings, recordid):
         return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
 
     # 3. Parsing del campo fields

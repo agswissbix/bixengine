@@ -648,9 +648,9 @@ class TableSettings:
 
         return base_settings
     
-    def can_user_edit(self, can_edit, recordid):
-        value = can_edit.get("value") == "true"
-        valid_records = can_edit.get("valid_records", [])
+    def has_permission_for_record(self, setting, recordid):
+        value = setting.get("value") == "true"
+        valid_records = setting.get("valid_records", [])
 
         # nessuna lista → si usa value direttamente
         if not valid_records:
