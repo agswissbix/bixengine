@@ -132,7 +132,6 @@ def get_master_linked_tables(request):
     return JsonResponse({"linked_tables": linked_tables})
 
 
-@superuser_required
 def settings_table_settings(request):
     tableid = json.loads(request.body).get('tableid')
     userid = json.loads(request.body).get('userid')
@@ -162,10 +161,24 @@ def settings_table_fields_settings_save(request):
         name = setting['name']
         new_value = setting['value']
         old_value = current_settings.get(name, {}).get('value')
+        new_conditions_raw = setting.get('conditions')
+        old_conditions = current_settings.get(name, {}).get('conditions')
 
+        if isinstance(new_conditions_raw, str) and new_conditions_raw.strip() != "":
+            try:
+                new_conditions = json.loads(new_conditions_raw)
+            except json.JSONDecodeError:
+                new_conditions = None
+        else:
+            new_conditions = new_conditions_raw
+        
         # confronto: aggiorno solo se è cambiato
         if new_value is not None and str(new_value).strip() != '' and new_value != old_value:
             tablesettings_obj.settings[name]['value'] = new_value
+            updated = True
+
+        if new_conditions != old_conditions:
+            tablesettings_obj.settings[name]['conditions'] = new_conditions
             updated = True
 
     # salvo solo se è cambiato qualcosa

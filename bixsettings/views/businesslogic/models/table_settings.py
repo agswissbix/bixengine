@@ -516,6 +516,8 @@ class TableSettings:
             # Valuta condizioni
             conditions = row.get('conditions')
             if conditions:
+                setting_info['conditions'] = conditions
+
                 try:
                     valid_records = self._evaluate_conditions(conditions)
                 except (json.JSONDecodeError, AttributeError):
@@ -659,12 +661,9 @@ class TableSettings:
 
     def save(self):
         table_settings = self.settings
-
-        # if self.tableid:
-
         success = True
 
-        for setting in table_settings:
+        for setting, setting_data in table_settings.items():
 
             if setting == 'workspace':
                 SysTable.objects.filter(id=self.tableid).update(
@@ -672,16 +671,19 @@ class TableSettings:
                 )
                 continue
 
-            sql_delete = f"DELETE FROM sys_user_table_settings WHERE tableid='{self.tableid}' AND settingid='{setting}' AND userid='{self.userid}' "
-            self.db_helper.sql_execute(sql_delete)
-
-            sql_insert = f"INSERT INTO sys_user_table_settings (userid, tableid, settingid, value) VALUES " \
-                         f"('{self.userid}', '{self.tableid}', '{setting}', '{table_settings[setting]['value']}')"
             try:
-                self.db_helper.sql_execute(sql_insert)
-                print(f"Inserted setting {setting}")
+                SysUserTableSettings.objects.update_or_create(
+                    userid_id=self.userid,
+                    tableid_id=self.tableid,
+                    settingid=setting,
+                    defaults={
+                        "value": setting_data.get("value"),
+                        "conditions": setting_data.get("conditions")
+                    }
+                )
+                print(f"Saved setting {setting}")
             except Exception as e:
-                print(f"Error inserting setting {setting}: {e}")
+                print(f"Error saving setting {setting}: {e}")
                 success = False
 
         return success
