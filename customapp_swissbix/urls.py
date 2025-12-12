@@ -53,4 +53,7 @@ urlpatterns = [
 
     path('get_timesheets_to_invoice/', get_timesheets_to_invoice, name='get_timesheets_to_invoice'),
     path('upload_timesheet_in_bexio/', upload_timesheet_in_bexio, name='upload_timesheet_in_bexio'),
+    path('get_timetracking/', get_timetracking, name='get_timetracking'),
+    path('save_timetracking/', save_timetracking, name='save_timetracking'),
+    path('stop_timetracking/', stop_timetracking, name='stop_timetracking')
 ]

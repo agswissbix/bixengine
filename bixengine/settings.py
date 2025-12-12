@@ -8,13 +8,26 @@ environ.Env.read_env()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 UPLOADS_URL = '/uploads/'
-UPLOADS_ROOT = os.path.join(BASE_DIR, '..', 'uploads') #in teoria non serve perchè se uso default_storage usa MEDIA_ROOT
-MEDIA_ROOT = os.path.join(BASE_DIR, '..', 'uploads')
-STATIC_ROOT = os.path.join(BASE_DIR, '..', 'bixengine', 'commonapp', 'static')
+MEDIA_URL = '/uploads/'
+STATIC_URL = '/static/'
+TEMPFILE_URL = '/tempfile/'  
 
-XML_DIR = os.path.join(BASE_DIR, '..', 'xml')
-TEMPFILE_URL = '/tempfile/'
-TEMPFILE_ROOT = BASE_DIR
+IN_DOCKER = os.environ.get('IN_DOCKER', False)
+
+if IN_DOCKER:
+    print("Running in DOCKER mode")
+    MEDIA_ROOT = os.path.join(BASE_DIR, 'uploads')
+    STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+    XML_DIR = os.path.join(BASE_DIR, 'xml')
+    TEMPFILE_ROOT = os.path.join(BASE_DIR, 'tempfile')
+else:
+    print("Running in LOCAL mode")
+    MEDIA_ROOT = os.path.join(BASE_DIR, '..', 'uploads')
+    STATIC_ROOT = os.path.join(BASE_DIR, '..', 'bixengine', 'commonapp', 'static')
+    XML_DIR = os.path.join(BASE_DIR, '..', 'xml')
+    TEMPFILE_ROOT = BASE_DIR
+
+UPLOADS_ROOT = MEDIA_ROOT
 
 SECRET_KEY = env('SECRET_KEY')
 
@@ -69,6 +82,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -199,7 +213,7 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024
 Q_CLUSTER = {
     'name': 'DjangoQ',
     'workers': 4, # Numero di worker che eseguono i task in parallelo
-    'retry': 120, # The number of seconds a broker will wait for a cluster to finish a task, before it’s presented again.
+    'retry': 1000, # The number of seconds a broker will wait for a cluster to finish a task, before it’s presented again.
     'timeout': 900, # The number of seconds a worker is allowed to spend on a task before it’s terminated.
     'queue_limit': 50, # This does not limit the amount of tasks that can be queued on the broker
     'bulk': 5, # Sets the number of messages each cluster tries to get from the broker per call
@@ -224,3 +238,5 @@ MS_GRAPH = {
     'SCOPE': ['https://graph.microsoft.com/.default'],
     'GRAPH_ENDPOINT': 'https://graph.microsoft.com/v1.0'
 }
+
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage' # DA lasciare in fondo al file

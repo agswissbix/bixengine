@@ -1678,3 +1678,15 @@ def get_timesheets_to_invoice(request):
 def upload_timesheet_in_bexio(request):
     from customapp_swissbix.script import upload_timesheet_in_bexio
     return upload_timesheet_in_bexio(request)
+
+def get_timetracking(request):
+    from customapp_swissbix.script import get_timetracking
+    return get_timetracking(request)
+
+def save_timetracking(request):
+    from customapp_swissbix.script import save_timetracking
+    return save_timetracking(request)
+
+def stop_timetracking(request):
+    from customapp_swissbix.script import stop_timetracking
+    return stop_timetracking(request)

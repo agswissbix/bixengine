@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+# Gunicorn
+  web:
+    build: .
+    restart: always
+    env_file:
+      - ./bixengine/.env
+    volumes:
+      - .:/app
+      - ../uploads:/app/uploads
+      - ../xml:/app/xml
+    ports:
+      - "8000:8000"
+    command: gunicorn --bind 0.0.0.0:8000 bixengine.wsgi:application
+
+  # Servizio worker per i processi in backend
+  qcluster:
+    build: .
+    restart: always
+    env_file:
+      - ./bixengine/.env
+    volumes: # volumi per la condivisione file con la macchina locale [posizione_macchina_locale:posizione_container]
+      - .:/app
+      - ../uploads:/app/uploads
+      - ../xml:/app/xml
+    command: python manage.py qcluster
