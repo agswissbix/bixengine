@@ -1,5 +1,5 @@
 from django.contrib.sessions.models import Session
-from bixsettings.models import *
+from commonapp.models import *
 import os
 from bixsettings.views.beta import *
 from django.shortcuts import render, redirect
@@ -411,14 +411,14 @@ class TableSettings:
         user_settings = SysUserTableSettings.objects.filter(
             tableid=self.tableid,
             userid=self.userid
-        ).values('settingid', 'value')
+        ).values('settingid', 'value', 'conditions')
 
         # Se non esistono impostazioni per l'utente, usa quelle dell'utente admin (1)
         if not user_settings.exists():
             user_settings = SysUserTableSettings.objects.filter(
                 tableid=self.tableid,
                 userid=1
-            ).values('settingid', 'value')
+            ).values('settingid', 'value', 'conditions')
 
         self._apply_user_settings(settings_copy, user_settings)
 
@@ -513,6 +513,16 @@ class TableSettings:
             else:
                 setting_info['value'] = row['value']
 
+            # Valuta condizioni
+            conditions = row.get('conditions')
+            if conditions:
+                try:
+                    valid_records = self._evaluate_conditions(conditions)
+                except (json.JSONDecodeError, AttributeError):
+                    valid_records = []
+
+                setting_info['valid_records'] = valid_records
+
             # Caso speciale per default_viewid
             if setting_id == 'default_viewid':
                 with connection.cursor() as cursor:
@@ -526,6 +536,65 @@ class TableSettings:
 
                 if not view_options:
                     setting_info['value'] = '0'
+
+    def _evaluate_conditions(self, conditions):
+        """
+        Valuta le condizioni JSON per il setting.
+        Struttura JSON attesa:
+        {
+            "logic": "AND",
+            "rules": [
+                {"field": "status", "operator": "!=", "value": "vinta"},
+                {"field": "userid", "operator": "=", "value": "$userid$"}
+            ]
+        }
+        
+        Ritorna:
+        - lista di recordid validi per cui la condizione passa
+        """
+        table_name = f'user_{self.tableid}'
+        logic = conditions.get("logic", "AND").upper()
+        rules = conditions.get("rules", [])
+
+        where_clauses = []
+
+        for rule in rules:
+            field = rule.get("field")
+            operator = rule.get("operator")
+            value = rule.get("value")
+
+            # sostituzioni dinamiche
+            if value == "$userid$":
+                value = self.userid
+
+            # Formatta correttamente il valore per SQL
+            if isinstance(value, str):
+                value = value.replace("'", "''")  # escape semplice
+                value_str = f"'{value}'"
+            else:
+                value_str = str(value)
+
+            if operator in ["=", "!=", ">", "<"]:
+                where_clauses.append(f"{field} {operator} {value_str}")
+            elif operator == "in":
+                if isinstance(value, list):
+                    value_list = ",".join([f"'{v}'" for v in value])
+                    where_clauses.append(f"{field} IN ({value_list})")
+            else:
+                continue  # operatore non supportato
+
+        if not where_clauses:
+            return []  # nessuna condizione -> nessun filtro
+
+        # Combina con AND/OR
+        sql_where = f" {logic} ".join(where_clauses)
+        sql = f"SELECT recordid_ FROM {table_name} WHERE {sql_where}"
+
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            records = [row[0] for row in cursor.fetchall()]
+
+        return records
 
     def get_specific_settings(self, settingids):
         """
@@ -576,6 +645,17 @@ class TableSettings:
         self._apply_user_settings(base_settings, user_settings)
 
         return base_settings
+    
+    def can_user_edit(self, can_edit, recordid):
+        value = can_edit.get("value") == "true"
+        valid_records = can_edit.get("valid_records", [])
+
+        # nessuna lista → si usa value direttamente
+        if not valid_records:
+            return value
+
+        match = str(recordid) in valid_records
+        return value if match else not value
 
     def save(self):
         table_settings = self.settings

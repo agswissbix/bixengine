@@ -25,6 +25,7 @@ from bs4 import BeautifulSoup
 from django.db.models import OuterRef, Subquery, Value
 from django.db.models.functions import Coalesce
 from .models.database_helper import *
+from commonapp.models import *
 
 
 class SettingsBusinessLogic:

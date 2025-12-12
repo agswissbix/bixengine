@@ -3081,13 +3081,12 @@ def save_record_fields(request):
             return JsonResponse({'error': 'Invalid or missing data'}, status=400)
         
     # check permissions
-    query = HelpderDB.sql_query_row(f"SELECT sys_user_id FROM v_users WHERE id = {request.user.id}")
-    userid = query['sys_user_id'] 
+    userid = Helper.get_userid(request)
 
     tablesettings = TableSettings(tableid, userid)
-    can_edit = tablesettings.get_specific_settings('edit')['edit']
+    can_edit_settings = tablesettings.get_specific_settings('edit')['edit']
 
-    if can_edit['value'] == 'false':
+    if not tablesettings.can_user_edit(can_edit_settings, recordid):
         return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
 
     # 3. Parsing del campo fields

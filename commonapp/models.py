@@ -576,6 +576,7 @@ class SysUserFieldSettings(models.Model):
     value = models.CharField(max_length=255, blank=True, null=True)
     context = models.CharField(max_length=50, blank=True, null=True)
     order = models.IntegerField(blank=True, null=True)
+    conditions = models.JSONField(blank=True, null=True)
 
     class Meta:
         db_table = 'sys_user_field_settings'
@@ -683,6 +684,7 @@ class SysUserTableSettings(models.Model):
     tableid = models.ForeignKey(SysTable, models.DO_NOTHING, db_column='tableid', blank=True, null=True)
     settingid = models.CharField(max_length=255, blank=True, null=True)
     value = models.CharField(max_length=255, blank=True, null=True)
+    conditions = models.JSONField(blank=True, null=True)
 
     class Meta:
         db_table = 'sys_user_table_settings'
@@ -1021,7 +1023,7 @@ class UserJobStatus(BaseUserTable):
     clientid = models.CharField(max_length=255, null=True, blank=True)
     reporter =  models.CharField(max_length=255, null=True, blank=True)
     type = models.CharField(max_length=255, null=True, blank=True)
-    duration = models.IntegerField(max_length=255, null=True, blank=True)
+    duration = models.IntegerField(null=True, blank=True)
 
     class Meta:
         db_table = 'user_job_status'

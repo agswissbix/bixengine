@@ -14,7 +14,7 @@ from commonapp.helper import *
 from commonapp.decorators.is_superuser import superuser_required
 from django.db import connection, transaction
 from django.http import JsonResponse
-from .models import *
+from commonapp.models import *
 
 @superuser_required
 def get_users_and_groups(request):
