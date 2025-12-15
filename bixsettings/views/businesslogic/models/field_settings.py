@@ -85,7 +85,7 @@ class FieldSettings:
         user_settings = SysUserFieldSettings.objects.filter(
             tableid=self.tableid,
             fieldid=self.fieldid,
-            userid=self.userid
+            userid_id=self.userid
         ).values('settingid', 'value', 'conditions')
 
         # Se non esistono impostazioni per l'utente, fallback a utente 1 (admin)
@@ -93,7 +93,7 @@ class FieldSettings:
             user_settings = SysUserFieldSettings.objects.filter(
                 tableid=self.tableid,
                 fieldid=self.fieldid,
-                userid=1
+                userid_id=1
             ).values('settingid', 'value', 'conditions')
 
         # Applica i valori recuperati alle impostazioni di base
@@ -217,7 +217,7 @@ class FieldSettings:
                 conditions = setting_data.get("conditions")
 
                 filters = Q(
-                    userid_id=self.userid,
+                    userid_id=1,
                     tableid=self.tableid,
                     fieldid=self.fieldid,
                     settingid=setting,

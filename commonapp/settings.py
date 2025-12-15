@@ -345,6 +345,8 @@ def settings_table_fields_settings_fields_save(request):
     # Aggiorna le chiavi presenti nel dizionario settings
     settings_dict = fieldsettings_obj.get_settings()
 
+    updated = False
+
     for name, setting in settings_list.items():
         new_value = setting['value']
         old_value = settings_dict.get(name, {}).get('value')
@@ -360,7 +362,7 @@ def settings_table_fields_settings_fields_save(request):
             new_conditions = new_conditions_raw
         
         # confronto: aggiorno solo se è cambiato
-        if new_value is not None and str(new_value).strip() != '' and new_value != old_value:
+        if new_value != old_value:
             fieldsettings_obj.settings[name]['value'] = new_value
             updated = True
 
