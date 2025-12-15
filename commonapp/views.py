@@ -613,6 +613,7 @@ def get_table_records(request):
     
     counter = table.get_total_records_count()
     table_columns = table.get_results_columns()
+    totals = table._numeric_totals
 
     # --- BLOCCO ALERT (invariato) ---
     alerts = HelpderDB.sql_query(f"SELECT * FROM sys_alert WHERE tableid='{tableid}' AND alert_type='cssclass'")
@@ -639,14 +640,6 @@ def get_table_records(request):
             print(f"Errore nel decodificare il JSON per l'alert: {alert.get('id')}")
         except ValueError as e:
             print(f"Condizione non valida per alert {alert.get('id')}: {e}")
-
-    totals = defaultdict(float)
-    numeric_fields = set()
-    
-    for c in table_columns:
-        ftype = c.get("fieldtypewebid", "").lower()
-        if ftype in ["numero"]:
-            numeric_fields.add(c["fieldid"])
 
     # --- COSTRUZIONE RISPOSTA JSON (ORA MOLTO PIU' SEMPLICE) ---
     rows = []
@@ -694,12 +687,6 @@ def get_table_records(request):
             }
             row["fields"].append(field_data)
 
-            if fieldid in numeric_fields:
-                try:
-                    num = float(value)
-                    totals[fieldid] += num
-                except (ValueError, TypeError):
-                    pass
         
         rows.append(row)
 
@@ -719,7 +706,7 @@ def get_table_records(request):
             "direction": order_direction
         },
         "totals": {
-            fieldid: round(value, 2)
+            fieldid: value
             for fieldid, value in totals.items()
         }
     }

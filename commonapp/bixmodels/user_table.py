@@ -41,6 +41,7 @@ class UserTable:
         self._fields_definitions = None
         self._results_columns = None # Cache per le colonne dei risultati
         self._total_records_count = None
+        self._numeric_totals = None
 
     # ============================
     #   COSTANTI DI CLASSE
@@ -291,6 +292,38 @@ class UserTable:
 
     def get_total_records_count(self):
         return self._total_records_count
+    
+    def calculate_totals_sql(self, numeric_fields, from_sql, where_sql):
+        if not numeric_fields:
+            return {}
+
+        # whitelist colonne
+        allowed_columns = {c['fieldid'] for c in self.get_results_columns()}
+        safe_fields = [f for f in numeric_fields if f in allowed_columns]
+
+        if not safe_fields:
+            return {}
+
+        sum_columns = ", ".join(
+            f"SUM(user_{self.tableid}.{field}) AS {field}"
+            for field in safe_fields
+        )
+
+        sql = f"""
+            SELECT {sum_columns}
+            {from_sql}
+            WHERE {where_sql}
+        """
+
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            row = cursor.fetchone()
+
+        return {
+            field: round(float(row[idx] or 0), 2)
+            for idx, field in enumerate(safe_fields)
+        }
+
 
     @timing_decorator
     def get_table_records(self,viewid='',searchTerm='', conditions_list=None,fields=None,offset=0,limit=None,orderby='recordid_ desc'):
@@ -546,6 +579,25 @@ class UserTable:
         )
 
         records = HelpderDB.sql_query(sql)
+
+        totals = defaultdict(float)
+        numeric_fields = set()
+
+        table_columns = self.get_results_columns()
+        
+        for c in table_columns:
+            ftype = c.get("fieldtypewebid", "").lower()
+            if ftype in ["numero"]:
+                numeric_fields.add(c["fieldid"])
+
+        totals = self.calculate_totals_sql(
+            numeric_fields=numeric_fields,
+            from_sql=from_sql_string,
+            where_sql=where_sql_string
+        )
+
+        self._numeric_totals = totals
+
         return records
     
     def _get_fields_definitions(self):

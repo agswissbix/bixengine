@@ -23,7 +23,7 @@ from django_user_agents.utils import get_user_agent
 # from bixdata_app.models import MyModel
 from django import template
 from bs4 import BeautifulSoup
-from django.db.models import OuterRef, Subquery
+from django.db.models import OuterRef, Subquery, Q
 from ..logic_helper import *
 from .database_helper import *
 
@@ -680,13 +680,32 @@ class TableSettings:
                 continue
 
             try:
+                conditions = setting_data.get("conditions")
+
+                filters = Q(
+                    userid_id=1,
+                    tableid_id=self.tableid,
+                    settingid=setting,
+                    value=setting_data.get("value"),
+                )
+
+                if conditions is None:
+                    filters &= Q(conditions__isnull=True)
+                else:
+                    filters &= Q(conditions=conditions)
+
+                exists = SysUserTableSettings.objects.filter(filters).exists()
+
+                if exists:
+                    continue
+
                 SysUserTableSettings.objects.update_or_create(
                     userid_id=self.userid,
                     tableid_id=self.tableid,
                     settingid=setting,
                     defaults={
                         "value": setting_data.get("value"),
-                        "conditions": setting_data.get("conditions")
+                        "conditions": conditions
                     }
                 )
                 print(f"Saved setting {setting}")
