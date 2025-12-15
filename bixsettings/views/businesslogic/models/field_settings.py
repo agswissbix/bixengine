@@ -1,5 +1,5 @@
 from django.contrib.sessions.models import Session
-from bixsettings.models import *
+from commonapp.models import *
 import os
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
@@ -22,7 +22,7 @@ from django_user_agents.utils import get_user_agent
 #from bixdata_app.models import MyModel
 from django import template
 from bs4 import BeautifulSoup
-from django.db.models import OuterRef, Subquery
+from django.db.models import OuterRef, Subquery, Q
 from ..logic_helper import *
 from .database_helper import *
 
@@ -71,7 +71,7 @@ class FieldSettings:
         
     }
 
-    def __init__(self, tableid, fieldid, userid=1):
+    def __init__(self, tableid, fieldid=None, userid=1):
         self.db_helper = DatabaseHelper('default')
         self.tableid = tableid
         self.fieldid = fieldid
@@ -86,7 +86,7 @@ class FieldSettings:
             tableid=self.tableid,
             fieldid=self.fieldid,
             userid=self.userid
-        ).values('settingid', 'value')
+        ).values('settingid', 'value', 'conditions')
 
         # Se non esistono impostazioni per l'utente, fallback a utente 1 (admin)
         if not user_settings.exists():
@@ -94,33 +94,159 @@ class FieldSettings:
                 tableid=self.tableid,
                 fieldid=self.fieldid,
                 userid=1
-            ).values('settingid', 'value')
+            ).values('settingid', 'value', 'conditions')
 
         # Applica i valori recuperati alle impostazioni di base
         for setting in user_settings:
             setting_id = setting['settingid']
             value = setting['value']
-            if setting_id in settings_copy:
-                settings_copy[setting_id]['value'] = value
+            if setting_id not in settings_copy:
+                continue
+            setting_info = settings_copy[setting_id]
+            setting_info['value'] = value
+
+            conditions = setting.get('conditions')
+            if conditions:
+                setting_info['conditions'] = conditions
+
+                try:
+                    valid_records, where_list = self._evaluate_conditions(conditions)
+                except (json.JSONDecodeError, AttributeError):
+                    valid_records = []
+                    where_list = ""
+
+                setting_info['valid_records'] = valid_records
+                setting_info['where_list'] = where_list
 
         return settings_copy
 
+    def _evaluate_conditions(self, conditions):
+        """
+        Valuta le condizioni JSON per il setting.
+        Struttura JSON attesa:
+        {
+            "logic": "AND",
+            "rules": [
+                {"field": "status", "operator": "!=", "value": "vinta"},
+                {"field": "userid", "operator": "=", "value": "$userid$"}
+            ]
+        }
+        
+        Ritorna:
+        - lista di recordid validi per cui la condizione passa
+        - le where conditions
+        """
+        table_name = f'user_{self.tableid}'
+        logic = conditions.get("logic", "AND").upper()
+        rules = conditions.get("rules", [])
+
+        where_clauses = []
+
+        for rule in rules:
+            field = rule.get("field")
+            operator = rule.get("operator")
+            value = rule.get("value")
+
+            # sostituzioni dinamiche
+            if value == "$userid$":
+                value = self.userid
+
+            # Formatta correttamente il valore per SQL
+            if isinstance(value, str):
+                value = value.replace("'", "''")  # escape semplice
+                value_str = f"'{value}'"
+            else:
+                value_str = str(value)
+
+            if operator in ["=", "!=", ">", "<"]:
+                where_clauses.append(f"{field} {operator} {value_str}")
+            elif operator == "in":
+                if isinstance(value, list):
+                    value_list = ",".join([f"'{v}'" for v in value])
+                    where_clauses.append(f"{field} IN ({value_list})")
+            else:
+                continue  # operatore non supportato
+
+        if not where_clauses:
+            return []  # nessuna condizione -> nessun filtro
+
+        # Combina con AND/OR
+        sql_where = f" {logic} ".join(where_clauses)
+        sql = f"SELECT recordid_ FROM {table_name} WHERE deleted_='N' AND {sql_where}"
+
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            records = [row[0] for row in cursor.fetchall()]
+
+        return records, sql_where
+    
+    def get_all_settings(self):
+        fields_by_table = SysField.objects.filter(
+            tableid=self.tableid
+        ).values_list('fieldid', flat=True)
+
+        all_settings = {}
+
+        for fieldid in fields_by_table:
+            instance = FieldSettings(
+                tableid=self.tableid,
+                fieldid=fieldid,
+                userid=self.userid
+            )
+            all_settings[fieldid] = instance.get_settings()
+
+        return all_settings
+    
+    def has_permission_for_record(self, setting, recordid):
+        value = setting.get("value") == "true"
+        valid_records = setting.get("valid_records", [])
+
+        # nessuna lista → si usa value direttamente
+        if not valid_records:
+            return value
+
+        match = str(recordid) in valid_records
+        return value if match else not value
+
     def save(self):
         field_settings = self.settings
-
-        if self.tableid and self.fieldid:
-            sql_delete = f"DELETE FROM sys_user_field_settings WHERE tableid='{self.tableid}' AND fieldid='{self.fieldid}' AND userid='{self.userid}' "
-            self.db_helper.sql_execute(sql_delete)
-
         success = True
 
-        for setting in field_settings:
-            sql_insert = f"INSERT INTO sys_user_field_settings (userid, tableid, fieldid, settingid, value) VALUES " \
-                         f"('{self.userid}', '{self.tableid}', '{self.fieldid}', '{setting}', '{field_settings[setting]['value']}')"
+        for setting, setting_data in field_settings.items():
             try:
-                self.db_helper.sql_execute(sql_insert)
+                conditions = setting_data.get("conditions")
+
+                filters = Q(
+                    userid_id=self.userid,
+                    tableid=self.tableid,
+                    fieldid=self.fieldid,
+                    settingid=setting,
+                    value=setting_data.get("value")
+                )
+
+                if conditions is None:
+                    filters &= Q(conditions__isnull=True)
+                else:
+                    filters &= Q(conditions=conditions)
+
+                exists = SysUserFieldSettings.objects.filter(filters).exists()
+                if exists:
+                    continue
+
+                SysUserFieldSettings.objects.update_or_create(
+                    userid_id=self.userid,
+                    tableid=self.tableid,
+                    fieldid=self.fieldid,
+                    settingid=setting,
+                    defaults={
+                        "value": setting_data.get("value"),
+                        "conditions": conditions
+                    }
+                )
+                print(f"Saved setting {setting}")
+
             except Exception as e:
-                print(f"Error inserting setting {setting}: {e}")
+                print(f"Error saving setting {setting}: {e}")
                 success = False
 
         return success

@@ -343,19 +343,34 @@ def settings_table_fields_settings_fields_save(request):
     fieldsettings_obj = FieldSettings(tableid=tableid, fieldid=field_record.fieldid, userid=userid)
 
     # Aggiorna le chiavi presenti nel dizionario settings
-    settings_dict = fieldsettings_obj.settings or {}
+    settings_dict = fieldsettings_obj.get_settings()
 
-    for key, value in settings_list.items():
-        # Ogni valore è un dict con {"type": "...", "value": "..."}
-        if key not in settings_dict:
-            settings_dict[key] = {}
-        settings_dict[key].update(value)
+    for name, setting in settings_list.items():
+        new_value = setting['value']
+        old_value = settings_dict.get(name, {}).get('value')
+        new_conditions_raw = setting.get('conditions')
+        old_conditions = settings_dict.get(name, {}).get('conditions')
 
-    # for setting in settings_list:
-        # fieldsettings_obj.settings[setting['name']]['value'] = setting['value']
+        if isinstance(new_conditions_raw, str) and new_conditions_raw.strip() != "":
+            try:
+                new_conditions = json.loads(new_conditions_raw)
+            except json.JSONDecodeError:
+                new_conditions = None
+        else:
+            new_conditions = new_conditions_raw
+        
+        # confronto: aggiorno solo se è cambiato
+        if new_value is not None and str(new_value).strip() != '' and new_value != old_value:
+            fieldsettings_obj.settings[name]['value'] = new_value
+            updated = True
 
-    fieldsettings_obj.settings = settings_dict
-    fieldsettings_obj.save()
+        if new_conditions != old_conditions:
+            fieldsettings_obj.settings[name]['conditions'] = new_conditions
+            updated = True
+
+    # salvo solo se è cambiato qualcosa
+    if updated:
+        fieldsettings_obj.save()
 
     return JsonResponse({
         'success': True, 

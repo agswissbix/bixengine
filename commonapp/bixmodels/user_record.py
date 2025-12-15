@@ -1,6 +1,7 @@
 import os
 from re import match
 from bixsettings.views.businesslogic.models.table_settings import TableSettings
+from bixsettings.views.businesslogic.models.field_settings import FieldSettings
 from commonapp.models import *
 from commonapp.bixmodels.helper_db import *
 from commonapp.bixmodels.helper_sys import *
@@ -474,10 +475,17 @@ class UserRecord:
             counter = 0
             if linked_tableid:
                 table_name = f"user_{linked_tableid}"
+                tablesettings = TableSettings(linked_tableid, self.userid)
+                can_view = tablesettings.get_specific_settings('view')['view']
+
+                where_clauses = f"recordid{self.tableid}_ = '{self.recordid}' AND deleted_ = 'N' "
+
+                if can_view['value'] == 'true' and 'where_list' in can_view:
+                    where_clauses += (f" AND {can_view['where_list']}")
                 sql = f"""
                     SELECT COUNT(recordid_) AS counter
                     FROM {table_name}
-                    WHERE recordid{self.tableid}_ = '{self.recordid}' AND deleted_ = 'N'
+                    WHERE {where_clauses}
                 """
                 counter = HelpderDB.sql_query_value(sql, 'counter')
 
@@ -519,77 +527,9 @@ class UserRecord:
             self.values['personariferimento'] = (record_telefonate.values.get('chi') or '') + " " + (record_telefonate.values.get('telefono') or '')
             self.values['richiesta']=(record_telefonate.values.get('motivo_chiamata','') or '')
         
-        
-        # 1. Carica tutte le impostazioni per la tabella e l'utente in una sola volta
-        # 1. Crea un dizionario per contenere le impostazioni finali.
-        #    La chiave sarà una tupla (fieldid, settingid) per garantire l'unicità.
-        merged_settings = {}
 
-        # 2. Carica prima le impostazioni di default (userid = 1)
-        sql_default = f"""
-        SELECT fieldid, settingid, value
-        FROM sys_user_field_settings
-        WHERE tableid = '{self.tableid}' AND userid = 1
-        """
-        default_settings_raw = HelpderDB.sql_query(sql_default)
-
-        # 3. Popola il dizionario con i valori di default
-        if not Helper.isempty(default_settings_raw):
-            for setting in default_settings_raw:
-                # Crea una chiave unica
-                key = (setting['fieldid'], setting['settingid'])
-                merged_settings[key] = setting
-
-        # 4. Ora carica le impostazioni specifiche dell'utente (self.userid)
-        #    Non serve controllare se l'utente è 1, il merge funziona comunque
-        sql_user = f"""
-        SELECT fieldid, settingid, value
-        FROM sys_user_field_settings
-        WHERE tableid = '{self.tableid}' AND userid = {self.userid}
-        """
-        user_settings_raw = HelpderDB.sql_query(sql_user)
-
-        # 5. Esegui l'override (merge)
-        #    Se l'utente ha una chiave, questa sovrascriverà quella di default.
-        if not Helper.isempty(user_settings_raw):
-            for setting in user_settings_raw:
-                key = (setting['fieldid'], setting['settingid'])
-                # Questa operazione sovrascrive il default se la chiave esiste,
-                # o aggiunge la nuova impostazione utente se non esiste.
-                merged_settings[key] = setting
-
-        # 6. Riconverti i valori del dizionario in una lista finale
-        #    Questo corrisponderà al formato che avevi nell'immagine.
-        all_settings_raw = list(merged_settings.values())
-
-        # 7. Post-elaborazione: Modifica i 'fieldid' che iniziano con underscore
-        final_settings = []
-        for setting in all_settings_raw:
-            current_fieldid = setting['fieldid']
-            
-            # Controlla se 'fieldid' inizia con un underscore
-            if current_fieldid.startswith('_'):
-                # Rimuove l'underscore iniziale e aggiunge un underscore finale
-                setting['fieldid'] = current_fieldid[1:] + '_'
-                
-                # Esempio: '_fieldesempio' diventa 'fieldesempio_'
-            
-            final_settings.append(setting)
-
-        # Il risultato finale è in 'final_settings'
-        all_settings_raw = final_settings
-
-        # Ora all_settings_raw contiene:
-        # - Tutte le impostazioni di userid=1
-        # - Sovrascritte/Integrate da quelle di self.userid
-
-        # 2. Organizza le impostazioni in un dizionario per un accesso efficiente
-        field_settings_map = {}
-        for setting in all_settings_raw:
-            fieldid = setting['fieldid']
-            if fieldid not in field_settings_map:
-                field_settings_map[fieldid] = {}
-            field_settings_map[fieldid][setting['settingid']] = setting['value']
+        fieldsettings_obj = FieldSettings(tableid=self.tableid, userid=self.userid)
+        all_field_settings = fieldsettings_obj.get_all_settings()
             
         step_condition = ""
         if step_id:
@@ -621,26 +561,17 @@ class UserRecord:
             """
             fields = HelpderDB.sql_query(sql)
 
-        insert_fields=[]
-        for field in fields:
-            
-            insert_field={}
-            fieldid=field['fieldid']
-            if fieldid and fieldid.startswith("_"):
-                fieldid= fieldid[1:] + "_"
-            value=self.values.get(fieldid, '')
-            
-            #if self.recordid=='':
-             #   value=""
-            #else:
-             #   value=self.values[fieldid]
-              #  if not value:
-               #     value=""
+        insert_fields = []
 
-            # 3. Recupera le impostazioni specifiche per il campo corrente
-            # Usa .get(fieldid, {}) per gestire campi senza impostazioni personalizzate
-            current_field_settings = field_settings_map.get(fieldid, {})
-            
+        for field in fields:
+            insert_field = {}
+
+            fieldid = field['fieldid']
+            if fieldid and fieldid.startswith("_"):
+                fieldid = fieldid[1:] + "_"
+
+            value = self.values.get(fieldid, '')
+
             insert_field['tableid']="1"
             insert_field['fieldid']=fieldid
             insert_field['fieldorder']="1"
@@ -651,26 +582,36 @@ class UserRecord:
             insert_field["lookuptableid"]= field['lookuptableid']
             insert_field["tablelink"]= field['tablelink']
             insert_field['linked_mastertable']=field['tablelink']
-            # 4. Applica le impostazioni dinamicamente
+
+            # Settings specifici del campo
+            current_field_settings = all_field_settings.get(fieldid, {})
+
+            # Defaults base
             insert_field['settings'] = {
-                # Valori di base che possono essere sovrascritti
                 "calcolato": "false",
                 "default": "",
                 "nascosto": "false",
                 "obbligatorio": "false"
             }
-            # Sovrascrivi con le impostazioni dal DB
-            insert_field['settings'].update(current_field_settings)
 
-            defaultvalue=insert_field['settings'].get('default','')
-            defaultcode=insert_field['settings'].get('default','')
+            # Applica override (solo value)
+            for setting_name, setting_data in current_field_settings.items():
+                has_permission = fieldsettings_obj.has_permission_for_record(setting_data, self.recordid)
+                insert_field['settings'][setting_name] = 'true' if has_permission else 'false'
             
-            #TODO rendere dinamico dai settings
-            if fieldid=='unitprice' or fieldid=='quantity' or fieldid=='unitexpectedcost' or fieldid=='recordidproduct_':
-                insert_field['hasDependencies']=True
-            
-            if self.tableid=='assenze' and fieldid=='giorni':
-                insert_field['hasDependencies']=True
+            defaultvalue = insert_field['settings'].get('default', '')
+            defaultcode = defaultvalue
+
+            if fieldid in {
+                'unitprice',
+                'quantity',
+                'unitexpectedcost',
+                'recordidproduct_'
+            }:
+                insert_field['hasDependencies'] = True
+
+            if self.tableid == 'assenze' and fieldid == 'giorni':
+                insert_field['hasDependencies'] = True
 
             fieldtype=field['fieldtypewebid']
             if not Helper.isempty(field['keyfieldlink']):
