@@ -575,7 +575,7 @@ class UserTable:
             f"{from_sql_string} "
             f"WHERE {where_sql_string} "
             f"ORDER BY {orderby_safe} "
-            f"LIMIT {limit} OFFSET {offset}"
+           # f"LIMIT {limit} OFFSET {offset}"
         )
 
         records = HelpderDB.sql_query(sql)
