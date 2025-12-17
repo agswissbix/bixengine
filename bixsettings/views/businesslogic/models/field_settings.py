@@ -200,9 +200,10 @@ class FieldSettings:
     def has_permission_for_record(self, setting, recordid):
         value = setting.get("value") == "true"
         valid_records = setting.get("valid_records", [])
+        has_conditions = bool(setting.get("conditions", None))
 
         # nessuna lista → si usa value direttamente
-        if not valid_records:
+        if not has_conditions:
             return value
 
         match = str(recordid) in valid_records
@@ -216,21 +217,28 @@ class FieldSettings:
             try:
                 conditions = setting_data.get("conditions")
 
-                filters = Q(
-                    userid_id=1,
+                base_filters = Q(
                     tableid=self.tableid,
                     fieldid=self.fieldid,
                     settingid=setting,
-                    value=setting_data.get("value")
+                    value=setting_data.get("value"),
                 )
 
                 if conditions is None:
-                    filters &= Q(conditions__isnull=True)
+                    base_filters &= Q(conditions__isnull=True)
                 else:
-                    filters &= Q(conditions=conditions)
+                    base_filters &= Q(conditions=conditions)
 
-                exists = SysUserFieldSettings.objects.filter(filters).exists()
-                if exists:
+                # 1️⃣ Controllo per userid = 1
+                exists_default = SysUserFieldSettings.objects.filter(
+                    base_filters & Q(userid_id=1)
+                ).exists()
+
+                if exists_default:
+                    # 2️⃣ Se esiste, cerco lo stesso record per l'utente corrente
+                    SysUserFieldSettings.objects.filter(
+                        base_filters & Q(userid_id=self.userid)
+                    ).delete()
                     continue
 
                 SysUserFieldSettings.objects.update_or_create(

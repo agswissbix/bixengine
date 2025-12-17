@@ -570,12 +570,13 @@ class UserTable:
             
         orderby_safe = f"user_{self.tableid}.{orderby}" # Previeni SQL Injection su orderby
         
+        # TODO custom telefonodo amico gestire limit
         sql = (
             f"SELECT {select_sql_string} "
             f"{from_sql_string} "
             f"WHERE {where_sql_string} "
             f"ORDER BY {orderby_safe} "
-           # f"LIMIT {limit} OFFSET {offset}"
+            f"LIMIT {limit} OFFSET {offset}"
         )
 
         records = HelpderDB.sql_query(sql)

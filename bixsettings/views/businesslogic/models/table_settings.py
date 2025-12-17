@@ -659,9 +659,10 @@ class TableSettings:
     def has_permission_for_record(self, setting, recordid):
         value = setting.get("value") == "true"
         valid_records = setting.get("valid_records", [])
+        has_conditions = bool(setting.get("conditions", None))
 
         # nessuna lista → si usa value direttamente
-        if not valid_records:
+        if not has_conditions:
             return value
 
         match = str(recordid) in valid_records
@@ -680,35 +681,40 @@ class TableSettings:
                 continue
 
             try:
+                value = setting_data.get("value")
                 conditions = setting_data.get("conditions")
 
-                filters = Q(
-                    userid_id=1,
+                base_filters = Q(
                     tableid_id=self.tableid,
                     settingid=setting,
-                    value=setting_data.get("value"),
                 )
 
+                cond_filter = Q()
                 if conditions is None:
-                    filters &= Q(conditions__isnull=True)
+                    cond_filter = Q(conditions__isnull=True)
                 else:
-                    filters &= Q(conditions=conditions)
+                    cond_filter = Q(conditions=conditions)
 
-                exists = SysUserTableSettings.objects.filter(filters).exists()
+                is_equal_to_default = SysUserTableSettings.objects.filter(
+                    base_filters 
+                    & cond_filter
+                    & Q(userid_id=1, value=value)
+                ).exists()
 
-                if exists:
-                    continue
-
-                SysUserTableSettings.objects.update_or_create(
-                    userid_id=self.userid,
-                    tableid_id=self.tableid,
-                    settingid=setting,
-                    defaults={
-                        "value": setting_data.get("value"),
-                        "conditions": conditions
-                    }
-                )
-                print(f"Saved setting {setting}")
+                if is_equal_to_default:
+                    SysUserTableSettings.objects.filter(
+                        base_filters & Q(userid_id=self.userid)
+                    ).delete()
+                else:
+                    SysUserTableSettings.objects.update_or_create(
+                        userid_id=self.userid,
+                        tableid_id=self.tableid,
+                        settingid=setting,
+                        defaults={
+                            "value": value,
+                            "conditions": conditions
+                        }
+                    )
             except Exception as e:
                 print(f"Error saving setting {setting}: {e}")
                 success = False
