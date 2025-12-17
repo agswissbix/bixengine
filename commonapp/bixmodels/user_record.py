@@ -598,6 +598,8 @@ class UserRecord:
             for setting_name, setting_data in current_field_settings.items():
                 has_permission = fieldsettings_obj.has_permission_for_record(setting_data, self.recordid)
                 insert_field['settings'][setting_name] = 'true' if has_permission else 'false'
+                if setting_name == 'default':
+                    insert_field['settings'][setting_name] = setting_data.get('value', '')
             
             defaultvalue = insert_field['settings'].get('default', '')
             defaultcode = defaultvalue
