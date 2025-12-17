@@ -168,7 +168,7 @@ class FieldSettings:
                 continue  # operatore non supportato
 
         if not where_clauses:
-            return []  # nessuna condizione -> nessun filtro
+            return [], ""  # nessuna condizione -> nessun filtro
 
         # Combina con AND/OR
         sql_where = f" {logic} ".join(where_clauses)

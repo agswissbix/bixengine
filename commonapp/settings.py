@@ -93,7 +93,7 @@ def settings_table_fields(request):
 
     for field in fields[:]:  # usa [:] per evitare problemi durante la rimozione
         # Rimuovi i campi con fieldid che termina con "_"
-        if str(field['fieldid']).endswith('_'):
+        if str(field['fieldid']).startswith('_'):
             fields.remove(field)
             continue
 
@@ -367,6 +367,7 @@ def settings_table_fields_settings_fields_save(request):
             updated = True
 
         if new_conditions != old_conditions:
+            new_conditions = None if len(new_conditions['rules']) == 0 else new_conditions
             fieldsettings_obj.settings[name]['conditions'] = new_conditions
             updated = True
 
