@@ -1857,6 +1857,8 @@ def matrixcalendar_save_record(request):
     if not record:
         return JsonResponse({"success": False, "detail": "Record non trovato"}, status=404)
 
+    old_record = record
+
     # --- Recupero impostazioni tabella ---
     userid = Helper.get_userid(request)
     tablesettings_obj = TableSettings(tableid=tableid, userid=userid)
@@ -1908,7 +1910,7 @@ def matrixcalendar_save_record(request):
         record.userid = record.values['user']
         event = record.save_record_for_event()
 
-        custom_save_record_fields('events', event.recordid)
+        custom_save_record_fields('events', event.recordid, old_record)
 
         return JsonResponse({"success": True, "detail": "Record aggiornato con successo"})
 
@@ -3820,7 +3822,9 @@ def get_record_linked_tables(request):
     master_tableid= data.get("masterTableid")
     master_recordid= data.get("masterRecordid")
 
-    record=UserRecord(master_tableid,master_recordid)
+    userid = Helper.get_userid(request)
+
+    record=UserRecord(master_tableid,master_recordid,userid)
     linkedTables=record.get_linked_tables()
     response={ "linkedTables": linkedTables}
     return JsonResponse(response)

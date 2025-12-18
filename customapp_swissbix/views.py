@@ -1166,7 +1166,7 @@ def get_fields_swissbix_deal(request):
             step_data["fields"] = card_fields
 
         elif step.type == "collegate":
-            record=UserRecord(tableid,recordid)
+            record=UserRecord(tableid,recordid, userid=Helper.get_userid(request),master_tableid=master_tableid,master_recordid=master_recordid)
             linked_tables=record.get_linked_tables(typepreference='keylabel_steps', step_id=step.id)
 
             step_data["linked_tables"] = linked_tables
@@ -1590,14 +1590,15 @@ def save_project_as_template(request):
         if not project_id or not template_id:
             return JsonResponse({"error": "Parametri mancanti"}, status=400)
 
+        userid = Helper.get_userid(request)
         # 🔹 Carico il record del progetto
-        project_record = UserRecord("project", project_id)
+        project_record = UserRecord("project", project_id, userid)
 
         if not project_record.values:
             return JsonResponse({"error": "Record progetto non trovato"}, status=404)
 
         # 🔹 Carico il record del template
-        template_record = UserRecord("projecttemplate", template_id)
+        template_record = UserRecord("projecttemplate", template_id, userid)
 
         if not template_record.values:
             return JsonResponse({"error": "Template non trovato"}, status=404)
