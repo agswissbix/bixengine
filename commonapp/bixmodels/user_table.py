@@ -690,7 +690,7 @@ class UserTable:
         return views
     
     def get_default_viewid(self):
-        sql="SELECT value FROM sys_user_table_settings WHERE tableid = '"+self.tableid+"' AND userid=1 AND settingid='default_viewid'"
-        viewid=HelpderDB.sql_query_value(sql=sql,column='value')
-        return viewid
+        tablesettings = TableSettings(self.tableid, self.userid)
+        table_default_viewid = tablesettings.get_specific_settings('default_viewid')['default_viewid']
+        return table_default_viewid['value']
                                     

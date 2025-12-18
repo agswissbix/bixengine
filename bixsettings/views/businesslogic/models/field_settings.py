@@ -215,27 +215,30 @@ class FieldSettings:
 
         for setting, setting_data in field_settings.items():
             try:
+                value = setting_data.get("value")
                 conditions = setting_data.get("conditions")
 
                 base_filters = Q(
                     tableid=self.tableid,
                     fieldid=self.fieldid,
                     settingid=setting,
-                    value=setting_data.get("value"),
                 )
 
+                cond_filter = Q()
                 if conditions is None:
-                    base_filters &= Q(conditions__isnull=True)
+                    cond_filter = Q(conditions__isnull=True)
                 else:
-                    base_filters &= Q(conditions=conditions)
+                    cond_filter = Q(conditions=conditions)
 
-                # 1️⃣ Controllo per userid = 1
                 exists_default = SysUserFieldSettings.objects.filter(
-                    base_filters & Q(userid_id=1)
+                    base_filters
+                    & cond_filter
+                    & Q(userid_id=1, value=value)
                 ).exists()
 
                 if exists_default:
-                    # 2️⃣ Se esiste, cerco lo stesso record per l'utente corrente
+                    if self.userid == 1:
+                        continue
                     SysUserFieldSettings.objects.filter(
                         base_filters & Q(userid_id=self.userid)
                     ).delete()
@@ -247,7 +250,7 @@ class FieldSettings:
                     fieldid=self.fieldid,
                     settingid=setting,
                     defaults={
-                        "value": setting_data.get("value"),
+                        "value": value,
                         "conditions": conditions
                     }
                 )

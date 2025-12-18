@@ -702,6 +702,8 @@ class TableSettings:
                 ).exists()
 
                 if is_equal_to_default:
+                    if self.userid == 1:
+                        continue
                     SysUserTableSettings.objects.filter(
                         base_filters & Q(userid_id=self.userid)
                     ).delete()
