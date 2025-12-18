@@ -81,23 +81,34 @@ class FieldSettings:
     def get_settings(self):
         settings_copy = {key: value.copy() for key, value in self.settings.items()}
 
-        # Query ORM per l'utente corrente
-        user_settings = SysUserFieldSettings.objects.filter(
+        # Settings utente
+        user_qs = SysUserFieldSettings.objects.filter(
             tableid=self.tableid,
             fieldid=self.fieldid,
             userid_id=self.userid
         ).values('settingid', 'value', 'conditions')
 
-        # Se non esistono impostazioni per l'utente, fallback a utente 1 (admin)
-        if not user_settings.exists():
-            user_settings = SysUserFieldSettings.objects.filter(
-                tableid=self.tableid,
-                fieldid=self.fieldid,
-                userid_id=1
-            ).values('settingid', 'value', 'conditions')
+        # Settings admin
+        admin_qs = SysUserFieldSettings.objects.filter(
+            tableid=self.tableid,
+            fieldid=self.fieldid,
+            userid_id=1
+        ).values('settingid', 'value', 'conditions')
+
+        # Indicizza per settingid
+        user_settings = {s['settingid']: s for s in user_qs}
+        admin_settings = {s['settingid']: s for s in admin_qs}
+
+        # Merge: user → admin
+        merged_settings = []
+        for settingid in set(admin_settings) | set(user_settings):
+            if settingid in user_settings:
+                merged_settings.append(user_settings[settingid])
+            else:
+                merged_settings.append(admin_settings[settingid])
 
         # Applica i valori recuperati alle impostazioni di base
-        for setting in user_settings:
+        for setting in merged_settings:
             setting_id = setting['settingid']
             value = setting['value']
             if setting_id not in settings_copy:
@@ -215,27 +226,30 @@ class FieldSettings:
 
         for setting, setting_data in field_settings.items():
             try:
+                value = setting_data.get("value")
                 conditions = setting_data.get("conditions")
 
                 base_filters = Q(
                     tableid=self.tableid,
                     fieldid=self.fieldid,
                     settingid=setting,
-                    value=setting_data.get("value"),
                 )
 
+                cond_filter = Q()
                 if conditions is None:
-                    base_filters &= Q(conditions__isnull=True)
+                    cond_filter = Q(conditions__isnull=True)
                 else:
-                    base_filters &= Q(conditions=conditions)
+                    cond_filter = Q(conditions=conditions)
 
-                # 1️⃣ Controllo per userid = 1
                 exists_default = SysUserFieldSettings.objects.filter(
-                    base_filters & Q(userid_id=1)
+                    base_filters
+                    & cond_filter
+                    & Q(userid_id=1, value=value)
                 ).exists()
 
                 if exists_default:
-                    # 2️⃣ Se esiste, cerco lo stesso record per l'utente corrente
+                    if self.userid == 1:
+                        continue
                     SysUserFieldSettings.objects.filter(
                         base_filters & Q(userid_id=self.userid)
                     ).delete()
@@ -247,7 +261,7 @@ class FieldSettings:
                     fieldid=self.fieldid,
                     settingid=setting,
                     defaults={
-                        "value": setting_data.get("value"),
+                        "value": value,
                         "conditions": conditions
                     }
                 )

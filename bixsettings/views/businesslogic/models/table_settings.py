@@ -412,20 +412,35 @@ class TableSettings:
 
         self._populate_workspace_options(settings_copy)
 
-        # Carica le impostazioni utente dalla tabella sys_user_table_settings
-        user_settings = SysUserTableSettings.objects.filter(
+        user_settings_qs = SysUserTableSettings.objects.filter(
             tableid=self.tableid,
             userid=self.userid
         ).values('settingid', 'value', 'conditions')
 
-        # Se non esistono impostazioni per l'utente, usa quelle dell'utente admin (1)
-        if not user_settings.exists():
-            user_settings = SysUserTableSettings.objects.filter(
-                tableid=self.tableid,
-                userid=1
-            ).values('settingid', 'value', 'conditions')
+        # Settings del defaultuser (admin)
+        admin_settings_qs = SysUserTableSettings.objects.filter(
+            tableid=self.tableid,
+            userid=1
+        ).values('settingid', 'value', 'conditions')
 
-        self._apply_user_settings(settings_copy, user_settings)
+        # Indicizza per settingid
+        user_settings = {
+            s['settingid']: s for s in user_settings_qs
+        }
+
+        admin_settings = {
+            s['settingid']: s for s in admin_settings_qs
+        }
+
+        # Merge: user → admin
+        merged_settings = []
+        for settingid in set(admin_settings) | set(user_settings):
+            if settingid in user_settings:
+                merged_settings.append(user_settings[settingid])
+            else:
+                merged_settings.append(admin_settings[settingid])
+
+        self._apply_user_settings(settings_copy, merged_settings)
 
         return settings_copy
 
@@ -534,17 +549,23 @@ class TableSettings:
 
             # Caso speciale per default_viewid
             if setting_id == 'default_viewid':
-                with connection.cursor() as cursor:
-                    cursor.execute(f"SELECT * FROM sys_view WHERE tableid='{self.tableid}'")
-                    view_options = dictfetchall(cursor)
+                self._populate_default_view_options(setting_info)
 
-                setting_info['options'] = [
-                    {'name': str(option['name']), 'id': str(option['id'])}
-                    for option in view_options
-                ] if view_options else []
+    def _populate_default_view_options(self, setting_info):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT * FROM sys_view WHERE tableid = %s",
+                [self.tableid]
+            )
+            view_options = dictfetchall(cursor)
 
-                if not view_options:
-                    setting_info['value'] = '0'
+        setting_info['options'] = [
+            {'name': str(opt['name']), 'id': str(opt['id'])}
+            for opt in view_options
+        ]
+
+        if not view_options:
+            setting_info['value'] = '0'
 
     def _evaluate_conditions(self, conditions):
         """
@@ -702,6 +723,8 @@ class TableSettings:
                 ).exists()
 
                 if is_equal_to_default:
+                    if self.userid == 1:
+                        continue
                     SysUserTableSettings.objects.filter(
                         base_filters & Q(userid_id=self.userid)
                     ).delete()

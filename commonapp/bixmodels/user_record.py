@@ -446,6 +446,17 @@ class UserRecord:
             .order_by('fieldorder')
         )
 
+        if not user_orders_qs.exists():
+            user_orders_qs = (
+                SysUserOrder.objects.filter(
+                    tableid=self.tableid,
+                    typepreference=typepreference,
+                    userid=1,
+                    fieldorder__isnull=False
+                )
+                .order_by('fieldorder')
+            )
+
         # Se passo uno step_id, filtro anche per quello
         if step_id:
             user_orders_qs = user_orders_qs.filter(step_id=step_id)
