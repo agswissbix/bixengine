@@ -81,23 +81,34 @@ class FieldSettings:
     def get_settings(self):
         settings_copy = {key: value.copy() for key, value in self.settings.items()}
 
-        # Query ORM per l'utente corrente
-        user_settings = SysUserFieldSettings.objects.filter(
+        # Settings utente
+        user_qs = SysUserFieldSettings.objects.filter(
             tableid=self.tableid,
             fieldid=self.fieldid,
             userid_id=self.userid
         ).values('settingid', 'value', 'conditions')
 
-        # Se non esistono impostazioni per l'utente, fallback a utente 1 (admin)
-        if not user_settings.exists():
-            user_settings = SysUserFieldSettings.objects.filter(
-                tableid=self.tableid,
-                fieldid=self.fieldid,
-                userid_id=1
-            ).values('settingid', 'value', 'conditions')
+        # Settings admin
+        admin_qs = SysUserFieldSettings.objects.filter(
+            tableid=self.tableid,
+            fieldid=self.fieldid,
+            userid_id=1
+        ).values('settingid', 'value', 'conditions')
+
+        # Indicizza per settingid
+        user_settings = {s['settingid']: s for s in user_qs}
+        admin_settings = {s['settingid']: s for s in admin_qs}
+
+        # Merge: user → admin
+        merged_settings = []
+        for settingid in set(admin_settings) | set(user_settings):
+            if settingid in user_settings:
+                merged_settings.append(user_settings[settingid])
+            else:
+                merged_settings.append(admin_settings[settingid])
 
         # Applica i valori recuperati alle impostazioni di base
-        for setting in user_settings:
+        for setting in merged_settings:
             setting_id = setting['settingid']
             value = setting['value']
             if setting_id not in settings_copy:
