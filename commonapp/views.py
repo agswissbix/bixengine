@@ -6758,8 +6758,19 @@ def save_newuser(request):
         return JsonResponse({"success": False, "error": "Metodo non supportato"}, status=405)
 
     try:
+        data = {}
         # 1. Parsing dei dati JSON
-        data = json.loads(request.body)
+        if request.content_type == 'application/json':
+            try:
+                data = json.loads(request.body)
+            except json.JSONDecodeError:
+                data = {}
+        
+        # 2. Se il dizionario è vuoto, prova i dati Form (POST) o Query (GET)
+        if not data:
+            # .dict() trasforma il QueryDict di Django in un dizionario standard
+            data = request.POST.dict() if request.POST else request.GET.dict()
+            
         username = (data.get("username") or "").lower()
         firstname = data.get("firstname")
         password = data.get("password")
