@@ -982,7 +982,7 @@ def calculate_dependent_fields(request):
     return JsonResponse({'status': 'success', 'updated_fields': updated_fields})
 
 
-def print_timesheet(request):
+def print_timesheet_func(request):
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
