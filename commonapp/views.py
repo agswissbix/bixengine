@@ -7205,9 +7205,34 @@ def stampa_pdf_test(request):
 def get_custom_functions(request):
     data = json.loads(request.body)
     tableid = data.get('tableid')
+    recordid = data.get('recordid')
+    userid = Helper.get_userid(request)
 
-    customs_fn = SysCustomFunction.objects.filter(tableid=tableid).order_by('order').values()
-    return JsonResponse({'fn': list(customs_fn)}, safe=False)
+    customs_fn = SysCustomFunction.objects.filter(
+        tableid=tableid
+    ).order_by('order').values()
+
+    tablesettings = TableSettings(tableid, userid)
+    valid_functions = []
+
+    for fn in customs_fn:
+        conditions = fn['conditions']
+        if conditions:
+            valid_records, sql_where = tablesettings._evaluate_conditions(conditions)
+
+            setting = {
+                'value': 'true',
+                'valid_records': valid_records,
+                'conditions': sql_where
+            }
+
+            if recordid:
+                if not tablesettings.has_permission_for_record(setting, recordid):
+                    continue  # esclude la funzione
+
+        valid_functions.append(fn)
+
+    return JsonResponse({'fn': valid_functions}, safe=False)
 
 
 def calculate_dependent_fields(request):
