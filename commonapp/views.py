@@ -2952,16 +2952,28 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None):
     - files: dict di file caricati (es. da request.FILES)
     """
     def normalize_value(value):
-        if value == '' or value == 'null' or len(str(value).strip()) == 0:
-            return None
-        return value
+        return value if value not in ('', 'null', None) and str(value).strip() else None
 
     record = UserRecord(tableid, recordid)
 
     # 1️⃣ Assegna i campi
     if fields:
         for fieldid, value in fields.items():
-            record.values[fieldid] = normalize_value(value)
+            normalized_value = normalize_value(value)
+
+            # Gestione campi FK (terminano con "_")
+            if fieldid.endswith('_') and normalized_value is not None:
+                sql = f"""
+                    SELECT recordid_
+                    FROM user_{fieldid.replace('_', '').replace('recordid', '')}
+                    WHERE recordid_ = %s
+                    LIMIT 1
+                """
+                existing_id = HelpderDB.sql_query_value(sql, 'recordid_', (normalized_value,))
+                if not existing_id:
+                    normalized_value = None
+
+            record.values[fieldid] = normalized_value
 
     # 2️⃣ Salva i file (se presenti)
     if files:
