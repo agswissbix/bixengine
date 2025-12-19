@@ -6189,7 +6189,7 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
     final_datasets2 = _resolve(config.get('datasets2'))
 
     # extra metadata invariati
-    if chart_record['layout'] == 'value':
+    if chart_record['layout'] in ['value', 'button']:
         icon = HelpderDB.sql_query_value(f"SELECT icon FROM user_chart WHERE report_id={chart_id} LIMIT 1", "icon")
         if icon and final_datasets1:
             final_datasets1[0]['image'] = icon
