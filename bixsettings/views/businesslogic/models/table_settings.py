@@ -106,7 +106,7 @@ class TableSettings:
                 {'name': 'Allegati', 'selected': True},
                 {'name': 'Analitica', 'selected': True},
                 {'name': 'Storico', 'selected': True},
-                {'name': 'Custom', 'selected': True},
+                {'name': 'Steps', 'selected': True},
                 {'name': 'Checklist', 'selected': True},
             ],
             'value': 'Campi, Collegati'
