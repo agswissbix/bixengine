@@ -12,7 +12,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/bixengine
 
 jobs:
   build-and-push:
@@ -32,11 +31,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Prepare image name
+        id: prep
+        run: |
+          OWNER="${{ github.repository_owner }}"
+          CLIENT="${{ github.event.inputs.client_id }}"
+          # Trasforma tutto in minuscolo usando 'tr'
+          IMAGE_PATH=$(echo "${{ env.REGISTRY }}/${OWNER}/bixengine-${CLIENT}" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE_PATH=${IMAGE_PATH}" >> $GITHUB_ENV
+
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ github.event.inputs.client_id }}:${{ github.event.inputs.tag }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ github.event.inputs.client_id }}:latest
+            ${{ env.IMAGE_PATH }}:${{ github.event.inputs.tag }}
+            ${{ env.IMAGE_PATH }}:latest
