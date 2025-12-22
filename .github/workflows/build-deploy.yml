@@ -1,4 +1,4 @@
-name: Build and Push Client Image
+name: Build and Push BixEngine
 
 on:
   workflow_dispatch:
