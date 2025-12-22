@@ -7,12 +7,11 @@ on:
         description: 'ID Cliente'
         required: true
       tag:
-        description: 'Versione (es. latest, 1.0.0)'
+        description: 'Tag versione (es. latest)'
         default: 'latest'
 
 env:
   REGISTRY: ghcr.io
-  # Il nome dell'immagine deve essere tutto minuscolo
   IMAGE_NAME: ${{ github.repository_owner }}/bixengine
 
 jobs:
@@ -38,7 +37,6 @@ jobs:
         with:
           context: .
           push: true
-          # Taggiamo l'immagine per il cliente specifico
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ github.event.inputs.client_id }}:${{ github.event.inputs.tag }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ github.event.inputs.client_id }}:latest
