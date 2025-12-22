@@ -4965,16 +4965,20 @@ def get_dashboard_data(request):
         .values("id", "name")\
         .order_by(F("order_dashboard").asc(nulls_last=True))
 
+    cliente_id = Helper.get_cliente_id()
+
     dashboards = []
     for d in dashboards_qs:
         dashboard_id_str = str(d["id"])
         
-        translated_text = WegolfHelper.get_translation(
-            tableid='sys_dashboard', 
-            fieldid=dashboard_id_str, 
-            userid=userid, 
-            translation_type='Dashboard'
-        )
+        translated_text = d["name"]
+        if cliente_id == "wegolf":
+            translated_text = WegolfHelper.get_translation(
+                tableid='sys_dashboard', 
+                fieldid=dashboard_id_str, 
+                userid=userid, 
+                translation_type='Dashboard'
+            )
 
         final_name = translated_text if translated_text != dashboard_id_str else d["name"]
 
