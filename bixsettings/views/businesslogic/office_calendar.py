@@ -10,14 +10,14 @@ class OfficeCalendar:
 
     def __init__(self):
         env = environ.Env()
-        self.credentials = (env('CLIENT_ID'), env('SECRET_ID'))
+        self.credentials = (env('AZURE_CLIENT_ID'), env('SECRET_ID'))
         self.account = Account(self.credentials, auth_flow_type='credentials', tenant_id=env('TENANT_ID'))
 
     def add_calendar_event(request, task):
         # pick the env variables from the __init__
         env = environ.Env()
         environ.Env.read_env()
-        credentials = (env('CLIENT_ID'), env('SECRET_ID'))
+        credentials = (env('AZURE_CLIENT_ID'), env('SECRET_ID'))
         account = Account(credentials, auth_flow_type='credentials', tenant_id=env('TENANT_ID'))
 
         if account.authenticate():
@@ -70,7 +70,7 @@ class OfficeCalendar:
         env = environ.Env()
         environ.Env.read_env()
 
-        credentials = (env('CLIENT_ID'), env('SECRET_ID'))
+        credentials = (env('AZURE_CLIENT_ID'), env('SECRET_ID'))
 
         account = Account(credentials, auth_flow_type='credentials', tenant_id=env('TENANT_ID'))
 
@@ -90,7 +90,7 @@ class OfficeCalendar:
         env = environ.Env()
         environ.Env.read_env()
 
-        credentials = (env('CLIENT_ID'), env('SECRET_ID'))
+        credentials = (env('AZURE_CLIENT_ID'), env('SECRET_ID'))
 
         account = Account(credentials, auth_flow_type='credentials', tenant_id=env('TENANT_ID'))
 

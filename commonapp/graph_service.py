@@ -19,7 +19,7 @@ def get_graph_access_token():
     config = settings.MS_GRAPH
 
     app = msal.ConfidentialClientApplication(
-        config['CLIENT_ID'],
+        config['AZURE_CLIENT_ID'],
         authority=config['AUTHORITY'],
         client_credential=config['CLIENT_SECRET'],
     )
