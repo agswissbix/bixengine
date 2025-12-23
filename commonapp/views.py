@@ -6269,23 +6269,22 @@ def get_dynamic_chart_data(request, chart_id, query_conditions='1=1', viewMode=N
 
     config = json.loads(chart_record['config'])
 
-    ds_keys = ['datasets', 'datasets2']
-
     active_server = Helper.get_cliente_id()
     userid = Helper.get_userid(request)
 
     if active_server == "wegolf":
+        ds_keys = ['datasets', 'datasets2']
+
         for key in ds_keys:
             dataset_list = config.get(key, [])
-            
-            if dataset_list and len(dataset_list) > 0:
-                target_ds = dataset_list[0]
-                alias = target_ds.get('alias')
+        
+            for dataset in dataset_list:
+                alias = dataset.get('alias')
                 
                 if alias:
                     label = WegolfHelper.get_translation("metrica_annuale", alias, userid=userid)
                     if label:
-                        target_ds['label'] = label
+                        dataset['label'] = label
 
     chart_type = config.get('chart_type', 'aggregate')
 
