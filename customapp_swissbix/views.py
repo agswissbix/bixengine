@@ -1718,3 +1718,11 @@ def save_timetracking(request):
 def stop_timetracking(request):
     from customapp_swissbix.script import stop_timetracking
     return stop_timetracking(request)
+
+def get_timesheet_initial_data(request):
+    from customapp_swissbix.script import get_timesheet_initial_data
+    return get_timesheet_initial_data(request)
+
+def save_timesheet(request):
+    from customapp_swissbix.script import save_timesheet
+    return save_timesheet(request)

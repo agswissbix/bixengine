@@ -1796,4 +1796,340 @@ def stop_timetracking(request):
         return JsonResponse({"status": "completed"}, safe=False)
     except Exception as e:
         logger.error(f"Errore nel fermare il timetracking: {str(e)}")
-        return JsonResponse({'error': f"Errore nel fermare il timetracking: {str(e)}"}, status=500)    
+        return JsonResponse({'error': f"Errore nel fermare il timetracking: {str(e)}"}, status=500)  
+
+def get_timesheet_initial_data(request):
+    print("get_timesheet_initial_data")
+
+    try:
+        userid = Helper.get_userid(request)
+        user = SysUser.objects.get(id=userid)
+
+        records = UserTable('company').get_records(conditions_list=[], limit=100000)
+        aziende = [
+            {
+                'id': x.get('recordid_'),
+                'name': x.get('companyname'),
+                'details': x.get('details')
+            } 
+            for x in records
+        ]
+
+        records = UserTable('project').get_records(conditions_list=[],limit=100000)
+        progetti = [
+            {
+                'id': x.get('recordid_'),
+                'name': x.get('projectname'),
+            } 
+            for x in records
+        ]
+
+        records = UserTable('ticket').get_records(conditions_list=[],limit=100000)
+        tickets = [
+            {
+                'id': x.get('recordid_'),
+                'name': x.get('subject'),
+                'details': x.get('description')
+            } 
+            for x in records
+        ]
+
+        records = UserTable('product').get_records(conditions_list=[],limit=100000)
+        prodotti = [
+            {
+                'id': x.get('recordid_'),
+                'name': x.get('name'),
+            } 
+            for x in records
+        ]
+
+        records = UserTable('timesheet').get_records(conditions_list=[],limit=100000)
+        rapporti = [
+            {
+                'id': x.get('recordid_'),
+                'name': x.get('description'),
+            } 
+            for x in records
+        ]
+
+        servizi = [
+            {"id": "1", "name": "Amministrazione", "icon_slug": "amministrazione"},
+            {"id": "2", "name": "Assistenza IT", "icon_slug": "it"},
+            {"id": "3", "name": "Assistenza PBX", "icon_slug": "pbx"},
+            {"id": "4", "name": "Assistenza SW", "icon_slug": "sw"},
+            {"id": "5", "name": "Assistenza Web Hosting", "icon_slug": "web"},
+            {"id": "6", "name": "Commerciale", "icon_slug": "commerciale"},
+            {"id": "7", "name": "Formazione Apprendista", "icon_slug": "formazione"},
+            {"id": "8", "name": "Formazione e Test", "icon_slug": "test"},
+            {"id": "9", "name": "Interno", "icon_slug": "interno"},
+            {"id": "10", "name": "Lenovo", "icon_slug": "lenovo"},
+            {"id": "11", "name": "Printing", "icon_slug": "printing"},
+            {"id": "12", "name": "Riunione", "icon_slug": "riunione"},
+        ]
+
+        opzioni = [
+            {"id": "o1", "name": "Commercial support"},
+            {"id": "o2", "name": "In contract"},
+            {"id": "o3", "name": "Monte ore"},
+            {"id": "o4", "name": "Out of contract"},
+            {"id": "o5", "name": "Swisscom incident"},
+            {"id": "o6", "name": "Swisscom ServiceNow"},
+            {"id": "o7", "name": "To check"},
+            {"id": "o8", "name": "Under Warranty"},
+        ]
+
+        response_data = {
+            'aziende': aziende,
+            'progetti': progetti,
+            'tickets': tickets, 
+            'prodotti': prodotti,
+            'rapporti': rapporti,
+            'servizi': servizi,
+            'opzioni': opzioni,
+            'utenteCorrente': {
+                'id': str(userid),
+                'name': f"{user.firstname} {user.lastname}",
+                'details': user.email
+            }
+        }
+
+        return JsonResponse(response_data, safe=False)
+    except Exception as e:
+        logger.error(f"Errore nel fetch dei dati iniziali per la creazione di un nuovo timesheeet: {str(e)}")
+        return JsonResponse({'error': f"Errore nel fetch dei dati iniziali per la creazione di un nuovo timesheeet: {str(e)}"}, status=500)
+    
+def save_timesheet(request):
+    """
+    Salvataggio Timesheet, righe di dettaglio e allegati da BixApp mobile
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    try:
+        userid = Helper.get_userid(request)
+        
+        # --- 1. RECUPERO DATI DAL FRONTEND ---
+        fields_raw = request.POST.get('fields')
+        data = json.loads(fields_raw) if fields_raw else {}
+
+        # Inizializzo Record
+        timesheet_record = UserRecord('timesheet')
+        
+        # Mappatura campi base
+        timesheet_record.values['recordidcompany_'] = data.get('azienda_id', '')
+        timesheet_record.values['recordidproject_'] = data.get('progetto_id', '')
+        timesheet_record.values['recordidticket_'] = data.get('ticket_id', '')
+        timesheet_record.values['service'] = data.get('servizio', '')
+        timesheet_record.values['invoiceoption'] = data.get('opzione', '')
+        timesheet_record.values['description'] = data.get('descrizione', '')
+        timesheet_record.values['internalnotes'] = data.get('note_interne', '')
+        timesheet_record.values['decline_note'] = data.get('nota_rifiuto', '')
+        timesheet_record.values['user'] = userid
+        
+        # Gestione Data
+        fecha = data.get('data')
+        if fecha:
+            timesheet_record.values['date'] = datetime.datetime.strptime(fecha, '%Y-%m-%d')
+        
+        # Gestione Tempi
+        worktime = data.get('tempo_lavoro', '00:00')
+        traveltime = data.get('tempo_trasferta', '00:00')
+        timesheet_record.values['worktime'] = worktime
+        timesheet_record.values['traveltime'] = traveltime
+
+        # --- 2. LOGICA DI BUSINESS E CALCOLI ---
+        # Recupero record correlati per calcoli
+        company_record = UserRecord('company', timesheet_record.values['recordidcompany_'])
+        project_record = UserRecord('project', timesheet_record.values['recordidproject_'])
+        ticket_record = UserRecord('ticket', timesheet_record.values['recordidticket_'])
+        servicecontract_table = UserTable(tableid='servicecontract')
+
+        service = timesheet_record.values['service']
+        invoiceoption = timesheet_record.values['invoiceoption']
+        invoicestatus = 'To Process'
+        productivity = ''
+        
+        worktime_decimal = 0
+        travel_time_decimal = 0
+        totaltime_decimal = 0
+        workprice = 0
+        travelprice = 0
+        
+        timesheet_record.values['print_type'] = 'Normale'
+        timesheet_record.values['recordidservicecontract_'] = ''
+
+        # Conversione tempi in decimali
+        if not Helper.isempty(worktime):
+            hours, minutes = map(int, worktime.split(':'))
+            worktime_decimal = hours + minutes / 60
+            if not Helper.isempty(traveltime):
+                hours, minutes = map(int, traveltime.split(':'))
+                travel_time_decimal = hours + minutes / 60
+            
+            totaltime_decimal = worktime_decimal + travel_time_decimal
+            timesheet_record.values['worktime_decimal'] = worktime_decimal
+            timesheet_record.values['traveltime_decimal'] = travel_time_decimal
+            timesheet_record.values['totaltime_decimal'] = totaltime_decimal
+
+        # Valutazione tipo servizio
+        if service in ['Amministrazione', 'Commerciale', 'Formazione Apprendista', 'Formazione e Test', 'Interno', 'Riunione']:
+            invoicestatus = 'Attività non fatturabile'
+            productivity = 'Senza ricavo'
+
+        # Valutazione opzioni particolari
+        if invoicestatus == 'To Process':
+            if invoiceoption in ['Under Warranty', 'Commercial support', 'Swisscom incident', 'Swisscom ServiceNow', 'To check']:
+                invoicestatus = invoiceoption
+                productivity = 'Senza ricavo'
+                timesheet_record.values['print_type'] = 'Garanzia'
+                timesheet_record.values['print_hourprice'] = 'Garanzia'
+                timesheet_record.values['print_travel'] = 'Garanzia'
+
+        # Valutazione Progetto
+        if invoicestatus == 'To Process' and not Helper.isempty(project_record.recordid) and invoiceoption != 'Out of contract':
+            timesheet_record.values['print_type'] = 'Progetto N. ' + str(project_record.values.get('id', ''))
+            if project_record.values.get('fixedprice') == 'Si':
+                invoicestatus = 'Fixed price Project'
+                productivity = 'Ricavo indiretto'
+                timesheet_record.values['print_hourprice'] = 'Compreso nel progetto'
+                timesheet_record.values['print_travel'] = 'Inclusa'
+            if invoiceoption == 'Monte ore':
+                invoicestatus = 'To Process'
+                productivity = ''
+
+        # Valutazione Flat Service Contract
+        if invoicestatus == 'To Process' and invoiceoption != 'Out of contract':
+            flat_service_contract = None
+            comp_id = timesheet_record.values['recordidcompany_']
+            
+            if service == 'Assistenza PBX' and ((travel_time_decimal == 0 and worktime_decimal == 0.25) or invoiceoption == 'In contract'):
+                flat_service_contract = servicecontract_table.get_records(conditions_list=[f"recordidcompany_='{comp_id}'", "type='Manutenzione PBX'"])
+            elif service == 'Assistenza IT' and (travel_time_decimal == 0 or invoiceoption == 'In contract'):
+                flat_service_contract = servicecontract_table.get_records(conditions_list=[f"recordidcompany_='{comp_id}'", "type='BeAll (All-inclusive)'"])
+            elif service == 'Printing':
+                flat_service_contract = servicecontract_table.get_records(conditions_list=[f"recordidcompany_='{comp_id}'", "type='Manutenzione Printing'"])
+            elif service == 'Assistenza Web Hosting':
+                flat_service_contract = servicecontract_table.get_records(conditions_list=[f"recordidcompany_='{comp_id}'", f"service='Assistenza Web Hosting'"])
+
+            if flat_service_contract:
+                sc_rec = UserRecord('servicecontract', flat_service_contract[0]['recordid_'])
+                timesheet_record.values['recordidservicecontract_'] = sc_rec.recordid
+                invoicestatus = 'Service Contract: ' + str(sc_rec.values.get('type', ''))
+                productivity = 'Ricavo indiretto'
+                timesheet_record.values['print_type'] = 'Contratto di servizio'
+                timesheet_record.values['print_hourprice'] = 'Compreso nel contratto di servizio'
+                timesheet_record.values['print_travel'] = 'Compresa nel contratto di servizio'
+
+        # Valutazione Monte Ore (PBX o Generale)
+        if invoicestatus in ['To Process', 'Under Warranty', 'Commercial support'] and invoiceoption != 'Out of contract':
+            comp_id = timesheet_record.values['recordidcompany_']
+            m_ore = []
+            if travel_time_decimal == 0:
+                m_ore = servicecontract_table.get_records(conditions_list=[f"recordidcompany_='{comp_id}'", "type='Monte Ore Remoto PBX'", "status='In Progress'"])
+            if not m_ore:
+                m_ore = servicecontract_table.get_records(conditions_list=[f"recordidcompany_='{comp_id}'", "type='Monte Ore'", "status='In Progress'"])
+            
+            if m_ore:
+                sc_rec = UserRecord('servicecontract', m_ore[0]['recordid_'])
+                timesheet_record.values['recordidservicecontract_'] = sc_rec.recordid
+                if invoicestatus == 'To Process':
+                    invoicestatus = 'Service Contract: ' + str(sc_rec.values.get('type'))
+                    productivity = 'Ricavo diretto'
+                timesheet_record.values['print_type'] = sc_rec.values.get('type')
+                timesheet_record.values['print_hourprice'] = 'Scalato dal monte ore'
+                if sc_rec.values.get('excludetravel'):
+                    timesheet_record.values['print_travel'] = 'Non scalata dal monte ore e non fatturata'
+
+        # Calcolo Prezzi Finali
+        if invoicestatus == 'To Process':
+            productivity = 'Ricavo diretto'
+            hourprice = 140
+            travelstandardprice = None
+            timesheet_record.values['print_travel'] = 'Da fatturare'
+
+            if not Helper.isempty(company_record.values.get('ictpbx_price')):
+                hourprice = company_record.values.get('ictpbx_price')
+                travelstandardprice = company_record.values.get('travel_price')
+
+            timesheet_record.values['print_hourprice'] = f"Fr.{hourprice}.--"
+
+            if not Helper.isempty(project_record.recordid) and project_record.values.get('completed') != 'Si':
+                invoicestatus = 'To invoice when Project Completed'
+            if not Helper.isempty(ticket_record.recordid) and ticket_record.values.get('vtestatus') != 'Closed':
+                invoicestatus = 'To invoice when Ticket Closed'
+            
+            workprice = float(hourprice) * worktime_decimal
+            if travel_time_decimal > 0:
+                travelprice = float(travelstandardprice) if travelstandardprice else (float(hourprice) * travel_time_decimal)
+            
+            timesheet_record.values['hourprice'] = hourprice
+            timesheet_record.values['workprice'] = workprice
+            timesheet_record.values['travelprice'] = travelprice
+            timesheet_record.values['totalprice'] = workprice + travelprice
+            
+            if invoicestatus == 'To Process':
+                invoicestatus = 'To Invoice'
+
+        timesheet_record.values['invoicestatus'] = invoicestatus
+        timesheet_record.values['productivity'] = productivity
+        
+        # Validazione automatica
+        if service in ['Assistenza IT', 'Assistenza PBX', 'Assistenza SW', 'Assistenza Web Hosting', 'Printing']:
+            if timesheet_record.values.get('validated') != 'Si':
+                timesheet_record.values['validated'] = 'No'
+
+        # --- 3. SALVATAGGIO TIMESHEET ---
+        timesheet_record.save()
+        new_timesheet_id = timesheet_record.recordid
+
+        # --- 4. SALVATAGGIO ALLEGATI ---
+        for key in request.FILES.keys():
+            if key.startswith('file_'):
+                idx = key.split('_')[1]
+                file_obj = request.FILES.get(key)
+                meta_raw = request.POST.get(f'metadata_{idx}')
+                
+                if file_obj and meta_raw:
+                    meta = json.loads(meta_raw)
+                    att_rec = UserRecord('attachment')
+
+                    # Mapping tipo Signature
+                    tipo_ui = meta.get('tipo', 'Allegato generico')
+                    att_rec.values['type'] = 'Signature' if tipo_ui == 'Signature' else 'Allegato generico'
+                    
+                    att_rec.values['note'] = meta.get('note', '')
+                    att_rec.values['date'] = meta.get('data') or datetime.date.today().strftime('%Y-%m-%d')
+                    att_rec.values['recordidtimesheet_'] = new_timesheet_id
+                    att_rec.values['recordidproject_'] = meta.get('progetto_id') or timesheet_record.values['recordidproject_']
+                    
+                    fname = meta.get('filename') or file_obj.name
+                    att_rec.values['filename'] = fname
+                    
+                    # Salvataggio fisico e path
+                    storage_path = f"timesheet/{new_timesheet_id}/{fname}"
+                    final_path = default_storage.save(storage_path, file_obj)
+                    att_rec.values['file'] = final_path
+                    att_rec.save()
+
+        # --- 5. SALVATAGGIO MATERIALI ---
+        materiali = data.get('materiali', [])
+        for mat in materiali:
+            m_rec = UserRecord('timesheetline')
+            m_rec.values['recordidtimesheet_'] = new_timesheet_id
+            m_rec.values['recordidproduct_'] = mat.get('prodotto_id')
+            m_rec.values['expectedquantity'] = mat.get('expectedquantity')
+            m_rec.values['actualquantity'] = mat.get('actualquantity')
+            m_rec.values['note'] = mat.get('note')
+            m_rec.save()
+
+        # Update finali tabelle collegate
+        if not Helper.isempty(timesheet_record.values['recordidservicecontract_']):
+            save_record_fields(tableid='servicecontract', recordid=timesheet_record.values['recordidservicecontract_'])
+        if not Helper.isempty(timesheet_record.values['recordidproject_']):
+            save_record_fields(tableid='project', recordid=timesheet_record.values['recordidproject_'])
+
+        return JsonResponse({'status': 'success', 'recordid': new_timesheet_id})
+
+    except Exception as e:
+        print(f"ERRORE save_timesheet: {str(e)}")
+        return JsonResponse({'error': str(e)}, status=500)
