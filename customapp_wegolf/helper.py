@@ -107,6 +107,53 @@ class Helper:
         except Exception as e:
             return cls.DEFAULT_LANG
 
+    @classmethod
+    def get_localized_labels_fields_chart(cls, chart_config, request=None):
+        if request:
+            userid = Helper.get_userid(request)
+            language = Helper.get_user_language(userid)
+        else:
+            userid = None
+            language = cls.DEFAULT_LANG
+
+        tableid = chart_config.get("from_table")
+        field_ids = []
+
+        # --- recupero alias nei datasets ---
+        for ds in chart_config.get("datasets", []):
+            if "alias" in ds:
+                field_ids.append(ds["alias"])
+
+        # --- recupero alias nei datasets2 (se presenti) ---
+        for ds in chart_config.get("datasets2", []):
+            if "alias" in ds:
+                field_ids.append(ds["alias"])
+
+        # --- recupero alias nel group_by_field ---
+        gb = chart_config.get("group_by_field")
+        if gb and "alias" in gb:
+            field_ids.append(gb["alias"])
+
+        labels = []
+
+        # --- esecuzione query sys_field per ciascun fieldid ---
+        sql = """
+            SELECT label 
+            FROM sys_field
+            WHERE tableid = %s AND fieldid = %s
+        """
+
+        exclude_labels = ['golfclub', 'Dati']
+
+        for fieldid in field_ids:
+            label = Helper.get_translation(tableid, fieldid, userid=userid, code=language)
+            if not label:
+                label = HelpderDB.sql_query_value(sql, 'label', [tableid, fieldid])
+            if not label or label in labels or label in exclude_labels:
+                continue
+            labels.append(label)
+
+        return labels
 
     @classmethod
     def get_translation(cls, tableid, fieldid, userid=None, code=None, translation_type="Field"):

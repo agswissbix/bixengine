@@ -29,6 +29,7 @@ from .bixmodels.user_table import *
 from commonapp.models import SysCustomFunction, SysUser, SysUserSettings, SysTable
 from django.db.models import F, OuterRef, Subquery, IntegerField, Q
 from commonapp.helper import *
+from customapp_wegolf.helper import Helper as WegolfHelper
 
 import pyotp
 import qrcode
@@ -5525,7 +5526,17 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
 
             if user_club and user_club in selected_clubs:
                 user_club_has_data = True
-            labels = Helper.get_labels_fields_chart(chart_config)
+
+            try:
+                active_server = Helper.get_activeserver(request).get('value')
+            except Exception:
+                active_server = Helper.get_cliente_id()
+
+            if str(active_server).lower() == 'wegolf':
+                labels = WegolfHelper.get_localized_labels_fields_chart(chart_config, request=request)
+            else:
+                labels = Helper.get_labels_fields_chart(chart_config)
+
             completeness_checks = [Helper.check_mydata_completeness(club, selected_years, labels) for club in selected_clubs]
             complete_pairs = list(zip(selected_clubs, completeness_checks))
             selected_clubs = [club for club, check in complete_pairs if check["complete"]]
@@ -6257,6 +6268,24 @@ def get_dynamic_chart_data(request, chart_id, query_conditions='1=1', viewMode=N
         return {'error': 'Chart not found'}
 
     config = json.loads(chart_record['config'])
+    datasets = config.get('datasets', [])
+    datasets2 = config.get('datasets2', [])
+
+    active_server = Helper.get_cliente_id()
+    userid = Helper.get_userid(request)
+    
+    if active_server == "wegolf":
+        alias = datasets[0]['alias']
+        if alias:
+            label = WegolfHelper.get_translation("metrica_annuale", alias, userid=userid)
+            if label:
+                datasets[0]['label'] = label
+        alias2 = datasets2[0]['alias']
+        if alias2:
+            label = WegolfHelper.get_translation("metrica_annuale", alias, userid=userid)
+            if label:
+                datasets2[0]['label'] = label
+
     chart_type = config.get('chart_type', 'aggregate')
 
     handlers = {
