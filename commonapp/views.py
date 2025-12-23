@@ -6268,23 +6268,24 @@ def get_dynamic_chart_data(request, chart_id, query_conditions='1=1', viewMode=N
         return {'error': 'Chart not found'}
 
     config = json.loads(chart_record['config'])
-    datasets = config.get('datasets', [])
-    datasets2 = config.get('datasets2', [])
+
+    ds_keys = ['datasets', 'datasets2']
 
     active_server = Helper.get_cliente_id()
     userid = Helper.get_userid(request)
-    
+
     if active_server == "wegolf":
-        alias = datasets[0]['alias']
-        if alias:
-            label = WegolfHelper.get_translation("metrica_annuale", alias, userid=userid)
-            if label:
-                datasets[0]['label'] = label
-        alias2 = datasets2[0]['alias']
-        if alias2:
-            label = WegolfHelper.get_translation("metrica_annuale", alias, userid=userid)
-            if label:
-                datasets2[0]['label'] = label
+        for key in ds_keys:
+            dataset_list = config.get(key, [])
+            
+            if dataset_list and len(dataset_list) > 0:
+                target_ds = dataset_list[0]
+                alias = target_ds.get('alias')
+                
+                if alias:
+                    label = WegolfHelper.get_translation("metrica_annuale", alias, userid=userid)
+                    if label:
+                        target_ds['label'] = label
 
     chart_type = config.get('chart_type', 'aggregate')
 
