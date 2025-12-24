@@ -1805,53 +1805,6 @@ def get_timesheet_initial_data(request):
         userid = Helper.get_userid(request)
         user = SysUser.objects.get(id=userid)
 
-        records = UserTable('company').get_records(conditions_list=[], limit=100000)
-        aziende = [
-            {
-                'id': x.get('recordid_'),
-                'name': x.get('companyname'),
-                'details': x.get('details')
-            } 
-            for x in records
-        ]
-
-        records = UserTable('project').get_records(conditions_list=[],limit=100000)
-        progetti = [
-            {
-                'id': x.get('recordid_'),
-                'name': x.get('projectname'),
-            } 
-            for x in records
-        ]
-
-        records = UserTable('ticket').get_records(conditions_list=[],limit=100000)
-        tickets = [
-            {
-                'id': x.get('recordid_'),
-                'name': x.get('subject'),
-                'details': x.get('description')
-            } 
-            for x in records
-        ]
-
-        records = UserTable('product').get_records(conditions_list=[],limit=100000)
-        prodotti = [
-            {
-                'id': x.get('recordid_'),
-                'name': x.get('name'),
-            } 
-            for x in records
-        ]
-
-        records = UserTable('timesheet').get_records(conditions_list=[],limit=100000)
-        rapporti = [
-            {
-                'id': x.get('recordid_'),
-                'name': x.get('description'),
-            } 
-            for x in records
-        ]
-
         servizi = [
             {"id": "1", "name": "Amministrazione", "icon_slug": "amministrazione"},
             {"id": "2", "name": "Assistenza IT", "icon_slug": "it"},
@@ -1879,11 +1832,6 @@ def get_timesheet_initial_data(request):
         ]
 
         response_data = {
-            'aziende': aziende,
-            'progetti': progetti,
-            'tickets': tickets, 
-            'prodotti': prodotti,
-            'rapporti': rapporti,
             'servizi': servizi,
             'opzioni': opzioni,
             'utenteCorrente': {
@@ -1897,6 +1845,45 @@ def get_timesheet_initial_data(request):
     except Exception as e:
         logger.error(f"Errore nel fetch dei dati iniziali per la creazione di un nuovo timesheeet: {str(e)}")
         return JsonResponse({'error': f"Errore nel fetch dei dati iniziali per la creazione di un nuovo timesheeet: {str(e)}"}, status=500)
+    
+def search_timesheet_entities(request):
+    """
+    Endpoint dinamico via POST per cercare entità.
+    """
+    target = request.POST.get('target')
+    query = request.POST.get('q', '').strip()
+    
+    table_map = {
+        'azienda': ('company', 'companyname', 'details'),
+        'progetto': ('project', 'projectname', None),
+        'ticket': ('ticket', 'subject', 'description'),
+        'prodotto': ('product', 'name', None),
+        'rapportiLavoro': ('timesheet', 'description', None),
+    }
+
+    if target not in table_map:
+        return JsonResponse({'results': []})
+
+    table_name, name_field, detail_field = table_map[target]
+    
+    conditions = []
+    if query:
+        conditions.append(f"{name_field} LIKE '%{query}%'")
+
+    try:
+        records = UserTable(table_name).get_records(conditions_list=conditions, limit=20)
+        
+        results = [
+            {
+                'id': str(x.get('recordid_')),
+                'name': x.get(name_field) or "N/D",
+                'details': x.get(detail_field) if detail_field else ""
+            } for x in records
+        ]
+        
+        return JsonResponse({'results': results}, safe=False)
+    except Exception as e:
+        return JsonResponse({'error': str(e), 'results': []}, status=500)
 
 def save_timesheet(request):
     """
