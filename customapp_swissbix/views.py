@@ -1726,3 +1726,11 @@ def get_timesheet_initial_data(request):
 def save_timesheet(request):
     from customapp_swissbix.script import save_timesheet
     return save_timesheet(request)
+
+def save_timesheet_material(request):
+    from customapp_swissbix.script import save_timesheet_material
+    return save_timesheet_material(request)
+
+def save_timesheet_attachment(request):
+    from customapp_swissbix.script import save_timesheet_attachment
+    return save_timesheet_attachment(request)

@@ -57,5 +57,7 @@ urlpatterns = [
     path('save_timetracking/', save_timetracking, name='save_timetracking'),
     path('stop_timetracking/', stop_timetracking, name='stop_timetracking'),
     path('get_timesheet_initial_data/', get_timesheet_initial_data, name='get_timesheet_initial_data'),
-    path('save_timesheet/', save_timesheet, name='save_timesheet')
+    path('save_timesheet/', save_timesheet, name='save_timesheet'),
+    path('save_timesheet_material/', save_timesheet_material, name='save_timesheet_material'),
+    path('save_timesheet_attachment/', save_timesheet_attachment, name='save_timesheet_attachment')
 ]

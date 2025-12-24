@@ -5471,18 +5471,23 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
     # 4) Pre-elaborazione filtri comuni (CLUB e ANNI)
     # ----------------------------------------------------------
     selected_years = (filters or {}).get("selectedYears", [])
-    selected_clubs = (filters or {}).get("selectedClubs", [])
+    if cliente_id == "wegolf":
+        selected_clubs = (filters or {}).get("selectedClubs", [])
     dynamic_conditions = []  # <-- condizioni riusabili anche nella query per il placeholder
 
     # CLUB – logica unica
-    user_club = HelpderDB.sql_query_value(
-        f"SELECT recordid_ FROM user_golfclub WHERE utente='{userid}'",
-        "recordid_"
-    )
-    user_numeric_format = HelpderDB.sql_query_value(
-        f"SELECT formato_numerico FROM user_golfclub WHERE utente='{userid}'",
-        "formato_numerico"
-    )
+    if cliente_id == "wegolf":
+        user_club = HelpderDB.sql_query_value(
+            f"SELECT recordid_ FROM user_golfclub WHERE utente='{userid}'",
+            "recordid_"
+        )
+        user_numeric_format = HelpderDB.sql_query_value(
+            f"SELECT formato_numerico FROM user_golfclub WHERE utente='{userid}'",
+            "formato_numerico"
+        )
+    else:
+        user_club = None
+        user_numeric_format = None
 
     # Creo adesso ma la uso dopo
     user_club_has_data = False

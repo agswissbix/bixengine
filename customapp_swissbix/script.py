@@ -1897,10 +1897,10 @@ def get_timesheet_initial_data(request):
     except Exception as e:
         logger.error(f"Errore nel fetch dei dati iniziali per la creazione di un nuovo timesheeet: {str(e)}")
         return JsonResponse({'error': f"Errore nel fetch dei dati iniziali per la creazione di un nuovo timesheeet: {str(e)}"}, status=500)
-    
+
 def save_timesheet(request):
     """
-    Salvataggio Timesheet, righe di dettaglio e allegati da BixApp mobile
+    Salvataggio Timesheet da BixApp mobile
     """
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
@@ -1938,7 +1938,6 @@ def save_timesheet(request):
         timesheet_record.values['traveltime'] = traveltime
 
         # --- 2. LOGICA DI BUSINESS E CALCOLI ---
-        # Recupero record correlati per calcoli
         company_record = UserRecord('company', timesheet_record.values['recordidcompany_'])
         project_record = UserRecord('project', timesheet_record.values['recordidproject_'])
         ticket_record = UserRecord('ticket', timesheet_record.values['recordidticket_'])
@@ -1971,7 +1970,7 @@ def save_timesheet(request):
             timesheet_record.values['traveltime_decimal'] = travel_time_decimal
             timesheet_record.values['totaltime_decimal'] = totaltime_decimal
 
-        # Valutazione tipo servizio
+        # Valutazione tipo servizio (Non fatturabile)
         if service in ['Amministrazione', 'Commerciale', 'Formazione Apprendista', 'Formazione e Test', 'Interno', 'Riunione']:
             invoicestatus = 'Attività non fatturabile'
             productivity = 'Senza ricavo'
@@ -2082,7 +2081,52 @@ def save_timesheet(request):
         timesheet_record.save()
         new_timesheet_id = timesheet_record.recordid
 
-        # --- 4. SALVATAGGIO ALLEGATI ---
+        if not Helper.isempty(timesheet_record.values.get('recordidservicecontract_')):
+            save_record_fields(tableid='servicecontract', recordid=timesheet_record.values['recordidservicecontract_'])
+        if not Helper.isempty(timesheet_record.values.get('recordidproject_')):
+            save_record_fields(tableid='project', recordid=timesheet_record.values['recordidproject_'])
+
+        return JsonResponse({'status': 'success', 'id': new_timesheet_id})
+
+    except Exception as e:
+        print(f"ERRORE save_timesheet (Base): {str(e)}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+def save_timesheet_material(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    try:
+        timesheet_id = request.POST.get('timesheet_id')
+        materiali_raw = request.POST.get('materiali')
+        
+        if not timesheet_id or not materiali_raw:
+            return JsonResponse({'error': 'Missing data'}, status=400)
+
+        materiali = json.loads(materiali_raw)
+        
+        for mat in materiali:
+            m_rec = UserRecord('timesheetline')
+            m_rec.values['recordidtimesheet_'] = timesheet_id
+            m_rec.values['recordidproduct_'] = mat.get('prodotto_id')
+            m_rec.values['expectedquantity'] = mat.get('expectedquantity')
+            m_rec.values['actualquantity'] = mat.get('actualquantity')
+            m_rec.values['note'] = mat.get('note', '')
+            m_rec.save()
+
+        return JsonResponse({'status': 'success'})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+    
+def save_timesheet_attachment(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    try:
+        timesheet_id = request.POST.get('timesheet_id')
+        if not timesheet_id:
+            return JsonResponse({'error': 'Timesheet ID missing'}, status=400)
+
         for key in request.FILES.keys():
             if key.startswith('file_'):
                 idx = key.split('_')[1]
@@ -2093,43 +2137,21 @@ def save_timesheet(request):
                     meta = json.loads(meta_raw)
                     att_rec = UserRecord('attachment')
 
-                    # Mapping tipo Signature
                     tipo_ui = meta.get('tipo', 'Allegato generico')
                     att_rec.values['type'] = 'Signature' if tipo_ui == 'Signature' else 'Allegato generico'
-                    
                     att_rec.values['note'] = meta.get('note', '')
                     att_rec.values['date'] = meta.get('data') or datetime.date.today().strftime('%Y-%m-%d')
-                    att_rec.values['recordidtimesheet_'] = new_timesheet_id
-                    att_rec.values['recordidproject_'] = meta.get('progetto_id') or timesheet_record.values['recordidproject_']
+                    att_rec.values['recordidtimesheet_'] = timesheet_id
                     
                     fname = meta.get('filename') or file_obj.name
                     att_rec.values['filename'] = fname
                     
-                    # Salvataggio fisico e path
-                    storage_path = f"timesheet/{new_timesheet_id}/{fname}"
+                    storage_path = f"timesheet/{timesheet_id}/{fname}"
                     final_path = default_storage.save(storage_path, file_obj)
+                    
                     att_rec.values['file'] = final_path
                     att_rec.save()
 
-        # --- 5. SALVATAGGIO MATERIALI ---
-        materiali = data.get('materiali', [])
-        for mat in materiali:
-            m_rec = UserRecord('timesheetline')
-            m_rec.values['recordidtimesheet_'] = new_timesheet_id
-            m_rec.values['recordidproduct_'] = mat.get('prodotto_id')
-            m_rec.values['expectedquantity'] = mat.get('expectedquantity')
-            m_rec.values['actualquantity'] = mat.get('actualquantity')
-            m_rec.values['note'] = mat.get('note')
-            m_rec.save()
-
-        # Update finali tabelle collegate
-        if not Helper.isempty(timesheet_record.values['recordidservicecontract_']):
-            save_record_fields(tableid='servicecontract', recordid=timesheet_record.values['recordidservicecontract_'])
-        if not Helper.isempty(timesheet_record.values['recordidproject_']):
-            save_record_fields(tableid='project', recordid=timesheet_record.values['recordidproject_'])
-
-        return JsonResponse({'status': 'success', 'recordid': new_timesheet_id})
-
+        return JsonResponse({'status': 'success'})
     except Exception as e:
-        print(f"ERRORE save_timesheet: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
