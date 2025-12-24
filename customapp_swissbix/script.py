@@ -1831,9 +1831,61 @@ def get_timesheet_initial_data(request):
             {"id": "o8", "name": "Under Warranty"},
         ]
 
+
+        # # Scelta aziende recenti a partire dai Timesheet
+        # recent_ts = UserTable('timesheet').get_records(
+        #     conditions_list=[f"user = '{userid}'"], 
+        #     limit=50
+        # )
+
+        # recent_ids = []
+        # for ts in recent_ts:
+        #     cid = ts.get('recordidcompany_')
+        #     if cid and cid not in recent_ids:
+        #         recent_ids.append(cid)
+        #     if len(recent_ids) >= 10: break
+
+        # aziende_recenti = []
+        # for cid in recent_ids:
+        #     c_rec = UserTable('company').get_records(conditions_list=[f"recordid_ = '{cid}'"])
+        #     if c_rec:
+        #         aziende_recenti.append({
+        #             'id': str(c_rec[0].get('recordid_')),
+        #             'name': c_rec[0].get('companyname'),
+        #             'details': c_rec[0].get('details')
+        #         })
+
+        # Scelta aziende recenti a partire dai progetti attivi
+        conditions_list = []
+        conditions_list.append(f"assignedto='{userid}'")
+        conditions_list.append("status != 'Progetto fatturato'")
+
+        active_projects = UserTable('project').get_records(conditions_list=conditions_list)
+
+        aziende_recenti = []
+        seen_ids = set() 
+        
+        for project in active_projects:
+            cid = project.get('recordidcompany_')
+            
+            if cid and cid not in seen_ids:
+                azienda = UserRecord('company', cid)
+                
+                if azienda and hasattr(azienda, 'values'):
+                    aziende_recenti.append({
+                        'id': str(cid),
+                        'name': azienda.values.get('companyname', 'Azienda senza nome'),
+                        'details': azienda.values.get('city', 'Località non definita')
+                    })
+                    seen_ids.add(cid) 
+            
+            if len(aziende_recenti) >= 10: 
+                break
+
         response_data = {
             'servizi': servizi,
             'opzioni': opzioni,
+            'aziendeRecenti': aziende_recenti,
             'utenteCorrente': {
                 'id': str(userid),
                 'name': f"{user.firstname} {user.lastname}",
