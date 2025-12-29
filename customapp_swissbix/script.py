@@ -305,7 +305,7 @@ def test_script():
     return {"status": result_status, "value": result_value, "type": type}
 
 
-
+#stampa trimestrale fatture printing
 def printing_katun_xml_extract_rows():
     folder_path_xml = os.path.join(settings.XML_DIR)
     folder_path = os.path.join(settings.MEDIA_ROOT, 'printinginvoice')  # Cartella per i file PDF
