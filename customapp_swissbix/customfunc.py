@@ -839,14 +839,18 @@ def printing_katun_bexio_api_set_invoice(request):
 
     for invoice in bixdata_invoices:
 
-        #invoice data
+         #invoice data
         recordid_company= invoice['recordidcompany_']
         record_company = UserRecord('company', recordid_company)
         bexio_contact_id= record_company.values.get('id_bexio', None)
+        print(invoice['title'])
         invoice_title="Conteggio copie stampanti/Multifunzioni"
-        if (bexio_contact_id is  None) or (bexio_contact_id == ''):
-            bexio_contact_id = 297 #contact id di Swissbix SA
+        print(bexio_contact_id)
+        if (bexio_contact_id == 297):
+            print('Cliente non presente in bexio')
             invoice_title = "Conteggio copie stampanti/Multifunzioni "+invoice['title']
+        
+        print(invoice_title)
         # 1. Ottieni la data e ora correnti come oggetto datetime
         now = datetime.datetime.now()
 
