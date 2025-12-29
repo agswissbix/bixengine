@@ -316,7 +316,7 @@ def printing_katun_xml_extract_rows():
             file_path = os.path.join(folder_path_xml, filename)
             filename = filename.replace('.xml', '')
 
-            xml_check = HelpderDB.sql_query_row(f"SELECT * FROM user_printinginvoice WHERE filename='{filename}'")
+            xml_check = HelpderDB.sql_query_row(f"SELECT * FROM user_printinginvoice WHERE filename='{filename}' AND deleted_='N'")
 
             try:
                 if xml_check is None:
