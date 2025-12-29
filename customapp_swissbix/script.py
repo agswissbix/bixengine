@@ -306,7 +306,7 @@ def test_script():
 
 
 
-def printing_katun_xml_extract_rows(request):
+def printing_katun_xml_extract_rows():
     folder_path_xml = os.path.join(settings.XML_DIR)
     folder_path = os.path.join(settings.MEDIA_ROOT, 'printinginvoice')  # Cartella per i file PDF
     if not os.path.exists(folder_path_xml):
