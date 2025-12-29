@@ -846,7 +846,7 @@ def printing_katun_bexio_api_set_invoice(request):
         invoice_title="Conteggio copie stampanti/Multifunzioni"
         if (bexio_contact_id is  None) or (bexio_contact_id == ''):
             bexio_contact_id = 297 #contact id di Swissbix SA
-            invoice_title = "Conteggio copie stampanti/Multifunzioni Swissbix SA "+invoice['title']
+            invoice_title = "Conteggio copie stampanti/Multifunzioni "+invoice['title']
         # 1. Ottieni la data e ora correnti come oggetto datetime
         now = datetime.datetime.now()
 
@@ -882,7 +882,7 @@ def printing_katun_bexio_api_set_invoice(request):
             invoiceliness.append(bexio_invoiceline)
 
         bexio_invoice = {
-            "title": "Conteggio copie stampanti/Multifunzioni",
+            "title": invoice_title,
             "contact_id": bexio_contact_id,
             "user_id": 1,
             "language_id": 3,
