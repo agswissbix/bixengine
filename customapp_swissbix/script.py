@@ -975,7 +975,7 @@ def syncdata(request, tableid):
 def get_scheduler_logs(request):
     monitor_values = {}
 
-    url = "https://bixdata.swissbix.com/get_scheduler_logs.php"
+    url = os.environ.get('SCHEDULER_LOGS_URL')
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     }
