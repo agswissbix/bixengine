@@ -1860,14 +1860,22 @@ def get_timesheet_initial_data(request):
         conditions_list.append(f"assignedto='{userid}'")
         conditions_list.append("status != 'Progetto fatturato'")
 
-        active_projects = UserTable('project').get_records(conditions_list=conditions_list)
+        active_projects = UserTable('project').get_records(conditions_list=conditions_list, orderby="lastupdate_ desc")
 
         aziende_recenti = []
-        seen_ids = set() 
+        progetti_recenti = []
+
+        seen_ids = set()
         
         for project in active_projects:
             cid = project.get('recordidcompany_')
             
+            if len(aziende_recenti) <= 10:
+                progetti_recenti.append({
+                    'id': str(project.get('recordid_')),
+                    'name': project.get('projectname'),
+                })
+
             if cid and cid not in seen_ids:
                 azienda = UserRecord('company', cid)
                 
@@ -1877,6 +1885,7 @@ def get_timesheet_initial_data(request):
                         'name': azienda.values.get('companyname', 'Azienda senza nome'),
                         'details': azienda.values.get('city', 'Località non definita')
                     })
+
                     seen_ids.add(cid) 
             
             if len(aziende_recenti) >= 10: 
@@ -1886,6 +1895,7 @@ def get_timesheet_initial_data(request):
             'servizi': servizi,
             'opzioni': opzioni,
             'aziendeRecenti': aziende_recenti,
+            'progettiRecenti': progetti_recenti,
             'utenteCorrente': {
                 'id': str(userid),
                 'name': f"{user.firstname} {user.lastname}",
