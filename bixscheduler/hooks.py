@@ -37,7 +37,7 @@ def on_task_success(task):
         pass
 
     try:
-        schedule = Schedule.objects.filter(task=task.id).first()  # ottieni il Schedule
+        schedule = Schedule.objects.filter(func=task.func).first()  # ottieni il Schedule
         if not schedule:
             return None
 
