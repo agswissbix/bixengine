@@ -1,4 +1,5 @@
 from asyncio.log import logger
+from calendar import calendar
 import hashlib
 import hmac
 import uuid
@@ -713,6 +714,176 @@ def get_table_records(request):
     }
     return JsonResponse(response_data)
 
+@timing_decorator
+def get_available_groups_for_table(request):
+    print('Function: get_available_groups_for_table')
+    data = json.loads(request.body)
+    tableid = data.get("tableid")
+    userid = Helper.get_userid(request)
+
+    sql = f"""
+        SELECT 
+            sf.fieldid, 
+            sf.fieldtypeid, 
+            sf.description
+        FROM sys_user_field_order sufo
+        INNER JOIN sys_field sf ON sufo.tableid = sf.tableid AND sufo.fieldid = sf.id
+        WHERE sufo.tableid = '{tableid}'
+          AND sufo.userid = 1  -- O usa {userid} se vuoi dinamicità per utente
+          AND sufo.typepreference = 'search_results_fields'
+          AND sufo.fieldorder IS NOT NULL
+          AND sf.fieldtypeid NOT IN ('Numero')
+          AND sf.fieldid NOT IN ('id')
+        ORDER BY sufo.fieldorder
+    """
+
+    try:
+        fields = HelpderDB.sql_query(sql)
+    except Exception as e:
+        print(f"Errore nella query SQL per i gruppi: {e}")
+        return JsonResponse({"success": False, "error": "Database error"}, status=500)
+
+    response_groups = [
+        {
+            "label": group['description'],
+            "type": group['fieldtypeid'],
+            "value": group['fieldid']
+        }
+        for group in fields
+    ]
+
+    return JsonResponse({
+        "success": True,
+        "groups": response_groups
+    })
+
+import calendar
+import json
+import datetime
+from django.http import JsonResponse
+
+def try_parse_date(val):
+    """ Tenta il parsing della data con formati ISO e Italiano. """
+    if val is None or val == "": 
+        return None
+    if isinstance(val, (datetime.date, datetime.datetime)):
+        return val
+    
+    clean_val = str(val).split(' ')[0].strip()
+    
+    for fmt in ('%d/%m/%Y', '%Y-%m-%d'):
+        try:
+            return datetime.datetime.strptime(clean_val, fmt)
+        except (ValueError, TypeError):
+            continue
+    return None
+
+@timing_decorator
+def get_grouped_table_records(request):
+    """
+    Recupera i gruppi unici per un campo specifico in una tabella, considerando il tipo di campo.
+    """
+    try:
+        data = json.loads(request.body)
+        tableid = data.get("tableid")
+        group_fieldid = data.get("fieldid")
+        group_type = data.get("type")
+        
+        viewid = data.get("view")
+        searchTerm = data.get("searchTerm", '')
+        filtersList = data.get("filtersList", [])
+        
+        table = UserTable(tableid, Helper.get_userid(request))
+
+        record_objects = table.get_table_records_obj(
+            viewid=viewid,
+            searchTerm=searchTerm,
+            filters_list=filtersList,
+            limit=100000, 
+            orderby=f"{group_fieldid} ASC"
+        )
+
+        unique_groups = []
+        seen_buckets = set()
+        m_names = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", 
+                   "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"]
+        
+        if group_type == 'Data':
+            months_found = set()
+            for record in record_objects:
+                field_def = record.fields.get(group_fieldid, {})
+                val = field_def.get("value") or field_def.get("convertedvalue")
+                
+                dt = try_parse_date(val)
+                if dt:
+                    months_found.add(dt.strftime('%Y-%m'))
+
+            use_year_grouping = len(months_found) > 60
+
+            for month_key in sorted(months_found):
+                year_val, month_val = map(int, month_key.split('-'))
+                last_day = calendar.monthrange(year_val, month_val)[1]
+                
+                if use_year_grouping:
+                    year_str = str(year_val)
+                    if year_str not in seen_buckets:
+                        seen_buckets.add(year_str)
+                        val_id = json.dumps({"from": f"{year_str}-01-01", "to": f"{year_str}-12-31"})
+                        unique_groups.append({"label": f"Anno {year_str}", "value": val_id, "type": "Data"})
+                else:
+                    if month_key not in seen_buckets:
+                        seen_buckets.add(month_key)
+                        val_id = json.dumps({
+                            "from": f"{year_val}-{month_val:02d}-01", 
+                            "to": f"{year_val}-{month_val:02d}-{last_day}"
+                        })
+                        unique_groups.append({
+                            "label": f"{m_names[month_val-1]} {year_val}", 
+                            "value": val_id, 
+                            "type": "Data"
+                        })
+        
+        else:
+            for record in record_objects:
+                field_def = record.fields.get(group_fieldid, {})
+                raw_value = field_def.get("value") or field_def.get("convertedvalue")
+                display_label = field_def.get("convertedvalue", raw_value)
+
+                if raw_value not in [None, ""]:
+                    val_id = str(raw_value)
+                    if val_id not in seen_buckets:
+                        seen_buckets.add(val_id)
+                        unique_groups.append({
+                            "label": str(display_label), 
+                            "value": val_id, 
+                            "type": group_type
+                        })
+
+        has_null = any(
+            (try_parse_date(r.fields.get(group_fieldid, {}).get("value") or r.fields.get(group_fieldid, {}).get("convertedvalue")) is None) 
+            if group_type == 'Data' else 
+            (r.fields.get(group_fieldid, {}).get("value") in [None, ""] and r.fields.get(group_fieldid, {}).get("convertedvalue") in [None, ""])
+            for r in record_objects
+        )
+        
+        if has_null:
+            unique_groups.append({"label": "Nessun valore", "value": "NULL_VALUE", "type": group_type})
+
+        def sort_key(x):
+            is_null = (x['value'] == "NULL_VALUE")
+            val_str = str(x['value'])
+            if group_type == 'Data' and not is_null:
+                if val_str.startswith('{'): 
+                    try: return (is_null, json.loads(val_str).get('from', val_str))
+                    except: pass
+                return (is_null, val_str)
+            return (is_null, str(x['label']).lower())
+
+        unique_groups = sorted(unique_groups, key=sort_key)
+        return JsonResponse({"success": True, "groups": unique_groups})
+
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
 
 def get_sql_condition(field_type, values, condition, field_name):
     """
@@ -4578,7 +4749,7 @@ def get_table_active_tab(request):
     sql=f"SELECT * FROM sys_user_table_settings WHERE tableid='{tableid}' AND settingid='table_tabs'"
     query_result=HelpderDB.sql_query_row(sql)
     if not query_result:
-        table_tabs = ['Tabella', 'Kanban', 'Pivot', 'Calendario', 'MatrixCalendar' , 'Planner' , 'Gallery']
+        table_tabs = ['Tabella', 'TabellaRaggruppata','Kanban', 'Pivot', 'Calendario', 'MatrixCalendar' , 'Planner' , 'Gallery']
     else:
         table_tabs=query_result['value']
         table_tabs=table_tabs.split(',')
