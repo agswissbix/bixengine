@@ -396,6 +396,7 @@ FIELDTYPES = {
     "Utente": "VARCHAR(255)",
     "Memo": "TEXT",
     "html": "LONGTEXT",
+    "Markdown": "LONGTEXT",
     "linked": "VARCHAR(255)"
 }
 

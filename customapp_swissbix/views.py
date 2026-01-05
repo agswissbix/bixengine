@@ -1738,3 +1738,7 @@ def save_timesheet_attachment(request):
 def search_timesheet_entities(request):
     from customapp_swissbix.script import search_timesheet_entities
     return search_timesheet_entities(request)
+
+def upload_markdown_image(request):
+    from customapp_swissbix.script import upload_markdown_image
+    return upload_markdown_image(request)

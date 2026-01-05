@@ -2279,3 +2279,33 @@ def save_timesheet_attachment(request):
         return JsonResponse({'status': 'success'})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+    
+def upload_markdown_image(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Metodo non consentito'}, status=405)
+
+    try:
+        file_obj = request.FILES.get('file')
+        
+        if not file_obj:
+            return JsonResponse({'error': 'Nessun file ricevuto'}, status=400)
+        
+        fname = file_obj.name
+        storage_path = f"markdown_uploads/{fname}"
+
+        final_path = default_storage.save(storage_path, file_obj)
+        
+        full_url = f"/api/media-proxy?url={final_path}"
+        
+        att_rec = UserRecord('attachment')
+        att_rec.values['type'] = 'Markdown Image'
+        att_rec.values['file'] = final_path
+        att_rec.save()
+
+        return JsonResponse({
+            'status': 'success',
+            'url': full_url 
+        })
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)

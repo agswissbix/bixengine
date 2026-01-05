@@ -760,7 +760,6 @@ def get_available_groups_for_table(request):
 import calendar
 import json
 import datetime
-from django.http import JsonResponse
 
 def try_parse_date(val):
     """ Tenta il parsing della data con formati ISO e Italiano. """

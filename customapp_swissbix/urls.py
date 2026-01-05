@@ -60,5 +60,6 @@ urlpatterns = [
     path('search_timesheet_entities/', search_timesheet_entities, name='search_timesheet_entities'),
     path('save_timesheet/', save_timesheet, name='save_timesheet'),
     path('save_timesheet_material/', save_timesheet_material, name='save_timesheet_material'),
-    path('save_timesheet_attachment/', save_timesheet_attachment, name='save_timesheet_attachment')
+    path('save_timesheet_attachment/', save_timesheet_attachment, name='save_timesheet_attachment'),
+    path('upload_markdown_image/', upload_markdown_image, name='upload_markdown_image'),
 ]

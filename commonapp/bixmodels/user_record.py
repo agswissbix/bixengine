@@ -682,7 +682,8 @@ class UserRecord:
                 fieldtype='Memo'
             if field['fieldtypewebid'] == 'html':
                 fieldtype='html'
-
+            if field['fieldtypewebid'] == 'markdown':
+                fieldtype='markdown'
             
 
             if field['fieldtypewebid'] == 'file':
