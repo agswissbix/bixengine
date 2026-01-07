@@ -1797,6 +1797,15 @@ def get_timetracking(request):
             if timetracking_date != current_date:
                 continue
 
+            clientid = timetracking.get('recordidcompany_', '')
+            
+            companyname = ""
+
+            if clientid:
+                company = UserRecord('company', clientid)
+                if company:
+                    companyname = company.values.get('companyname', '')
+
             timetracking_data = {
                 'id': timetracking['recordid_'],
                 'description': timetracking['description'],
@@ -1805,11 +1814,23 @@ def get_timetracking(request):
                 'end': timetracking['end'],
                 'worktime': timetracking['worktime'],
                 'worktime_string': timetracking['worktime_string'],
-                'status': timetracking['stato']
+                'status': timetracking['stato'],
+                'clientid': clientid,
+                'client_name': companyname,
             }
             timetrackings.append(timetracking_data)
 
-        return JsonResponse({"timetracking": timetrackings}, safe=False)
+        # Clienti
+        companies_list = UserTable('company').get_records(limit=10000000)
+        companies = []
+        for company in companies_list:
+            company_data = {
+                'id': company['recordid_'],
+                'companyname': company['companyname']
+            }
+            companies.append(company_data)
+
+        return JsonResponse({"timetracking": timetrackings, "clients": companies}, safe=False)
 
     except Exception as e:
         logger.error(f"Errore nell'ottenimento dei timetracker per l'utente: {str(e)}")
@@ -1830,6 +1851,9 @@ def save_timetracking(request):
         timetracking.values['date'] = datetime.datetime.now().strftime("%Y-%m-%d")
         timetracking.values['start'] = datetime.datetime.now().strftime("%H:%M")
         timetracking.values['stato'] = "Attivo"
+
+        if data.get('clientid'):
+            timetracking.values['recordidcompany_'] = data.get('clientid')    
 
         timetracking.save()
 

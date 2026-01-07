@@ -729,7 +729,7 @@ def get_available_groups_for_table(request):
         FROM sys_user_field_order sufo
         INNER JOIN sys_field sf ON sufo.tableid = sf.tableid AND sufo.fieldid = sf.id
         WHERE sufo.tableid = '{tableid}'
-          AND sufo.userid = {userid}
+          AND sufo.userid = 1
           AND sufo.typepreference = 'search_results_fields'
           AND sufo.fieldorder IS NOT NULL
           AND sf.fieldtypeid NOT IN ('Numero')
