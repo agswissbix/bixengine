@@ -839,16 +839,19 @@ def get_grouped_table_records(request):
             
             bucket_key = "NULL_VALUE"
             display_label = "Nessun valore"
+            sort_key = "zzz"
 
             if group_type == 'Data':
                 dt = try_parse_date(raw_val)
                 if dt:
                     bucket_key = dt.strftime('%Y-%m')
                     display_label = f"{m_names[dt.month-1]} {dt.year}"
+                    sort_key = bucket_key
             else:
                 if raw_val not in [None, ""]:
                     bucket_key = str(raw_val)
                     display_label = str(field_def.get("convertedvalue", raw_val))
+                    sort_key = display_label.lower()
 
             if bucket_key not in groups_map:
                 groups_map[bucket_key] = {
@@ -856,6 +859,7 @@ def get_grouped_table_records(request):
                     "value": bucket_key,
                     "type": group_type,
                     "count": 0,
+                    "sort_key": sort_key,
                     "totals": {f['id']: 0.0 for f in numeric_fields}
                 }
                 
@@ -875,11 +879,11 @@ def get_grouped_table_records(request):
                 except (ValueError, TypeError):
                     continue
 
-        def sort_groups(x):
-            is_null = (x['label'] == "Nessun valore")
-            return (is_null, x['label'].lower())
+        def final_sort(x):
+            is_null = (x['value'] == "NULL_VALUE")
+            return (is_null, x['sort_key'])
 
-        unique_groups = sorted(list(groups_map.values()), key=sort_groups)
+        unique_groups = sorted(list(groups_map.values()), key=final_sort)
 
         return JsonResponse({
             "success": True, 
