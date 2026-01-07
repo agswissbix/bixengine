@@ -729,7 +729,7 @@ def get_available_groups_for_table(request):
         FROM sys_user_field_order sufo
         INNER JOIN sys_field sf ON sufo.tableid = sf.tableid AND sufo.fieldid = sf.id
         WHERE sufo.tableid = '{tableid}'
-          AND sufo.userid = 1  -- O usa {userid} se vuoi dinamicità per utente
+          AND sufo.userid = {userid}
           AND sufo.typepreference = 'search_results_fields'
           AND sufo.fieldorder IS NOT NULL
           AND sf.fieldtypeid NOT IN ('Numero')
@@ -743,14 +743,24 @@ def get_available_groups_for_table(request):
         print(f"Errore nella query SQL per i gruppi: {e}")
         return JsonResponse({"success": False, "error": "Database error"}, status=500)
 
-    response_groups = [
-        {
-            "label": group['description'],
-            "type": group['fieldtypeid'],
-            "value": group['fieldid']
-        }
-        for group in fields
-    ]
+    response_groups = []
+    seen_values = set()
+
+    for group in fields:
+        original_val = group['fieldid']
+        
+        if original_val.startswith('_'):
+            transformed_val = original_val[1:] + '_'
+        else:
+            transformed_val = original_val
+
+        if transformed_val not in seen_values:
+            response_groups.append({
+                "label": group['description'],
+                "type": group['fieldtypeid'],
+                "value": transformed_val
+            })
+            seen_values.add(transformed_val)
 
     return JsonResponse({
         "success": True,
@@ -780,19 +790,21 @@ def try_parse_date(val):
 @timing_decorator
 def get_grouped_table_records(request):
     """
-    Recupera i gruppi unici per un campo specifico in una tabella, considerando il tipo di campo.
+    Recupera i gruppi unici per un campo, calcolando totali e conteggi record
+    per ogni gruppo.
     """
     try:
         data = json.loads(request.body)
         tableid = data.get("tableid")
-        group_fieldid = data.get("fieldid")
+        group_fieldid = data.get("fieldid") 
         group_type = data.get("type")
         
         viewid = data.get("view")
         searchTerm = data.get("searchTerm", '')
         filtersList = data.get("filtersList", [])
         
-        table = UserTable(tableid, Helper.get_userid(request))
+        userid = Helper.get_userid(request)
+        table = UserTable(tableid, userid)
 
         record_objects = table.get_table_records_obj(
             viewid=viewid,
@@ -802,86 +814,81 @@ def get_grouped_table_records(request):
             orderby=f"{group_fieldid} ASC"
         )
 
-        unique_groups = []
-        seen_buckets = set()
+        table_columns = table.get_results_columns()
+        numeric_fields = [
+            {'id': c['fieldid'], 'desc': c['description']} 
+            for c in table_columns 
+            if c.get('fieldtypewebid') == 'Numero'
+        ]
+
+        groups_map = {}
         m_names = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", 
                    "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"]
-        
-        if group_type == 'Data':
-            months_found = set()
-            for record in record_objects:
-                field_def = record.fields.get(group_fieldid, {})
-                val = field_def.get("value") or field_def.get("convertedvalue")
-                
-                dt = try_parse_date(val)
+
+        alt_fieldid = None
+        if group_fieldid.endswith('_'):
+            alt_fieldid = '_' + group_fieldid[:-1]
+
+        for record in record_objects:
+            field_def = record.fields.get(group_fieldid)
+            if not field_def and alt_fieldid:
+                field_def = record.fields.get(alt_fieldid)
+            
+            field_def = field_def or {}
+            raw_val = field_def.get("value") or field_def.get("convertedvalue")
+            
+            bucket_key = "NULL_VALUE"
+            display_label = "Nessun valore"
+
+            if group_type == 'Data':
+                dt = try_parse_date(raw_val)
                 if dt:
-                    months_found.add(dt.strftime('%Y-%m'))
+                    bucket_key = dt.strftime('%Y-%m')
+                    display_label = f"{m_names[dt.month-1]} {dt.year}"
+            else:
+                if raw_val not in [None, ""]:
+                    bucket_key = str(raw_val)
+                    display_label = str(field_def.get("convertedvalue", raw_val))
 
-            use_year_grouping = len(months_found) > 60
-
-            for month_key in sorted(months_found):
-                year_val, month_val = map(int, month_key.split('-'))
-                last_day = calendar.monthrange(year_val, month_val)[1]
+            if bucket_key not in groups_map:
+                groups_map[bucket_key] = {
+                    "label": display_label,
+                    "value": bucket_key,
+                    "type": group_type,
+                    "count": 0,
+                    "totals": {f['id']: 0.0 for f in numeric_fields}
+                }
                 
-                if use_year_grouping:
-                    year_str = str(year_val)
-                    if year_str not in seen_buckets:
-                        seen_buckets.add(year_str)
-                        val_id = json.dumps({"from": f"{year_str}-01-01", "to": f"{year_str}-12-31"})
-                        unique_groups.append({"label": f"Anno {year_str}", "value": val_id, "type": "Data"})
-                else:
-                    if month_key not in seen_buckets:
-                        seen_buckets.add(month_key)
-                        val_id = json.dumps({
-                            "from": f"{year_val}-{month_val:02d}-01", 
-                            "to": f"{year_val}-{month_val:02d}-{last_day}"
-                        })
-                        unique_groups.append({
-                            "label": f"{m_names[month_val-1]} {year_val}", 
-                            "value": val_id, 
-                            "type": "Data"
-                        })
-        
-        else:
-            for record in record_objects:
-                field_def = record.fields.get(group_fieldid, {})
-                raw_value = field_def.get("value") or field_def.get("convertedvalue")
-                display_label = field_def.get("convertedvalue", raw_value)
+                if group_type == 'Data' and bucket_key != "NULL_VALUE":
+                    y, m = map(int, bucket_key.split('-'))
+                    last_day = calendar.monthrange(y, m)[1]
+                    groups_map[bucket_key]["value"] = json.dumps({
+                        "from": f"{y}-{m:02d}-01", 
+                        "to": f"{y}-{m:02d}-{last_day}"
+                    })
 
-                if raw_value not in [None, ""]:
-                    val_id = str(raw_value)
-                    if val_id not in seen_buckets:
-                        seen_buckets.add(val_id)
-                        unique_groups.append({
-                            "label": str(display_label), 
-                            "value": val_id, 
-                            "type": group_type
-                        })
+            groups_map[bucket_key]["count"] += 1
+            for nf in numeric_fields:
+                val_to_sum = record.values.get(nf['id'], 0)
+                try:
+                    groups_map[bucket_key]["totals"][nf['id']] += float(val_to_sum or 0)
+                except (ValueError, TypeError):
+                    continue
 
-        has_null = any(
-            (try_parse_date(r.fields.get(group_fieldid, {}).get("value") or r.fields.get(group_fieldid, {}).get("convertedvalue")) is None) 
-            if group_type == 'Data' else 
-            (r.fields.get(group_fieldid, {}).get("value") in [None, ""] and r.fields.get(group_fieldid, {}).get("convertedvalue") in [None, ""])
-            for r in record_objects
-        )
-        
-        if has_null:
-            unique_groups.append({"label": "Nessun valore", "value": "NULL_VALUE", "type": group_type})
+        def sort_groups(x):
+            is_null = (x['label'] == "Nessun valore")
+            return (is_null, x['label'].lower())
 
-        def sort_key(x):
-            is_null = (x['value'] == "NULL_VALUE")
-            val_str = str(x['value'])
-            if group_type == 'Data' and not is_null:
-                if val_str.startswith('{'): 
-                    try: return (is_null, json.loads(val_str).get('from', val_str))
-                    except: pass
-                return (is_null, val_str)
-            return (is_null, str(x['label']).lower())
+        unique_groups = sorted(list(groups_map.values()), key=sort_groups)
 
-        unique_groups = sorted(unique_groups, key=sort_key)
-        return JsonResponse({"success": True, "groups": unique_groups})
+        return JsonResponse({
+            "success": True, 
+            "groups": unique_groups,
+            "numeric_columns": numeric_fields
+        })
 
     except Exception as e:
+        print(f"Errore in get_grouped_table_records: {str(e)}")
         return JsonResponse({"success": False, "error": str(e)}, status=500)
 
 def get_sql_condition(field_type, values, condition, field_name):
