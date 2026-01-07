@@ -544,6 +544,16 @@ def settings_table_fields_new_field(request):
 
                 cursor.execute(sql)
 
+            elif fieldtype == 'SimpleMarkdown':
+                cursor.execute(
+                    "INSERT INTO sys_field (tableid, fieldid, description, fieldtypeid, length, label, fieldtypewebid) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                    [tableid, fieldid, fielddescription, 'Memo', 4294967295, 'Dati', 'simple_markdown']
+                )
+                
+                sql = f"ALTER TABLE user_{tableid} ADD COLUMN {fieldid} LONGTEXT NULL"
+
+                cursor.execute(sql)
+
             elif fieldtype == 'LongText':
 
 

@@ -684,6 +684,8 @@ class UserRecord:
                 fieldtype='html'
             if field['fieldtypewebid'] == 'markdown':
                 fieldtype='markdown'
+            if field['fieldtypewebid'] == 'simple-markdown':
+                fieldtype='simple-markdown'
             
 
             if field['fieldtypewebid'] == 'file':
