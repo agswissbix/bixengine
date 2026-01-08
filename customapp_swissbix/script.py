@@ -1776,6 +1776,7 @@ def get_timetracking(request):
 
         timetrackings_list = UserTable('timetracking').get_records(conditions_list=condition_list)
         timetrackings = []
+        task_totals_map = {}
 
         for timetracking in timetrackings_list:
             raw_date = timetracking['date']
@@ -1806,6 +1807,28 @@ def get_timetracking(request):
                 if company:
                     companyname = company.values.get('companyname', '')
 
+            task_id = timetracking.get('recordidtask_')
+            task_key = str(task_id) if task_id else "no_task"
+            
+            status = timetracking.get('stato')
+            worktime_val = float(timetracking.get('worktime', 0)) if timetracking.get('worktime') else 0.0
+
+            if status == "Terminato":
+                task_totals_map[task_key] = task_totals_map.get(task_key, 0) + worktime_val
+            else:
+                if task_key not in task_totals_map:
+                    task_totals_map[task_key] = 0.0
+
+            task_name = ""
+            expected_duration = 0.0
+
+            if task_id:
+                task_record = UserRecord('task', task_id)
+                if task_record:
+                    task_name = task_record.values.get('description', '')
+                    raw_expected = task_record.values.get('duration')
+                    expected_duration = float(raw_expected) if raw_expected is not None else 0.0
+
             timetracking_data = {
                 'id': timetracking['recordid_'],
                 'description': timetracking['description'],
@@ -1817,6 +1840,9 @@ def get_timetracking(request):
                 'status': timetracking['stato'],
                 'clientid': clientid,
                 'client_name': companyname,
+                'task_id': task_key,
+                'task_name': task_name,
+                'task_expected_duration': expected_duration
             }
             timetrackings.append(timetracking_data)
 
@@ -1826,11 +1852,12 @@ def get_timetracking(request):
         for company in companies_list:
             company_data = {
                 'id': company['recordid_'],
-                'companyname': company['companyname']
+                'companyname': company['companyname'],
             }
             companies.append(company_data)
 
-        return JsonResponse({"timetracking": timetrackings, "clients": companies}, safe=False)
+        return JsonResponse({"timetracking": timetrackings, "clients": companies,
+                "task_totals": task_totals_map}, safe=False)
 
     except Exception as e:
         logger.error(f"Errore nell'ottenimento dei timetracker per l'utente: {str(e)}")
@@ -1843,6 +1870,8 @@ def save_timetracking(request):
         data = json.loads(request.body)
 
         userid = Helper.get_userid(request)
+
+        stop_active_timetracking(userid)
 
         timetracking = UserRecord('timetracking')
 
@@ -1861,6 +1890,40 @@ def save_timetracking(request):
     except Exception as e:
         logger.error(f"Errore nell'avviare il timetracking: {str(e)}")
         return JsonResponse({'error': f"Errore nell'avviare il timetracking: {str(e)}"}, status=500)    
+
+def stop_active_timetracking(userid):
+    print("stop_active_timetracking")
+    try:
+        condition_list = []
+        condition_list.append(f"user={userid}")
+        condition_list.append("stato='Attivo'")
+
+        active_timetrackings = UserTable('timetracking').get_records(conditions_list=condition_list)
+
+        for timetracking in active_timetrackings:
+            timetracking = UserRecord('timetracking', timetracking.get('recordid_'))
+            timetracking.values['end'] = datetime.datetime.now().strftime("%H:%M")
+            timetracking.values['stato'] = "Terminato"
+
+            time_format = '%H:%M'
+            start = datetime.datetime.strptime(timetracking.values['start'], time_format)
+            end = datetime.datetime.strptime(timetracking.values['end'], time_format)
+            time_difference = end - start
+
+            total_minutes = time_difference.total_seconds() / 60
+            hours, minutes = divmod(total_minutes, 60)
+            formatted_time = "{:02}:{:02}".format(int(hours), int(minutes))
+
+            timetracking.values['worktime_string'] = str(formatted_time)
+
+            hours = time_difference.total_seconds() / 3600
+            timetracking.values['worktime'] = round(hours, 2)
+
+            timetracking.save()
+
+        return True
+    except:
+        return False
 
 
 def stop_timetracking(request):
