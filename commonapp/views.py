@@ -762,9 +762,33 @@ def get_available_groups_for_table(request):
             })
             seen_values.add(transformed_val)
 
+    # Gestione custom functions
+    userid = Helper.get_userid(request)
+
+    customs_fn = SysCustomFunction.objects.filter(
+        tableid=tableid
+    ).order_by('order').values()
+
+    tablesettings = TableSettings(tableid, userid)
+    valid_functions = []
+
+    for fn in customs_fn:
+        conditions = fn['conditions']
+        if conditions:
+            valid_records, sql_where = tablesettings._evaluate_conditions(conditions)
+
+            setting = {
+                'value': 'true',
+                'valid_records': valid_records,
+                'conditions': sql_where
+            }
+        if fn['context'] == "grouptable":
+            valid_functions.append(fn)
+
     return JsonResponse({
         "success": True,
-        "groups": response_groups
+        "groups": response_groups,
+        "fn": valid_functions
     })
 
 import calendar
