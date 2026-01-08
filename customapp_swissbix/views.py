@@ -660,16 +660,6 @@ def get_products_activemind(request):
     if not recordid_deal:
         return JsonResponse({'error': 'Missing trattativaid'}, status=400)
 
-    # 🔹 Pattern per mappare prodotti -> categorie
-    category_map = {
-        "data_security": ["RMM", "EDR", "Backup"],
-        "mobile_security": ["Safely Mobile"],
-        "infrastructure": ["Vulnerability"],
-        "sophos": ["Central E-mail", "Phish Threat"],
-        "firewall": ["XGS"],
-        "microsoft": ["Microsoft 365"]
-    }
-
     # 🔹 Mappa icone già definite nel mock
     icon_map = {
         "RMM": "Monitor",
@@ -692,7 +682,7 @@ def get_products_activemind(request):
     with connection.cursor() as cursor:
         # 1. Prendo tutti i prodotti AM
         cursor.execute("""
-            SELECT recordid_, name, description, note, price, cost
+            SELECT recordid_, name, description, note, price, cost, subcategory
             FROM user_product
             WHERE name LIKE 'AM - %' AND deleted_ = 'N'
         """)
@@ -708,27 +698,22 @@ def get_products_activemind(request):
         quantity_map = {row[0]: row[1] for row in deal_rows}
         frequency_map = {row[0]: row[2] for row in deal_rows}
 
-    # 3. Per ogni prodotto DB → mappo alla categoria mock
-    for recordid_, name, description, note, price, cost in db_products:
-        matched_category_id = None
-        matched_icon = None
+    # 3. Per ogni prodotto DB
+    for recordid_, name, description, note, price, cost, subcategory in db_products:
+        matched_category_id = subcategory
 
-        for cat_id, patterns in category_map.items():
-            for p in patterns:
-                if p.lower() in name.lower():
-                    matched_category_id = cat_id
-                    matched_icon = icon_map.get(p, None)
-                    break
-            if matched_category_id:
-                break
-
-        if not matched_category_id:
-            # se non matcha nessuna categoria → skip
+        if not matched_category_id or matched_category_id not in categories_dict:
             continue
 
         features = [f.strip() for f in note.split(",")] if note else []
         quantity = quantity_map.get(recordid_, 0)
         frequency = frequency_map.get(recordid_, "")
+
+        matched_icon = None
+        for keyword, icon_name in icon_map.items():
+            if keyword.lower() in name.lower():
+                matched_icon = icon_name
+                break
 
         service = {
             "id": str(recordid_),
