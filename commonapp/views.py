@@ -7447,9 +7447,22 @@ def fieldsupdate(request):
     for param, value in params.items():
         if param in ['tableid','recordid']:
             continue
+        old_value=old_record.values.get(param,None)
         value=str(value).replace("'","''")
+        if value == '$today$':
+            value = datetime.date.today().strftime('%Y-%m-%d')
+        if value.startswith('$dateadd:') and value.endswith('$'):
+            try:
+                # Rimuovi l'ultimo '$' e prendi la parte dopo ':'
+                days_str = value.split(':')[1].replace('$', '')
+                days = int(days_str)
+                value = (datetime.date.today() + datetime.timedelta(days=days)).strftime('%Y-%m-%d')
+            except (ValueError, IndexError):
+                # Gestione errore se il numero non è valido o il formato è errato
+                pass
         HelpderDB.sql_execute(f"UPDATE user_{tableid} SET {param}='{value}' WHERE recordid_='{recordid}' ")
     fields= params
+    #TODO verificare cosa fa questa parte di codice
     dealline_record = UserRecord(tableid, recordid)
     changed_fields = Helper.get_changed_fields(dealline_record, old_record)
     if "linkedorder_" not in changed_fields:

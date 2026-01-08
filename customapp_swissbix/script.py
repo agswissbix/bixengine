@@ -335,7 +335,7 @@ def printing_katun_xml_extract_rows():
                     invoice_rows = invoice_rows_container.findall('InvoiceRow')
                 
                 company_name = root.find('RecipientDescription').text 
-                company = HelpderDB.sql_query_row(f"SELECT * FROM user_company WHERE companyname='{company_name}'")
+                company = HelpderDB.sql_query_row(f"SELECT * FROM user_company WHERE companyname='{company_name}' AND bexio_status='Active'")
                 if not company:
                     recordidcompany = '00000000000000000000000000000394'
                 else:

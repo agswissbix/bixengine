@@ -855,7 +855,7 @@ def printing_katun_bexio_api_set_invoice(request):
         now = datetime.datetime.now()
 
         # 2. Aggiungi 20 giorni utilizzando timedelta
-        future_date = now + timedelta(days=30)
+        future_date = now + timedelta(days=20)
 
         # 3. Formatta la nuova data nel formato stringa desiderato
         invoice_dateto = future_date.strftime("%Y-%m-%d")
@@ -878,7 +878,7 @@ def printing_katun_bexio_api_set_invoice(request):
                 "tax_id": "39",
                 "account_id": "353",
                 "text": invoiceline_description_html,
-                "unit_id": 2,   
+                "unit_id": 1,   
                 "amount": invoiceline_quantity,
                 "unit_price": invoiceline_unitprice,
                 "type": "KbPositionCustom",

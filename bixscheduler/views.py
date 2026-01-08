@@ -10,6 +10,7 @@ from bixscheduler.utils import get_available_tasks
 from rest_framework.decorators import api_view
 from commonapp.bixmodels.user_record import *
 from bixscheduler.models import ScheduleExtra
+import traceback
 
 
 HOOK_PATH = 'bixscheduler.hooks.on_task_success'
@@ -257,8 +258,23 @@ def run_function(request):
     # 4. Esegui la funzione in Python
     try:
         result = task_function() 
-        return JsonResponse({"success": True, "result": str(result)})
+        
+        # Gestione speciale se la funzione ritorna già un JsonResponse (vedi nota sotto)
+        if isinstance(result, JsonResponse):
+             # Decodifica il contenuto se serve loggarlo, oppure ritorna direttamente
+             return result 
+             
+        return JsonResponse({"success": True, "result": result})
+
     except Exception as e:
-        # Cattura eventuali errori durante l'esecuzione della funzione
-        return JsonResponse({"error": f"Error running function: {str(e)}"}, status=500)
+        # 1. STAMPA L'ERRORE IN CONSOLE (Visibilità immediata)
+        print(f"!!! ERRORE ESEGUENDO {function_name} !!!")
+        traceback.print_exc()  # Questo stampa tutto il dettaglio rosso in console
+        
+        # 2. RITORNA L'ERRORE NEL JSON (Per i log dello scheduler)
+        return JsonResponse({
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc() # Manda la scia dell'errore anche allo scheduler
+        }, status=500)
     
