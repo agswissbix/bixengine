@@ -355,10 +355,13 @@ class UserTable:
             filter_value = filter_item.get('value')
             filter_condition = filter_item.get('conditions', [])
             
-            if not field_id or not filter_value:
+            if not field_id or filter_value is None:
                 continue
-            
-            sql_condition = self.build_condition(filter_type, field_id, filter_value, filter_condition)
+
+            if filter_value == "NULL_VALUE":
+                sql_condition = f"({field_id} IS NULL OR {field_id} = '' OR {field_id} = '0')"
+            else:
+                sql_condition = self.build_condition(filter_type, field_id, filter_value, filter_condition)
 
             if sql_condition:
                 conditions_list.append(sql_condition)

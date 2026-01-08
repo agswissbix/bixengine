@@ -33,59 +33,68 @@ from xhtml2pdf import pisa
 from django.template.loader import get_template
 from customapp_swissbix.views import link_callback
 
+def task_monitor(data_type):
+    """
+    Decoratore che trasforma l'output di una funzione nel template standard.
+    Gestisce automaticamente il try-except e il formato del dizionario.
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                result_value = func(*args, **kwargs)
+                return {
+                    "status": "success",
+                    "value": result_value,
+                    "type": data_type
+                }
+            except Exception as e:
+                logger.error(f"Errore nel task {data_type}: {str(e)}")
+                return {
+                    "status": "error",
+                    "value": {"error": str(e), "message": "Esecuzione fallita"},
+                    "type": data_type
+                }
+        return wrapper
+    return decorator
 
 # ritorna dei contatori (ad esempio: numero di stabili, numero di utenti, ecc.)
+@task_monitor(data_type="counters")
 def monitor_timesheet_daily_count():
     """
-    Conteggio del numero di record su user_timesheet durante la giornata
+    Conteggio del numero di record su user_timesheet durante la giornata.
     """
-    type = "counters"
-    result_status = "success"
-    result_value = {}
+    today = date.today().isoformat()
 
-    today = date.today().isoformat()  # formato 'YYYY-MM-DD'
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT COUNT(*) 
+            FROM user_timesheet 
+            WHERE CAST(date AS DATE) = %s
+        """, [today])
 
-    try:
-        with connection.cursor() as cursor:
-            cursor.execute("""
-                SELECT COUNT(*) 
-                FROM user_timesheet 
-                WHERE CAST(date AS DATE) = %s
-            """, [today])
-
-            count = cursor.fetchone()[0]
-            result_value["user_timesheet_today"] = count
-
-    except Exception as e:
-        result_status = "error"
-        result_value["error"] = str(e)
-
-    return {
-        "status": result_status,
-        "value": result_value,
-        "type": type
-    }
+        count = cursor.fetchone()[0]
+        
+    return {"user_timesheet_today": count, "message": "Conteggio completato con successo."}
 
 # ritorna delle date
+@task_monitor(data_type="dates")
 def monitor_dates():
     """
     Controllo delle date
     """
-    type = "dates"
-    result_status = 'success'
     result_value = {
         'stabili_ultimoinserimento': '2025-07-20',
+        'message': 'Controllo date eseguito con successo.'
     }
-    return {"status": result_status, "value": result_value, "type": type}
+    return result_value
 
 # ritorna lo stato dei servizi, funziona per gli avvii django manage.py, e react con npm, inoltre con servizi windows
+@task_monitor(data_type="services")
 def monitor_services():
     """
     Controllo dei servizi in esecuzione Windows e dei progetti attivi
     """
-
-    type = "services"
-    result_status = 'success'
     result_value = {}
 
     # Servizi Windows da controllare (esatti)
@@ -95,23 +104,17 @@ def monitor_services():
         'bixportal': ['npm', 'react-scripts', 'vite']
     }
 
-
-
     # Controllo dei servizi Windows
     for service in service_names:
         try:
             output = subprocess.check_output(['sc', 'query', service], stderr=subprocess.DEVNULL, text=True)
-            if 'RUNNING' in output:
-                result_value[service] = 'Running'
-            else:
-                result_value[service] = 'Disabled'
+            result_value[service] = 'Running' if 'RUNNING' in output else 'Disabled'
         except subprocess.CalledProcessError:
             result_value[service] = 'Disabled'
 
     # Controllo dei progetti Django/React tramite processi attivi
     for project, keywords in project_keywords.items():
         project_running = False
-
         for proc in psutil.process_iter(['cmdline']):
             try:
                 cmdline = proc.info.get('cmdline', [])
@@ -124,18 +127,22 @@ def monitor_services():
                     break
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
-
+        
         result_value[project] = 'Running' if project_running else 'Disabled'
 
-    # Invia il report se qualcosa è disabilitato
+    # Logica di notifica: Invia il report se qualcosa è disabilitato
     disabled_items = [name for name, status in result_value.items() if status.lower() == 'disabled']
+    
     if disabled_items:
-        #da cambiare
         destinatari = ["marks.iljins@samtrevano.ch"]
-        #send_report({"status": result_status,"value": result_value,"type": type}, destinatari)
+        # Qui potresti chiamare una funzione di invio mail
+        # send_report(result_value, destinatari) 
+        logger.warning(f"Servizi disabilitati rilevati: {disabled_items}")
 
-    return {"status": result_status, "value": result_value, "type": type}
+    result_value["message"] = "Controllo servizi eseguito con successo."
+    return result_value
 
+@task_monitor(data_type="no_output")
 def move_files():
     """
     Sposta tutti i file da: C:/Adiuto/Dispatcher a: C:/Adiuto/Immission/TrashBin
@@ -144,56 +151,59 @@ def move_files():
     immission_dir = r"C:\Adiuto\Immission"
     trash_bin_dir = os.path.join(immission_dir, "TrashBin")
 
-    type = "no_output"
-    result_status = "success"
     result_value = {
         "moved_files": [],
         "moved_to_trash": []
     }
 
     if not os.path.exists(dispatcher_dir):
-        return {"status": "error", "value": {"error": f"Path dispatcher non trovato: {dispatcher_dir}"}, "type": type}
+        raise FileNotFoundError(f"Path dispatcher non trovato: {dispatcher_dir}")
     
     if not os.path.exists(immission_dir):
-        return {"status": "error", "value": {"error": f"Path immission non trovato: {immission_dir}"}, "type": type}
+        raise FileNotFoundError(f"Path immission non trovato: {immission_dir}")
 
-    try:
-        if not os.path.exists(trash_bin_dir):
-            os.makedirs(trash_bin_dir)
+    if not os.path.exists(trash_bin_dir):
+        os.makedirs(trash_bin_dir)
 
-        files = os.listdir(dispatcher_dir)
+    # Elaborazione file
+    files = os.listdir(dispatcher_dir)
 
-        for file in files:
-            old_path = os.path.join(dispatcher_dir, file)
-            if not os.path.isfile(old_path):
-                continue  # ignora cartelle o altro
+    for file in files:
+        old_path = os.path.join(dispatcher_dir, file)
+        
+        if not os.path.isfile(old_path):
+            continue  # ignora cartelle
 
-            parts = file.split('_')
-            if len(parts) < 2:
-                new_path = os.path.join(trash_bin_dir, file)
-                shutil.move(old_path, new_path)
-                result_value["moved_to_trash"].append(file)
-                print(f"File '{file}' spostato in '{trash_bin_dir}'")
-                continue
+        parts = file.split('_')
 
-            folder_name = parts[0]
-            new_name = "_".join(parts[1:])
-            new_folder_path = os.path.join(immission_dir, folder_name)
+        # Caso A: Meno di due parti -> Sposta nel TrashBin
+        if len(parts) < 2:
+            new_path = os.path.join(trash_bin_dir, file)
+            shutil.move(old_path, new_path)
+            result_value["moved_to_trash"].append(file)
+            continue
 
-            if not os.path.exists(new_folder_path):
-                os.makedirs(new_folder_path)
+        # Caso B: Almeno due parti (es. PROGETTO_nomefile.ext)
+        folder_name = parts[0]
+        new_name = "_".join(parts[1:])
+        new_folder_path = os.path.join(immission_dir, folder_name)
 
-            new_file_path = os.path.join(new_folder_path, new_name)
-            shutil.move(old_path, new_file_path)
-            result_value["moved_files"].append({"file": file, "destination": new_file_path})
-            print(f"File '{file}' spostato in '{new_folder_path}' con il nuovo nome '{new_name}'.")
+        if not os.path.exists(new_folder_path):
+            os.makedirs(new_folder_path)
 
-    except Exception as e:
-        result_status = "error"
-        result_value = {"error": str(e)}
+        new_file_path = os.path.join(new_folder_path, new_name)
+        shutil.move(old_path, new_file_path)
+        
+        result_value["moved_files"].append({
+            "original_name": file, 
+            "new_name": new_name, 
+            "destination": folder_name
+        })
 
-    return {"status": result_status, "value": result_value, "type": type}
+    result_value["message"] = "Spostamento file completato con successo."
+    return result_value
 
+@task_monitor(data_type="no_output")
 def send_report(monitoring_result, destinatari):
     # monitoring_result = {"status": ..., "value": {...}, "type": ...}
     disabled_services = [srv for srv, status in monitoring_result['value'].items() if status.lower() == 'disabled']
@@ -204,6 +214,7 @@ def send_report(monitoring_result, destinatari):
 
     subject = "Report Servizi Disabilitati"
     servizi_lista = "\n".join(f"- {srv}" for srv in disabled_services)
+    
     html_message = f"""
     <html>
         <body>
@@ -214,98 +225,99 @@ def send_report(monitoring_result, destinatari):
     </html>
     """
 
-    # Usa EmailSender per inviare l’email
-    EmailSender.send_email(
-        emails=destinatari,
-        subject=subject,
-        html_message=html_message,
-    )
-    return True
+    try:
+        EmailSender.send_email(
+            emails=destinatari,
+            subject=subject,
+            html_message=html_message,
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Errore invio email report: {str(e)}")
+        return False
 
 # ritorna conteggi di file in delle cartelle
+@task_monitor(data_type="folders")
 def monitor_folders():
     """
     Controlla il numero di file nella cartella: C:/Adiuto/Scansioni/originali ed eventuali sottocartelle
     """
 
     path = r"C:\Adiuto\Scansioni\originali"
-    type = "folders"
-    result_status = 'success'
     result_value = {}
 
     if not os.path.exists(path):
-        return {"status": "error", "value": {"error": "Path non trovato"}, "type": type}
+        raise FileNotFoundError(f"Path non trovato: {path}")
 
-    try:
-        for current_path, dirs, files in os.walk(path):
-            folder_name = os.path.basename(current_path)
-            # Se siamo nella root e basename è vuoto, usa l'intero path
-            if not folder_name:
-                folder_name = current_path
-            result_value[folder_name] = len([f for f in files if os.path.isfile(os.path.join(current_path, f))])
+    for current_path, dirs, files in os.walk(path):
+        # Otteniamo il nome della cartella corrente
+        folder_name = os.path.basename(current_path)
+        
+        # Se siamo nella root e basename è vuoto (es. path radice), usa l'intero path
+        if not folder_name:
+            folder_name = current_path
 
-    except Exception as e:
-        result_status = "error"
-        result_value["error"] = str(e)
+        # Contiamo solo i file effettivi (escludendo eventuali sottocartelle dalla lista 'files')
+        file_count = len([f for f in files if os.path.isfile(os.path.join(current_path, f))])
+        
+        # Salviamo il risultato
+        result_value[folder_name] = file_count
 
-    return {"status": result_status, "value": result_value, "type": type}
+    result_value["message"] = "Controllo cartelle eseguito con successo."
+    return result_value
 
+@task_monitor(data_type="no_output")
 def move_attachments_to_dispatcher():
     """
     Sposta tutti i file dalla cartella: C:/xampp/htdocs/bixdata_view/bixdata_view/bixdata_app/attachments alla cartella: C:/Adiuto/Dispatcher
     """
-
-    type = "no_output"
-    result_status = "success"
     result_value = {}
 
     adiuto = 'C:\\Adiuto\\Dispatcher'
     bixdata = 'C:\\xampp\\htdocs\\bixdata_view\\bixdata_view\\bixdata_app\\attachments'
 
-    try:
-        if not os.path.exists(adiuto):
-            os.makedirs(adiuto)
+    if not os.path.exists(adiuto):
+        os.makedirs(adiuto)
 
-        if not os.path.exists(bixdata):
-            result_status = "error"
-            result_value["error"] = f"Path sorgente non trovato: {bixdata}"
-            return {"status": result_status, "value": result_value, "type": type}
+    if not os.path.exists(bixdata):
+        raise FileNotFoundError(f"Path sorgente non trovato: {bixdata}")
 
-        files = os.listdir(bixdata)
-        moved_files = []
+    files = os.listdir(bixdata)
+    moved_files = []
 
-        for file in files:
-            source_file = os.path.join(bixdata, file)
-            destination_file = os.path.join(adiuto, file)
+    for file in files:
+        source_file = os.path.join(bixdata, file)
+        destination_file = os.path.join(adiuto, file)
 
-            if os.path.isfile(source_file):
-                shutil.move(source_file, destination_file)
-                moved_files.append(file)
+        if os.path.isfile(source_file):
+            shutil.move(source_file, destination_file)
+            moved_files.append(file)
 
-        result_value["moved_files"] = moved_files
-        result_value["count"] = len(moved_files)
+    result_value["moved_files"] = moved_files
+    result_value["count"] = len(moved_files)
 
-    except Exception as e:
-        result_status = "error"
-        result_value["error"] = str(e)
-
-    return {"status": result_status, "value": result_value, "type": type}
+    result_value["message"] = "Spostamento file eseguito con successo."
+    return result_value
 
 
-
+@task_monitor(data_type="counters")
 def test_script():
     """
     Script di test
     """
-
-    type = "counters"
-    result_status = 'success'
     result_value = {"message": "Script eseguito correttamente"}
+    return result_value
 
-    return {"status": result_status, "value": result_value, "type": type}
+@task_monitor(data_type="counters")
+def test_fail_script():
+    """
+    Script di test che genera un errore
+    """
+    raise Exception("Errore nel script di test")
 
 
 #stampa trimestrale fatture printing
+@task_monitor(data_type="")
 def printing_katun_xml_extract_rows():
     folder_path_xml = os.path.join(settings.XML_DIR)
     folder_path = os.path.join(settings.MEDIA_ROOT, 'printinginvoice')  # Cartella per i file PDF
@@ -401,75 +413,90 @@ def printing_katun_xml_extract_rows():
                              
             except ET.ParseError as e:
                 print("errore")
-    return JsonResponse({'status': 'success', 'message': 'Rows extracted successfully.'})
+    result_value = {'message': 'Rows extracted successfully.'}
+    return result_value
 
 # Gets feedbacks
+@task_monitor(data_type="sync")
 def get_satisfaction():
-    try: 
-        url = "https://www.swissbix.ch/sync/get_feedback.php"
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-        }
-        response = requests.get(url, headers=headers)
+    """
+    Recupera i feedback dal sito e li salva nel database.
+    Ottimizzato per la visualizzazione in dashboard.
+    """
+    url = "https://www.swissbix.ch/sync/get_feedback.php"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    }
+
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         data = response.json()
+    except Exception as e:
+        raise Exception(f"Errore connessione Feedback: {str(e)}")
 
-        tableid = 'ticketfeedback'
-        results = []        
+    tableid = 'ticketfeedback'
+    results = []        
 
-        for feedback in data:
-            ticketid = feedback.get("ticketid")
-            level = feedback.get("level")
-            comment = feedback.get("comment", "")
-            technician = feedback.get("technician")
-            dateinsert_str = feedback.get("dateinsert")
+    for feedback in data:
+        ticketid = feedback.get("ticketid")
+        level = feedback.get("level")
+        comment = feedback.get("comment", "")
+        technician = feedback.get("technician")
+        dateinsert_str = feedback.get("dateinsert")
 
-            try:
-                dateinsert = datetime.strptime(dateinsert_str, "%Y-%m-%d")
-            except:
-                dateinsert = None
+        try:
+            dateinsert = datetime.datetime.strptime(dateinsert_str, "%Y-%m-%d")
+        except (ValueError, TypeError):
+            dateinsert = None
 
-            # Check if record (ticket) already exists
-            existing = HelpderDB.sql_query_row(
-                f"SELECT id FROM user_ticketfeedback WHERE ticketid = '{ticketid}'"
-            )
+        # Controllo se il record esiste già
+        existing = HelpderDB.sql_query_row(
+            f"SELECT id FROM user_ticketfeedback WHERE ticketid = '{ticketid}'"
+        )
 
-            if existing:
-                # If record exists, update record
-                recordid = existing['id']
-                record = UserRecord(tableid, recordid)
-                record.values['level'] = level
-                record.values['comment'] = comment
-                record.values['technician'] = technician
-                record.values['dateinsert'] = dateinsert
-                record.save()
-                created = False
-            else:
-                # If record does not exists, create record
-                new_record = UserRecord(tableid)
-                new_record.values['ticketid'] = ticketid
-                new_record.values['level'] = level
-                new_record.values['comment'] = comment
-                new_record.values['dateinsert'] = dateinsert
-                new_record.save()
-                created = True
-            
-                
+        if existing:
+            # Aggiornamento
+            recordid = existing['id']
+            record = UserRecord(tableid, recordid)
+            record.values['level'] = level
+            record.values['comment'] = comment
+            record.values['technician'] = technician
+            record.values['dateinsert'] = dateinsert
+            record.save()
+            created = False
+        else:
+            # Creazione
+            new_record = UserRecord(tableid)
+            new_record.values['ticketid'] = ticketid
+            new_record.values['level'] = level
+            new_record.values['comment'] = comment
+            new_record.values['dateinsert'] = dateinsert
+            new_record.save()
+            created = True
+        
         results.append({
             "ticketid": ticketid,
             "created": created,
-            "level": level,
-            "comment": comment,
+            "level": level
         })
 
-        return JsonResponse(results, safe=False)
-    except requests.RequestException as e:  
-        return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
-    
+    output_per_dashboard = {
+        "message": f"Script eseguito correttamente: {len(results)} feedback elaborati.",
+        "summary": {
+            "total": len(results),
+            "created": len([r for r in results if r['created']]),
+            "updated": len([r for r in results if not r['created']])
+        },
+        # "results": results,
+        "timestamp": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    }
 
+    return output_per_dashboard
+    
+@task_monitor(data_type="update")
 @safe_schedule_task(stop_on_error=True)
 def update_deals():
-    result_status = 'error'
     result_message = ''
     result_log = []
 
@@ -560,40 +587,28 @@ def update_deals():
                         print("dealline updated")
                         result_log.append("dealline updated")
 
-                
-
-
-
             save_record_fields('deal', recordid_deal)
-            updated_deal_counter+=1
-            print("deal updated")
-            result_log.append("deal updated")
-            print("-----")
-            result_log.append("-----")
-        
+            updated_deal_counter += 1
+            result_log.append(f"Aggiornata: {deal.get('dealname', recordid_deal)}")
 
+    except Exception as e:
+        result_message = f"Errore durante la sincronizzazione: {str(e)}"
+        result_log.append(result_message)
+        print(result_message)
+        raise Exception(result_message)
+
+    finally:
         cnxn.close()
-        
-        print(f"Trattative aggiornate: {updated_deal_counter}")
-        result_log.append(f"Trattative aggiornate: {updated_deal_counter}")
 
-        result_status = 'success'
-        result_message=f"Trattative aggiornate: {updated_deal_counter}"
-        
-        result_log="<br>".join(result_log)
-
-    except pyodbc.Error as ex:
-        sqlstate = ex.args[0]
-        result_status = 'Errore connessione'
-        print(f"Connessione non riuscita: {sqlstate}")
-
-    
-
-    return {"type": "update", "status": result_status, "message": result_message, "log": result_log}
+        return {
+            "updated_count": updated_deal_counter,
+            "message": f"Sincronizzazione completata: {updated_deal_counter} trattative",
+            # "details": "<br>".join(result_log)
+        }
 
 
 
-
+@task_monitor(data_type="sync")
 def sync_freshdesk_tickets(request):
     api_key = os.environ.get('FRESHDESK_APIKEY')
     password = "x"
@@ -604,6 +619,9 @@ def sync_freshdesk_tickets(request):
 
     headers = response.headers
     response = json.loads(response.text)
+
+    updated_tickets = 0
+    new_tickets = 0
 
     for ticket in response:
         field = HelpderDB.sql_query_row(f"select * from user_freshdesk_tickets WHERE ticket_id='{ticket['id']}'")
@@ -621,6 +639,7 @@ def sync_freshdesk_tickets(request):
             new_record.values['status'] = ticket['status']
 
             new_record.save()
+            new_tickets += 1
         else:
             record = UserRecord('freshdesk_tickets', field['recordid_'])
             record.values['subject'] = ticket['subject']
@@ -629,11 +648,12 @@ def sync_freshdesk_tickets(request):
             record.values['status'] = ticket['status']
             record.values['responder_id'] = ticket['responder_id']
             record.save()
+            updated_tickets += 1
 
 
-    return JsonResponse(response, safe=False)
+    return {"message": "Sincronizzazione freshdesk tickets completata", "updated_tickets": updated_tickets, "new_tickets": new_tickets}
 
-
+@task_monitor(data_type="sync")
 def sync_bexio_contacts():
     url = "https://api.bexio.com/2.0/contact?order_by=id_desc&limit=10&offset=0"
     accesstoken=os.environ.get('BEXIO_ACCESSTOKEN')
@@ -645,15 +665,19 @@ def sync_bexio_contacts():
 
     response = requests.request("GET", url, headers=headers)
     response = json.loads(response.text)
+    updated_contacts = 0
+    new_contacts = 0
 
     for contact in response:
         print(f"Syncing contact: {contact['name_1']} Bexio nr: {contact['nr']}")
         field = HelpderDB.sql_query_row(f"select * from user_bexio_contact WHERE bexio_id='{contact['id']}'")
         if not field:
             record = UserRecord("bexio_contact")
+            new_contacts += 1
 
         else:
             record = UserRecord("bexio_contact", field['recordid_'])
+            updated_contacts += 1
         record.values['bexio_id'] = contact['id']
         record.values['nr'] = contact['nr']
         record.values['contact_type_id'] = contact['contact_type_id']
@@ -675,8 +699,9 @@ def sync_bexio_contacts():
 
         record.save()
 
-    return JsonResponse(response, safe=False)
+    return {"message": "Sincronizzazione bexio contacts completata", "updated_contacts": updated_contacts, "new_contacts": new_contacts}
 
+@task_monitor(data_type="sync")
 def sync_bexio_orders():
     sql="DELETE FROM user_bexio_orders"
     HelpderDB.sql_execute(sql)
@@ -767,13 +792,12 @@ def sync_bexio_orders():
 
         sync_bexio_positions('kb_order', order['id'])
 
-    return JsonResponse(response, safe=False)
-
+    return {"message": "Sincronizzazione bexio orders completata", "total_orders": total_orders}
 
 def sync_bexio_positions_example(request, bexioid):
     return sync_bexio_positions(request,'kb_order',bexioid)
 
-
+@task_monitor(data_type="sync")
 def sync_bexio_positions(bexiotable,bexio_parent_id):
     url = f"https://api.bexio.com/2.0/{bexiotable}/{bexio_parent_id}/kb_position_custom"
     accesstoken=os.environ.get('BEXIO_ACCESSTOKEN')
@@ -819,9 +843,9 @@ def sync_bexio_positions(bexiotable,bexio_parent_id):
 
         record.save()
 
-    return JsonResponse(response, safe=False)
+    return {"message": f"Sincronizzazione bexio positions per {bexiotable} id {bexio_parent_id} completata", "total_positions": len(response)}
 
-
+@task_monitor(data_type="sync")
 def sync_bexio_invoices(request):
     url = "https://api.bexio.com/2.0/kb_invoice?order_by=id_desc&limit=10&offset=0"
     accesstoken=os.environ.get('BEXIO_ACCESSTOKEN')
@@ -834,12 +858,18 @@ def sync_bexio_invoices(request):
     response = requests.request("GET", url, headers=headers)
     response = json.loads(response.text)
 
+    new_invoices = 0
+    updated_invoices = 0
+
+
     for invoice in response:
         field = HelpderDB.sql_query_row(f"select * from user_bexio_invoices WHERE bexio_id='{invoice['id']}'")
         if not field:
             record = UserRecord("bexio_invoices")
+            new_invoices += 1
         else:
             record = UserRecord("bexio_invoices", field['recordid_'])
+            updated_invoices += 1
 
         record.values['bexio_id'] = invoice['id']
         record.values['document_nr'] = invoice['document_nr']
@@ -861,12 +891,13 @@ def sync_bexio_invoices(request):
         sync_bexio_positions(request, 'kb_invoice', invoice['id'])
 
 
-    return JsonResponse(response, safe=False)
+    return {"message": "Sincronizzazione bexio invoices completata", "new_invoices": new_invoices, "updated_invoices": updated_invoices}
 
 def sync_contacts(request):
     return syncdata(request,'company')
 
 # DO NOT EXECUTE
+@task_monitor(data_type="sync")
 def syncdata(request, tableid):
     sql_table = f"SELECT * FROM sys_table WHERE id='{tableid}'"
     sys_table_rows = HelpderDB.sql_query(sql_table)
@@ -938,150 +969,192 @@ def syncdata(request, tableid):
         
         record.save()
 
-    return HttpResponse(f"Sync completato: {records_created} inseriti, {records_updated} aggiornati.")
+    return {"message": f"Sync completato: {records_created} inseriti, {records_updated} aggiornati."}
 
+@task_monitor(data_type="logs")
 def get_scheduler_logs(request):
-    try: 
-        url = "https://bixdata.swissbix.com/get_scheduler_logs.php"
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-        }
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        data = response.json()
+    monitor_values = {}
 
-        formato = "%Y-%m-%d %H:%M:%S"
+    url = os.environ.get('SCHEDULER_LOGS_URL')
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    }
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    data = response.json()
 
-        key = os.environ.get('LOGS_ENCRYPTION_KEY')
-        f = Fernet(key)
+    formato = "%Y-%m-%d %H:%M:%S"
 
-        for log in data:
-            id = log.get("id")
+    key = os.environ.get('LOGS_ENCRYPTION_KEY')
+    f = Fernet(key)
 
-            oggetto_datetime = datetime.strptime(log.get('date'), formato)
-            date = oggetto_datetime.date()
-            ora = oggetto_datetime.time()
+    for log in data:
+        id = log.get("id")
 
-            funzione_criptata = log.get('function')
-            funzione = f.decrypt(funzione_criptata.encode())
+        oggetto_datetime = datetime.datetime.strptime(log.get('date'), formato)
+        date = oggetto_datetime.date()
+        ora = oggetto_datetime.time()
 
-            cliente_criptato = log.get('client')
-            cliente = f.decrypt(cliente_criptato.encode())
+        funzione_criptata = log.get('function')
+        funzione = f.decrypt(funzione_criptata.encode())
 
-            output_criptato = log.get('output')
-            output = f.decrypt(output_criptato.encode())
+        cliente_criptato = log.get('client')
+        cliente = f.decrypt(cliente_criptato.encode())
 
-            numero_chiamate = log.get('calls_number')
+        output_criptato = log.get('output')
+        output = f.decrypt(output_criptato.encode())
 
-            monitoring_table=UserTable('monitoring')
-            condition_list=[]
-            condition_list.append(f"id={id}")
-            field=monitoring_table.get_records(conditions_list=condition_list)
+        numero_chiamate = log.get('calls_number')
 
-            if not field:
-                new_record = UserRecord('monitoring') 
-                new_record.values['id'] = id
-                new_record.values['data'] = date
-                new_record.values['ora'] = ora
-                new_record.values['funzione'] = funzione
-                new_record.values['client_id'] = cliente
-                new_record.values['output'] = output
-                new_record.values['calls_counter'] = numero_chiamate
+        monitoring_table=UserTable('monitoring')
+        condition_list=[]
+        condition_list.append(f"id={id}")
+        field=monitoring_table.get_records(conditions_list=condition_list)
 
-                # new_record.save()
-            else:
-                record = UserRecord('monitoring', id) 
-                record.values['id'] = id
-                record.values['data'] = date
-                record.values['ora'] = ora
-                record.values['funzione'] = funzione
-                record.values['client_id'] = cliente
-                record.values['output'] = output
-                record.values['calls_counter'] = numero_chiamate
+        if not field:
+            new_record = UserRecord('monitoring') 
+            new_record.values['id'] = id
+            new_record.values['data'] = date
+            new_record.values['ora'] = ora
+            new_record.values['funzione'] = funzione
+            new_record.values['client_id'] = cliente
+            new_record.values['output'] = output
+            new_record.values['calls_counter'] = numero_chiamate
 
-                # record.save()
+            # new_record.save()
+        else:
+            record = UserRecord('monitoring', id) 
+            record.values['id'] = id
+            record.values['data'] = date
+            record.values['ora'] = ora
+            record.values['funzione'] = funzione
+            record.values['client_id'] = cliente
+            record.values['output'] = output
+            record.values['calls_counter'] = numero_chiamate
 
-        return JsonResponse(data, safe=False)
-    except requests.RequestException as e:  
-        return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
+            # record.save()
+
+    monitor_values["message"] = "Logs sincronizzati correttamente"
+    monitor_values["data"] = data
+
+    return monitor_values
     
-def sync_graph_calendar(request):
-    print("sync_graph_calendar")
+@task_monitor(data_type="sync")
+def sync_graph_calendar_task(request):
+    """
+    Coordinatore della sincronizzazione: decide se eseguire 
+    la sincronizzazione iniziale o quella delta.
+    """
+    print("Function: sync_graph_calendar_task")
 
+    # Verifica se il database locale è vuoto
     is_empty = not UserEvents.objects.all().exists()
 
     if is_empty:
-        print("Nessun evento")
-        return views.initial_graph_calendar_sync(request)
+        print("-> Database vuoto: Avvio Sincronizzazione Iniziale")
+        # Chiamata alla funzione (che ora deve restituire un dict)
+        result = views.initial_graph_calendar_sync(request)
     else:
-        print("Eventi esistenti")
-        return views.sync_graph_calendar(request)
-    
-def sync_tables(request):
-    '''
-    Sincronizza tutte le tabelle da sincronizzare presenti in sys_table
-    '''
-    print("sync_tables")
+        print(f"-> Eventi presenti: Avvio Sincronizzazione Delta")
+        # Chiamata alla funzione (che ora deve restituire un dict)
+        result = views.sync_graph_calendar(request)
+
     try:
+        data = json.loads(result.content.decode('utf-8'))
+    except Exception as e:
+        raise Exception(f"Impossibile decodificare la risposta della funzione: {str(e)}")
+
+    if result.status_code >= 400 or data.get('success') is False:
+        error_msg = data.get('detail') or data.get('error') or "Errore sconosciuto nella sincronizzazione"
+        raise Exception(error_msg)
+
+    return data
+    
+@task_monitor(data_type="sync")
+def sync_tables(request):
+    """
+    Sincronizza dinamicamente le tabelle definite in sys_table.
+    """
+    print("Function: sync_tables")
+    sync_summary = []
+
+    try:
+        # Recupero tabelle da sincronizzare
         tables = HelpderDB.sql_query("SELECT * FROM sys_table WHERE sync_table IS NOT NULL")
-        # tables = HelpderDB.sql_query("SELECT * FROM sys_table WHERE sync_table IS NOT NULL AND id = 'company'")
+        
+        if not tables:
+            return "Nessuna tabella configurata per la sincronizzazione."
 
         for table in tables:
-            print("Starting sync of table: " + table['sync_table'])
-            columns = HelpderDB.sql_query(f"SELECT * FROM sys_field WHERE tableid='{table['id']}' AND sync_fieldid IS NOT NULL AND sync_fieldid != ''")
+            table_id = table['id']
+            sync_table_name = table['sync_table']
+            print(f"Starting sync of table: {sync_table_name}")
+            
+            # Recupero mappatura colonne
+            columns = HelpderDB.sql_query(
+                f"SELECT * FROM sys_field WHERE tableid='{table_id}' "
+                f"AND sync_fieldid IS NOT NULL AND sync_fieldid != ''"
+            )
 
             sync_fieldid = table['sync_field']
             founded_fieldid = [c for c in columns if c.get('sync_fieldid') == sync_fieldid]
+            
             if not founded_fieldid:
+                print(f"Skipping {sync_table_name}: sync_field non trovato.")
                 continue
+                
             fieldid = founded_fieldid[0]['fieldid']
 
-            query = f"SELECT * from {table['sync_table']}"
-            condition = table['sync_condition']
-            order = table['sync_order']
-
-            if condition:
-                query += f" WHERE {condition}"
-
-            if order:
-                query += f" ORDER BY {order}"
+            # Costruzione query sorgente
+            query = f"SELECT * FROM {sync_table_name}"
+            if table['sync_condition']:
+                query += f" WHERE {table['sync_condition']}"
+            if table['sync_order']:
+                query += f" ORDER BY {table['sync_order']}"
 
             data = HelpderDB.sql_query(query)
+            
+            records_updated = 0
+            records_created = 0
 
             for row in data:
-                id = row[sync_fieldid]
+                external_id = row[sync_fieldid]
                 
-                field = HelpderDB.sql_query_row(f"SELECT * FROM user_{table['id']} WHERE {fieldid}='{id}'")
+                # Controllo esistenza locale
+                existing_record = HelpderDB.sql_query_row(
+                    f"SELECT recordid_ FROM user_{table_id} WHERE {fieldid}='{external_id}'"
+                )
 
-                if field:
-                    print("Updating record")
-                    record = UserRecord(table['id'], field['recordid_'])
-
-                    for column in columns:
-                        if column['sync_fieldid'] in row:
-                            record.values[column['fieldid']] = row[column['sync_fieldid']]
-                        else:
-                            print("Missing column: " + column['sync_fieldid'])
-
-                    record.save()
+                if existing_record:
+                    record = UserRecord(table_id, existing_record['recordid_'])
+                    records_updated += 1
                 else:
-                    print("Creating record")
-                    new_record = UserRecord(table['id'])
+                    record = UserRecord(table_id)
+                    records_created += 1
 
-                    for column in columns:
-                        if column['sync_fieldid'] in row:
-                            new_record.values[column['fieldid']] = row[column['sync_fieldid']]
-                        else:
-                            print("Missing column: " + column['sync_fieldid'])
-                    
-                    new_record.save()
-            print("Sync completed of table: " + table['sync_table'])
+                # Mappatura campi
+                for column in columns:
+                    src_col = column['sync_fieldid']
+                    dst_col = column['fieldid']
+                    if src_col in row:
+                        record.values[dst_col] = row[src_col]
+                
+                record.save()
+            
+            sync_summary.append({
+                "message": f"Sync completed for {sync_table_name}",
+                "table": sync_table_name,
+                "created": records_created,
+                "updated": records_updated
+            })
+            print(f"Sync completed for {sync_table_name}")
 
-        print("Syncronization completed")
-        return JsonResponse(data, safe=False)
-    except requests.RequestException as e:  
-        return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
+        return sync_summary
 
+    except Exception as e:
+        raise Exception(f"Errore durante la sincronizzazione tabelle: {str(e)}")
+
+@task_monitor(data_type="sync")
 def sync_table(tableid):
     '''
     Sincronizza una singola tabella identificata da tableid
@@ -1164,10 +1237,11 @@ def sync_table(tableid):
         print("Sync completed of table: " + table['sync_table'])
 
         print("Syncronization completed")
-        return JsonResponse(data, safe=False)
+        return {"message": "Sync completed for " + table['sync_table']}
     except requests.RequestException as e:  
         return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
-
+    
+@task_monitor(data_type="sync")
 def sync_bixdata_salesorders():
     print("sync_salesorders")
     sync_output = sync_table('salesorderline')
@@ -1207,7 +1281,8 @@ def sync_bixdata_salesorders():
 
    
     
-    return JsonResponse({"status": "completed"}, safe=False)
+    return {"message": "Sincronizzazione salesorder completata"}
+
 
 def print_servicecontract(request):
     print("print_servicecontract")
@@ -1701,6 +1776,7 @@ def get_timetracking(request):
 
         timetrackings_list = UserTable('timetracking').get_records(conditions_list=condition_list)
         timetrackings = []
+        task_totals_map = {}
 
         for timetracking in timetrackings_list:
             raw_date = timetracking['date']
@@ -1722,6 +1798,37 @@ def get_timetracking(request):
             if timetracking_date != current_date:
                 continue
 
+            clientid = timetracking.get('recordidcompany_', '')
+            
+            companyname = ""
+
+            if clientid:
+                company = UserRecord('company', clientid)
+                if company:
+                    companyname = company.values.get('companyname', '')
+
+            task_id = timetracking.get('recordidtask_')
+            task_key = str(task_id) if task_id else "no_task"
+            
+            status = timetracking.get('stato')
+            worktime_val = float(timetracking.get('worktime', 0)) if timetracking.get('worktime') else 0.0
+
+            if status == "Terminato":
+                task_totals_map[task_key] = task_totals_map.get(task_key, 0) + worktime_val
+            else:
+                if task_key not in task_totals_map:
+                    task_totals_map[task_key] = 0.0
+
+            task_name = ""
+            expected_duration = 0.0
+
+            if task_id:
+                task_record = UserRecord('task', task_id)
+                if task_record:
+                    task_name = task_record.values.get('description', '')
+                    raw_expected = task_record.values.get('duration')
+                    expected_duration = float(raw_expected) if raw_expected is not None else 0.0
+
             timetracking_data = {
                 'id': timetracking['recordid_'],
                 'description': timetracking['description'],
@@ -1730,11 +1837,27 @@ def get_timetracking(request):
                 'end': timetracking['end'],
                 'worktime': timetracking['worktime'],
                 'worktime_string': timetracking['worktime_string'],
-                'status': timetracking['stato']
+                'status': timetracking['stato'],
+                'clientid': clientid,
+                'client_name': companyname,
+                'task_id': task_key,
+                'task_name': task_name,
+                'task_expected_duration': expected_duration
             }
             timetrackings.append(timetracking_data)
 
-        return JsonResponse({"timetracking": timetrackings}, safe=False)
+        # Clienti
+        companies_list = UserTable('company').get_records(limit=10000000)
+        companies = []
+        for company in companies_list:
+            company_data = {
+                'id': company['recordid_'],
+                'companyname': company['companyname'],
+            }
+            companies.append(company_data)
+
+        return JsonResponse({"timetracking": timetrackings, "clients": companies,
+                "task_totals": task_totals_map}, safe=False)
 
     except Exception as e:
         logger.error(f"Errore nell'ottenimento dei timetracker per l'utente: {str(e)}")
@@ -1748,6 +1871,8 @@ def save_timetracking(request):
 
         userid = Helper.get_userid(request)
 
+        stop_active_timetracking(userid)
+
         timetracking = UserRecord('timetracking')
 
         timetracking.values['user'] = userid
@@ -1756,12 +1881,49 @@ def save_timetracking(request):
         timetracking.values['start'] = datetime.datetime.now().strftime("%H:%M")
         timetracking.values['stato'] = "Attivo"
 
+        if data.get('clientid'):
+            timetracking.values['recordidcompany_'] = data.get('clientid')    
+
         timetracking.save()
 
         return JsonResponse({"status": "completed"}, safe=False)
     except Exception as e:
         logger.error(f"Errore nell'avviare il timetracking: {str(e)}")
         return JsonResponse({'error': f"Errore nell'avviare il timetracking: {str(e)}"}, status=500)    
+
+def stop_active_timetracking(userid):
+    print("stop_active_timetracking")
+    try:
+        condition_list = []
+        condition_list.append(f"user={userid}")
+        condition_list.append("stato='Attivo'")
+
+        active_timetrackings = UserTable('timetracking').get_records(conditions_list=condition_list)
+
+        for timetracking in active_timetrackings:
+            timetracking = UserRecord('timetracking', timetracking.get('recordid_'))
+            timetracking.values['end'] = datetime.datetime.now().strftime("%H:%M")
+            timetracking.values['stato'] = "Terminato"
+
+            time_format = '%H:%M'
+            start = datetime.datetime.strptime(timetracking.values['start'], time_format)
+            end = datetime.datetime.strptime(timetracking.values['end'], time_format)
+            time_difference = end - start
+
+            total_minutes = time_difference.total_seconds() / 60
+            hours, minutes = divmod(total_minutes, 60)
+            formatted_time = "{:02}:{:02}".format(int(hours), int(minutes))
+
+            timetracking.values['worktime_string'] = str(formatted_time)
+
+            hours = time_difference.total_seconds() / 3600
+            timetracking.values['worktime'] = round(hours, 2)
+
+            timetracking.save()
+
+        return True
+    except:
+        return False
 
 
 def stop_timetracking(request):
@@ -1860,14 +2022,22 @@ def get_timesheet_initial_data(request):
         conditions_list.append(f"assignedto='{userid}'")
         conditions_list.append("status != 'Progetto fatturato'")
 
-        active_projects = UserTable('project').get_records(conditions_list=conditions_list)
+        active_projects = UserTable('project').get_records(conditions_list=conditions_list, orderby="lastupdate_ desc")
 
         aziende_recenti = []
-        seen_ids = set() 
+        progetti_recenti = []
+
+        seen_ids = set()
         
         for project in active_projects:
             cid = project.get('recordidcompany_')
             
+            if len(aziende_recenti) <= 10:
+                progetti_recenti.append({
+                    'id': str(project.get('recordid_')),
+                    'name': project.get('projectname'),
+                })
+
             if cid and cid not in seen_ids:
                 azienda = UserRecord('company', cid)
                 
@@ -1877,6 +2047,7 @@ def get_timesheet_initial_data(request):
                         'name': azienda.values.get('companyname', 'Azienda senza nome'),
                         'details': azienda.values.get('city', 'Località non definita')
                     })
+
                     seen_ids.add(cid) 
             
             if len(aziende_recenti) >= 10: 
@@ -1886,6 +2057,7 @@ def get_timesheet_initial_data(request):
             'servizi': servizi,
             'opzioni': opzioni,
             'aziendeRecenti': aziende_recenti,
+            'progettiRecenti': progetti_recenti,
             'utenteCorrente': {
                 'id': str(userid),
                 'name': f"{user.firstname} {user.lastname}",
@@ -2192,5 +2364,35 @@ def save_timesheet_attachment(request):
                     att_rec.save()
 
         return JsonResponse({'status': 'success'})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+    
+def upload_markdown_image(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Metodo non consentito'}, status=405)
+
+    try:
+        file_obj = request.FILES.get('file')
+        
+        if not file_obj:
+            return JsonResponse({'error': 'Nessun file ricevuto'}, status=400)
+        
+        fname = file_obj.name
+        storage_path = f"markdown_uploads/{fname}"
+
+        final_path = default_storage.save(storage_path, file_obj)
+        
+        full_url = f"/api/media-proxy?url={final_path}"
+        
+        att_rec = UserRecord('attachment')
+        att_rec.values['type'] = 'Markdown Image'
+        att_rec.values['file'] = final_path
+        att_rec.save()
+
+        return JsonResponse({
+            'status': 'success',
+            'url': full_url 
+        })
+
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)

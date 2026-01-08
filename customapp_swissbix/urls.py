@@ -60,5 +60,9 @@ urlpatterns = [
     path('search_timesheet_entities/', search_timesheet_entities, name='search_timesheet_entities'),
     path('save_timesheet/', save_timesheet, name='save_timesheet'),
     path('save_timesheet_material/', save_timesheet_material, name='save_timesheet_material'),
-    path('save_timesheet_attachment/', save_timesheet_attachment, name='save_timesheet_attachment')
+    path('save_timesheet_attachment/', save_timesheet_attachment, name='save_timesheet_attachment'),
+    path('upload_markdown_image/', upload_markdown_image, name='upload_markdown_image'),
+    path('swissbix_create_timesheet_from_timetracking/', swissbix_create_timesheet_from_timetracking, name='swissbix_create_timesheet_from_timetracking'),
+    path('start_timetracking_from_task/', start_timetracking_from_task, name='start_timetracking_from_task'),
+    
 ]

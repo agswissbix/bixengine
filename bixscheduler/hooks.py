@@ -37,7 +37,7 @@ def on_task_success(task):
         pass
 
     try:
-        schedule = Schedule.objects.filter(task=task.id).first()  # ottieni il Schedule
+        schedule = Schedule.objects.filter(func=task.func).first()  # ottieni il Schedule
         if not schedule:
             return None
 
@@ -59,10 +59,10 @@ def on_task_success(task):
         # Ottieni chiavi da variabili d’ambiente
         hmac_key_str = os.environ.get("HMAC_KEY")
         encryption_key = os.environ.get("LOGS_ENCRYPTION_KEY")
-        endpoint_url = os.environ.get("PHP_ENDPOINT_URL")
+        endpoint_url = os.environ.get("SCHEDULER_LOGS_ENDPOINT_URL")
 
         if not hmac_key_str or not encryption_key or not endpoint_url:
-            logger.error("[HOOK ERROR] Variabili d’ambiente HMAC_KEY, PHP_ENDPOINT_URL e/o LOGS_ENCRYPTION_KEY non impostate.")
+            logger.error("[HOOK ERROR] Variabili d’ambiente HMAC_KEY, SCHEDULER_LOGS_ENDPOINT_URL e/o LOGS_ENCRYPTION_KEY non impostate.")
             return None
 
         hmac_key = hmac_key_str.encode("utf-8")

@@ -253,11 +253,11 @@ def settings_table_tablefields_save(request):
     if not table:
         return JsonResponse({"error": "Table not found"}, status=404)
 
-    for field in fields:
-        fieldid = field.get("id")
-        order = field.get("order")
+    for field_data in fields:
+        fieldid = field_data.get("id")
+        order = field_data.get("order")
 
-        if not fieldid:
+        if not fieldid or (isinstance(fieldid, str) and not fieldid.isdigit()):
             continue
 
         field = SysField.objects.filter(tableid=table.id, id=fieldid).first()
@@ -396,6 +396,8 @@ FIELDTYPES = {
     "Utente": "VARCHAR(255)",
     "Memo": "TEXT",
     "html": "LONGTEXT",
+    "Markdown": "LONGTEXT",
+    "SimpleMarkdown": "LONGTEXT",
     "linked": "VARCHAR(255)"
 }
 

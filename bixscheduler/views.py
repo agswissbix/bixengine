@@ -1,4 +1,5 @@
 import importlib
+import logging
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from datetime import datetime, timedelta
@@ -12,6 +13,7 @@ from commonapp.bixmodels.user_record import *
 from bixscheduler.models import ScheduleExtra
 import traceback
 
+logger = logging.getLogger(__name__)
 
 HOOK_PATH = 'bixscheduler.hooks.on_task_success'
 FUNC_PATH = 'bixscheduler.tasks.'
@@ -52,6 +54,7 @@ def run_scheduler_now(request):
         async_task(schedule.func, hook=schedule.hook or HOOK_PATH)
         return JsonResponse({"success": True})
     except Exception as e:
+        logger.error(f"Errore durante l'invio del task: {str(e)}")
         return JsonResponse({"success": False, "error": str(e)}, status=500)
 
 @api_view(['POST'])

@@ -1092,4 +1092,142 @@ def print_timesheet_func(request):
             print(f"Error in print_timesheet: {e}")
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
+def swissbix_create_timesheet_from_timetracking(request):
+    print("Function: swissbix_create_timesheet_from_timetracking")
 
+    try:
+        userid = Helper.get_userid(request)
+        data = json.loads(request.body)
+        
+        params = data.get('params', {})
+        
+        service_data = data.get('service')
+        service = service_data.get('service', "")
+        tableid = params.get("tableid")
+        viewid = params.get("view")
+        searchTerm = params.get("searchTerm", '')
+        master_tableid = params.get("masterTableid")
+        master_recordid = params.get("masterRecordid")
+        filtersList = params.get("filtersList", [])
+        
+        order = params.get("order", {"fieldid": "recordid_", "direction": "desc"})
+        order_str = f"{order.get('fieldid', 'recordid_')} {order.get('direction', 'desc')}"
+
+        table = UserTable(tableid, userid)
+
+        timetrackings = table.get_table_records_obj(
+            viewid=viewid,
+            searchTerm=searchTerm,
+            master_tableid=master_tableid,
+            master_recordid=master_recordid,
+            filters_list=filtersList,
+            offset=0,
+            limit=100000, 
+            orderby=order_str
+        )
+
+        if not timetrackings:
+            return JsonResponse({
+                'status': 'success',
+                'message': 'Nessun record trovato',
+                'count': 0
+            })
+
+        azienda = None
+        date = None
+        worktime_decimal = 0
+
+        descriptions = []
+        processed_count = 0
+
+        for timetracking in timetrackings:
+            azienda = timetracking.fields.get('recordidcompany_', {}).get('value', azienda)
+            date = timetracking.fields.get('date', {}).get('value', date)
+            desc_val = timetracking.fields.get('description', {}).get('value', '')
+            if desc_val:
+                descriptions.append(str(desc_val))
+                
+            worktime_val = timetracking.fields.get('worktime', {}).get('value', 0)
+            worktime_decimal += float(worktime_val or 0)
+            
+            processed_count += 1
+
+        new_timesheet = UserRecord('timesheet')
+
+        # worktime convertito e arrotondato ai 15 mins
+        minutes_raw = worktime_decimal * 60
+        total_minutes = int(round(minutes_raw / 15) * 15)
+        hours, minutes = divmod(total_minutes, 60)
+        worktime = f"{hours:02d}:{minutes:02d}"
+
+
+        new_timesheet.values['user'] = userid
+        new_timesheet.values['recordidcompany_'] = azienda
+        new_timesheet.values['date'] = date
+        new_timesheet.values['description'] = ', '.join(descriptions)
+        new_timesheet.values['service'] = service
+        new_timesheet.values['worktime'] = worktime
+        new_timesheet.values['worktime_decimal'] = worktime_decimal
+
+        new_timesheet.save()
+
+        return JsonResponse({
+            'status': 'success', 
+            'message': f'Processati {processed_count} record di timetracking',
+            'count': processed_count
+        })
+    
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+def start_timetracking_from_task(request):
+    print("Function: start_timetracking_from_task")
+
+    userid = Helper.get_userid(request)
+
+    data = json.loads(request.body)
+    params = data.get('params', {})
+    recordid = params.get('recordid')
+    tableid = 'task'
+
+    from customapp_swissbix.script import stop_active_timetracking
+    stop_active_timetracking(userid)
+
+    conditions = []
+    conditions.append(f"recordid_='{recordid}'")
+    task_table = UserTable(tableid).get_table_records(conditions_list=conditions)
+    task = task_table[0]
+    if not task:
+        return JsonResponse({'status': 'error', 'message': 'Task non trovato'}, status=404)
+
+    timetracking = UserRecord('timetracking')
+
+    timetracking.values['user'] = userid
+    timetracking.values['description'] = task.get('description')
+    timetracking.values['date'] = datetime.datetime.now().strftime("%Y-%m-%d")
+    timetracking.values['start'] = datetime.datetime.now().strftime("%H:%M")
+    timetracking.values['stato'] = "Attivo"
+    timetracking.values['recordidtask_'] = task.get('recordid_')
+
+    if task.get('recordidcompany_'):
+        timetracking.values['recordidcompany_'] = task.get('recordidcompany_')
+
+    timetracking.save()
+
+    # Ottenimento URL per reindirizzamento
+    fn = SysCustomFunction.objects.filter(
+        context='link',
+        tableid='timetracking'
+    ).order_by('order').values('params').first()
+
+    if not fn or not fn.get('params'):
+        return JsonResponse({'status': 'error', 'message': 'Configurazione mancante'}, status=500)
+
+    params = fn['params']
+    if isinstance(params, str):
+        params = json.loads(params)
+
+    url = params.get('url', 'https://default.url')
+    
+
+    return JsonResponse({'status': 'success', 'url': url})
