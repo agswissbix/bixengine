@@ -5,7 +5,7 @@ from commonapp.bixmodels.user_table import *
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 import time
-
+from commonapp.helper import Helper as CommonHelper
 
 class Helper:
     DEFAULT_LANG = "it"
@@ -110,7 +110,7 @@ class Helper:
     @classmethod
     def get_localized_labels_fields_chart(cls, chart_config, request=None):
         if request:
-            userid = Helper.get_userid(request)
+            userid = CommonHelper.get_userid(request)
             language = Helper.get_user_language(userid)
         else:
             userid = None
