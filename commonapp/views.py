@@ -4339,6 +4339,7 @@ def get_input_linked(request):
         try:
             data = json.loads(request.body)
             searchTerm = data.get('searchTerm', '').lower()
+            recordid = data.get('recordid')
             #linkedmaster_tableid_array = data.get('linkedmaster_tableid') # Puoi usare tableid se necessario
             #linkedmaster_tableid=linkedmaster_tableid_array[0]
             linkedmaster_tableid=data.get('linkedmaster_tableid')
@@ -4360,7 +4361,16 @@ def get_input_linked(request):
                 recordid_stabile=formValues['recordidstabile_']
                 if recordid_stabile:
                     additional_conditions = " AND recordidstabile_ = '"+recordid_stabile+"'"
-            if searchTerm:
+            if recordid:
+                sql = f"""
+                    SELECT recordid_ as recordid, {kyefieldlink} as name 
+                    FROM user_{linkedmaster_tableid} 
+                    WHERE recordid_ = '{recordid}' 
+                    AND deleted_='N' 
+                    {additional_conditions}
+                    LIMIT 1
+                """
+            elif searchTerm:
                 sql=f"SELECT recordid_ as recordid, {kyefieldlink} as name FROM user_{linkedmaster_tableid} where {kyefieldlink} like '%{searchTerm}%' {additional_conditions} AND deleted_='N' ORDER BY recordid_ DESC LIMIT 20"
             else:
                 sql=f"SELECT recordid_ as recordid, {kyefieldlink} as name FROM user_{linkedmaster_tableid} where deleted_='N' {additional_conditions} ORDER BY recordid_ desc LIMIT 20 "

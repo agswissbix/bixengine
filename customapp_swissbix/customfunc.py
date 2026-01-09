@@ -1101,8 +1101,6 @@ def swissbix_create_timesheet_from_timetracking(request):
         
         params = data.get('params', {})
         
-        service_data = data.get('service')
-        service = service_data.get('service', "")
         tableid = params.get("tableid")
         viewid = params.get("view")
         searchTerm = params.get("searchTerm", '')
@@ -1152,7 +1150,7 @@ def swissbix_create_timesheet_from_timetracking(request):
             
             processed_count += 1
 
-        new_timesheet = UserRecord('timesheet')
+        new_timesheet = {}
 
         # worktime convertito e arrotondato ai 15 mins
         minutes_raw = worktime_decimal * 60
@@ -1160,20 +1158,17 @@ def swissbix_create_timesheet_from_timetracking(request):
         hours, minutes = divmod(total_minutes, 60)
         worktime = f"{hours:02d}:{minutes:02d}"
 
-
-        new_timesheet.values['user'] = userid
-        new_timesheet.values['recordidcompany_'] = azienda
-        new_timesheet.values['date'] = date
-        new_timesheet.values['description'] = ', '.join(descriptions)
-        new_timesheet.values['service'] = service
-        new_timesheet.values['worktime'] = worktime
-        new_timesheet.values['worktime_decimal'] = worktime_decimal
-
-        new_timesheet.save()
+        new_timesheet['user'] = userid
+        new_timesheet['recordidcompany_'] = azienda
+        new_timesheet['date'] = date
+        new_timesheet['description'] = ', '.join(descriptions)
+        new_timesheet['worktime'] = worktime
+        new_timesheet['worktime_decimal'] = worktime_decimal
 
         return JsonResponse({
             'status': 'success', 
             'message': f'Processati {processed_count} record di timetracking',
+            'timesheet': new_timesheet,
             'count': processed_count
         })
     
