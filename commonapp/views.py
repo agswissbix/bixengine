@@ -5696,6 +5696,7 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
 
     # Creo adesso ma la uso dopo
     user_club_has_data = False
+    user_club_has_incomplete_data = False
     logged_club_check = None
     excluded_clubs = []
 
@@ -5743,17 +5744,17 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
                 active_server = Helper.get_cliente_id()
 
             if str(active_server).lower() == 'wegolf':
-                labels = WegolfHelper.get_localized_labels_fields_chart(chart_config, request=request)
-            else:
-                labels = Helper.get_labels_fields_chart(chart_config)
+                localized_labels = WegolfHelper.get_localized_labels_fields_chart(chart_config, request=request)
 
-            completeness_checks = [Helper.check_mydata_completeness(club, selected_years, labels) for club in selected_clubs]
+            labels = Helper.get_labels_fields_chart(chart_config)
+
+            completeness_checks = [Helper.check_mydata_completeness(club, selected_years, labels, localized_labels) for club in selected_clubs]
             complete_pairs = list(zip(selected_clubs, completeness_checks))
             selected_clubs = [club for club, check in complete_pairs if check["complete"]]
             excluded_clubs = [club for club, check in complete_pairs if not check["complete"]]
 
-            if user_club and user_club_has_data and user_club in selected_clubs:
-                user_club_has_data = False
+            if user_club and user_club_has_data and (user_club not in selected_clubs):
+                user_club_has_incomplete_data = True
 
             for club, check in complete_pairs:
                 if club == user_club:
@@ -5779,7 +5780,7 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
     
     chart_data['numeric_format'] = str(user_numeric_format).replace('_', '-') if is_valid_locale(user_numeric_format) else "it-CH"
 
-    if user_club_has_data:
+    if user_club_has_incomplete_data:
         chart_data['name'] = '$nomydata$'
         chart_data["logged_club_incomplete"] = {
             "missing_years": logged_club_check["missing_years"],

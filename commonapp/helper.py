@@ -210,13 +210,22 @@ class Helper:
         return colors
     
     @classmethod
-    def check_mydata_completeness(cls, recordidgolfclub, selected_years, labels=['Soci']):
-        # 1. Prepara i nomi dei campi da verificare
-        normalized_labels = []
-        for label in labels:
-            field = label.strip().replace('-', '').lower()
-            field = f"prog_{field}"
-            normalized_labels.append(field)
+    def check_mydata_completeness(cls, recordidgolfclub, selected_years, labels=['Soci'], localized_labels=[]):
+        # 1. Prepara i mappaggi tra campi tecnici e label visualizzate
+        # Creiamo una lista di oggetti per mantenere l'associazione corretta
+        field_mappings = []
+        for i, label in enumerate(labels):
+            # Normalizzazione per il DB
+            clean_name = label.strip().replace('-', '').lower()
+            field_name = f"prog_{clean_name}"
+            
+            # Localizzazione per l'output (fallback alla label originale se manca la traduzione)
+            display_name = localized_labels[i] if i < len(localized_labels) else label
+            
+            field_mappings.append({
+                "tech_field": field_name,
+                "display_label": display_name
+            })
 
         # 2. Recupera tutti i progressi del golf club
         sql = """
@@ -224,29 +233,20 @@ class Helper:
             FROM user_golfdataprogress
             WHERE recordidgolfclub_ = %s AND deleted_ = 'N'
         """
+        # Nota: Assumi che HelpderDB sia la tua utility interna
         all_rows = HelpderDB.sql_query(sql, [recordidgolfclub])
 
         # Trasformo i record in un dizionario indicizzato per anno
         rows_by_year = {}
-
         for row in all_rows:
             raw_year = row["anno"]
-
-            # Esempi:
-            # 2022.0 → "2022"
-            # 2023.5 → "2023.5" (se mai capitasse…)
             if isinstance(raw_year, float):
-                # Se è intero tipo 2022.0 togli ".0"
-                if raw_year.is_integer():
-                    year = str(int(raw_year))
-                else:
-                    year = str(raw_year)  # fallback
+                year = str(int(raw_year)) if raw_year.is_integer() else str(raw_year)
             else:
                 year = str(raw_year)
-
             rows_by_year[year] = row
 
-        # Normalizzo anche gli anni selezionati a string
+        # Normalizzo gli anni selezionati a string
         selected_years_str = [str(y) for y in selected_years]
 
         missing_years = []
@@ -262,16 +262,22 @@ class Helper:
 
             row = rows_by_year[year]
 
-            # --- B. Verifico che ogni label = 100 ---
-            for field in normalized_labels:
-                value = row.get(field)
+            # --- B. Verifico ogni campo usando il mapping ---
+            for mapping in field_mappings:
+                tech_field = mapping["tech_field"]
+                display_label = mapping["display_label"]
+                
+                value = row.get(tech_field)
 
+                # Controllo validità (deve essere 100)
                 if value is None or float(value) != 100:
                     if year not in wrong_values:
                         wrong_values[year] = {}
-                    wrong_values[year][field] = value
+                    
+                    # Usiamo la label localizzata come chiave per l'errore
+                    wrong_values[year][display_label] = value
 
-        # 4. Se mancano anni o valori ≠ 100 → incomplete
+        # 4. Risultato finale
         complete = len(missing_years) == 0 and len(wrong_values) == 0
 
         return {
