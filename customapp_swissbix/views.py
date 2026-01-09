@@ -1,10 +1,11 @@
 import datetime
 from datetime import timedelta
+import sys
 import uuid
 import base64
 import logging
 from pydoc import html
-from django.http import JsonResponse
+from django.http import FileResponse, JsonResponse
 from rest_framework.decorators import api_view, permission_classes, renderer_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -23,6 +24,7 @@ from commonapp.bixmodels.user_table import *
 from commonapp.bixmodels.helper_db import *
 from commonapp.helper import *
 import qrcode
+import subprocess
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
@@ -34,6 +36,7 @@ from customapp_swissbix.mock.activeMind.services import services as services_dat
 from customapp_swissbix.mock.activeMind.conditions import frequencies as conditions_data_mock
 from customapp_swissbix.customfunc import save_record_fields
 from xhtml2pdf import pisa
+from playwright.sync_api import sync_playwright
 from types import SimpleNamespace
 from commonapp.models import SysUser
 from PIL import Image
@@ -1231,43 +1234,186 @@ def sync_tables(request):
     return sync_tables(request)
 
 
+def ensure_playwright_installed():
+    """Garantisce che il browser Chromium sia presente."""
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            browser.close()
+    except Exception:
+        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
+
+def to_base64(path):
+    """Converte immagine locale in Base64 per l'incorporamento nel PDF."""
+    if path and os.path.exists(path):
+        try:
+            with open(path, "rb") as f:
+                return f"data:image/png;base64,{base64.b64encode(f.read()).decode('utf-8')}"
+        except Exception as e:
+            print(f"Errore conversione Base64: {e}")
+    return None
+
+def generate_timesheet_pdf(recordid, signature_path=None):
+    """
+    Genera il PDF del timesheet con firma condizionale e footer fisso.
+    """
+    try:
+        ensure_playwright_installed()
+
+        base_path = os.path.normpath(os.path.join(settings.STATIC_ROOT, 'pdf'))
+        os.makedirs(base_path, exist_ok=True)
+
+        q_path = os.path.join(base_path, f"qr_{uuid.uuid4().hex}.png")
+        qr = qrcode.QRCode(box_size=10, border=0)
+        qr.add_data(f"timesheet_{recordid}")
+        qr.make(fit=True)
+        qr.make_image(fill_color="black", back_color="white").save(q_path)
+
+        rows = HelpderDB.sql_query(f"""
+            SELECT t.*, c.companyname, c.address, c.city, c.email, c.phonenumber, 
+                   u.firstname, u.lastname 
+            FROM user_timesheet AS t 
+            JOIN user_company AS c ON t.recordidcompany_=c.recordid_ 
+            JOIN sys_user AS u ON t.user = u.id 
+            WHERE t.recordid_='{recordid}'
+        """)
+
+        if not rows:
+            raise Exception(f"Nessun timesheet trovato per recordid {recordid}")
+
+        row = rows[0]
+        for k in row: row[k] = row[k] or ''
+
+        row['qrUrl'] = to_base64(q_path)
+        row['signatureUrl'] = to_base64(signature_path)
+        row['recordid'] = recordid
+
+        timesheetlines = HelpderDB.sql_query(
+            f"SELECT * FROM user_timesheetline WHERE recordidtimesheet_='{recordid}'"
+        )
+        for line in timesheetlines:
+            line['note'] = line.get('note') or ''
+            line['expectedquantity'] = line.get('expectedquantity') or ''
+            line['actualquantity'] = line.get('actualquantity') or ''
+        row['timesheetlines'] = timesheetlines
+
+        html_content = render_to_string('pdf/timesheet_signature.html', row)
+        pdf_filename = f"timesheet_{recordid}.pdf"
+        temp_pdf_path = os.path.join(base_path, pdf_filename)
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.set_content(html_content, wait_until="networkidle")
+
+            page.add_style_tag(content="""
+                /* Rimuove l'altezza forzata che spesso crea la seconda pagina */
+                html, body { 
+                    height: auto !important; 
+                    overflow: hidden !important; 
+                    margin: 0 !important; 
+                    padding: 0 !important;
+                }
+                
+                /* Evita che il footer fixed forzi un salto pagina se troppo vicino al bordo */
+                div[style*="position:fixed"] {
+                    position: absolute !important;
+                    bottom: 0 !important;
+                }
+
+                /* Rimuove spazi bianchi finali indesiderati */
+                body:after {
+                    content: none !important;
+                }
+                
+                /* Ottimizzazione scala */
+                body {
+                    zoom: 0.98;
+                }
+
+                
+            """)
+            
+            page.pdf(
+                path=temp_pdf_path,
+                format="A4",
+                print_background=True,
+                scale=0.75,
+                margin={"top": "1cm", "bottom": "1cm", "left": "1cm", "right": "1cm"}
+            )
+            browser.close()
+
+        attachment_record = UserRecord('attachment')
+        attachment_record.values['type'] = "Signature"
+        attachment_record.values['recordidtimesheet_'] = recordid
+        attachment_record.save()
+
+        dest_dir = os.path.join(settings.UPLOADS_ROOT, "timesheet", str(recordid))
+        os.makedirs(dest_dir, exist_ok=True)
+        final_pdf_path = os.path.join(dest_dir, pdf_filename)
+        shutil.move(temp_pdf_path, final_pdf_path)
+
+        attachment_record.values['file'] = f"timesheet/{recordid}/{pdf_filename}"
+        attachment_record.values['filename'] = pdf_filename
+        attachment_record.save()
+
+        if os.path.exists(q_path): os.remove(q_path)
+
+        return pdf_filename
+
+    except Exception as e:
+        print(f"Errore in generate_timesheet_pdf: {e}")
+        raise
 
 def print_timesheet(request):
     """
-    Restituisce un PDF già generato, passato come file_path nel body.
-    Serve per scaricare il PDF firmato precedentemente salvato.
+    Genera (o rigenera) il PDF del timesheet e lo restituisce per il download.
     """
     if request.method != 'POST':
-        return JsonResponse({'error': 'Invalid method'}, status=405)
+        return JsonResponse({'error': 'Metodo non consentito'}, status=405)
 
     try:
         data = json.loads(request.body)
         recordid = data.get('recordid')
+        with_signature = data.get('with_signature')
 
         if not recordid:
-            return JsonResponse({'error': 'Missing recordid'}, status=400)
+            return JsonResponse({'error': 'Recordid mancante'}, status=400)
 
+        attachment_rows = HelpderDB.sql_query(f"""
+            SELECT file, filename 
+            FROM user_attachment 
+            WHERE recordidtimesheet_ = '{recordid}' 
+            AND type = 'Signature'
+            ORDER BY recordid_ DESC LIMIT 1
+        """)
 
-        record_timesheet = UserRecord('attachment', recordid)
-        file_path = record_timesheet.values['file']
+        if not attachment_rows or not with_signature:
+            pdf_filename = generate_timesheet_pdf(recordid)
+            attachment_rows = HelpderDB.sql_query(f"""
+                SELECT file, filename 
+                FROM user_attachment 
+                WHERE recordidtimesheet_ = '{recordid}' 
+                AND type = 'Signature'
+                ORDER BY recordid_ DESC LIMIT 1
+            """)
+        
+        file_info = attachment_rows[0]
+        relative_path = file_info['file']
+        filename = file_info.get('filename', 'timesheet.pdf')
 
-        # Percorso assoluto
-        abs_path = os.path.join(settings.UPLOADS_ROOT, file_path)
+        abs_path = os.path.normpath(os.path.join(settings.UPLOADS_ROOT, relative_path))
 
         if not os.path.exists(abs_path):
-            return JsonResponse({'error': f'File not found: {file_path}'}, status=404)
+            return JsonResponse({'error': f'File non trovato sul server: {relative_path}'}, status=404)
 
-        # Legge il PDF e lo restituisce
-        with open(abs_path, 'rb') as f:
-            pdf_data = f.read()
-
-        response = HttpResponse(pdf_data, content_type='application/pdf')
-        filename = os.path.basename(file_path)
+        response = FileResponse(open(abs_path, 'rb'), content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
         return response
 
     except Exception as e:
-        print(f"Error in sign_timesheet (download): {e}")
+        print(f"Errore in print_timesheet: {e}")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 @csrf_exempt
@@ -1280,6 +1426,8 @@ def save_signature(request):
         return JsonResponse({'error': 'Invalid method'}, status=405)
 
     try:
+        ensure_playwright_installed()
+        
         data = json.loads(request.body)
         recordid = data.get('recordid')
         img_base64 = data.get('image')
@@ -1372,14 +1520,30 @@ def save_signature(request):
         # -------------------------
         # 5️⃣ Genera il PDF
         # -------------------------
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        wkhtmltopdf_path = os.path.join(script_dir, 'wkhtmltopdf.exe')
-        config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
         content = render_to_string('pdf/timesheet_signature.html', row)
-
         pdf_filename = f"allegato.pdf"
         pdf_path = os.path.join(base_path, pdf_filename)
-        pdfkit.from_string(content, pdf_path, configuration=config)
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.set_content(content, wait_until="networkidle")
+            
+            # Iniezione CSS per rimpicciolire (stile PDFKit) ed evitare la pagina bianca extra
+            page.add_style_tag(content="""
+                html, body { height: auto !important; overflow: hidden !important; margin: 0 !important; }
+                body { zoom: 0.98; }
+                div[style*="position:fixed"] { position: absolute !important; bottom: 0 !important; }
+            """)
+
+            page.pdf(
+                path=pdf_path,
+                format="A4",
+                print_background=True,
+                scale=0.75,  # Rapporto 72/96 DPI per simulare PDFKit
+                margin={"top": "1cm", "bottom": "0.5cm", "left": "1cm", "right": "1cm"}
+            )
+            browser.close()
 
         # -------------------------
         # 6️⃣ Crea il record allegato
