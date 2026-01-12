@@ -1109,8 +1109,9 @@ def swissbix_create_timesheet_from_timetracking(request):
         master_recordid = params.get("masterRecordid")
         filtersList = params.get("filtersList", [])
         
-        order = params.get("order", {"fieldid": "recordid_", "direction": "desc"})
-        order_str = f"{order.get('fieldid', 'recordid_')} {order.get('direction', 'desc')}"
+        # order = params.get("order", {"fieldid": "recordid_", "direction": "desc"})
+        # order_str = f"{order.get('fieldid', 'recordid_')} {order.get('direction', 'desc')}"
+        order_str = "creation_ desc"
 
         table = UserTable(tableid, userid)
 
