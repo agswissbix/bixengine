@@ -1094,6 +1094,7 @@ def print_timesheet_func(request):
 
 def swissbix_create_timesheet_from_timetracking(request):
     print("Function: swissbix_create_timesheet_from_timetracking")
+    from customapp_swissbix.script import get_timetracking_ai_summary, check_ai_server
 
     try:
         userid = Helper.get_userid(request)
@@ -1135,18 +1136,25 @@ def swissbix_create_timesheet_from_timetracking(request):
         date = None
         worktime_decimal = 0
 
-        descriptions = []
+        timetracking_list = []
         processed_count = 0
 
         for timetracking in timetrackings:
             azienda = timetracking.fields.get('recordidcompany_', {}).get('value', azienda)
             date = timetracking.fields.get('date', {}).get('value', date)
             desc_val = timetracking.fields.get('description', {}).get('value', '')
-            if desc_val:
-                descriptions.append(str(desc_val))
                 
             worktime_val = timetracking.fields.get('worktime', {}).get('value', 0)
-            worktime_decimal += float(worktime_val or 0)
+
+            sanitized_worktime = float(worktime_val) if worktime_val is not None else 0.0
+            sanitized_description = str(desc_val) if desc_val is not None else ""
+
+            timetracking_list.append({
+                "description": sanitized_description,
+                "worktime": sanitized_worktime
+            })
+
+            worktime_decimal += sanitized_worktime
             
             processed_count += 1
 
@@ -1158,10 +1166,21 @@ def swissbix_create_timesheet_from_timetracking(request):
         hours, minutes = divmod(total_minutes, 60)
         worktime = f"{hours:02d}:{minutes:02d}"
 
+        is_online, message = check_ai_server()
+
+        summary = None
+        if is_online:
+            print(f"✅  {message}")
+            summary = get_timetracking_ai_summary(timetracking_list)
+        else:
+            print(f"❌  {message}")
+
+        description = ', '.join([t['description'] for t in timetracking_list if t['description']])
+
         new_timesheet['user'] = userid
         new_timesheet['recordidcompany_'] = azienda
         new_timesheet['date'] = date
-        new_timesheet['description'] = ', '.join(descriptions)
+        new_timesheet['description'] = summary or description
         new_timesheet['worktime'] = worktime
         new_timesheet['worktime_decimal'] = worktime_decimal
 

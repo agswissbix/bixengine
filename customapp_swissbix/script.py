@@ -2396,3 +2396,64 @@ def upload_markdown_image(request):
 
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+def check_ai_server():
+    """
+    Verifica se il server AI è attivo e risponde correttamente.
+    Restituisce un tuple (bool, message).
+    """
+    try:
+        url = os.environ.get("AI_STATUS_URL")
+        
+        response = requests.get(url, timeout=5)
+        
+        if response.status_code == 200:
+            return True, "Il server AI è attivo e raggiungibile."
+        else:
+            return False, f"Il server ha risposto con codice errore: {response.status_code}"
+            
+    except requests.exceptions.ConnectionError:
+        return False, "Errore di connessione: il server sembra essere spento o la porta 8080 è chiusa."
+    except requests.exceptions.Timeout:
+        return False, "Il server non ha risposto entro il tempo limite (timeout)."
+    except Exception as e:
+        return False, f"Si è verificato un errore imprevisto: {str(e)}"
+
+def get_timetracking_ai_summary(tracking_data):
+    """
+    Invia la lista di descrizioni dei timetracking all'agente AI per ottenere la descrizione timesheet
+    """
+    url = os.environ.get("AI_SUMMARY_URL")
+    key = os.environ.get("AI_ENCRYPTION_KEY")
+    
+    if not key:
+        return "Errore: AI_ENCRYPTION_KEY non configurata nel client."
+    
+    try:
+        fernet = Fernet(key.encode())
+        
+        raw_payload = json.dumps({"entries": tracking_data})
+        
+        encrypted_data = fernet.encrypt(raw_payload.encode()).decode()
+        
+        start = time.time()
+        
+        response = requests.post(
+            url,
+            json={"data": encrypted_data},
+            timeout=120 
+        )
+        response.raise_for_status()
+
+        encrypted_response_data = response.json().get("data")
+        if not encrypted_response_data:
+            return "Errore: Il server ha restituito un formato non atteso."
+
+        decrypted_response = fernet.decrypt(encrypted_response_data.encode()).decode()
+        result_json = json.loads(decrypted_response)
+        
+        print(f"Tempo di esecuzione: {time.time() - start:.2f} secondi")
+        return result_json.get("summary")
+        
+    except Exception as e:
+        return f"Errore sicurezza o comunicazione: {str(e)}"
