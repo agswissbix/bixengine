@@ -1244,8 +1244,9 @@ def sync_table(tableid):
 @task_monitor(data_type="sync")
 def sync_bixdata_salesorders():
     print("sync_salesorders")
-    sync_output = sync_table('salesorderline')
     sync_output = sync_table('salesorder')
+    sync_output = sync_table('salesorderline')
+    
     sql="UPDATE user_salesorder SET status='Complete'"
     HelpderDB.sql_execute(sql)
     sql="UPDATE user_salesorderline SET status='Complete'"
@@ -1259,12 +1260,16 @@ def sync_bixdata_salesorders():
     sql="UPDATE user_salesorder JOIN user_bexio_orders ON user_salesorder.id_bexio=user_bexio_orders.bexio_id SET user_salesorder.status='In Progress'"
     HelpderDB.sql_execute(sql)
 
+    #aggiornamento stato righe in progress
+    sql="UPDATE user_salesorderline JOIN user_bexio_positions ON user_salesorderline.id_bexio=user_bexio_positions.bexio_id SET user_salesorderline.status='In Progress'"
+    HelpderDB.sql_execute(sql)
+
     #aggiornamento company in salesorder
     sql="UPDATE user_salesorder JOIN user_company ON user_salesorder.id_bexio_company=user_company.id_bexio SET user_salesorder.recordidcompany_=user_company.recordid_"
     HelpderDB.sql_execute(sql)
 
-    #aggiornamento stato righe ordini in progress
-    sql="UPDATE user_salesorderline JOIN user_bexio_orders ON user_salesorderline.id_bexio_order=user_bexio_orders.bexio_id SET user_salesorderline.status='In Progress',user_salesorderline.bexio_repetition_type=user_bexio_orders.repetition_type,user_salesorderline.bexio_repetition_interval=user_bexio_orders.repetition_interval "
+    #aggiornamento  righe ordini 
+    sql="UPDATE user_salesorderline JOIN user_bexio_orders ON user_salesorderline.id_bexio_order=user_bexio_orders.bexio_id SET user_salesorderline.bexio_repetition_type=user_bexio_orders.repetition_type,user_salesorderline.bexio_repetition_interval=user_bexio_orders.repetition_interval "
     HelpderDB.sql_execute(sql)
 
     # aggiornamento conti nr conti
