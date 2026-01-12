@@ -1099,6 +1099,9 @@ def swissbix_create_timesheet_from_timetracking(request):
     try:
         userid = Helper.get_userid(request)
         data = json.loads(request.body)
+
+        use_ai_data = data.get('use_ai', {})
+        use_ai = use_ai_data.get('useAI', False) if isinstance(use_ai_data, dict) else False
         
         params = data.get('params', {})
         
@@ -1167,14 +1170,15 @@ def swissbix_create_timesheet_from_timetracking(request):
         hours, minutes = divmod(total_minutes, 60)
         worktime = f"{hours:02d}:{minutes:02d}"
 
-        is_online, message = check_ai_server()
-
         summary = None
-        if is_online:
-            print(f"✅  {message}")
-            summary = get_timetracking_ai_summary(timetracking_list)
-        else:
-            print(f"❌  {message}")
+        if use_ai:
+            is_online, message = check_ai_server()
+
+            if is_online:
+                print(f"✅  {message}")
+                summary = get_timetracking_ai_summary(timetracking_list)
+            else:
+                print(f"❌  {message}")
 
         description = ', '.join([t['description'] for t in timetracking_list if t['description']])
 

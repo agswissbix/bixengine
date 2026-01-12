@@ -1891,3 +1891,14 @@ def search_timesheet_entities(request):
 def upload_markdown_image(request):
     from customapp_swissbix.script import upload_markdown_image
     return upload_markdown_image(request)
+
+def check_ai_status(request):
+    from customapp_swissbix.script import check_ai_server
+
+    is_online, message = check_ai_server()
+    if is_online:
+        print(f"✅  {message}")
+        return JsonResponse({"status": True})
+    else:
+        print(f"❌  {message}")
+        return JsonResponse({"status": False})
