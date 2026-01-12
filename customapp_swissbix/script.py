@@ -2442,10 +2442,16 @@ def get_timetracking_ai_summary(tracking_data, instructions = None):
         encrypted_data = fernet.encrypt(raw_payload.encode()).decode()
         
         start = time.time()
+
+        headers = {
+            "Content-Type": "application/json",
+            "X-Content-Type-Options": "nosniff"
+        }
         
         response = requests.post(
             url,
             json={"data": encrypted_data},
+            headers=headers,
             timeout=120 
         )
         response.raise_for_status()
