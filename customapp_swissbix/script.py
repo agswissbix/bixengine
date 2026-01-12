@@ -2424,7 +2424,7 @@ def check_ai_server():
     except Exception as e:
         return False, f"Si è verificato un errore imprevisto: {str(e)}"
 
-def get_timetracking_ai_summary(tracking_data):
+def get_timetracking_ai_summary(tracking_data, instructions = None):
     """
     Invia la lista di descrizioni dei timetracking all'agente AI per ottenere la descrizione timesheet
     """
@@ -2437,7 +2437,7 @@ def get_timetracking_ai_summary(tracking_data):
     try:
         fernet = Fernet(key.encode())
         
-        raw_payload = json.dumps({"entries": tracking_data})
+        raw_payload = json.dumps({"entries": tracking_data, "instructions": instructions})
         
         encrypted_data = fernet.encrypt(raw_payload.encode()).decode()
         

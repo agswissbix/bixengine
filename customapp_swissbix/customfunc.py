@@ -1100,8 +1100,15 @@ def swissbix_create_timesheet_from_timetracking(request):
         userid = Helper.get_userid(request)
         data = json.loads(request.body)
 
-        use_ai_data = data.get('use_ai', {})
-        use_ai = use_ai_data.get('useAI', False) if isinstance(use_ai_data, dict) else False
+        raw_ai = data.get('use_ai', {})
+        
+        if isinstance(raw_ai, dict) and 'use_ai' in raw_ai:
+            use_ai_config = raw_ai['use_ai']
+        else:
+            use_ai_config = raw_ai
+
+        use_ai = use_ai_config.get('useAI', False) if isinstance(use_ai_config, dict) else False
+        instructions = use_ai_config.get('instructions', "") if isinstance(use_ai_config, dict) else ""
         
         params = data.get('params', {})
         
@@ -1114,7 +1121,7 @@ def swissbix_create_timesheet_from_timetracking(request):
         
         # order = params.get("order", {"fieldid": "recordid_", "direction": "desc"})
         # order_str = f"{order.get('fieldid', 'recordid_')} {order.get('direction', 'desc')}"
-        order_str = "creation_ desc"
+        order_str = "creation_ asc"
 
         table = UserTable(tableid, userid)
 
@@ -1176,7 +1183,7 @@ def swissbix_create_timesheet_from_timetracking(request):
 
             if is_online:
                 print(f"✅  {message}")
-                summary = get_timetracking_ai_summary(timetracking_list)
+                summary = get_timetracking_ai_summary(timetracking_list, instructions)
             else:
                 print(f"❌  {message}")
 
