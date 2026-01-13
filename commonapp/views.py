@@ -4790,12 +4790,18 @@ def get_table_active_tab(request):
     data = json.loads(request.body)
     tableid = data.get('tableid')
 
+    userid = Helper.get_userid(request)
+
     sql=f"SELECT * FROM sys_user_table_settings WHERE tableid='{tableid}' AND settingid='table_tabs'"
-    query_result=HelpderDB.sql_query_row(sql)
-    if not query_result:
+    query_result=HelpderDB.sql_query(sql)
+
+    target = (next((i for i in query_result if i['userid'] == userid), None) or 
+          next((i for i in query_result if i['userid'] == 1), None))
+
+    if not target:
         table_tabs = ['Tabella', 'TabellaRaggruppata','Kanban', 'Pivot', 'Calendario', 'MatrixCalendar' , 'Planner' , 'Gallery']
     else:
-        table_tabs=query_result['value']
+        table_tabs=target['value']
         table_tabs=table_tabs.split(',')
 
     sql=f"SELECT * FROM sys_user_table_settings WHERE tableid='{tableid}' AND settingid='table_active_tab'"

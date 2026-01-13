@@ -136,12 +136,13 @@ class TableSettings:
                 {'name': 'MatrixCalendar', 'selected': True},
                 {'name': 'Planner', 'selected': True},
                 {'name': 'Gallery', 'selected': True},
+                {'name': 'TabellaRaggruppata', 'selected': True},
             ],
             'value': 'Tabella'
         },
         'table_active_tab': {
             'type': 'select',
-            'options': ['Tabella', 'Kanban', 'Pivot', 'Calendario','MatrixCalendar', 'Planner' , 'Gallery'],
+            'options': ['Tabella', 'Kanban', 'Pivot', 'Calendario','MatrixCalendar', 'Planner' , 'Gallery', 'TabellaRaggruppata'],
             'value': 'Tabella'
         },
         'table_planner_resource_field': {
