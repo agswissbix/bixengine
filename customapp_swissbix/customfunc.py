@@ -1262,6 +1262,13 @@ def swissbix_summarize_day(request):
     print("Function: swissbix_summarize_day")
     from customapp_swissbix.script import check_ai_server, get_timesheet_ai_summary
 
+    userid = Helper.get_userid(request)
+    tablesettings = TableSettings("timesheet", userid)
+    can_view_settings = tablesettings.get_specific_settings('view')['view']
+    permitted = can_view_settings.get('value')
+    if not permitted:
+        return JsonResponse({'status': 'error', 'message': 'Non autorizzato'}, status=403)
+
     is_online, message = check_ai_server()
 
     if is_online:
@@ -1294,6 +1301,7 @@ def swissbix_summarize_day(request):
         timesheets_per_utente[user_id].append(ts)
 
     timesheets_per_user = []
+    
     for dipendente in filtered_users:
         user_id = str(dipendente.get('id'))
         
