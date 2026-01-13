@@ -846,7 +846,7 @@ def printing_katun_bexio_api_set_invoice(request):
         print(invoice['title'])
         invoice_title="Conteggio copie stampanti/Multifunzioni"
         print(bexio_contact_id)
-        if (bexio_contact_id == 297):
+        if (bexio_contact_id == '297'):
             print('Cliente non presente in bexio')
             invoice_title = "Conteggio copie stampanti/Multifunzioni "+invoice['title']
         
