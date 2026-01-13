@@ -1257,3 +1257,54 @@ def start_timetracking_from_task(request):
     
 
     return JsonResponse({'status': 'success', 'url': url})
+
+def swissbix_summarize_day(request):
+    print("Function: swissbix_summarize_day")
+    from customapp_swissbix.script import check_ai_server, get_timesheet_ai_summary
+
+    is_online, message = check_ai_server()
+
+    if is_online:
+        print(f"✅  {message}")
+    else:
+        print(f"❌  {message}")
+        return JsonResponse({'status': 'error', 'message': message}, status=500)
+
+    current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+
+    condition_list = []
+    condition_list.append(f"date='{current_date}'")
+
+    todays_timesheets = UserTable('timesheet').get_table_records(conditions_list=condition_list)
+
+    blacklist = ['test', 'wip', 'guest', 'group', 'user', 'admin', 'super', 'nome']
+    sql = "SELECT * FROM sys_user WHERE firstname IS NOT NULL"
+    all_users = HelpderDB.sql_query(sql)
+
+    filtered_users = []
+    for u in all_users:
+        first_name = str(u.get('firstname', '')).lower()
+        
+        if not any(word in first_name for word in blacklist):
+            filtered_users.append(u)
+
+    timesheets_per_utente = defaultdict(list)
+    for ts in todays_timesheets:
+        user_id = ts.get('user')
+        timesheets_per_utente[user_id].append(ts)
+
+    timesheets_per_user = []
+    for dipendente in filtered_users:
+        user_id = str(dipendente.get('id'))
+        
+        ts_associati = timesheets_per_utente.get(user_id, [])
+        
+        timesheets_per_user.append({
+            'anagrafica': dipendente,
+            'timesheets': ts_associati,
+            'totale_record': len(ts_associati)
+        })
+
+    summary = get_timesheet_ai_summary(timesheets_per_user)
+
+    return JsonResponse({'status': 'success', 'summary': summary})

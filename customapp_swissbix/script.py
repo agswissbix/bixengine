@@ -2408,7 +2408,7 @@ def check_ai_server():
     Restituisce un tuple (bool, message).
     """
     try:
-        url = os.environ.get("AI_STATUS_URL")
+        url = os.environ.get("AI_URL")
         
         response = requests.get(url, timeout=5)
         
@@ -2428,7 +2428,7 @@ def get_timetracking_ai_summary(tracking_data, instructions = None):
     """
     Invia la lista di descrizioni dei timetracking all'agente AI per ottenere la descrizione timesheet
     """
-    url = os.environ.get("AI_SUMMARY_URL")
+    url = os.environ.get("AI_URL") + "summarize"
     key = os.environ.get("AI_ENCRYPTION_KEY")
     
     if not key:
@@ -2468,3 +2468,69 @@ def get_timetracking_ai_summary(tracking_data, instructions = None):
         
     except Exception as e:
         return f"Errore sicurezza o comunicazione: {str(e)}"
+
+def get_timesheet_ai_summary(timesheets_per_user_data):
+    """
+    Ottiene il riassunto globale usando django-environ per le configurazioni.
+    """
+    url = env("AI_URL", default=None) + "summarize-team"
+    key = env("AI_ENCRYPTION_KEY", default=None)
+    
+    if not key:
+        return "Errore: AI_ENCRYPTION_KEY non configurata nel client."
+
+    f = Fernet(key.encode())
+
+    reports_payload = []
+    for user_data in timesheets_per_user_data:
+        dipendente = user_data['anagrafica']
+        ts_list = user_data['timesheets']
+        
+        if ts_list:
+            clean_entries = []
+            for ts in ts_list:
+                raw_desc = ts.get('description')
+                desc_sicura = str(raw_desc) if raw_desc is not None else "Attività senza descrizione"
+                
+                try:
+                    time_val = float(ts.get('totaltime_decimal', 0) or 0)
+                except (ValueError, TypeError):
+                    time_val = 0.0
+
+                clean_entries.append({
+                    "description": desc_sicura,
+                    "worktime": time_val
+                })
+
+            reports_payload.append({
+                "full_name": f"{dipendente.get('firstname', '')} {dipendente.get('lastname', '')}".strip(),
+                "entries": clean_entries
+            })
+
+    if not reports_payload:
+        return "Nessuna attività valida da processare."
+
+    payload = {
+        "reports": reports_payload,
+        "date": datetime.datetime.now().strftime("%d/%m/%Y")
+    }
+
+    try:
+        json_data = json.dumps(payload).encode()
+        encrypted_payload = f.encrypt(json_data).decode()
+        
+        response = requests.post(url, json={"data": encrypted_payload}, timeout=120)
+        
+        if response.status_code == 400:
+            detail = response.json().get('detail', 'Errore validazione')
+            return f"Errore 400 dal server AI: {detail}"
+            
+        response.raise_for_status()
+
+        enc_res = response.json().get("data")
+        dec_res = json.loads(f.decrypt(enc_res.encode()).decode())
+        
+        return dec_res.get("summary", "Riassunto non disponibile.")
+        
+    except Exception as e:
+        return f"Errore di comunicazione: {str(e)}"
