@@ -2423,6 +2423,28 @@ def check_ai_server():
         return False, "Il server non ha risposto entro il tempo limite (timeout)."
     except Exception as e:
         return False, f"Si è verificato un errore imprevisto: {str(e)}"
+    
+def check_ai_chat_server():
+    """
+    Verifica se il server AI è attivo e risponde correttamente.
+    Restituisce un tuple (bool, message).
+    """
+    try:
+        url = os.environ.get("AI_CHAT_URL")
+        
+        response = requests.get(url, timeout=5)
+        
+        if response.status_code == 200:
+            return True, "Il server AI è attivo e raggiungibile."
+        else:
+            return False, f"Il server ha risposto con codice errore: {response.status_code}"
+            
+    except requests.exceptions.ConnectionError:
+        return False, "Errore di connessione: il server sembra essere spento o la porta 8080 è chiusa."
+    except requests.exceptions.Timeout:
+        return False, "Il server non ha risposto entro il tempo limite (timeout)."
+    except Exception as e:
+        return False, f"Si è verificato un errore imprevisto: {str(e)}"
 
 def get_timetracking_ai_summary(tracking_data, instructions = None):
     """

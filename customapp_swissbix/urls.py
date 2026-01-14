@@ -66,4 +66,7 @@ urlpatterns = [
     path('start_timetracking_from_task/', start_timetracking_from_task, name='start_timetracking_from_task'),
     path('check_ai_status/', check_ai_status, name='check_ai_status'),
     path('swissbix_summarize_day/', swissbix_summarize_day, name='swissbix_summarize_day'),
+    path('ask_ai/', ask_ai, name='ask_ai'),
+    path('check_ai_chat_status/', check_ai_chat_status, name='check_ai_chat_status'),
+
 ]

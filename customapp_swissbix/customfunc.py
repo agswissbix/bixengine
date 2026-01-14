@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from rest_framework.response import Response
 from rest_framework import status
-from django.http import JsonResponse
+from django.http import JsonResponse, StreamingHttpResponse
 import pyodbc
 import environ
 from django.conf import settings
@@ -1316,3 +1316,33 @@ def swissbix_summarize_day(request):
     summary = get_timesheet_ai_summary(timesheets_per_user)
 
     return JsonResponse({'status': 'success', 'summary': summary})
+
+def ask_ai(request):
+    """
+    Riceve una domanda e restituisce la risposta completa in formato JSON.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Metodo non consentito'}, status=405)
+
+    try:
+        question = request.POST.get("question")
+        if not question:
+            try:
+                data = json.loads(request.body)
+                question = data.get("question")
+            except:
+                pass
+
+        if not question:
+            return JsonResponse({'status': 'error', 'message': 'Nessuna domanda specificata'}, status=400)
+
+        answer = f"Funzione non implementata. Impossibile rispondere alla domanda:'{question}'.\n"
+
+        return JsonResponse({
+            "status": "completed",
+            "answer": answer,
+            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': f"Errore interno: {str(e)}"}, status=500)

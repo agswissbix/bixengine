@@ -1902,3 +1902,14 @@ def check_ai_status(request):
     else:
         print(f"❌  {message}")
         return JsonResponse({"status": False})
+
+def check_ai_chat_status(request):
+    from customapp_swissbix.script import check_ai_chat_server
+
+    is_online, message = check_ai_chat_server()
+    if is_online:
+        print(f"✅  {message}")
+        return JsonResponse({"status": True})
+    else:
+        print(f"❌  {message}")
+        return JsonResponse({"status": False})
