@@ -1017,7 +1017,7 @@ def stampa_offerta(request):
     dealuser1 = deal_record.values.get('dealuser1', 'N/A')
     closedata = deal_record.values.get('closedate', 'N/A')
     
-    filename = reference if reference else f"offerta_{recordid_deal}"
+    filename = re.sub(r'[^a-zA-Z0-9\-_ ]', '', reference.replace(' ', '_')) if reference else f"offerta_{recordid_deal}"
 
     companyid = deal_record.values.get('recordidcompany_')
     if companyid:
