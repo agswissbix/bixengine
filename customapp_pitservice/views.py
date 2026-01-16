@@ -294,7 +294,7 @@ Cordiali saluti
     if type == 'emailGasolio':
         stabile_recordid=recordid
         stabile_record=UserRecord('stabile',stabile_recordid)
-        meseLettura='2025-04'
+        meseLettura='2025-12'
         anno, mese = meseLettura.split('-')
 
         sql=f"SELECT * FROM user_contattostabile WHERE deleted_='N' AND recordidstabile_='{stabile_recordid}'"
@@ -358,7 +358,7 @@ def stampa_gasoli(request):
         recordid_stabile = data.get('recordid')
         #meseLettura=data.get('date')
         #TODO pitservice sistemare dinamico TODO GASOLI
-        meseLettura="2025 10-Ottobre"
+        meseLettura="2025 12-Dicembre"
         anno, mese = meseLettura.split(' ')
     script_dir = os.path.dirname(os.path.abspath(__file__))
     wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
@@ -439,7 +439,8 @@ def crea_lista_lavanderie(request):
     current_month_num = now.month
     
     # Mese corrente
-    if meserichiesto == 'mesecorrente':
+    #TODO pitservice rendere dinamico controllando se viene richiesto il mese corrente o permettendo all'utente di scegliere il mese
+    if True:
         month = current_month_num # Formato numerico (es. 2)
         year=current_year
         month_2digit = f"{month:02d}"  # Due cifre (es. "02")
