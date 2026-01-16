@@ -2,13 +2,13 @@ version: '3.8'
 
 services:
   web:
-    # L'immagine viene scaricata dal registro privato di GitHub
-    image: ghcr.io/${GITHUB_USER}/${IMAGE_BASE}-${CLIENT_ID}:latest
+    image: ghcr.io/${GITHUB_USER}/bixengine-${CLIENT_ID}:latest
     restart: always
     env_file:
       - .env
+    networks:
+      - bix-network
     volumes:
-      # Mappiamo solo le cartelle dei dati persistenti
       - ./uploads:/app/uploads
       - ./xml:/app/xml
       - ./staticfiles:/app/staticfiles
@@ -17,11 +17,17 @@ services:
     command: gunicorn --bind 0.0.0.0:8000 bixengine.wsgi:application
 
   qcluster:
-    image: ghcr.io/${GITHUB_USER}/${IMAGE_BASE}-${CLIENT_ID}:latest
+    image: ghcr.io/${GITHUB_USER}/bixengine-${CLIENT_ID}:latest
     restart: always
     env_file:
       - .env
+    networks:
+      - bix-network
     volumes:
       - ./uploads:/app/uploads
       - ./xml:/app/xml
     command: python manage.py qcluster
+
+networks:
+  bix-network:
+    external: true
