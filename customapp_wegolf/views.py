@@ -12,9 +12,16 @@ from .helper import Helper as WegolfHelper
 # Create your views here.
 
 def get_benchmark_filters(request):
+    data = json.loads(request.body)
+    dashboard_category = data.get('dashboardCategory')
+
     golfclub_table=UserTable('golfclub')
     userid = Helper.get_userid(request)
     
+    anonimi_condition = "(g.dati_anonimi = 'false' OR g.dati_anonimi IS NULL) AND"
+    if dashboard_category == 'nationalAvg':
+        anonimi_condition = ""
+
     sql = f"""
         SELECT g.nome_club AS title,
                g.recordid_ AS recordid,
@@ -23,8 +30,7 @@ def get_benchmark_filters(request):
         FROM user_golfclub AS g
         JOIN user_metrica_annuale AS m
            ON g.recordid_ = m.recordidgolfclub_
-        WHERE (g.dati_anonimi = 'false' OR g.dati_anonimi IS NULL) 
-            AND g.deleted_ = 'N' AND m.deleted_ = 'N'
+        WHERE {anonimi_condition} g.deleted_ = 'N' AND m.deleted_ = 'N'
         GROUP BY title, recordid
         ORDER BY title ASC
     """
@@ -87,6 +93,7 @@ def get_filtered_clubs(request):
     data = json.loads(request.body)
     userid = Helper.get_userid(request)
     filters = data.get('filters', {})
+    dashboard_category = data.get('dashboardCategory')
 
     conditions = " TRUE"
     numeric_filters = filters.get('numericFilters', [])
@@ -134,6 +141,10 @@ def get_filtered_clubs(request):
         if value:
             conditions += f" AND g.{field} = '{value}'"
 
+    anonimi_condition = "(g.dati_anonimi = 'false' OR g.dati_anonimi IS NULL) AND"
+    if dashboard_category == 'nationalAvg':
+        anonimi_condition = ""
+
     # --------------------------------------------------------
     # 3. ESECUZIONE QUERY senza distanza
     # --------------------------------------------------------
@@ -145,8 +156,8 @@ def get_filtered_clubs(request):
         FROM user_golfclub AS g
         JOIN user_metrica_annuale AS m
            ON g.recordid_ = m.recordidgolfclub_
-        WHERE (g.dati_anonimi = 'false' OR g.dati_anonimi IS NULL) 
-            AND g.deleted_ = 'N' AND m.deleted_ = 'N' 
+        WHERE {anonimi_condition} 
+            g.deleted_ = 'N' AND m.deleted_ = 'N' 
             AND {conditions}
         GROUP BY title, recordid
         ORDER BY title ASC
