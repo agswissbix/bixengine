@@ -8257,25 +8257,24 @@ def sync_monitoring(request):
         clientid = Helper.get_cliente_id()
 
         for job in data:
+            raw_function = str(job.get('function'))
             raw_recordid = str(job.get('recordid_') or '')
             raw_clientid = str(clientid or '')
             
-            hashing_string = f"{raw_recordid}{raw_clientid}"
+            hashing_string = f"{raw_clientid}|{raw_function}"
             unique_hash = hmac.new(hmac_key, hashing_string.encode(), hashlib.sha256).hexdigest()
 
             job_dict = {
                 "log_hash": unique_hash,
-                
-                'recordid_': encrypt_data(fernet, raw_recordid),
-                'clientid': encrypt_data(fernet, raw_clientid),
-                'scheduleid': encrypt_data(fernet, str(job.get('scheduleid') or '')),
-
-                'date': encrypt_data(fernet, str(job['date']) if job['date'] else ''),
-                'hour': encrypt_data(fernet, str(job['hour']) if job['hour'] else ''),
-                'name': encrypt_data(fernet, job.get('name')),
-                'function': encrypt_data(fernet, job.get('function')),
-                'status': encrypt_data(fernet, job.get('status')),
-                'monitoring_output': encrypt_data(fernet, job.get('monitoring_output'))
+                'recordid_': encrypt_val(fernet, raw_recordid),
+                'clientid': encrypt_val(fernet, raw_clientid),
+                'scheduleid': encrypt_val(fernet, job.get('scheduleid')),
+                'date': encrypt_val(fernet, job.get('date')),
+                'hour': encrypt_val(fernet, job.get('hour')),
+                'name': encrypt_val(fernet, job.get('name')),
+                'function': encrypt_val(fernet, raw_function),
+                'status': encrypt_val(fernet, job.get('status')),
+                'monitoring_output': encrypt_val(fernet, job.get('monitoring_output'))
             }
             payload.append(job_dict)
 

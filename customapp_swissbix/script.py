@@ -1502,12 +1502,12 @@ def get_monitoring():
 
             mon_id = item.get("id")
 
-            sql = "SELECT recordid_ FROM user_monitoring WHERE id = %s"
-            exists = HelpderDB.sql_query_value(sql, "recordid_", [mon_id])
+            sql = f"SELECT recordid_ FROM user_monitoring WHERE clientid='{dec_clientid}' AND function='{dec_function}'"
+            exists = HelpderDB.sql_query_row(sql)
 
             rec = None
             if exists:
-                rec = UserRecord('monitoring', exists)
+                rec = UserRecord('monitoring', exists['recordid_'])
             else:
                 rec = UserRecord('monitoring')
 
@@ -1552,10 +1552,11 @@ def sync_monitoring():
         payload = []
 
         for job in data:
+            raw_function = str(job.get('function'))
             raw_recordid = str(job.get('recordid_') or '')
             raw_clientid = str(clientid or '')
             
-            hashing_string = f"{raw_recordid}|{raw_clientid}"
+            hashing_string = f"{raw_clientid}|{raw_function}"
             unique_hash = hmac.new(hmac_key, hashing_string.encode(), hashlib.sha256).hexdigest()
 
             def enc(val):
@@ -1569,7 +1570,7 @@ def sync_monitoring():
                 'date': enc(job.get('date')),
                 'hour': enc(job.get('hour')),
                 'name': enc(job.get('name')),
-                'function': enc(job.get('function')),
+                'function': enc(raw_function),
                 'status': enc(job.get('status')),
                 'monitoring_output': enc(job.get('monitoring_output'))
             }
