@@ -9,7 +9,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 from django.shortcuts import redirect
 from datetime import datetime, date, timedelta, time
-
+from decimal import Decimal
 from django.views.decorators.csrf import csrf_exempt
 import json
 from django.middleware.csrf import get_token
@@ -5655,7 +5655,11 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
 
     userid = Helper.get_userid(request)
     cliente_id = Helper.get_cliente_id()
-
+    request_data = json.loads(request.body)
+    dashboardid=request_data.get('dashboardid', None)
+    dashboard_category = None
+    if dashboardid:
+        dashboard_category = SysDashboard.objects.filter(id=dashboardid).values_list('category', flat=True).first()
     # ----------------------------------------------------------
     # 1) Lettura definizione chart
     # ----------------------------------------------------------
@@ -5790,7 +5794,7 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
     # ----------------------------------------------------------
     # 5) Ottenimento dati dinamici del chart
     # ----------------------------------------------------------
-    chart_data = get_dynamic_chart_data(request, chart_id, query_conditions or "1=1", viewMode, referenceYear)
+    chart_data = get_dynamic_chart_data(request, chart_id, query_conditions or "1=1", viewMode, referenceYear, dashboard_category)
     if "datasets" in chart_data and chart_data["datasets"]:
         chart_data["datasets"][0]["view"] = viewid
     
@@ -6102,7 +6106,7 @@ def _build_chart_context_base(chart_id, chart_record, labels, datasets, datasets
 
 # === SPECIFIC IMPLEMENTATIONS ==============================================
 
-def _handle_record_pivot_chart(request, config, chart_id, chart_record, query_conditions,viewMode=None, referenceYear=None):
+def _handle_record_pivot_chart(request, config, chart_id, chart_record, query_conditions,viewMode=None, referenceYear=None, dashboard_category=None):
     """Gestisce la generazione di dati per grafici 'record_pivot'."""
     pivot_fields_map = {item['alias']: item for item in config['pivot_fields']}
     aliases = list(pivot_fields_map.keys())
@@ -6243,15 +6247,52 @@ def _handle_record_pivot_chart(request, config, chart_id, chart_record, query_co
     return _build_chart_context_base(chart_id, chart_record, final_labels, datasets)
 
 
-def _handle_aggregate_chart(request, config, chart_id, chart_record, query_conditions,viewMode=None, referenceYear=None):
+def _handle_aggregate_chart(request, config, chart_id, chart_record, query_conditions, viewMode=None, referenceYear=None, dashboard_category=None):
+    # --- IMPORT E SETTAGGI ---
+    from decimal import Decimal
+    import json
+    
+    try:
+        active_server = Helper.get_activeserver(request).get('value')
+    except Exception:
+        active_server = Helper.get_cliente_id()
+
+    
+    request_data = json.loads(request.body)
+
+    
+    # [CONFIGURAZIONE TEST]
+    # True = Mette l'Anno sull'asse X e i Club come Serie (Colori)
+    # False = Mette i Club sull'asse X e l'Anno come Serie
+    
+
     all_defs = config.get('datasets', []) + config.get('datasets2', [])
     db_defs = [ds for ds in all_defs if 'expression' in ds]
     post_calc_defs = [ds for ds in all_defs if 'post_calculation' in ds]
 
     db_aliases = [ds['alias'] for ds in db_defs]
     db_labels = [ds['label'] for ds in db_defs]
-    select_clauses = [f"{ds['expression']} AS {ds['alias']}" for ds in db_defs]
+    
+    select_clauses = []
+    for ds in db_defs:
+        expression = ds['expression']
+        if dashboard_category == 'nationalAvg':
+             expression = expression.replace("SUM(", "AVG(").replace("sum(", "AVG(")
+        select_clauses.append(f"{expression} AS {ds['alias']}")
+    
+    
+    # --- PRE-CALCOLO VARIABILI PER LOGICA CONDIZIONALE ---
+    priority_id = None
+    if str(active_server).lower() == 'wegolf':
+        userid = Helper.get_userid(request)
+        priority_id = HelpderDB.sql_query_value(
+            f"SELECT recordid_ FROM user_golfclub WHERE utente='{userid}'",
+            "recordid_"
+        )
 
+    is_primary_club = 'recordidgolfclub_' in config['group_by_field']['field']
+
+    # --- 1. CONFIGURAZIONE GRUPPO PRIMARIO (Tecnico: usato per Lookup/Join) ---
     group_by_config = config['group_by_field']
     group_by_alias = group_by_config.get('alias', group_by_config['field'])
 
@@ -6259,23 +6300,38 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
     has_lookup = 'lookup' in group_by_config
     lookup_table = None
 
-    # ---- Branch LOOKUP (ripristinato) ----
+    # Variabili query
+    select_group_field = ""
+    from_clause = ""
+    group_by_clause = ""
+    qc = ""
+
+    # ---- Branch LOOKUP ----
     if has_lookup:
         lookup_cfg = group_by_config['lookup']
         lookup_table = f"user_{lookup_cfg['from_table']}"
         main_alias, lookup_alias = 't1', 't2'
-        # display_field è il campo "umano" da mostrare come label
-        select_group_field = f"{lookup_alias}.{lookup_cfg['display_field']} AS {group_by_alias}"
+        
+        if dashboard_category == 'nationalAvg' and is_primary_club and priority_id:
+             select_group_field = f"""
+                CASE 
+                    WHEN {main_alias}.{group_by_config['field']} = '{priority_id}' THEN {lookup_alias}.{lookup_cfg['display_field']}
+                    ELSE {lookup_alias}.nazione
+                END AS {group_by_alias}
+             """
+             group_by_clause = f"GROUP BY {group_by_alias}"
+        else:
+             select_group_field = f"{lookup_alias}.{lookup_cfg['display_field']} AS {group_by_alias}"
+             group_by_clause = f"GROUP BY {lookup_alias}.{lookup_cfg['display_field']}"
+
         from_clause = (
             f"FROM {main_table} AS {main_alias} "
             f"JOIN {lookup_table} AS {lookup_alias} "
             f"ON {main_alias}.{group_by_config['field']} = {lookup_alias}.{lookup_cfg['on_key']}"
         )
-        group_by_clause = f"GROUP BY {lookup_alias}.{lookup_cfg['display_field']}"
-        # aliasing condizioni -> t1/t2
         qc = _aliasize_conditions(query_conditions, main_table, True, lookup_table)
 
-    # ---- Branch NON-LOOKUP (come in origine, con tipi Data/Datetime ecc.) ---
+    # ---- Branch NON-LOOKUP ----
     else:
         fieldid = group_by_config['field']
         try:
@@ -6300,34 +6356,161 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
                 expr = f"t1.{fieldid}"
             select_group_field = f"{expr} AS {group_by_alias}"
             group_by_clause = f"GROUP BY {expr}"
-
-        # aliasing condizioni -> t1
+        
         qc = _aliasize_conditions(query_conditions, main_table, False, None)
+
+    # --- 2. CONFIGURAZIONE GRUPPO SECONDARIO (Hardcoded per Test) ---
+    secondary_config=None
+    secondary_config = config.get('secondary_group_by_field',None)
+    if dashboard_category == 'benchmark':
+        secondary_config = {"field": "anno","alias": "Anno",}
+        
+    #secondary_config = {"field": "anno","alias": "Anno",}
+    # Se vuoi usare la config reale quando rimuoverai l'hardcode, scommenta:
+    # secondary_config = config.get('secondary_group_by_field')
+
+    secondary_select_part = ""
+    secondary_group_part = ""
+    secondary_alias = None
+    
+    if secondary_config:
+        sec_field = secondary_config['field']
+        secondary_alias = secondary_config.get('alias', sec_field)
+        
+        sec_granularity = secondary_config.get('date_granularity')
+        if secondary_config.get('is_year'): 
+            sec_granularity = 'year'
+
+        if sec_granularity:
+            if sec_granularity == 'year':
+                sec_expr = f"YEAR(t1.{sec_field})"
+            elif sec_granularity == 'month':
+                sec_expr = f"DATE_FORMAT(t1.{sec_field}, '%Y-%m')"
+            elif sec_granularity == 'day':
+                sec_expr = f"DATE(t1.{sec_field})"
+            else:
+                sec_expr = f"t1.{sec_field}"
+        else:
+            sec_expr = f"t1.{sec_field}"
+            
+        secondary_select_part = f", {sec_expr} AS {secondary_alias}"
+        secondary_group_part = f", {sec_expr}"
 
     # composizione SELECT
     if select_clauses:
-        query_select = f"{select_group_field}, {', '.join(select_clauses)}"
+        query_select = f"{select_group_field}{secondary_select_part}, {', '.join(select_clauses)}"
+        query_select = f"{select_group_field}{secondary_select_part}, {', '.join(select_clauses)}, t1.recordidgolfclub_"
     else:
-        query_select = select_group_field
+        query_select = f"{select_group_field}{secondary_select_part}"
 
+    # composizione QUERY
     query = (
         f"SELECT {query_select} "
         f"{from_clause} "
         f"WHERE {qc} AND t1.deleted_='N' "
-        f"{group_by_clause}"
+        f"{group_by_clause}{secondary_group_part}"
     )
-    if 'order_by' in config:
-        query += f" ORDER BY {config['order_by']}"
+    
+    # -------------------------------------------------------------------------
+    # <<<< INIZIO MODIFICA: ORDINAMENTO CON PRIORITÀ >>>>
+    # -------------------------------------------------------------------------
 
+    # 1. Recupero parametri
+    filters = request_data.get("filters", {}) or {}
+    subgroupby = filters.get("subgroupBy", "")
+    invert_axes = (subgroupby == 'year') 
+
+    # Recupero i nomi dei campi fisici per il controllo ID
+    # field_primary es: t1.recordidgolfclub_
+    field_primary = f"t1.{group_by_config['field']}"
+    alias_primary = group_by_alias
+    
+    field_secondary = f"t1.{secondary_config['field']}" if secondary_config else None
+    alias_secondary = secondary_alias if secondary_alias else None
+
+    # Controllo dove si trova l'ID (Secondario)
+    is_secondary_club = secondary_config and 'recordidgolfclub_' in secondary_config.get('field', '')
+
+    # Helper per la query di priorità
+    def get_priority_sql(field_name, value):
+        return f"CASE WHEN {field_name} = '{value}' THEN 0 ELSE 1 END"
+
+    # 3. Costruzione della clausola di priorità (PRIORITY PART)
+    priority_clause = None
+
+    if priority_id:
+        if is_primary_club:
+            # Se il club è nel gruppo principale, usiamo t1.recordidgolfclub_ per il confronto
+            base_priority_sql = get_priority_sql(field_primary, priority_id)
+            if dashboard_category == 'nationalAvg':
+                priority_clause = f"MIN({base_priority_sql})"
+            else:
+                priority_clause = base_priority_sql
+        elif is_secondary_club and field_secondary:
+            # Se il club è nel gruppo secondario
+            # Nota: se stiamo raggruppando per nazione nel secondario, servirebbe logica simile, 
+            # ma per ora assumiamo che nationalAvg usi il gruppo primario per i club.
+            priority_clause = get_priority_sql(field_secondary, priority_id) 
+
+    # 4. Costruzione dell'ordinamento standard (STANDARD PART)
+    standard_order = ""
+
+    if 'order_by' in config:
+        # SE C'È GIÀ UN ORDER BY NELLA CONFIGURAZIONE, LO MANTENIAMO COME SECONDARIO
+        standard_order = config['order_by']
+    else:
+        # ALTRIMENTI LO GENERIAMO DINAMICAMENTE
+        sort_parts = []
+        if invert_axes and alias_secondary:
+            sort_parts.append(alias_secondary)
+            sort_parts.append(alias_primary)
+        else:
+            sort_parts.append(alias_primary)
+            if alias_secondary:
+                sort_parts.append(alias_secondary)
+        
+        standard_order = ", ".join(sort_parts)
+
+    # 5. UNIONE: Prima la priorità, poi l'ordinamento standard
+    final_order_parts = []
+    
+    # Nota: Se invertiamo gli assi (Anno su X), potremmo voler ordinare prima per Anno e poi per priorità Club
+    # Ma solitamente si vuole che la serie prioritaria (Legenda) sia la prima.
+    
+    if invert_axes and alias_secondary:
+        # Se raggruppiamo per Anno: Ordina Anno ASC, Poi Club Prioritario, Poi altri Club
+        final_order_parts.append(alias_secondary) # Es: Anno
+        if priority_clause:
+            final_order_parts.append(priority_clause)
+        # Rimuoviamo alias_secondary da standard_order se lo abbiamo aggiunto qui, per pulizia, ma SQL lo tollera doppio.
+        # Per semplicità accodiamo standard_order che conterrà di nuovo alias_secondary e poi alias_primary
+        if standard_order:
+             final_order_parts.append(standard_order)
+    else:
+        # Se raggruppiamo per Club: Club Prioritario, Poi Standard (Nome Club, Anno)
+        if priority_clause:
+            final_order_parts.append(priority_clause)
+        if standard_order:
+            final_order_parts.append(standard_order)
+
+    # Rimozione duplicati grossolana nella stringa finale se necessario, ma JOIN gestisce bene
+    final_order_string = ", ".join(final_order_parts)
+
+    if final_order_string:
+        query += f" ORDER BY {final_order_string}"
+
+    # -------------------------------------------------------------------------
+    # <<<< FINE MODIFICA >>>>
+    # -------------------------------------------------------------------------
+    
     dictrows = HelpderDB.sql_query(query)
     if not dictrows:
         return {'id': chart_id, 'name': chart_record['name'], 'error': '$empty$'}
 
-    # --- wegolf: tentativo di conversione di campi valuta nella valuta dell'utente corrente ---
-    try:
-        active_server = Helper.get_activeserver(request).get('value')
-    except Exception:
-        active_server = Helper.get_cliente_id()
+    show_total_average = filters.get('showTotalAverage', False)
+
+    # --- wegolf: conversione valuta (Logica esistente mantenuta) ---
+    
 
     if str(active_server).lower() == 'wegolf':
         currency_aliases = []
@@ -6338,21 +6521,18 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
                 fld = SysField.objects.get(fieldid=alias)
             except Exception:
                 fld = None
-
             if not fld:
                 fieldid = ds.get('field') or ds.get('fieldid')
                 if fieldid:
                     try:
                         fld = SysField.objects.get(fieldid=fieldid)
                     except Exception:
-                        fld = None
-
+                        pass
             is_currency = False
             if fld:
                 expr_field = (getattr(fld, 'explanation', '') or '').lower()
                 if 'number_currency' in expr_field:
                     is_currency = True
-
             if is_currency:
                 currency_aliases.append(alias)
 
@@ -6361,7 +6541,6 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
             cid = r.get('recordidgolfclub_')
             if cid:
                 clubs.add(cid)
-
         clubs_map = _get_clubs_currency_map(clubs) if clubs else {}
 
         try:
@@ -6375,12 +6554,10 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
         for cid, tc in clubs_map.items():
             if tc:
                 source_currencies.add(normalize_currency(tc))
-
         source_currencies = {c for c in source_currencies if c}
 
         if source_currencies:
             rates = get_frankfurter_rates(base=user_target, to_list=list(source_currencies))
-
             for r in dictrows:
                 cid = r.get('recordidgolfclub_')
                 src = None
@@ -6403,34 +6580,213 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
                     except Exception:
                         pass
 
-    labels = [row[group_by_alias] for row in dictrows]
-    all_db_datasets = _format_datasets_from_rows(db_aliases, db_labels, dictrows)
-    for i, ds in enumerate(all_db_datasets):
-        ds['original_alias'] = db_aliases[i]
+    # --- FORMATTAZIONE DATASET (Logica Principale) ---
+    
+    # === CASO A: DOPPIO RAGGRUPPAMENTO (PIVOT) ===
+    if secondary_alias:
+        # Determina quale campo funge da Asse X e quale da Serie
+        if invert_axes:
+            # X = Anno, Serie = Club
+            col_x_alias = secondary_alias
+            col_series_alias = group_by_alias
+        else:
+            # X = Club, Serie = Anno
+            col_x_alias = group_by_alias
+            col_series_alias = secondary_alias
 
-    all_post_calc_datasets = []
-    for pc_def in post_calc_defs:
-        r = _perform_post_calculation(pc_def, all_db_datasets, labels, viewMode, referenceYear)
-        if r:
-            all_post_calc_datasets.append(r)
+        # 1. Labels Asse X (Uniche e ordinate)
+        labels = list(dict.fromkeys([row[col_x_alias] for row in dictrows]))
+        
+        # 2. Serie (Uniche e ordinate)
+        unique_series_keys = list(dict.fromkeys([row[col_series_alias] for row in dictrows]))
+        unique_series_keys = [k for k in unique_series_keys if k is not None]
 
-    # Attenzione: NON poppare se la stessa alias serve a datasets e datasets2
-    db_map = {ds['original_alias']: {k: v for k, v in ds.items() if k != 'original_alias'} for ds in all_db_datasets}
-    pc_map = {ds['label']: ds for ds in all_post_calc_datasets}
+        final_datasets1 = []
+        
+        # Mappa per accesso veloce: (ValoreX, ValoreSerie) -> Riga intera
+        data_map = {}
+        for row in dictrows:
+            x_val = row[col_x_alias]
+            s_val = row[col_series_alias]
+            data_map[(x_val, s_val)] = row
 
-    def _resolve(defs):
-        out = []
-        for d in defs or []:
-            if 'expression' in d and d['alias'] in db_map:
-                out.append(db_map[d['alias']])
-            elif 'post_calculation' in d and d['label'] in pc_map:
-                out.append(pc_map[d['label']])
-        return out
+        # Creazione Datasets
+        for ds_def in db_defs:
+            alias = ds_def['alias']
+            base_label = ds_def.get('label', alias)
+            
+            for s_key in unique_series_keys:
+                series_data = []
+                for lbl in labels:
+                    # Cerchiamo il valore per questa coordinata (X, Serie)
+                    row = data_map.get((lbl, s_key))
+                    val = row.get(alias, 0) if row else 0
+                    
+                    # Fix Decimal -> Float per JSON
+                    if isinstance(val, Decimal):
+                        val = float(val)
 
-    final_datasets1 = _resolve(config.get('datasets'))
-    final_datasets2 = _resolve(config.get('datasets2'))
+                    series_data.append(val)
+                
+                # Etichetta Serie
+                if len(db_defs) > 1:
+                    series_label = f"{s_key} - {base_label}"
+                else:
+                    series_label = f"{s_key}"
+                
+                final_datasets1.append({
+                    'label': str(series_label),
+                    'data': series_data,
+                    'alias': alias, 
+                    'original_def': ds_def
+                })
+        
+        # Post calc disabilitato nel pivot mode per semplicità
+        final_datasets2 = [] 
+        
+        # --- CALCOLO MEDIA TOTALE (PIVOT) ---
+        if show_total_average and str(active_server).lower() == 'wegolf' and priority_id:
+            from collections import defaultdict
+            
+            # Filtra righe escludendo il club loggato
+            other_clubs_rows = [r for r in dictrows if str(r.get('recordidgolfclub_', '')) != str(priority_id)]
+            
+            if invert_axes:
+                # X = Anno, Serie = Club
+                # Calcoliamo una sola linea di media per ogni metrica (media di tutti i club per quell'anno)
+                sums_by_x = defaultdict(lambda: defaultdict(float))
+                counts_by_x = defaultdict(lambda: defaultdict(int))
+                
+                for row in other_clubs_rows:
+                    x_val = row[col_x_alias]
+                    for ds_def in db_defs:
+                        alias = ds_def['alias']
+                        val = row.get(alias, 0)
+                        if isinstance(val, Decimal): val = float(val)
+                        sums_by_x[x_val][alias] += val
+                        counts_by_x[x_val][alias] += 1
+                
+                for ds_def in db_defs:
+                    alias = ds_def['alias']
+                    avg_data = []
+                    for lbl in labels:
+                        s = sums_by_x[lbl][alias]
+                        c = counts_by_x[lbl][alias]
+                        avg = s / c if c > 0 else 0
+                        avg_data.append(round(avg, 2))
+                    
+                    final_datasets2.append({
+                        'label': f"Media Mercato",
+                        'data': avg_data,
+                        'type': 'line',
+                        'borderDash': [5, 5],
+                        'pointRadius': 0,
+                        'fill': False,
+                        'borderColor': '#999999',
+                        'borderWidth': 2
+                    })
+            else:
+                # X = Club, Serie = Anno
+                # Calcoliamo una linea di media PER OGNI SERIE (Anno)
+                sums_by_s = defaultdict(lambda: defaultdict(float))
+                counts_by_s = defaultdict(lambda: defaultdict(int))
+                
+                for row in other_clubs_rows:
+                    s_val = row[col_series_alias]
+                    for ds_def in db_defs:
+                        alias = ds_def['alias']
+                        val = row.get(alias, 0)
+                        if isinstance(val, Decimal): val = float(val)
+                        sums_by_s[s_val][alias] += val
+                        counts_by_s[s_val][alias] += 1
+                
+                for s_key in unique_series_keys:
+                    for ds_def in db_defs:
+                        alias = ds_def['alias']
+                        s = sums_by_s[s_key][alias]
+                        c = counts_by_s[s_key][alias]
+                        avg = s / c if c > 0 else 0
+                        
+                        # La media è costante per tutti i club sull'asse X
+                        avg_data = [round(avg, 2)] * len(labels)
+                        
+                        final_datasets2.append({
+                            'label': f"Media {s_key}",
+                            'data': avg_data,
+                            'type': 'line',
+                            'borderDash': [5, 5],
+                            'pointRadius': 0,
+                            'fill': False,
+                            'borderWidth': 2
+                        })
 
-    # extra metadata invariati
+    # === CASO B: RAGGRUPPAMENTO SINGOLO (Standard) ===
+    else:
+        labels = [row[group_by_alias] for row in dictrows]
+        all_db_datasets = _format_datasets_from_rows(db_aliases, db_labels, dictrows)
+        for i, ds in enumerate(all_db_datasets):
+            ds['original_alias'] = db_aliases[i]
+            # Fix Decimal anche qui per sicurezza
+            ds['data'] = [float(x) if isinstance(x, Decimal) else x for x in ds['data']]
+
+        all_post_calc_datasets = []
+        for pc_def in post_calc_defs:
+            r = _perform_post_calculation(pc_def, all_db_datasets, labels, viewMode, referenceYear)
+            if r:
+                all_post_calc_datasets.append(r)
+
+        db_map = {ds['original_alias']: {k: v for k, v in ds.items() if k != 'original_alias'} for ds in all_db_datasets}
+        pc_map = {ds['label']: ds for ds in all_post_calc_datasets}
+
+        def _resolve(defs):
+            out = []
+            for d in defs or []:
+                if 'expression' in d and d['alias'] in db_map:
+                    out.append(db_map[d['alias']])
+                elif 'post_calculation' in d and d['label'] in pc_map:
+                    out.append(pc_map[d['label']])
+            return out
+
+        final_datasets1 = _resolve(config.get('datasets'))
+        final_datasets2 = _resolve(config.get('datasets2'))
+        
+        # --- CALCOLO MEDIA TOTALE (SINGOLO) ---
+        if show_total_average and str(active_server).lower() == 'wegolf' and priority_id:
+            from collections import defaultdict
+            other_clubs_rows = [r for r in dictrows if str(r.get('recordidgolfclub_', '')) != str(priority_id)]
+            
+            sums = defaultdict(float)
+            counts = defaultdict(int)
+            
+            for row in other_clubs_rows:
+                for ds_def in db_defs:
+                    alias = ds_def['alias']
+                    val = row.get(alias, 0)
+                    if isinstance(val, Decimal): val = float(val)
+                    sums[alias] += val
+                    counts[alias] += 1
+            
+            for ds_def in db_defs:
+                alias = ds_def['alias']
+                s = sums[alias]
+                c = counts[alias]
+                avg = s / c if c > 0 else 0
+                avg_data = [round(avg, 2)] * len(labels)
+                
+                # Aggiungi a datasets2 se esiste, altrimenti crea
+                if final_datasets2 is None: final_datasets2 = []
+                final_datasets2.append({
+                    'label': f"Media Mercato",
+                    'data': avg_data,
+                    'type': 'line',
+                    'borderDash': [5, 5],
+                    'pointRadius': 0,
+                    'fill': False,
+                    'borderColor': '#999999',
+                    'borderWidth': 2
+                })
+
+    # --- EXTRA METADATA ---
     if chart_record['layout'] in ['value', 'button']:
         icon = HelpderDB.sql_query_value(f"SELECT icon FROM user_chart WHERE report_id={chart_id} LIMIT 1", "icon")
         if icon and final_datasets1:
@@ -6454,6 +6810,14 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
                 final_datasets1[0]['fn'] = custom_func
 
     return _build_chart_context_base(chart_id, chart_record, labels, final_datasets1, final_datasets2 or None)
+
+
+
+
+
+
+
+
 
 # --- NEW: aliasing robusto delle condizioni --------------------------------
 import re
@@ -6488,7 +6852,7 @@ def _aliasize_conditions(query_conditions, main_table, has_lookup=False, lookup_
     return qc
 
 
-def get_dynamic_chart_data(request, chart_id, query_conditions='1=1', viewMode=None, referenceYear=None):
+def get_dynamic_chart_data(request, chart_id, query_conditions='1=1', viewMode=None, referenceYear=None,dashboard_category=None):
     """Genera dinamicamente i dati per un grafico leggendo la configurazione JSON dal database."""
     chart_record = HelpderDB.sql_query_row(f"SELECT * FROM sys_chart WHERE id={chart_id}")
     if not chart_record:
@@ -6524,7 +6888,7 @@ def get_dynamic_chart_data(request, chart_id, query_conditions='1=1', viewMode=N
     if not handler:
         return {'error': f'Unknown chart type: {chart_type}'}
 
-    return handler(request, config, chart_id, chart_record, query_conditions,viewMode, referenceYear)
+    return handler(request, config, chart_id, chart_record, query_conditions,viewMode, referenceYear, dashboard_category)
 
 
 
