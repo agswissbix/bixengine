@@ -1501,12 +1501,12 @@ def get_monitoring():
 
             mon_id = item.get("id")
 
-            sql = f"SELECT recordid_ FROM user_monitoring WHERE clientid={dec_clientid} AND function={dec_function}"
-            exists = HelpderDB.sql_query_value(sql, "recordid_", [mon_id])
+            sql = f"SELECT recordid_ FROM user_monitoring WHERE clientid='{dec_clientid}' AND function='{dec_function}'"
+            exists = HelpderDB.sql_query_row(sql)
 
             rec = None
             if exists:
-                rec = UserRecord('monitoring', exists)
+                rec = UserRecord('monitoring', exists['recordid_'])
             else:
                 rec = UserRecord('monitoring')
 
