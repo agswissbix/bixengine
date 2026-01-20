@@ -519,6 +519,7 @@ def update_deals():
         condition_list.append("dealstatus='Vinta'")
         condition_list.append("dealstage IS NULL OR (dealstage!='Progetto fatturato'  and dealstage!='Invoiced')")
         condition_list.append("deleted_='N'")
+        condition_list.append("recordid_='N'")
         deals=deal_table.get_records(conditions_list=condition_list)
         sorted_deals = sorted(deals, key=lambda deal: deal['recordid_'])
         
