@@ -6362,8 +6362,12 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
     # --- 2. CONFIGURAZIONE GRUPPO SECONDARIO (Hardcoded per Test) ---
     secondary_config=None
     secondary_config = config.get('secondary_group_by_field',None)
-    if dashboard_category == 'benchmark':
-        secondary_config = {"field": "anno","alias": "Anno",}
+    
+    filters = request_data.get("filters", {}) or {}
+    selected_years = filters.get("selectedYears", [])
+
+    if dashboard_category == 'benchmark' and len(selected_years) > 1:
+        secondary_config = {"field": "anno","alias": "Anno"}
         
     #secondary_config = {"field": "anno","alias": "Anno",}
     # Se vuoi usare la config reale quando rimuoverai l'hardcode, scommenta:
