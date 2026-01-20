@@ -6650,7 +6650,7 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
         final_datasets2 = [] 
         
         # --- CALCOLO MEDIA TOTALE (PIVOT) ---
-        if show_total_average and str(active_server).lower() == 'wegolf' and priority_id:
+        if show_total_average and str(active_server).lower() == 'wegolf' and priority_id and dashboard_category == 'benchmark':
             from collections import defaultdict
             
             # Filtra righe escludendo il club loggato
@@ -6756,7 +6756,7 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
         final_datasets2 = _resolve(config.get('datasets2'))
         
         # --- CALCOLO MEDIA TOTALE (SINGOLO) ---
-        if show_total_average and str(active_server).lower() == 'wegolf' and priority_id:
+        if show_total_average and str(active_server).lower() == 'wegolf' and priority_id and dashboard_category == 'benchmark':
             from collections import defaultdict
             other_clubs_rows = [r for r in dictrows if str(r.get('recordidgolfclub_unique_', '')) != str(priority_id)]
             
