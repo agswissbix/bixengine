@@ -1892,6 +1892,10 @@ def upload_markdown_image(request):
     from customapp_swissbix.script import upload_markdown_image
     return upload_markdown_image(request)
 
+def get_monitoring(request):
+    from customapp_swissbix.script import get_monitoring
+    return get_monitoring()
+
 def check_ai_status(request):
     from customapp_swissbix.script import check_ai_server
 

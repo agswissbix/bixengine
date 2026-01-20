@@ -1454,8 +1454,8 @@ def renew_servicecontract(request):
         logger.error(f"Errore nel rinnovo: {str(e)}")
         return JsonResponse({'error': f'Errore nel rinnovo: {str(e)}'}, status=500)
     
-
-def get_monitoring(request):
+@task_monitor(data_type="logs")
+def get_monitoring():
     try:
         clientid = Helper.get_cliente_id()
         
@@ -1522,11 +1522,73 @@ def get_monitoring(request):
 
             rec.save()
             count += 1
-
-        return JsonResponse({"status": "success", "processed": count}, safe=False)
+   
+        result_value = {'message': 'Rows extracted successfully.', 'processed': count}
+        print(result_value)
+        return result_value
 
     except Exception as e:
-        return JsonResponse({"error": str(e)}, status=500)
+        result_message = f"Errore durante la sincronizzazione: {str(e)}"
+        print(result_message)
+        raise Exception(result_message)
+
+@task_monitor(data_type="sync")  
+def sync_monitoring():
+    """Invia i dati a Plesk e forza l'unione tramite log_hash."""
+    try: 
+        hmac_key_str = os.environ.get("HMAC_KEY")
+        encryption_key = os.environ.get("LOGS_ENCRYPTION_KEY")
+        endpoint_url = os.environ.get("MONITORING_SYNC_ENDPOINT_URL")
+
+        if not hmac_key_str or not encryption_key or not endpoint_url:
+            return JsonResponse({"error": "Variabili d'ambiente mancanti"}, status=500)
+
+        hmac_key = hmac_key_str.encode()
+        fernet = Fernet(encryption_key)
+
+        data = UserTable('monitoring').get_records(conditions_list=[])
+        clientid = Helper.get_cliente_id()
+        payload = []
+
+        for job in data:
+            raw_recordid = str(job.get('recordid_') or '')
+            raw_clientid = str(clientid or '')
+            
+            hashing_string = f"{raw_recordid}|{raw_clientid}"
+            unique_hash = hmac.new(hmac_key, hashing_string.encode(), hashlib.sha256).hexdigest()
+
+            def enc(val):
+                return fernet.encrypt(str(val or '').encode()).decode()
+
+            job_dict = {
+                "log_hash": unique_hash,
+                'recordid_': enc(raw_recordid),
+                'clientid': enc(raw_clientid),
+                'scheduleid': enc(job.get('scheduleid')),
+                'date': enc(job.get('date')),
+                'hour': enc(job.get('hour')),
+                'name': enc(job.get('name')),
+                'function': enc(job.get('function')),
+                'status': enc(job.get('status')),
+                'monitoring_output': enc(job.get('monitoring_output'))
+            }
+            payload.append(job_dict)
+
+        payload_as_string = json.dumps(payload)
+        signature = hmac.new(hmac_key, payload_as_string.encode("utf-8"), hashlib.sha256).hexdigest()
+
+        headers = {
+            "Content-Type": "application/json",
+            "X-Signature": signature,
+        }
+
+        response = requests.post(endpoint_url, data=payload_as_string, headers=headers, timeout=20)
+        response.raise_for_status()
+
+        return {"message": "Sincronizzazione completata con successo", "inviati": len(payload)}
+        
+    except Exception as e:
+        raise Exception(f"Errore durante la sincronizzazione: {str(e)}")
     
 def encrypt_data(fernet_instance, plaintext):
     """Cifra una stringa con Fernet. Gestisce None e altri tipi."""
