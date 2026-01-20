@@ -7869,7 +7869,15 @@ def encrypt_data(fernet_instance, plaintext):
 
     return fernet_instance.encrypt(plaintext.encode("utf-8")).decode("utf-8")
 
+def encrypt_val(fernet, value):
+    """Utility per crittografare stringhe gestendo i valori None."""
+    return fernet.encrypt(str(value or '').encode()).decode()
+
 def sync_monitoring(request):
+    """
+    Sincronizza i log di monitoring locali verso il server Plesk.
+    Usa un log_hash (recordid + clientid) per permettere l'unione dei dati (UPSERT).
+    """
     print("monitoring sync start")
 
     try: 
@@ -7880,7 +7888,7 @@ def sync_monitoring(request):
         endpoint_url = os.environ.get("MONITORING_SYNC_ENDPOINT_URL")
 
         if not hmac_key_str or not encryption_key or not endpoint_url:
-            return JsonResponse({"error": "Missing environment variables"}, status=500)
+            return JsonResponse({"error": "Missing environment variables (HMAC_KEY, LOGS_ENCRYPTION_KEY, or MONITORING_SYNC_ENDPOINT_URL)"}, status=500)
 
         hmac_key = hmac_key_str.encode()
         fernet = Fernet(encryption_key)
@@ -7892,30 +7900,27 @@ def sync_monitoring(request):
             raw_recordid = str(job.get('recordid_') or '')
             raw_clientid = str(clientid or '')
             
-            hashing_string = f"{raw_recordid}{raw_clientid}"
+            hashing_string = f"{raw_recordid}|{raw_clientid}"
             unique_hash = hmac.new(hmac_key, hashing_string.encode(), hashlib.sha256).hexdigest()
 
             job_dict = {
                 "log_hash": unique_hash,
-                
-                'recordid_': encrypt_data(fernet, raw_recordid),
-                'clientid': encrypt_data(fernet, raw_clientid),
-                'scheduleid': encrypt_data(fernet, str(job.get('scheduleid') or '')),
-
-                'date': encrypt_data(fernet, str(job['date']) if job['date'] else ''),
-                'hour': encrypt_data(fernet, str(job['hour']) if job['hour'] else ''),
-                'name': encrypt_data(fernet, job.get('name')),
-                'function': encrypt_data(fernet, job.get('function')),
-                'status': encrypt_data(fernet, job.get('status')),
-                'monitoring_output': encrypt_data(fernet, job.get('monitoring_output'))
+                'recordid_': encrypt_val(fernet, raw_recordid),
+                'clientid': encrypt_val(fernet, raw_clientid),
+                'scheduleid': encrypt_val(fernet, job.get('scheduleid')),
+                'date': encrypt_val(fernet, job.get('date')),
+                'hour': encrypt_val(fernet, job.get('hour')),
+                'name': encrypt_val(fernet, job.get('name')),
+                'function': encrypt_val(fernet, job.get('function')),
+                'status': encrypt_val(fernet, job.get('status')),
+                'monitoring_output': encrypt_val(fernet, job.get('monitoring_output'))
             }
             payload.append(job_dict)
 
-        try:
-            payload_as_string = json.dumps(payload)
-        except TypeError as e:
-            raise
-            
+        if not payload:
+            return JsonResponse({"message": "No data to sync", "processed": 0}, status=200)
+
+        payload_as_string = json.dumps(payload)
         signature = hmac.new(hmac_key, payload_as_string.encode("utf-8"), hashlib.sha256).hexdigest()
 
         headers = {
@@ -7923,20 +7928,27 @@ def sync_monitoring(request):
             "X-Signature": signature,
         }
 
-        response = requests.post(endpoint_url, data=payload_as_string, headers=headers, timeout=10)
+        response = requests.post(endpoint_url, data=payload_as_string, headers=headers, timeout=15)
         response.raise_for_status()
 
-        logger.info("Monitoring sync completed successfully.")
+        logger.info(f"Monitoring sync completed. Sent {len(payload)} records.")
 
-        return JsonResponse(payload, safe=False)
+        return JsonResponse({
+            "status": "success",
+            "processed_records": len(payload),
+            "server_response": response.json() if response.content else "OK"
+        }, safe=False)
         
     except requests.RequestException as e:
-        server_response = ""
-        if hasattr(e, 'response') and e.response is not None:
-             server_response = e.response.text
+        server_response = e.response.text if hasattr(e, 'response') and e.response is not None else str(e)
+        logger.error(f"Sync failed: {server_response}")
         
         return JsonResponse({
-            "error": "Failed to fetch external data", 
+            "error": "Failed to push data to Plesk", 
             "details": str(e),
             "server_response": server_response
         }, status=500)
+    
+    except Exception as e:
+        logger.error(f"Unexpected error during sync: {str(e)}")
+        return JsonResponse({"error": "Internal Server Error", "details": str(e)}, status=500)
