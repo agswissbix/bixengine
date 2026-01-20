@@ -9,7 +9,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 from django.shortcuts import redirect
 from datetime import datetime, date, timedelta, time
-
+from decimal import Decimal
 from django.views.decorators.csrf import csrf_exempt
 import json
 from django.middleware.csrf import get_token
@@ -5672,6 +5672,7 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
     chart_config = chart["config"]
     if isinstance(chart_config, str):
         chart_config = json.loads(chart_config)
+    from_table = chart_config.get('from_table')
 
     # ----------------------------------------------------------
     # 2) Ricavo categoria del blocco se non fornita
@@ -5728,12 +5729,12 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
             selected_years = ['None']
 
         year_list = "', '".join(selected_years)
-        dynamic_conditions.append(f"anno IN ('{year_list}')")
+        dynamic_conditions.append(f"user_{from_table}.anno IN ('{year_list}')")
 
         if block_category != "benchmark":
             # Non benchmark → club dell’utente
             if user_club:
-                dynamic_conditions.append(f"recordidgolfclub_='{user_club}'")
+                dynamic_conditions.append(f"user_{from_table}.recordidgolfclub_='{user_club}'")
 
         else:
             # benchmark → usa clubs selezionati
@@ -5781,7 +5782,7 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
                     logged_club_check = check
                     break
             club_list = "', '".join(selected_clubs)
-            dynamic_conditions.append(f"recordidgolfclub_ IN ('{club_list}')")
+            dynamic_conditions.append(f"user_{from_table}.recordidgolfclub_ IN ('{club_list}')")
 
     # Applica condizioni a query_conditions
     if dynamic_conditions:
@@ -5813,6 +5814,11 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
         record_club = UserRecord('golfclub', club)
         excluded_names.append(record_club.values.get('nome_club', 'Unknown Club'))
     chart_data['excluded_clubs'] = excluded_names
+    
+    final_type = chart_layout.lower() if chart_layout else "value"
+    if chart_data.get('datasets2') and final_type in ['barchart', 'multibarchart']:
+        final_type = 'multibarlinechart'
+        chart_data['layout'] = 'multi-bar-line'
 
     chart_data_json = json.dumps(chart_data, default=json_date_handler)
 
@@ -5862,7 +5868,7 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
     return {
         "id": chart_id,
         "name": chart_name,
-        "type": chart_layout.lower() if chart_layout else "value",
+        "type": final_type,
         "chart_data": chart_data_json,
         "config": chart_config,
     }
@@ -6106,7 +6112,7 @@ def _build_chart_context_base(chart_id, chart_record, labels, datasets, datasets
 
 # === SPECIFIC IMPLEMENTATIONS ==============================================
 
-def _handle_record_pivot_chart(request, config, chart_id, chart_record, query_conditions,viewMode=None, referenceYear=None):
+def _handle_record_pivot_chart(request, config, chart_id, chart_record, query_conditions,viewMode=None, referenceYear=None, dashboard_category=None):
     """Gestisce la generazione di dati per grafici 'record_pivot'."""
     pivot_fields_map = {item['alias']: item for item in config['pivot_fields']}
     aliases = list(pivot_fields_map.keys())
@@ -6362,12 +6368,8 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
     # --- 2. CONFIGURAZIONE GRUPPO SECONDARIO (Hardcoded per Test) ---
     secondary_config=None
     secondary_config = config.get('secondary_group_by_field',None)
-    
-    filters = request_data.get("filters", {}) or {}
-    selected_years = filters.get("selectedYears", [])
-
-    if dashboard_category == 'benchmark' and len(selected_years) > 1:
-        secondary_config = {"field": "anno","alias": "Anno"}
+    if dashboard_category == 'benchmark':
+        secondary_config = {"field": "anno","alias": "Anno",}
         
     #secondary_config = {"field": "anno","alias": "Anno",}
     # Se vuoi usare la config reale quando rimuoverai l'hardcode, scommenta:
@@ -6402,7 +6404,7 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
 
     # composizione SELECT
     if select_clauses:
-        query_select = f"{select_group_field}{secondary_select_part}, {', '.join(select_clauses)}"
+        query_select = f"{select_group_field}{secondary_select_part}, {', '.join(select_clauses)}, t1.recordidgolfclub_ AS recordidgolfclub_unique_"
     else:
         query_select = f"{select_group_field}{secondary_select_part}"
 
@@ -6510,6 +6512,8 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
     if not dictrows:
         return {'id': chart_id, 'name': chart_record['name'], 'error': '$empty$'}
 
+    show_total_average = filters.get('showTotalAverage', False)
+
     # --- wegolf: conversione valuta (Logica esistente mantenuta) ---
     
 
@@ -6539,7 +6543,7 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
 
         clubs = set()
         for r in dictrows:
-            cid = r.get('recordidgolfclub_')
+            cid = r.get('recordidgolfclub_unique_')
             if cid:
                 clubs.add(cid)
         clubs_map = _get_clubs_currency_map(clubs) if clubs else {}
@@ -6560,7 +6564,7 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
         if source_currencies:
             rates = get_frankfurter_rates(base=user_target, to_list=list(source_currencies))
             for r in dictrows:
-                cid = r.get('recordidgolfclub_')
+                cid = r.get('recordidgolfclub_unique_')
                 src = None
                 if cid and str(cid) in clubs_map:
                     src = normalize_currency(clubs_map.get(str(cid)))
@@ -6644,6 +6648,82 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
         
         # Post calc disabilitato nel pivot mode per semplicità
         final_datasets2 = [] 
+        
+        # --- CALCOLO MEDIA TOTALE (PIVOT) ---
+        if show_total_average and str(active_server).lower() == 'wegolf' and priority_id:
+            from collections import defaultdict
+            
+            # Filtra righe escludendo il club loggato
+            other_clubs_rows = [r for r in dictrows if str(r.get('recordidgolfclub_unique_', '')) != str(priority_id)]
+            
+            if invert_axes:
+                # X = Anno, Serie = Club
+                # Calcoliamo una sola linea di media per ogni metrica (media di tutti i club per quell'anno)
+                sums_by_x = defaultdict(lambda: defaultdict(float))
+                counts_by_x = defaultdict(lambda: defaultdict(int))
+                
+                for row in other_clubs_rows:
+                    x_val = row[col_x_alias]
+                    for ds_def in db_defs:
+                        alias = ds_def['alias']
+                        val = row.get(alias, 0)
+                        if isinstance(val, Decimal): val = float(val)
+                        sums_by_x[x_val][alias] += val
+                        counts_by_x[x_val][alias] += 1
+                
+                for ds_def in db_defs:
+                    alias = ds_def['alias']
+                    avg_data = []
+                    for lbl in labels:
+                        s = sums_by_x[lbl][alias]
+                        c = counts_by_x[lbl][alias]
+                        avg = s / c if c > 0 else 0
+                        avg_data.append(round(avg, 2))
+                    
+                    final_datasets2.append({
+                        'label': f"Media Mercato",
+                        'data': avg_data,
+                        'type': 'line',
+                        'borderDash': [5, 5],
+                        'pointRadius': 0,
+                        'fill': False,
+                        'borderColor': '#999999',
+                        'borderWidth': 2
+                    })
+            else:
+                # X = Club, Serie = Anno
+                # Calcoliamo una linea di media PER OGNI SERIE (Anno)
+                sums_by_s = defaultdict(lambda: defaultdict(float))
+                counts_by_s = defaultdict(lambda: defaultdict(int))
+                
+                for row in other_clubs_rows:
+                    s_val = row[col_series_alias]
+                    for ds_def in db_defs:
+                        alias = ds_def['alias']
+                        val = row.get(alias, 0)
+                        if isinstance(val, Decimal): val = float(val)
+                        sums_by_s[s_val][alias] += val
+                        counts_by_s[s_val][alias] += 1
+                
+                for s_key in unique_series_keys:
+                    for ds_def in db_defs:
+                        alias = ds_def['alias']
+                        s = sums_by_s[s_key][alias]
+                        c = counts_by_s[s_key][alias]
+                        avg = s / c if c > 0 else 0
+                        
+                        # La media è costante per tutti i club sull'asse X
+                        avg_data = [round(avg, 2)] * len(labels)
+                        
+                        final_datasets2.append({
+                            'label': f"Media {s_key}",
+                            'data': avg_data,
+                            'type': 'line',
+                            'borderDash': [5, 5],
+                            'pointRadius': 0,
+                            'fill': False,
+                            'borderWidth': 2
+                        })
 
     # === CASO B: RAGGRUPPAMENTO SINGOLO (Standard) ===
     else:
@@ -6674,6 +6754,42 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
 
         final_datasets1 = _resolve(config.get('datasets'))
         final_datasets2 = _resolve(config.get('datasets2'))
+        
+        # --- CALCOLO MEDIA TOTALE (SINGOLO) ---
+        if show_total_average and str(active_server).lower() == 'wegolf' and priority_id:
+            from collections import defaultdict
+            other_clubs_rows = [r for r in dictrows if str(r.get('recordidgolfclub_unique_', '')) != str(priority_id)]
+            
+            sums = defaultdict(float)
+            counts = defaultdict(int)
+            
+            for row in other_clubs_rows:
+                for ds_def in db_defs:
+                    alias = ds_def['alias']
+                    val = row.get(alias, 0)
+                    if isinstance(val, Decimal): val = float(val)
+                    sums[alias] += val
+                    counts[alias] += 1
+            
+            for ds_def in db_defs:
+                alias = ds_def['alias']
+                s = sums[alias]
+                c = counts[alias]
+                avg = s / c if c > 0 else 0
+                avg_data = [round(avg, 2)] * len(labels)
+                
+                # Aggiungi a datasets2 se esiste, altrimenti crea
+                if final_datasets2 is None: final_datasets2 = []
+                final_datasets2.append({
+                    'label': f"Media Mercato",
+                    'data': avg_data,
+                    'type': 'line',
+                    'borderDash': [5, 5],
+                    'pointRadius': 0,
+                    'fill': False,
+                    'borderColor': '#999999',
+                    'borderWidth': 2
+                })
 
     # --- EXTRA METADATA ---
     if chart_record['layout'] in ['value', 'button']:
@@ -6699,6 +6815,14 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
                 final_datasets1[0]['fn'] = custom_func
 
     return _build_chart_context_base(chart_id, chart_record, labels, final_datasets1, final_datasets2 or None)
+
+
+
+
+
+
+
+
 
 # --- NEW: aliasing robusto delle condizioni --------------------------------
 import re
@@ -8114,15 +8238,7 @@ def encrypt_data(fernet_instance, plaintext):
 
     return fernet_instance.encrypt(plaintext.encode("utf-8")).decode("utf-8")
 
-def encrypt_val(fernet, value):
-    """Utility per crittografare stringhe gestendo i valori None."""
-    return fernet.encrypt(str(value or '').encode()).decode()
-
 def sync_monitoring(request):
-    """
-    Sincronizza i log di monitoring locali verso il server Plesk.
-    Usa un log_hash (recordid + clientid) per permettere l'unione dei dati (UPSERT).
-    """
     print("monitoring sync start")
 
     try: 
@@ -8133,7 +8249,7 @@ def sync_monitoring(request):
         endpoint_url = os.environ.get("MONITORING_SYNC_ENDPOINT_URL")
 
         if not hmac_key_str or not encryption_key or not endpoint_url:
-            return JsonResponse({"error": "Missing environment variables (HMAC_KEY, LOGS_ENCRYPTION_KEY, or MONITORING_SYNC_ENDPOINT_URL)"}, status=500)
+            return JsonResponse({"error": "Missing environment variables"}, status=500)
 
         hmac_key = hmac_key_str.encode()
         fernet = Fernet(encryption_key)
@@ -8145,27 +8261,30 @@ def sync_monitoring(request):
             raw_recordid = str(job.get('recordid_') or '')
             raw_clientid = str(clientid or '')
             
-            hashing_string = f"{raw_recordid}|{raw_clientid}"
+            hashing_string = f"{raw_recordid}{raw_clientid}"
             unique_hash = hmac.new(hmac_key, hashing_string.encode(), hashlib.sha256).hexdigest()
 
             job_dict = {
                 "log_hash": unique_hash,
-                'recordid_': encrypt_val(fernet, raw_recordid),
-                'clientid': encrypt_val(fernet, raw_clientid),
-                'scheduleid': encrypt_val(fernet, job.get('scheduleid')),
-                'date': encrypt_val(fernet, job.get('date')),
-                'hour': encrypt_val(fernet, job.get('hour')),
-                'name': encrypt_val(fernet, job.get('name')),
-                'function': encrypt_val(fernet, job.get('function')),
-                'status': encrypt_val(fernet, job.get('status')),
-                'monitoring_output': encrypt_val(fernet, job.get('monitoring_output'))
+                
+                'recordid_': encrypt_data(fernet, raw_recordid),
+                'clientid': encrypt_data(fernet, raw_clientid),
+                'scheduleid': encrypt_data(fernet, str(job.get('scheduleid') or '')),
+
+                'date': encrypt_data(fernet, str(job['date']) if job['date'] else ''),
+                'hour': encrypt_data(fernet, str(job['hour']) if job['hour'] else ''),
+                'name': encrypt_data(fernet, job.get('name')),
+                'function': encrypt_data(fernet, job.get('function')),
+                'status': encrypt_data(fernet, job.get('status')),
+                'monitoring_output': encrypt_data(fernet, job.get('monitoring_output'))
             }
             payload.append(job_dict)
 
-        if not payload:
-            return JsonResponse({"message": "No data to sync", "processed": 0}, status=200)
-
-        payload_as_string = json.dumps(payload)
+        try:
+            payload_as_string = json.dumps(payload)
+        except TypeError as e:
+            raise
+            
         signature = hmac.new(hmac_key, payload_as_string.encode("utf-8"), hashlib.sha256).hexdigest()
 
         headers = {
@@ -8173,27 +8292,20 @@ def sync_monitoring(request):
             "X-Signature": signature,
         }
 
-        response = requests.post(endpoint_url, data=payload_as_string, headers=headers, timeout=15)
+        response = requests.post(endpoint_url, data=payload_as_string, headers=headers, timeout=10)
         response.raise_for_status()
 
-        logger.info(f"Monitoring sync completed. Sent {len(payload)} records.")
+        logger.info("Monitoring sync completed successfully.")
 
-        return JsonResponse({
-            "status": "success",
-            "processed_records": len(payload),
-            "server_response": response.json() if response.content else "OK"
-        }, safe=False)
+        return JsonResponse(payload, safe=False)
         
     except requests.RequestException as e:
-        server_response = e.response.text if hasattr(e, 'response') and e.response is not None else str(e)
-        logger.error(f"Sync failed: {server_response}")
+        server_response = ""
+        if hasattr(e, 'response') and e.response is not None:
+             server_response = e.response.text
         
         return JsonResponse({
-            "error": "Failed to push data to Plesk", 
+            "error": "Failed to fetch external data", 
             "details": str(e),
             "server_response": server_response
         }, status=500)
-    
-    except Exception as e:
-        logger.error(f"Unexpected error during sync: {str(e)}")
-        return JsonResponse({"error": "Internal Server Error", "details": str(e)}, status=500)
