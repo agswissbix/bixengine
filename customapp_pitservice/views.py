@@ -358,7 +358,7 @@ def stampa_gasoli(request):
         recordid_stabile = data.get('recordid')
         #meseLettura=data.get('date')
         #TODO pitservice sistemare dinamico TODO GASOLI
-        meseLettura="2026 11-Gennaio"
+        meseLettura="2026 01-Gennaio"
         anno, mese = meseLettura.split(' ')
     script_dir = os.path.dirname(os.path.abspath(__file__))
     wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
