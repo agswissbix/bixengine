@@ -5538,7 +5538,7 @@ def get_dashboard_blocks(request):
                 #     dashboard_id=dashboard_id
                 # )
                 sql = """
-                    SELECT sdb.*, uc.status as status
+                    SELECT sdb.*, uc.status as status, uc.category_block
                     FROM sys_dashboard_block sdb
                     LEFT JOIN user_chart uc ON uc.report_id = sdb.chartid
                     WHERE sdb.dashboardid = {dashboard_id}
