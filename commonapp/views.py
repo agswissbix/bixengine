@@ -4246,6 +4246,81 @@ Cordiali saluti
 
     return JsonResponse({"success": True, "emailFields": email_fields})
 
+@csrf_exempt
+def stampa_gasoli(request):
+    data={}
+    filename='report gasolio.pdf'
+    recordid_stabile = ''
+    data = json.loads(request.body)
+    if request.method == 'POST':
+        recordid_stabile = data.get('recordid')
+        #meseLettura=data.get('date')
+        #TODO pitservice sistemare dinamico TODO GASOLI
+        meseLettura="2026 01-Gennaio"
+        anno, mese = meseLettura.split(' ')
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
+    config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
+    
+    record_stabile=UserRecord('stabile',recordid_stabile)
+    data['stabile']=record_stabile.values
+    sql=f"""
+    SELECT t.recordid_,t.anno,t.mese,t.datalettura,t.letturacm,t.letturalitri, i.riferimento, i.livellominimo, i.capienzacisterna, i.note
+    FROM user_letturagasolio t
+    INNER JOIN (
+        SELECT recordidinformazionigasolio_, MAX(datalettura) AS max_datalettura
+        FROM user_letturagasolio
+        WHERE anno='{anno}' AND mese like '%{mese}%' AND deleted_='N' AND recordidstabile_ = '{recordid_stabile}'
+        GROUP BY recordidinformazionigasolio_
+        
+    ) subquery
+    ON t.recordidinformazionigasolio_ = subquery.recordidinformazionigasolio_ 
+    AND t.datalettura = subquery.max_datalettura
+    INNER JOIN user_informazionigasolio i
+    ON t.recordidinformazionigasolio_ = i.recordid_
+    WHERE t.recordidstabile_ = '{recordid_stabile}' AND t.deleted_ = 'N' 
+            """
+    ultimeletturegasolio = HelpderDB.sql_query(sql)
+    data['ultimeletturegasolio']=ultimeletturegasolio
+    data["show_letturacm"] = any(l.get('letturacm') for l in ultimeletturegasolio)
+    data["show_note"] = any(l.get('note') for l in ultimeletturegasolio)
+
+    content = render_to_string('pdf/gasolio.html', data)
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
+    config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
+    
+    filename = f"Lettura Gasolio {mese} {anno}  {record_stabile.values['indirizzo']}.pdf"
+    filename = re.sub(r'[\\/*?:"<>|]', "", filename)
+    #filename='gasolio.pdf'
+
+    filename_with_path = os.path.dirname(os.path.abspath(__file__))
+    filename_with_path = filename_with_path.rsplit('views', 1)[0]
+    filename_with_path = filename_with_path + '\\static\\pdf\\' + filename
+    pdfkit.from_string(
+        content,
+        filename_with_path,
+        configuration=config,
+        options={
+            "enable-local-file-access": "",
+            # "quiet": ""  # <-- rimuovilo!
+        }
+    )
+
+    if True:
+        return 'commonapp/static/pdf/' + filename
+    else:
+        try:
+            with open(filename_with_path, 'rb') as fh:
+                response = HttpResponse(fh.read(), content_type="application/pdf")
+                response['Content-Disposition'] = f'inline; filename={filename}'
+                return response
+            return response
+
+        finally:
+            os.remove(filename_with_path)
+    
 
 
 @csrf_exempt
