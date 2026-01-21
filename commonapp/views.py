@@ -76,7 +76,6 @@ from dateutil import parser
 
 from customapp_wegolf.helper import Helper as WegolfHelper
 from customapp_wegolf.views import sync_translation_dashboards as wegolf_sync_translation_dashboards
-from customapp_pitservice.views import stampa_gasoli
 
 from cryptography.fernet import Fernet, InvalidToken
 
