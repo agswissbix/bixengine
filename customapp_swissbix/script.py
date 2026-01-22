@@ -2741,7 +2741,7 @@ def get_bixhub_initial_data(request):
         if userid:
             condition_list = []
             condition_list.append(f"user='{userid}'")
-            # condition_list.append("(description IS NULL OR description = '' OR worktime IS NULL OR worktime = '')")
+            condition_list.append("(description IS NULL OR description = '' OR worktime IS NULL OR worktime = '')")
             
             ts_records = UserTable('timesheet').get_records(
                 conditions_list=condition_list, 
