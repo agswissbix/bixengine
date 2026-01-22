@@ -2125,11 +2125,65 @@ def get_timesheet_initial_data(request):
             if len(aziende_recenti) >= 10: 
                 break
 
-        timesheet = None
+        timesheet_formatted = None
+        
         if recordid:
-            conditions_list = []
-            conditions_list.append(f"recordid_={recordid}")
-            timesheet = UserTable("timesheet").get_records(conditions_list=conditions_list)
+            # TODO: controllo permessi
+
+
+            conditions_list = [f"recordid_={recordid}"]
+            raw_ts_list = UserTable("timesheet").get_records(conditions_list=conditions_list)
+            
+            if raw_ts_list:
+                raw_ts = raw_ts_list[0]
+                
+                azienda_obj = None
+                if raw_ts.get('recordidcompany_'):
+                    c_rec = UserRecord('company', raw_ts.get('recordidcompany_'))
+                    if c_rec and hasattr(c_rec, 'values'):
+                        azienda_obj = {
+                            'id': str(raw_ts.get('recordidcompany_')),
+                            'name': c_rec.values.get('companyname'),
+                            'details': c_rec.values.get('city', '')
+                        }
+
+                progetto_obj = None
+                if raw_ts.get('recordidproject_'):
+                    p_rec = UserRecord('project', raw_ts.get('recordidproject_'))
+                    if p_rec and hasattr(p_rec, 'values'):
+                        progetto_obj = {
+                            'id': str(raw_ts.get('recordidproject_')),
+                            'name': p_rec.values.get('projectname')
+                        }
+
+                ticket_obj = None
+                if raw_ts.get('recordidticket_'):
+                    t_rec = UserRecord('ticket', raw_ts.get('recordidticket_'))
+                    if t_rec and hasattr(t_rec, 'values'):
+                        ticket_obj = {
+                            'id': str(raw_ts.get('recordidticket_')),
+                            'name': t_rec.values.get('subject') or t_rec.values.get('ticket_no')
+                        }
+
+                servizio_obj = next((s for s in servizi if s['name'] == raw_ts.get('service')), None)
+                opzione_obj = next((o for o in opzioni if o['name'] == raw_ts.get('invoiceoption')), None)
+
+                timesheet_formatted = {
+                    'id': str(raw_ts.get('recordid_')),
+                    'data': str(raw_ts.get('date'))[:10] if raw_ts.get('date') else None,
+                    'descrizione': raw_ts.get('description', ''),
+                    'tempoLavoro': raw_ts.get('worktime', '00:00')[:5],
+                    'tempoTrasferta': raw_ts.get('traveltime', '00:00')[:5],
+                    'noteInterne': raw_ts.get('internalnotes', ''),
+                    'notaRifiuto': raw_ts.get('decline_note', ''),
+                    'azienda': azienda_obj,
+                    'progetto': progetto_obj,
+                    'ticket': ticket_obj,
+                    'servizio': servizio_obj,
+                    'opzioni': opzione_obj,
+                    'materiali': [], 
+                    'allegati': []
+                }
 
         response_data = {
             'servizi': servizi,
@@ -2141,7 +2195,7 @@ def get_timesheet_initial_data(request):
                 'name': f"{user.firstname} {user.lastname}",
                 'details': user.email
             },
-            'timesheet': timesheet
+            'timesheet': timesheet_formatted
         }
 
         return JsonResponse(response_data, safe=False)
@@ -2202,8 +2256,14 @@ def save_timesheet(request):
         fields_raw = request.POST.get('fields')
         data = json.loads(fields_raw) if fields_raw else {}
 
+        recordid = data.get('recordid', '')
+
         # Inizializzo Record
-        timesheet_record = UserRecord('timesheet')
+        timesheet_record = None
+        if recordid:
+            timesheet_record = UserRecord('timesheet', recordid)
+        else:
+            timesheet_record = UserRecord('timesheet')
         
         # Mappatura campi base
         timesheet_record.values['recordidcompany_'] = data.get('azienda_id', '')
@@ -2644,38 +2704,75 @@ def get_bixhub_initial_data(request):
                 lastname = user_rec.lastname
                 username = f"{firstname} {lastname}"
 
-        customs_fn = SysCustomFunction.objects.all().order_by('order').values('id', 'title', 'params') 
+        customs_fn = SysCustomFunction.objects.all().order_by('order').values() 
 
         bix_apps = []
+        
+        timesheet_fn_obj = None 
 
         for fn in customs_fn:
             raw_params = fn.get('params')
+            params_dict = {}
             
             try:
                 if raw_params and isinstance(raw_params, str):
                     params_dict = json.loads(raw_params)
-                else:
-                    params_dict = {}
             except json.JSONDecodeError:
-                continue
+                pass
             
+            app_data = {
+                **fn, 
+                "name": fn['title'],
+                "function": fn.get('function') or fn.get('action'),
+                "url": params_dict.get('url', '#'),
+                "icon": params_dict.get('icon', 'squares'), 
+                "logo": params_dict.get('logo', None),
+                "description": params_dict.get('description', ''),
+                "params": params_dict 
+            }
+
+            if fn.get('tableid_id') and fn['tableid_id'].lower() == "timesheet" and params_dict.get('linkable') is True:
+                timesheet_fn_obj = app_data
+
             if params_dict.get('linkable') is True:
-                bix_apps.append({
-                    "name": fn['title'],
-                    "url": params_dict.get('url', '#'),
-                    "icon": params_dict.get('icon', 'squares'), 
-                    "logo": params_dict.get('logo', None)
+                bix_apps.append(app_data)
+
+        recent_timesheets = []
+        if userid:
+            condition_list = []
+            condition_list.append(f"user='{userid}'")
+            # condition_list.append("(description IS NULL OR description = '' OR worktime IS NULL OR worktime = '')")
+            
+            ts_records = UserTable('timesheet').get_records(
+                conditions_list=condition_list, 
+                limit=10, 
+                orderby="date desc"
+            )
+
+            for ts in ts_records:
+                company_name = "N/D"
+                cid = ts.get('recordidcompany_')
+                if cid:
+                    c_rec = UserRecord('company', cid)
+                    if c_rec and hasattr(c_rec, 'values'):
+                        company_name = c_rec.values.get('companyname', 'N/D')
+
+                recent_timesheets.append({
+                    "id": str(ts.get('recordid_')),
+                    "date": str(ts.get('date'))[:10] if ts.get('date') else "",
+                    "company": company_name,
                 })
 
         data = {
             "bixApps": bix_apps,
+            "timesheets": recent_timesheets,
             "user": {
                 "name": username
-            }
+            },
+            "timesheet_fn": timesheet_fn_obj 
         }
 
         return JsonResponse(data)
 
-        return JsonResponse({"status": "Success"})
     except Exception as e:
-        return JsonResponse({"error": f"Errore di nel prendere i dati iniziali: {str(e)}"}, status=500)
+        return JsonResponse({"error": f"Errore nel prendere i dati iniziali: {str(e)}"}, status=500)
