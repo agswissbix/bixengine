@@ -2206,13 +2206,14 @@ def get_timesheet_initial_data(request):
     except Exception as e:
         logger.error(f"Errore nel fetch dei dati iniziali per la creazione di un nuovo timesheeet: {str(e)}")
         return JsonResponse({'error': f"Errore nel fetch dei dati iniziali per la creazione di un nuovo timesheeet: {str(e)}"}, status=500)
-    
+        
 def search_timesheet_entities(request):
     """
     Endpoint dinamico via POST per cercare entità.
     """
     target = request.POST.get('target')
     query = request.POST.get('q', '').strip()
+    azienda_id = request.POST.get('azienda_id')
     
     table_map = {
         'azienda': ('company', 'companyname', 'details'),
@@ -2230,6 +2231,9 @@ def search_timesheet_entities(request):
     conditions = []
     if query:
         conditions.append(f"{name_field} LIKE '%{query}%'")
+
+    if target == 'progetto' and azienda_id:
+        conditions.append(f"recordidcompany_ = '{azienda_id}'")
 
     try:
         records = UserTable(table_name).get_records(conditions_list=conditions, limit=20)
