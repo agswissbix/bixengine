@@ -1917,3 +1917,7 @@ def check_ai_chat_status(request):
     else:
         print(f"❌  {message}")
         return JsonResponse({"status": False})
+
+def get_bixhub_initial_data(request):
+    from customapp_swissbix.script import get_bixhub_initial_data
+    return get_bixhub_initial_data(request)

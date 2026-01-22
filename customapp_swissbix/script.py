@@ -2035,6 +2035,9 @@ def get_timesheet_initial_data(request):
     try:
         userid = Helper.get_userid(request)
         user = SysUser.objects.get(id=userid)
+    
+        data = json.loads(request.body)
+        recordid = data.get('recordid')
 
         servizi = [
             {"id": "1", "name": "Amministrazione", "icon_slug": "amministrazione"},
@@ -2122,6 +2125,12 @@ def get_timesheet_initial_data(request):
             if len(aziende_recenti) >= 10: 
                 break
 
+        timesheet = None
+        if recordid:
+            conditions_list = []
+            conditions_list.append(f"recordid_={recordid}")
+            timesheet = UserTable("timesheet").get_records(conditions_list=conditions_list)
+
         response_data = {
             'servizi': servizi,
             'opzioni': opzioni,
@@ -2131,7 +2140,8 @@ def get_timesheet_initial_data(request):
                 'id': str(userid),
                 'name': f"{user.firstname} {user.lastname}",
                 'details': user.email
-            }
+            },
+            'timesheet': timesheet
         }
 
         return JsonResponse(response_data, safe=False)
@@ -2620,3 +2630,52 @@ def get_timesheet_ai_summary(timesheets_per_user_data):
         
     except Exception as e:
         return f"Errore di comunicazione: {str(e)}"
+
+def get_bixhub_initial_data(request):
+    print("get_bixhub_initial_data")
+
+    try: 
+        userid = Helper.get_userid(request)
+        username = "Utente"
+        if userid:
+            user_rec = SysUser.objects.get(id=userid)
+            if user_rec:
+                firstname = user_rec.firstname
+                lastname = user_rec.lastname
+                username = f"{firstname} {lastname}"
+
+        customs_fn = SysCustomFunction.objects.all().order_by('order').values('id', 'title', 'params') 
+
+        bix_apps = []
+
+        for fn in customs_fn:
+            raw_params = fn.get('params')
+            
+            try:
+                if raw_params and isinstance(raw_params, str):
+                    params_dict = json.loads(raw_params)
+                else:
+                    params_dict = {}
+            except json.JSONDecodeError:
+                continue
+            
+            if params_dict.get('linkable') is True:
+                bix_apps.append({
+                    "name": fn['title'],
+                    "url": params_dict.get('url', '#'),
+                    "icon": params_dict.get('icon', 'squares'), 
+                    "logo": params_dict.get('logo', None)
+                })
+
+        data = {
+            "bixApps": bix_apps,
+            "user": {
+                "name": username
+            }
+        }
+
+        return JsonResponse(data)
+
+        return JsonResponse({"status": "Success"})
+    except Exception as e:
+        return JsonResponse({"error": f"Errore di nel prendere i dati iniziali: {str(e)}"}, status=500)
