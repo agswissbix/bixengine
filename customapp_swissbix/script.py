@@ -2168,12 +2168,16 @@ def get_timesheet_initial_data(request):
                 servizio_obj = next((s for s in servizi if s['name'] == raw_ts.get('service')), None)
                 opzione_obj = next((o for o in opzioni if o['name'] == raw_ts.get('invoiceoption')), None)
 
+                def safe_time(val):
+                    if not val: return '00:00'
+                    return str(val)[:5]
+
                 timesheet_formatted = {
                     'id': str(raw_ts.get('recordid_')),
                     'data': str(raw_ts.get('date'))[:10] if raw_ts.get('date') else None,
                     'descrizione': raw_ts.get('description', ''),
-                    'tempoLavoro': raw_ts.get('worktime', '00:00')[:5],
-                    'tempoTrasferta': raw_ts.get('traveltime', '00:00')[:5],
+                    'tempoLavoro': safe_time(raw_ts.get('worktime')), 
+                    'tempoTrasferta': safe_time(raw_ts.get('traveltime')),
                     'noteInterne': raw_ts.get('internalnotes', ''),
                     'notaRifiuto': raw_ts.get('decline_note', ''),
                     'azienda': azienda_obj,
