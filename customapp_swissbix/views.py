@@ -40,6 +40,7 @@ from playwright.sync_api import sync_playwright
 from types import SimpleNamespace
 from commonapp.models import SysUser
 from PIL import Image
+from customapp_swissbix.utils.browser_manager import BrowserManager
 
 logger = logging.getLogger(__name__)
 
@@ -1301,12 +1302,7 @@ def generate_timesheet_pdf(recordid, signature_path=None):
         pdf_filename = f"timesheet_{recordid}.pdf"
         temp_pdf_path = os.path.join(base_path, pdf_filename)
 
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
-            page.set_content(html_content, wait_until="networkidle")
-
-            page.add_style_tag(content="""
+        css = """
                 /* Rimuove l'altezza forzata che spesso crea la seconda pagina */
                 html, body { 
                     height: auto !important; 
@@ -1330,18 +1326,13 @@ def generate_timesheet_pdf(recordid, signature_path=None):
                 body {
                     zoom: 0.98;
                 }
+        """
 
-                
-            """)
-            
-            page.pdf(
-                path=temp_pdf_path,
-                format="A4",
-                print_background=True,
-                scale=0.75,
-                margin={"top": "1cm", "bottom": "1cm", "left": "1cm", "right": "1cm"}
-            )
-            browser.close()
+        BrowserManager.generate_pdf(
+            html_content=html_content,
+            output_path=temp_pdf_path,
+            css_styles=css
+        )
 
         attachment_record = UserRecord('attachment')
         attachment_record.values['type'] = "Signature"
@@ -1524,26 +1515,18 @@ def save_signature(request):
         pdf_filename = f"allegato.pdf"
         pdf_path = os.path.join(base_path, pdf_filename)
 
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
-            page.set_content(content, wait_until="networkidle")
-            
-            # Iniezione CSS per rimpicciolire (stile PDFKit) ed evitare la pagina bianca extra
-            page.add_style_tag(content="""
+        css = """
                 html, body { height: auto !important; overflow: hidden !important; margin: 0 !important; }
                 body { zoom: 0.98; }
                 div[style*="position:fixed"] { position: absolute !important; bottom: 0 !important; }
-            """)
-
-            page.pdf(
-                path=pdf_path,
-                format="A4",
-                print_background=True,
-                scale=0.75,  # Rapporto 72/96 DPI per simulare PDFKit
-                margin={"top": "1cm", "bottom": "0.5cm", "left": "1cm", "right": "1cm"}
-            )
-            browser.close()
+        """
+        
+        BrowserManager.generate_pdf(
+            html_content=content, 
+            output_path=pdf_path, 
+            css_styles=css,
+            options={"margin": {"top": "1cm", "bottom": "0.5cm", "left": "1cm", "right": "1cm"}}
+        )
 
         # -------------------------
         # 6️⃣ Crea il record allegato
