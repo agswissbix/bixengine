@@ -2055,10 +2055,10 @@ def get_timesheet_initial_data(request):
         ]
 
         opzioni = [
-            {"id": "o1", "name": "Commercial support"},
-            {"id": "o2", "name": "In contract"},
-            {"id": "o3", "name": "Monte ore"},
-            {"id": "o4", "name": "Out of contract"},
+            # {"id": "o1", "name": "Commercial support"},
+            # {"id": "o2", "name": "In contract"},
+            # {"id": "o3", "name": "Monte ore"},
+            # {"id": "o4", "name": "Out of contract"},
             {"id": "o5", "name": "Swisscom incident"},
             {"id": "o6", "name": "Swisscom ServiceNow"},
             {"id": "o7", "name": "To check"},
@@ -2450,7 +2450,37 @@ def save_timesheet(request):
         print(f"ERRORE save_timesheet (Base): {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
+
 def save_timesheet_material(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    try:
+        timesheet_id = request.POST.get('timesheet_id')
+        materiali_raw = request.POST.get('materiali')
+        
+        if not timesheet_id or not materiali_raw:
+            return JsonResponse({'error': 'Missing data'}, status=400)
+
+        materiali = json.loads(materiali_raw)
+        saved_ids = []
+        
+        for mat in materiali:
+            m_rec = UserRecord('timesheetline')
+            m_rec.values['recordidtimesheet_'] = timesheet_id
+            m_rec.values['recordidproduct_'] = mat.get('prodotto_id')
+            m_rec.values['expectedquantity'] = mat.get('expectedquantity')
+            m_rec.values['actualquantity'] = mat.get('actualquantity')
+            m_rec.values['note'] = mat.get('note', '')
+            m_rec.save()
+            saved_ids.append(m_rec.recordid)
+
+        return JsonResponse({'status': 'success', 'ids': saved_ids})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def remove_timesheet_material(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
 
@@ -2464,18 +2494,32 @@ def save_timesheet_material(request):
         materiali = json.loads(materiali_raw)
         
         for mat in materiali:
-            m_rec = UserRecord('timesheetline')
-            m_rec.values['recordidtimesheet_'] = timesheet_id
-            m_rec.values['recordidproduct_'] = mat.get('prodotto_id')
-            m_rec.values['expectedquantity'] = mat.get('expectedquantity')
-            m_rec.values['actualquantity'] = mat.get('actualquantity')
-            m_rec.values['note'] = mat.get('note', '')
-            m_rec.save()
+            line_id = mat.get('id')
+            if line_id:
+               rec = UserRecord('timesheetline', line_id)
+               if rec and str(rec.values.get('recordidtimesheet_')) == str(timesheet_id):
+                   rec.values['deleted_'] = 'Y'
+                   rec.save()
+            else:
+                prod_id = mat.get('prodotto_id')
+                if prod_id:
+                    records = UserTable('timesheetline').get_records(
+                        conditions_list=[
+                            f"recordidtimesheet_ = '{timesheet_id}'",
+                            f"recordidproduct_ = '{prod_id}'",
+                            "deleted_ = 'N'"
+                        ]
+                    )
+                    if records:
+                        del_rec = UserRecord('timesheetline', records[0]['recordid_'])
+                        del_rec.values['deleted_'] = 'Y'
+                        del_rec.save()
 
         return JsonResponse({'status': 'success'})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
     
+
 def save_timesheet_attachment(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
@@ -2484,6 +2528,8 @@ def save_timesheet_attachment(request):
         timesheet_id = request.POST.get('timesheet_id')
         if not timesheet_id:
             return JsonResponse({'error': 'Timesheet ID missing'}, status=400)
+
+        saved_ids = []
 
         for key in request.FILES.keys():
             if key.startswith('file_'):
@@ -2509,8 +2555,34 @@ def save_timesheet_attachment(request):
                     
                     att_rec.values['file'] = final_path
                     att_rec.save()
+                    saved_ids.append(att_rec.recordid)
 
+        return JsonResponse({'status': 'success', 'ids': saved_ids})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def remove_timesheet_attachment(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    try:
+        timesheet_id = request.POST.get('timesheet_id')
+        attachment_id = request.POST.get('attachment_id')
+
+        if not attachment_id:
+             return JsonResponse({'error': 'Attachment ID missing'}, status=400)
+
+        att_rec = UserRecord('attachment', attachment_id)
+        
+        if timesheet_id:
+             if str(att_rec.values.get('recordidtimesheet_')) != str(timesheet_id):
+                 return JsonResponse({'error': 'Mismatch timesheet/attachment'}, status=403)
+        
+        att_rec.values['deleted_'] = 'Y'
+        att_rec.save()
         return JsonResponse({'status': 'success'})
+
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
     

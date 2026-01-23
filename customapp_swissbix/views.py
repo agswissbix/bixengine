@@ -1880,9 +1880,17 @@ def save_timesheet_material(request):
     from customapp_swissbix.script import save_timesheet_material
     return save_timesheet_material(request)
 
+def remove_timesheet_material(request):
+    from customapp_swissbix.script import remove_timesheet_material
+    return remove_timesheet_material(request)
+
 def save_timesheet_attachment(request):
     from customapp_swissbix.script import save_timesheet_attachment
     return save_timesheet_attachment(request)
+
+def remove_timesheet_attachment(request):
+    from customapp_swissbix.script import remove_timesheet_attachment
+    return remove_timesheet_attachment(request)
 
 def search_timesheet_entities(request):
     from customapp_swissbix.script import search_timesheet_entities
