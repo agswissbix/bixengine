@@ -1,3 +1,4 @@
+# TODO da eliminare
 products = [
     {
         "id": "data_security",

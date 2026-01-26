@@ -1,3 +1,4 @@
+# TODO da eliminare
 frequencies = [
     {
         "id": "monthly",

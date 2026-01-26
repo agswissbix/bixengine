@@ -84,7 +84,7 @@ def save_activemind(request):
         # -------------------------------------------------
         # Helper Functions
         # -------------------------------------------------
-        def fetch_existing_dealline(recordid_deal, name_pattern):
+        def fetch_existing_dealline(recordid_deal, category):
             with connection.cursor() as cursor:
                 cursor.execute("""
                     SELECT recordid_
@@ -93,7 +93,7 @@ def save_activemind(request):
                       AND name LIKE %s
                       AND deleted_ = 'N'
                     LIMIT 1
-                """, [recordid_deal, name_pattern])
+                """, [recordid_deal, category])
                 row = cursor.fetchone()
                 return row[0] if row else None
 
@@ -529,8 +529,8 @@ def get_system_assurance_activemind(request):
         cursor.execute("""
             SELECT recordid_, name, price, cost
             FROM user_product
-            WHERE name LIKE %s AND deleted_ = 'N'
-        """, ["System Assurance%"])
+            WHERE category = 'ActiveMind' AND subcategory ='system_assurance' AND deleted_ = 'N'
+        """)
         products = cursor.fetchall()  # [(id, name, price), ...]
 
         # 2. Prendo i product_id selezionati nella trattativa
@@ -558,10 +558,9 @@ def get_system_assurance_activemind(request):
 def get_services_activemind(request):
     """
     Restituisce i servizi ActiveMind:
-    - Si appoggia al mock solo per determinare quali servizi sono validi e per l'ordine base.
-    - Recupera prezzo e features reali dal DB (user_product).
-    - Recupera quantità dalla dealline (record AM - Manutenzione servizi).
-    - Se il prodotto non è nel DB → mantiene mock con quantità 0.
+    - Tutti i dati provengono dal DB (user_product)
+    - Quantità recuperate dalla dealline (Manutenzione servizi)
+    - Se il servizio non è nella dealline → quantity = 0
     """
     try:
         data = json.loads(request.body)
@@ -569,56 +568,51 @@ def get_services_activemind(request):
         if not recordid_deal:
             return JsonResponse({"error": "Missing dealid"}, status=400)
 
-        # 1️⃣ Costruisco dizionario dal mock (titolo lower come chiave)
-        services_dict = {s["title"].strip().lower(): s.copy() for s in services_data_mock}
-        for s in services_dict.values():
-            s["recordid_product"] = None
-            s["unitPrice"] = s.get("unitPrice", 0)
-            s["quantity"] = 0
-            s["selected"] = False
-            s["features"] = s.get("features", [])
+        # 1️⃣ Recupero TUTTI i servizi ActiveMind dal DB
+        services_dict = {}
 
-        # 2️⃣ Recupero dal DB i prodotti validi
         with connection.cursor() as cursor:
             cursor.execute("""
-                SELECT recordid_, name, price, cost, note
+                SELECT recordid_, name,description, price, cost, note
                 FROM user_product
-                WHERE name LIKE 'AM %%'
-                  AND name NOT LIKE 'AM - Annuale'
-                  AND name NOT LIKE 'AM - Trimestrale'
-                  AND name NOT LIKE 'AM - Semestrale'
-                  AND name NOT LIKE 'AM - Mensile'
+                WHERE category = 'ActiveMind'
+                  AND subcategory = 'services'
                   AND deleted_ = 'N'
+                ORDER BY name
             """)
             db_products = cursor.fetchall()
 
-        for recordid_product, name, price, cost, note in db_products:
+        for recordid_product, name,description, price, cost, note in db_products:
             clean_name = name.replace("AM - ", "").strip()
             key = clean_name.lower()
-            if key not in services_dict:
-                # ignoro prodotti non presenti nel mock
-                continue
 
-            # sovrascrivo i dati dal DB
-            s = services_dict[key]
-            s["recordid_product"] = recordid_product
-            s["title"] = clean_name
-            s["unitPrice"] = float(price or 0)
-            s["unitCost"] = float(cost or 0)
-            s["selected"] = False
+            services_dict[key] = {
+                "recordid_product": recordid_product,
+                "id": description,
+                "title": clean_name,
+                "unitPrice": float(price or 0),
+                "unitCost": float(cost or 0),
+                "quantity": 0,
+                "total": 0,
+                "selected": False,
+                "icon": "Server",
+                "features": [f.strip() for f in note.split(",")] if note else []
+            }
 
-            # estraggo le features dal campo note (una per riga)
-            if note and note.strip():
-                s["features"] = [f.strip() for f in note.split(",")] if note else []
-
-        # 3️⃣ Recupero quantità dalla dealline
+        # 2️⃣ Recupero quantità dalla dealline (Manutenzione servizi)
         quantities_map = {}
+
         with connection.cursor() as cursor:
             cursor.execute("""
-                SELECT name
-                FROM user_dealline
-                WHERE recordiddeal_ = %s
-                  AND name LIKE 'AM - Manutenzione servizi%%' AND deleted_ = 'N'
+                SELECT dl.name
+                FROM user_dealline dl
+                JOIN user_product p
+                  ON p.recordid_ = dl.recordidproduct_
+                WHERE dl.recordiddeal_ = %s
+                  AND p.category = 'ActiveMind'
+                  AND p.subcategory = 'services_maintenance'
+                  AND dl.deleted_ = 'N'
+                  AND p.deleted_ = 'N'
                 LIMIT 1
             """, [recordid_deal])
             row = cursor.fetchone()
@@ -626,31 +620,28 @@ def get_services_activemind(request):
         if row:
             raw = row[0].replace("AM - Manutenzione servizi - ", "")
             for entry in raw.split(","):
-                if ":" not in entry:
+                if ": qta." not in entry:
                     continue
-                n, qty = entry.strip().split(": qta. ", 1)
-                quantities_map[n.strip().lower()] = int(qty.strip())
+                name, qty = entry.split(": qta.", 1)
+                quantities_map[name.strip().lower()] = int(qty.strip())
 
-        # 4️⃣ Aggiorno quantità e totale
+        # 3️⃣ Calcolo quantità, totale e selected
         for key, s in services_dict.items():
             qty = quantities_map.get(key, 0)
-            unit_price = float(s.get('unitPrice', 0))
+            unit_price = s["unitPrice"]
 
-            service_total = qty * unit_price
+            total = qty * unit_price
 
-            # Sconto speciale solo per clientPC
-            if s['id'] == "clientPC" and qty > 1:
+            # Sconto speciale clientPC
+            if s["id"] == "clientPC" and qty > 1:
                 discount = 1 - (qty - 1) / 100
-                service_total *= discount
-            
+                total *= discount
+
             s["quantity"] = qty
-            s["total"] = service_total
-            s["selected"] = s["quantity"] > 0
+            s["total"] = round(total, 2)
+            s["selected"] = qty > 0
 
-        # 5️⃣ Lista finale mantenendo l’ordine del mock
-        services_list = list(services_dict.values())
-
-        return JsonResponse({"services": services_list})
+        return JsonResponse({"services": list(services_dict.values())})
 
     except Exception as e:
         logger.error(f"Errore in get_services_activemind: {e}")
@@ -659,12 +650,12 @@ def get_services_activemind(request):
 
 def get_products_activemind(request):
     data = json.loads(request.body)
-    recordid_deal = data.get('trattativaid', None)
+    recordid_deal = data.get('trattativaid')
 
     if not recordid_deal:
         return JsonResponse({'error': 'Missing trattativaid'}, status=400)
 
-    # 🔹 Mappa icone già definite nel mock
+    # 🔹 Icon mapping
     icon_map = {
         "RMM": "Monitor",
         "EDR": "Shield",
@@ -677,123 +668,137 @@ def get_products_activemind(request):
         "Microsoft 365": "Cloud",
     }
 
-    # 🔹 Creo un dizionario per accedere rapidamente alle macro-categorie
-    categories_dict = {c["id"]: c for c in products_data_mock}
-    # Svuoto i services per poi riempirli con dati reali
-    for cat in categories_dict.values():
-        cat["services"] = []
+    categories_dict = {}
 
     with connection.cursor() as cursor:
-        # 1. Prendo tutti i prodotti AM
+        # 1️⃣ Tutti i prodotti ActiveMind
         cursor.execute("""
             SELECT recordid_, name, description, note, price, cost, subcategory
             FROM user_product
-            WHERE name LIKE 'AM - %' AND deleted_ = 'N'
+            WHERE category = 'ActiveMind'
+              AND deleted_ = 'N'
         """)
         db_products = cursor.fetchall()
 
-        # 2. Prendo le quantità dalla trattativa
+        # 2️⃣ Quantità dalla trattativa
         cursor.execute("""
             SELECT recordidproduct_, quantity, frequency
             FROM user_dealline
-            WHERE recordiddeal_ = %s AND deleted_ = 'N'
+            WHERE recordiddeal_ = %s
+              AND deleted_ = 'N'
         """, [recordid_deal])
         deal_rows = cursor.fetchall()
-        quantity_map = {row[0]: row[1] for row in deal_rows}
-        frequency_map = {row[0]: row[2] for row in deal_rows}
 
-    # 3. Per ogni prodotto DB
+    quantity_map = {row[0]: row[1] for row in deal_rows}
+    frequency_map = {row[0]: row[2] for row in deal_rows}
+
+    excluded_subcategories = {
+        'services',
+        'services_maintenance',
+        'system_assurance',
+        'conditions'
+    }
+
+    # 3️⃣ Costruzione dinamica categorie + servizi
     for recordid_, name, description, note, price, cost, subcategory in db_products:
-        matched_category_id = subcategory
-
-        if not matched_category_id or matched_category_id not in categories_dict:
+        if not subcategory or subcategory in excluded_subcategories:
             continue
+
+        # creo la categoria se non esiste
+        if subcategory not in categories_dict:
+            categories_dict[subcategory] = {
+                "id": subcategory,
+                "title": subcategory.replace("_", " ").title(),
+                "services": []
+            }
 
         features = [f.strip() for f in note.split(",")] if note else []
         quantity = quantity_map.get(recordid_, 0)
         frequency = frequency_map.get(recordid_, "")
 
-        matched_icon = None
-        for keyword, icon_name in icon_map.items():
-            if keyword.lower() in name.lower():
-                matched_icon = icon_name
-                break
+        matched_icon = next(
+            (icon for key, icon in icon_map.items() if key.lower() in name.lower()),
+            None
+        )
 
         service = {
             "id": str(recordid_),
             "title": name.replace("AM - ", ""),
-            "unitPrice": float(price) if price else 0.0,
-            "unitCost": float(cost) if cost else 0.0,
-            "icon": matched_icon,
-            "category": matched_category_id,
             "description": description,
+            "category": subcategory,
+            "icon": matched_icon,
+            "unitPrice": float(price or 0),
+            "unitCost": float(cost or 0),
             "monthlyPrice": float(price) if price else None,
             "yearlyPrice": float(price) * 10.5 if price else None,
             "features": features,
             "quantity": quantity,
-            "billingType": "yearly" if frequency == "Annuale" else 'monthly',
+            "billingType": "yearly" if frequency == "Annuale" else "monthly",
         }
 
-        categories_dict[matched_category_id]["services"].append(service)
+        categories_dict[subcategory]["services"].append(service)
 
-    # 4. Ritorno la struttura aggiornata
-    return JsonResponse({"servicesCategory": list(categories_dict.values())}, safe=False)
+    # 4️⃣ Output finale
+    return JsonResponse(
+        {"servicesCategory": list(categories_dict.values())},
+        safe=False
+    )
+
 
 
 def get_conditions_activemind(request):
     data = json.loads(request.body)
-    recordid_deal = data.get('dealid', None)
+    recordid_deal = data.get('dealid')
 
     if not recordid_deal:
-        return JsonResponse({'error': 'Missing trattativaid'}, status=400)
+        return JsonResponse({'error': 'Missing dealid'}, status=400)
 
-    # 1. Dizionario base dal mock
-    conditions_dict = {f["label"].strip(): f.copy() for f in conditions_data_mock}
-    for f in conditions_dict.values():
-        f["price"] = 0
-        f["selected"] = False
-        f["recordid_product"] = None
-
-    # 2. Prendo i prodotti condizioni dal DB
     with connection.cursor() as cursor:
         cursor.execute("""
-            SELECT recordid_, name, description, price
+            SELECT recordid_, name, description, price, note
             FROM user_product
-            WHERE name LIKE 'AM - %' AND deleted_ = 'N'
+            WHERE category LIKE 'ActiveMind' AND subcategory LIKE 'conditions' AND deleted_ = 'N'
         """)
         products = cursor.fetchall()
 
-        for recordid_product, name, description, price in products:
-            clean_name = name.replace("AM - ", "").strip()
-            if clean_name in conditions_dict:
-                conditions_dict[clean_name]["label"] = clean_name
-                conditions_dict[clean_name]["id"] = clean_name
-                conditions_dict[clean_name]["description"] = description
-                conditions_dict[clean_name]["recordid_product"] = recordid_product
-                conditions_dict[clean_name]["price"] = float(price) if price else 0.0
-
-        # 3. Recupero la frequenza selezionata per AM - Manutenzione servizi
         cursor.execute("""
-            SELECT frequency
-            FROM user_dealline
-            WHERE recordiddeal_ = %s
-              AND name LIKE 'AM - Manutenzione servizi%%' AND deleted_ = 'N'
+            SELECT dl.frequency
+            FROM user_dealline dl
+            JOIN user_product p
+            ON p.recordid_ = dl.recordidproduct_
+            WHERE dl.recordiddeal_ = %s
+            AND p.subcategory = 'services_maintenance'
+            AND p.category = 'ActiveMind'
+            AND dl.deleted_ = 'N'
+            AND p.deleted_ = 'N'
             LIMIT 1
         """, [recordid_deal])
         row = cursor.fetchone()
+        selected_frequency = row[0] if row else None
 
-    # 4. Se esiste una riga per manutenzione servizi, controllo il product id associato
-    if row and row[0]:
-        selected_frequency = row[0]
+    conditions_list = []
+    for recordid_product, name, description, price, note in products:
+        clean_name = name.replace("AM - ", "").strip()
 
-        # Ricerco tra le condizioni quella con lo stesso recordid_product
-        for cond in conditions_dict.values():
-            if cond["label"] == selected_frequency:
-                cond["selected"] = True
-                break
+        operations_in_one_year = None
 
-    # 5. Ritorno la lista aggiornata
-    conditions_list = list(conditions_dict.values())
+        if note:
+            match_ops = re.search(r'operationsInOneYear\s*:\s*(\d+)', note)
+
+            if match_ops:
+                operations_in_one_year = int(match_ops.group(1))
+        
+        conditions_list.append({
+            "id": clean_name,
+            "label": clean_name,
+            "description": description or "",
+            "recordid_product": recordid_product,
+            "price": float(price) if price else 0.0,
+            "selected": clean_name == selected_frequency,
+            "icon": "Calendar",
+            "operationsInOneYear": operations_in_one_year,
+        })
+
     return JsonResponse({"frequencies": conditions_list}, safe=False)
 
 
