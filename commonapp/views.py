@@ -6366,11 +6366,16 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
         qc = _aliasize_conditions(query_conditions, main_table, False, None)
 
     # --- 2. CONFIGURAZIONE GRUPPO SECONDARIO (Hardcoded per Test) ---
+    allowed_layouts = ['barchart', 'orizbarchart', 'stackedchart', 'multibarchart', 'overlappingbarchart', 'overlappedbarchart']
+    current_layout = str(chart_record.get('layout', '')).lower()
+    filters = request_data.get("filters", {}) or {}
+    selected_years = filters.get("selectedYears", [])
     secondary_config=None
     secondary_config = config.get('secondary_group_by_field',None)
-    if dashboard_category == 'benchmark':
-        secondary_config = {"field": "anno","alias": "Anno",}
-        
+    
+    if dashboard_category == 'benchmark' and len(selected_years) > 1 and current_layout in allowed_layouts:
+        secondary_config = {"field": "anno", "alias": "Anno"}
+
     #secondary_config = {"field": "anno","alias": "Anno",}
     # Se vuoi usare la config reale quando rimuoverai l'hardcode, scommenta:
     # secondary_config = config.get('secondary_group_by_field')
@@ -6681,7 +6686,7 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
                         avg_data.append(round(avg, 2))
                     
                     final_datasets2.append({
-                        'label': f"Media Mercato",
+                        'label': f"Media",
                         'data': avg_data,
                         'type': 'line',
                         'borderDash': [5, 5],
@@ -6781,7 +6786,7 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
                 # Aggiungi a datasets2 se esiste, altrimenti crea
                 if final_datasets2 is None: final_datasets2 = []
                 final_datasets2.append({
-                    'label': f"Media Mercato",
+                    'label': f"Media",
                     'data': avg_data,
                     'type': 'line',
                     'borderDash': [5, 5],
