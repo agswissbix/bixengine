@@ -2048,8 +2048,11 @@ def resume_timetracking(request):
             total_minutes = pause_delta.total_seconds() / 60
 
             existing_pause_string = timetracking.values.get('pausetime_string', '00:00')
-            existing_hours, existing_minutes = map(int, existing_pause_string.split(':'))
-            existing_pause_minutes = existing_hours * 60 + existing_minutes
+            if existing_pause_string:
+                existing_hours, existing_minutes = map(int, existing_pause_string.split(':'))
+                existing_pause_minutes = existing_hours * 60 + existing_minutes
+            else:
+                existing_pause_minutes = 0
 
             total_pause_minutes = existing_pause_minutes + total_minutes
 
@@ -2057,11 +2060,8 @@ def resume_timetracking(request):
             formatted_time = "{:02}:{:02}".format(int(hours), int(minutes))
             timetracking.values['pausetime_string'] = str(formatted_time)
 
-            pause_hours = pause_delta.total_seconds() / 3600
-            existing_pause = float(timetracking.values.get('pausetime', 0)) if timetracking.values.get('pausetime', 0) else 0
-            timetracking.values['pausetime'] = round(
-                existing_pause + pause_hours, 2
-            )
+            pause_decimal = calculate_pausetime(formatted_time)
+            timetracking.values['pausetime'] = pause_decimal
 
             timetracking.values['stato'] = "Attivo"
 
@@ -2105,12 +2105,15 @@ def update_timetracking(request):
         description = data.get('description')
         start = data.get('start')
         end = data.get('end')
+        pausetime_string = data.get('pausetime_string')
 
         if recordid:
             timetracking = UserRecord('timetracking', recordid)
             timetracking.values['description'] = description
             timetracking.values['start'] = start
             timetracking.values['end'] = end
+            timetracking.values['pausetime_string'] = pausetime_string
+            timetracking.values['pausetime'] = calculate_pausetime(pausetime_string)
 
             # --- ricalcolo worktime se start ed end sono valorizzati ---
             if start and end:
@@ -2127,6 +2130,19 @@ def update_timetracking(request):
             {'error': f"Errore nell'aggiornamento del timetracking: {str(e)}"},
             status=500
         )
+
+def calculate_pausetime(pausetime_string):
+    """
+    pausetime_string: stringa HH:MM
+    ritorna: pausetime_decimal
+    """
+    if not pausetime_string:
+        return 0.0
+
+    hours, minutes = map(int, pausetime_string.split(":"))
+    pausetime_decimal = hours + minutes / 60
+
+    return round(pausetime_decimal, 2)
 
 def calculate_worktime(start, end):
     """
