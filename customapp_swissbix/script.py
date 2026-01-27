@@ -1881,9 +1881,12 @@ def get_timetracking(request):
             
             status = timetracking.get('stato')
             worktime_val = float(timetracking.get('worktime', 0)) if timetracking.get('worktime') else 0.0
+            pausetime_val = float(timetracking.get('pausetime', 0)) if timetracking.get('pausetime') else 0.0
+
+            net_worktime = max(worktime_val - pausetime_val, 0.0)
 
             if status == "Terminato":
-                task_totals_map[task_key] = task_totals_map.get(task_key, 0) + worktime_val
+                task_totals_map[task_key] = task_totals_map.get(task_key, 0) + net_worktime
             else:
                 if task_key not in task_totals_map:
                     task_totals_map[task_key] = 0.0
@@ -1906,6 +1909,8 @@ def get_timetracking(request):
                 'end': timetracking['end'],
                 'worktime': timetracking['worktime'],
                 'worktime_string': timetracking['worktime_string'],
+                'pausetime': timetracking['pausetime'],
+                'pausetime_string': timetracking['pausetime_string'],
                 'status': timetracking['stato'],
                 'clientid': clientid,
                 'client_name': companyname,
@@ -1974,19 +1979,13 @@ def stop_active_timetracking(userid):
             timetracking.values['end'] = datetime.datetime.now().strftime("%H:%M")
             timetracking.values['stato'] = "Terminato"
 
-            time_format = '%H:%M'
-            start = datetime.datetime.strptime(timetracking.values['start'], time_format)
-            end = datetime.datetime.strptime(timetracking.values['end'], time_format)
-            time_difference = end - start
+            worktime, worktime_string = calculate_worktime(
+                timetracking.values['start'],
+                timetracking.values['end']
+            )
 
-            total_minutes = time_difference.total_seconds() / 60
-            hours, minutes = divmod(total_minutes, 60)
-            formatted_time = "{:02}:{:02}".format(int(hours), int(minutes))
-
-            timetracking.values['worktime_string'] = str(formatted_time)
-
-            hours = time_difference.total_seconds() / 3600
-            timetracking.values['worktime'] = round(hours, 2)
+            timetracking.values['worktime'] = worktime
+            timetracking.values['worktime_string'] = worktime_string
 
             timetracking.save()
 
@@ -2008,19 +2007,12 @@ def stop_timetracking(request):
             timetracking.values['end'] = datetime.datetime.now().strftime("%H:%M")
             timetracking.values['stato'] = "Terminato"
 
-            time_format = '%H:%M'
-            start = datetime.datetime.strptime(timetracking.values['start'], time_format)
-            end = datetime.datetime.strptime(timetracking.values['end'], time_format)
-            time_difference = end - start
-
-            total_minutes = time_difference.total_seconds() / 60
-            hours, minutes = divmod(total_minutes, 60)
-            formatted_time = "{:02}:{:02}".format(int(hours), int(minutes))
-
-            timetracking.values['worktime_string'] = str(formatted_time)
-
-            hours = time_difference.total_seconds() / 3600
-            timetracking.values['worktime'] = round(hours, 2)
+            worktime, worktime_string = calculate_worktime(
+                timetracking.values['start'],
+                timetracking.values['end']
+            )
+            timetracking.values['worktime'] = worktime
+            timetracking.values['worktime_string'] = worktime_string
 
             timetracking.save()
 
@@ -2028,6 +2020,152 @@ def stop_timetracking(request):
     except Exception as e:
         logger.error(f"Errore nel fermare il timetracking: {str(e)}")
         return JsonResponse({'error': f"Errore nel fermare il timetracking: {str(e)}"}, status=500)  
+
+def resume_timetracking(request):
+    print("resume_timetracking")
+
+    try:
+        data = json.loads(request.body)
+        recordid = data.get('timetracking')
+
+        userid = Helper.get_userid(request)
+
+        stop_active_timetracking(userid)
+
+        if recordid:
+            timetracking = UserRecord('timetracking', recordid)
+
+            time_format = '%H:%M'
+
+            last_end = datetime.datetime.strptime(
+                timetracking.values['end'], time_format
+            )
+
+            now = datetime.datetime.now().strftime(time_format)
+
+            pause_delta = datetime.datetime.strptime(now, time_format) - last_end
+
+            total_minutes = pause_delta.total_seconds() / 60
+
+            existing_pause_string = timetracking.values.get('pausetime_string', '00:00')
+            if existing_pause_string:
+                existing_hours, existing_minutes = map(int, existing_pause_string.split(':'))
+                existing_pause_minutes = existing_hours * 60 + existing_minutes
+            else:
+                existing_pause_minutes = 0
+
+            total_pause_minutes = existing_pause_minutes + total_minutes
+
+            hours, minutes = divmod(total_pause_minutes, 60)
+            formatted_time = "{:02}:{:02}".format(int(hours), int(minutes))
+            timetracking.values['pausetime_string'] = str(formatted_time)
+
+            pause_decimal = calculate_pausetime(formatted_time)
+            timetracking.values['pausetime'] = pause_decimal
+
+            timetracking.values['stato'] = "Attivo"
+
+            timetracking.save()
+
+        return JsonResponse({"status": "restarted"}, safe=False)
+
+    except Exception as e:
+        logger.error(f"Errore nel riavvio del timetracking: {str(e)}")
+        return JsonResponse(
+            {'error': f"Errore nel riavvio del timetracking: {str(e)}"},
+            status=500
+        )
+
+def delete_timetracking(request):
+    print("delete_timetracking")
+
+    try:
+        data = json.loads(request.body)
+        recordid = data.get('timetracking')
+
+        if recordid:
+            timetracking = UserRecord('timetracking', recordid)
+            timetracking.values['deleted_'] = 'Y'
+            timetracking.save()
+
+        return JsonResponse({"status": "deleted"}, safe=False)
+    except Exception as e:
+        logger.error(f"Errore nella cancellazione del timetracking: {str(e)}")
+        return JsonResponse(
+            {'error': f"Errore nella cancellazione del timetracking: {str(e)}"},
+            status=500
+        )
+    
+def update_timetracking(request):
+    print("update_timetracking")
+
+    try:
+        data = json.loads(request.body)
+        recordid = data.get('timetracking_id')
+        description = data.get('description')
+        start = data.get('start')
+        end = data.get('end')
+        pausetime_string = data.get('pausetime_string')
+
+        if recordid:
+            timetracking = UserRecord('timetracking', recordid)
+            timetracking.values['description'] = description
+            timetracking.values['start'] = start
+            timetracking.values['end'] = end
+            timetracking.values['pausetime_string'] = pausetime_string
+            timetracking.values['pausetime'] = calculate_pausetime(pausetime_string)
+
+            # --- ricalcolo worktime se start ed end sono valorizzati ---
+            if start and end:
+                worktime, worktime_string = calculate_worktime(start, end)
+                timetracking.values['worktime'] = worktime
+                timetracking.values['worktime_string'] = worktime_string
+
+            timetracking.save()
+
+        return JsonResponse({"status": "updated"}, safe=False)
+    except Exception as e:
+        logger.error(f"Errore nell'aggiornamento del timetracking: {str(e)}")
+        return JsonResponse(
+            {'error': f"Errore nell'aggiornamento del timetracking: {str(e)}"},
+            status=500
+        )
+
+def calculate_pausetime(pausetime_string):
+    """
+    pausetime_string: stringa HH:MM
+    ritorna: pausetime_decimal
+    """
+    if not pausetime_string:
+        return 0.0
+
+    hours, minutes = map(int, pausetime_string.split(":"))
+    pausetime_decimal = hours + minutes / 60
+
+    return round(pausetime_decimal, 2)
+
+def calculate_worktime(start, end):
+    """
+    start, end: stringhe HH:MM
+    ritorna: (worktime_decimal, worktime_string)
+    """
+    time_format = '%H:%M'
+
+    start_dt = datetime.datetime.strptime(start, time_format)
+    end_dt = datetime.datetime.strptime(end, time_format)
+
+    if end_dt < start_dt:
+        raise ValueError("End precedente allo start")
+
+    delta = end_dt - start_dt
+    total_minutes = int(delta.total_seconds() / 60)
+
+    hours, minutes = divmod(total_minutes, 60)
+    worktime_string = f"{hours:02}:{minutes:02}"
+    worktime_decimal = round(delta.total_seconds() / 3600, 2)
+
+    return worktime_decimal, worktime_string
+
 
 def get_timesheet_initial_data(request):
     print("get_timesheet_initial_data")
