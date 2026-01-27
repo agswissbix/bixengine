@@ -1848,6 +1848,18 @@ def get_timetracking(request):
     from customapp_swissbix.script import get_timetracking
     return get_timetracking(request)
 
+def resume_timetracking(request):
+    from customapp_swissbix.script import resume_timetracking
+    return resume_timetracking(request)
+
+def delete_timetracking(request):
+    from customapp_swissbix.script import delete_timetracking
+    return delete_timetracking(request)
+
+def update_timetracking(request):
+    from customapp_swissbix.script import update_timetracking
+    return update_timetracking(request)
+
 def save_timetracking(request):
     from customapp_swissbix.script import save_timetracking
     return save_timetracking(request)
