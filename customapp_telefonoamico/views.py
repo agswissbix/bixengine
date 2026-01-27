@@ -57,7 +57,7 @@ def get_shifts_and_volunteers_telefono(request):
   
 
     turni_table=UserTable('turni')
-    turni=turni_table.get_records()
+    turni=turni_table.get_records(limit=10000000)
   
 
     slots = []
@@ -113,7 +113,7 @@ def get_shifts_and_volunteers_chat(request):
    
 
     turni_table=UserTable('turni')
-    turni=turni_table.get_records(conditions_list=['tipo="chat"'])
+    turni=turni_table.get_records(conditions_list=['tipo="chat"'],limit=10000000)
   
 
     slots = []
