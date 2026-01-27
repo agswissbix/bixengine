@@ -1055,28 +1055,26 @@ def stampa_offerta(request):
         
         # Crea RichText per questa riga prodotto
         rt_prodotto = RichText()
-        rt_prodotto.add(f"{idx}. ", bold=True, size=20)
-        rt_prodotto.add(name, size=20)
-        rt_prodotto.add('\n   ', size=20)
-        rt_prodotto.add('Quantità: ', size=20)
-        rt_prodotto.add(f"{qty_str}  |  ", bold=True, size=20)
-        rt_prodotto.add('Prezzo unitario: ', size=20)
-        rt_prodotto.add(f"{unit_str}  |  ", bold=True, size=20)
-        rt_prodotto.add('Totale: ', size=20)
+        rt_prodotto.add(f"{name}:\n", size=20, underline=True)
+        rt_prodotto.add("\tQuantità: ", size=20)
+        rt_prodotto.add(qty_str, bold=True, size=20)
+        rt_prodotto.add("\t|\tPrezzo unitario: ", size=20)
+        rt_prodotto.add(unit_str, bold=True, size=20)
+        rt_prodotto.add("\t|\tTotale: ", size=20)
         rt_prodotto.add(price_str, bold=True, size=20)
-        rt_prodotto.add('\n\n', size=20)
-        
+        rt_prodotto.add("\n\n", size=20)
+
         lines.append(rt_prodotto)
 
     # Crea il titolo
     # Crea il separatore
-    separatore = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    separatore = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
     # Crea il totale finale
     total_str = f"CHF {total:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
     rt_totale = RichText()
-    rt_totale.add('TOTALE COMPLESSIVO: ', bold=True, size=24)
-    rt_totale.add(total_str, bold=True, size=24)
+    rt_totale.add('TOTALE COMPLESSIVO: ', bold=True, size=22)
+    rt_totale.add(total_str, bold=True, size=22)
 
     # Combina tutti i prodotti in un unico RichText
     rt_all_products = RichText()
@@ -1086,14 +1084,14 @@ def stampa_offerta(request):
 
     # Crea il documento completo
     tabella_completa = RichText()
-    tabella_completa.add(separatore)
+    tabella_completa.add(separatore, color='gray', size=18)
     tabella_completa.add('\n\n')
     tabella_completa.add(rt_all_products)
-    tabella_completa.add(separatore)
+    tabella_completa.add(separatore, color='gray', size=18)
     tabella_completa.add('\n\n')
     tabella_completa.add(rt_totale)
     tabella_completa.add('\n\n')
-    tabella_completa.add(separatore)
+    tabella_completa.add(separatore, color='gray', size=18)
 
     dati_trattativa = {
         "indirizzo": f"{address}, {cap} {city}",
