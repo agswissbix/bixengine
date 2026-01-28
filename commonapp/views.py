@@ -6000,7 +6000,7 @@ def _format_datasets_from_rows(aliases, labels, dictrows):
                 data.append(round(float(value), 2) if value is not None else 0)
             except (ValueError, TypeError):
                 data.append(0)
-        datasets.append({'label': labels[i], 'data': data})
+        datasets.append({'label': labels[i], 'data': data, 'yAxisID': 'y'})
     return datasets
 
 def _perform_post_calculation(post_calc_def, all_db_datasets, labels,viewMode=None, referenceYear=None):
@@ -6311,6 +6311,7 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
     from_clause = ""
     group_by_clause = ""
     qc = ""
+    is_national_avg_special = False
 
     # ---- Branch LOOKUP ----
     if has_lookup:
@@ -6319,14 +6320,16 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
         main_alias, lookup_alias = 't1', 't2'
         
         if dashboard_category == 'nationalAvg' and is_primary_club and priority_id:
-             group_expression = f"""
-                CASE 
-                    WHEN {main_alias}.{group_by_config['field']} = '{priority_id}' THEN {lookup_alias}.{lookup_cfg['display_field']}
-                    ELSE {lookup_alias}.nazione
-                END
-             """
-             select_group_field = f"{group_expression} AS {group_by_alias}"
-             group_by_clause = f"GROUP BY {group_expression}"
+             is_national_avg_special = True
+             # Query 1: Club Loggato
+             select_group_field_1 = f"0 as sort_col, {lookup_alias}.{lookup_cfg['display_field']} AS {group_by_alias}"
+             group_by_clause_1 = f"GROUP BY {lookup_alias}.{lookup_cfg['display_field']}"
+             where_extra_1 = f"AND {main_alias}.{group_by_config['field']} = '{priority_id}'"
+             
+             # Query 2: Nazioni (Tutte, incluso il club loggato)
+             select_group_field_2 = f"1 as sort_col, {lookup_alias}.nazione AS {group_by_alias}"
+             group_by_clause_2 = f"GROUP BY {lookup_alias}.nazione"
+             where_extra_2 = ""
         else:
              select_group_field = f"{lookup_alias}.{lookup_cfg['display_field']} AS {group_by_alias}"
              group_by_clause = f"GROUP BY {lookup_alias}.{lookup_cfg['display_field']}"
@@ -6409,106 +6412,123 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
         secondary_group_part = f", {sec_expr}"
 
     # composizione SELECT
-    if select_clauses:
-        query_select = f"{select_group_field}{secondary_select_part}, {', '.join(select_clauses)}, MAX(t1.recordidgolfclub_) AS recordidgolfclub_unique_"
+    if is_national_avg_special:
+        # Costruzione Query UNION per National Average
+        base_select_suffix = f"{secondary_select_part}, {', '.join(select_clauses)}, MAX(t1.recordidgolfclub_) AS recordidgolfclub_unique_" if select_clauses else f"{secondary_select_part}, MAX(t1.recordidgolfclub_) AS recordidgolfclub_unique_"
+        
+        q1 = (
+            f"SELECT {select_group_field_1}{base_select_suffix} "
+            f"{from_clause} "
+            f"WHERE {qc} AND t1.deleted_='N' {where_extra_1} "
+            f"{group_by_clause_1}{secondary_group_part}"
+        )
+        
+        q2 = (
+            f"SELECT {select_group_field_2}{base_select_suffix} "
+            f"{from_clause} "
+            f"WHERE {qc} AND t1.deleted_='N' {where_extra_2} "
+            f"{group_by_clause_2}{secondary_group_part}"
+        )
+        
+        query = f"SELECT * FROM (({q1}) UNION ALL ({q2})) AS combined_results"
+        
     else:
-        query_select = f"{select_group_field}{secondary_select_part}"
+        if select_clauses:
+            query_select = f"{select_group_field}{secondary_select_part}, {', '.join(select_clauses)}, MAX(t1.recordidgolfclub_) AS recordidgolfclub_unique_"
+        else:
+            query_select = f"{select_group_field}{secondary_select_part}"
 
-    # composizione QUERY
-    query = (
-        f"SELECT {query_select} "
-        f"{from_clause} "
-        f"WHERE {qc} AND t1.deleted_='N' "
-        f"{group_by_clause}{secondary_group_part}"
-    )
+        # composizione QUERY
+        query = (
+            f"SELECT {query_select} "
+            f"{from_clause} "
+            f"WHERE {qc} AND t1.deleted_='N' "
+            f"{group_by_clause}{secondary_group_part}"
+        )
     
     # -------------------------------------------------------------------------
     # <<<< INIZIO MODIFICA: ORDINAMENTO CON PRIORITÀ >>>>
     # -------------------------------------------------------------------------
 
-    # 1. Recupero parametri
-    filters = request_data.get("filters", {}) or {}
-    subgroupby = filters.get("subgroupBy", "")
-    invert_axes = (subgroupby == 'year') 
-
-    # Recupero i nomi dei campi fisici per il controllo ID
-    # field_primary es: t1.recordidgolfclub_
-    field_primary = f"t1.{group_by_config['field']}"
-    alias_primary = group_by_alias
-    
-    field_secondary = f"t1.{secondary_config['field']}" if secondary_config else None
-    alias_secondary = secondary_alias if secondary_alias else None
-
-    # Controllo dove si trova l'ID (Secondario)
-    is_secondary_club = secondary_config and 'recordidgolfclub_' in secondary_config.get('field', '')
-
-    # Helper per la query di priorità
-    def get_priority_sql(field_name, value):
-        return f"CASE WHEN {field_name} = '{value}' THEN 0 ELSE 1 END"
-
-    # 3. Costruzione della clausola di priorità (PRIORITY PART)
-    priority_clause = None
-
-    if priority_id:
-        if is_primary_club:
-            # Se il club è nel gruppo principale, usiamo t1.recordidgolfclub_ per il confronto
-            base_priority_sql = get_priority_sql(field_primary, priority_id)
-            if dashboard_category == 'nationalAvg':
-                priority_clause = f"MIN({base_priority_sql})"
-            else:
-                priority_clause = base_priority_sql
-        elif is_secondary_club and field_secondary:
-            # Se il club è nel gruppo secondario
-            # Nota: se stiamo raggruppando per nazione nel secondario, servirebbe logica simile, 
-            # ma per ora assumiamo che nationalAvg usi il gruppo primario per i club.
-            priority_clause = get_priority_sql(field_secondary, priority_id) 
-
-    # 4. Costruzione dell'ordinamento standard (STANDARD PART)
-    standard_order = ""
-
-    if 'order_by' in config:
-        # SE C'È GIÀ UN ORDER BY NELLA CONFIGURAZIONE, LO MANTENIAMO COME SECONDARIO
-        standard_order = config['order_by']
+    if is_national_avg_special:
+        # Ordinamento semplificato per National Avg (usa sort_col)
+        query += f" ORDER BY sort_col ASC, {group_by_alias} ASC"
     else:
-        # ALTRIMENTI LO GENERIAMO DINAMICAMENTE
-        sort_parts = []
-        if invert_axes and alias_secondary:
-            sort_parts.append(alias_secondary)
-            sort_parts.append(alias_primary)
-        else:
-            sort_parts.append(alias_primary)
-            if alias_secondary:
-                sort_parts.append(alias_secondary)
+        # 1. Recupero parametri
+        filters = request_data.get("filters", {}) or {}
+        subgroupby = filters.get("subgroupBy", "")
+        invert_axes = (subgroupby == 'year') 
+
+        # Recupero i nomi dei campi fisici per il controllo ID
+        # field_primary es: t1.recordidgolfclub_
+        field_primary = f"t1.{group_by_config['field']}"
+        alias_primary = group_by_alias
         
-        standard_order = ", ".join(sort_parts)
+        field_secondary = f"t1.{secondary_config['field']}" if secondary_config else None
+        alias_secondary = secondary_alias if secondary_alias else None
 
-    # 5. UNIONE: Prima la priorità, poi l'ordinamento standard
-    final_order_parts = []
-    
-    # Nota: Se invertiamo gli assi (Anno su X), potremmo voler ordinare prima per Anno e poi per priorità Club
-    # Ma solitamente si vuole che la serie prioritaria (Legenda) sia la prima.
-    
-    if invert_axes and alias_secondary:
-        # Se raggruppiamo per Anno: Ordina Anno ASC, Poi Club Prioritario, Poi altri Club
-        final_order_parts.append(alias_secondary) # Es: Anno
-        if priority_clause:
-            final_order_parts.append(priority_clause)
-        # Rimuoviamo alias_secondary da standard_order se lo abbiamo aggiunto qui, per pulizia, ma SQL lo tollera doppio.
-        # Per semplicità accodiamo standard_order che conterrà di nuovo alias_secondary e poi alias_primary
-        if standard_order:
-             final_order_parts.append(standard_order)
-    else:
-        # Se raggruppiamo per Club: Club Prioritario, Poi Standard (Nome Club, Anno)
-        if priority_clause:
-            final_order_parts.append(priority_clause)
-        if standard_order:
-            final_order_parts.append(standard_order)
+        # Controllo dove si trova l'ID (Secondario)
+        is_secondary_club = secondary_config and 'recordidgolfclub_' in secondary_config.get('field', '')
 
-    # Rimozione duplicati grossolana nella stringa finale se necessario, ma JOIN gestisce bene
-    final_order_string = ", ".join(final_order_parts)
+        # Helper per la query di priorità
+        def get_priority_sql(field_name, value):
+            return f"CASE WHEN {field_name} = '{value}' THEN 0 ELSE 1 END"
 
-    if final_order_string:
-        query += f" ORDER BY {final_order_string}"
+        # 3. Costruzione della clausola di priorità (PRIORITY PART)
+        priority_clause = None
+
+        if priority_id:
+            if is_primary_club:
+                # Se il club è nel gruppo principale, usiamo t1.recordidgolfclub_ per il confronto
+                base_priority_sql = get_priority_sql(field_primary, priority_id)
+                if dashboard_category == 'nationalAvg':
+                    priority_clause = f"MIN({base_priority_sql})"
+                else:
+                    priority_clause = base_priority_sql
+            elif is_secondary_club and field_secondary:
+                # Se il club è nel gruppo secondario
+                priority_clause = get_priority_sql(field_secondary, priority_id) 
+
+        # 4. Costruzione dell'ordinamento standard (STANDARD PART)
+        standard_order = ""
+
+        if 'order_by' in config:
+            # SE C'È GIÀ UN ORDER BY NELLA CONFIGURAZIONE, LO MANTENIAMO COME SECONDARIO
+            standard_order = config['order_by']
+        else:
+            # ALTRIMENTI LO GENERIAMO DINAMICAMENTE
+            sort_parts = []
+            if invert_axes and alias_secondary:
+                sort_parts.append(alias_secondary)
+                sort_parts.append(alias_primary)
+            else:
+                sort_parts.append(alias_primary)
+                if alias_secondary:
+                    sort_parts.append(alias_secondary)
+            
+            standard_order = ", ".join(sort_parts)
+
+        # 5. UNIONE: Prima la priorità, poi l'ordinamento standard
+        final_order_parts = []
+        
+        if invert_axes and alias_secondary:
+            # Se raggruppiamo per Anno: Ordina Anno ASC, Poi Club Prioritario, Poi altri Club
+            final_order_parts.append(alias_secondary) # Es: Anno
+            if priority_clause:
+                final_order_parts.append(priority_clause)
+            if standard_order:
+                final_order_parts.append(standard_order)
+        else:
+            # Se raggruppiamo per Club: Club Prioritario, Poi Standard (Nome Club, Anno)
+            if priority_clause:
+                final_order_parts.append(priority_clause)
+            if standard_order:
+                final_order_parts.append(standard_order)
+
+        final_order_string = ", ".join(final_order_parts)
+
+        if final_order_string:
+            query += f" ORDER BY {final_order_string}"
 
     # -------------------------------------------------------------------------
     # <<<< FINE MODIFICA >>>>
@@ -6648,7 +6668,8 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
                 final_datasets1.append({
                     'label': str(series_label),
                     'data': series_data,
-                    'alias': alias, 
+                    'alias': alias,
+                    'yAxisID': 'y',
                     'original_def': ds_def
                 })
         
@@ -6694,9 +6715,10 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
                         'pointRadius': 0,
                         'fill': False,
                         'borderColor': '#999999',
-                        'borderWidth': 2
+                        'borderWidth': 2,
+                        'yAxisID': 'y'
                     })
-            else:
+            elif db_defs: # Aggiunto controllo per evitare di processare se non ci sono metriche
                 # X = Club, Serie = Anno
                 # Calcoliamo una linea di media PER OGNI SERIE (Anno)
                 sums_by_s = defaultdict(lambda: defaultdict(float))
@@ -6728,7 +6750,8 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
                             'borderDash': [5, 5],
                             'pointRadius': 0,
                             'fill': False,
-                            'borderWidth': 2
+                            'borderWidth': 2,
+                            'yAxisID': 'y'
                         })
 
     # === CASO B: RAGGRUPPAMENTO SINGOLO (Standard) ===
@@ -6794,7 +6817,8 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
                     'pointRadius': 0,
                     'fill': False,
                     'borderColor': '#999999',
-                    'borderWidth': 2
+                    'borderWidth': 2,
+                    'yAxisID': 'y'
                 })
 
     # --- EXTRA METADATA ---
