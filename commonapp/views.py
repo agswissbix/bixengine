@@ -6319,13 +6319,14 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
         main_alias, lookup_alias = 't1', 't2'
         
         if dashboard_category == 'nationalAvg' and is_primary_club and priority_id:
-             select_group_field = f"""
+             group_expression = f"""
                 CASE 
                     WHEN {main_alias}.{group_by_config['field']} = '{priority_id}' THEN {lookup_alias}.{lookup_cfg['display_field']}
                     ELSE {lookup_alias}.nazione
-                END AS {group_by_alias}
+                END
              """
-             group_by_clause = f"GROUP BY {group_by_alias}"
+             select_group_field = f"{group_expression} AS {group_by_alias}"
+             group_by_clause = f"GROUP BY {group_expression}"
         else:
              select_group_field = f"{lookup_alias}.{lookup_cfg['display_field']} AS {group_by_alias}"
              group_by_clause = f"GROUP BY {lookup_alias}.{lookup_cfg['display_field']}"
@@ -6409,7 +6410,7 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
 
     # composizione SELECT
     if select_clauses:
-        query_select = f"{select_group_field}{secondary_select_part}, {', '.join(select_clauses)}, t1.recordidgolfclub_ AS recordidgolfclub_unique_"
+        query_select = f"{select_group_field}{secondary_select_part}, {', '.join(select_clauses)}, MAX(t1.recordidgolfclub_) AS recordidgolfclub_unique_"
     else:
         query_select = f"{select_group_field}{secondary_select_part}"
 
