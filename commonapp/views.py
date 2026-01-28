@@ -6434,7 +6434,9 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
         
     else:
         if select_clauses:
-            query_select = f"{select_group_field}{secondary_select_part}, {', '.join(select_clauses)}, MAX(t1.recordidgolfclub_) AS recordidgolfclub_unique_"
+            query_select = f"{select_group_field}{secondary_select_part}, {', '.join(select_clauses)}"
+            if str(active_server).lower() == 'wegolf':
+                query_select += ", MAX(t1.recordidgolfclub_) AS recordidgolfclub_unique_"
         else:
             query_select = f"{select_group_field}{secondary_select_part}"
 
