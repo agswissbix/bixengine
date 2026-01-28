@@ -4,162 +4,207 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="{{ request.scheme }}://{{ request.get_host }}/">
     <title>ActiveMind - Servizi di Supporto Sistemistico</title>
     <style>
+        /* ==================== RESET PER PLAYWRIGHT ==================== */
+        * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+        }
+
         @page {
             size: A4;
-            margin: 1.5cm;
-            background-image: url("{% static 'images/cover.png' %}");
-            background-repeat: no-repeat;
-            background-position: center center;
-            background-size: contain;
+            margin: 0;
         }
-        @page normal {
-            size: A4;
-            margin: 1.5cm;
-            background-image: url("{% static 'images/background.png' %}");
+
+        html, body {
+            margin: 0;
+            padding: 0;
         }
         
         body {
             font-family: Arial, sans-serif;
-            font-size: 14px;
+            font-size: 11pt;
             line-height: 1.2;
             color: #333;
-            margin: 0;
-            padding: 0;
         }
 
-        .cover {
-            text-align: center;
+        /* ==================== COPERTINA ==================== */
+        .cover-page {
+            position: relative;
+            width: 210mm;
+            height: 297mm;
+            overflow: hidden;
+            page-break-after: always;
+        }
+
+        .cover-background {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+
+        .cover-background img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .cover-content {
+            position: relative;
+            z-index: 1;
             padding-top: 200px;
-            margin-left: 400px;
+            margin-left: 55%;
+            padding-right: 25px;
         }
 
         .cover-title {
-            font-size: 20px;
+            font-size: 16pt;
             font-weight: bold;
             margin-bottom: 40px;
         }
 
         .cover-client {
             margin-top: 40px;
-            font-size: 16px;
+            font-size: 13pt;
         }
 
         .cover-logo {
             margin-top: 150px;
-            font-size: 26px;
+            font-size: 20pt;
             font-weight: bold;
         }
 
         .cover-logo span {
             color: #dc2626;
         }
+
+        /* ==================== PAGINE NORMALI ==================== */
+        .page {
+            position: relative;
+            width: 210mm;
+            min-height: 297mm;
+            padding: 1.5cm;
+            box-sizing: border-box;
+        }
+
+        .page-break {
+            page-break-before: always;
+        }
         
         .header {
             text-align: left;
-            margin-bottom: 15px;
-            padding-bottom: 8px;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
         }
         
         .company-info {
-            font-size: 12px;
+            font-size: 10pt;
             color: #333;
-            margin-bottom: 15px;
-            line-height: 1.1;
+            margin-bottom: 20px;
+            line-height: 1.2;
         }
         
         .client-info {
-            margin-bottom: 15px;
-            font-size: 16px;
+            margin-bottom: 20px;
+            font-size: 13pt;
         }
         
         .client-info h3 {
             color: #333;
-            margin-bottom: 5px;
-            font-size: 16px;
+            margin-bottom: 8px;
+            font-size: 13pt;
         }
         
         .document-title {
             color: #dc2626;
-            font-size: 30px;
+            font-size: 24pt;
             font-weight: bold;
-            margin: 40px 0 30px 0;
+            margin: 30px 0 30px 0;
             text-align: center;
         }
         
         .intro-text {
-            font-size: 16px;
-            line-height: 1.4;
-            margin-bottom: 20px;
+            font-size: 13pt;
+            line-height: 1.5;
+            margin-bottom: 25px;
             text-align: justify;
         }
         
         .section {
-            margin-bottom: 15px;
+            margin-bottom: 20px;
         }
         
         .section-title {
             background-color: #dc2626;
             color: white;
-            padding: 6px 10px;
+            padding: 10px 15px;
             font-weight: bold;
-            font-size: 20px;
-            margin-bottom: 8px;
+            font-size: 16pt;
+            margin-bottom: 5px;
         }
         
         .service-item {
-            margin-bottom: 0px;
-            padding: 0px;
+            margin-bottom: 8px;
+            padding: 0px 0;
         }
         
         .service-header {
             font-weight: bold;
             color: #dc2626;
-            margin-bottom: 10px;
-            margin-top: 20px;
-            font-size: 18px;
+            margin-bottom: 15px;
+            margin-top: 15px;
+            font-size: 14pt;
         }
 
         .service-details h3 {
             color: #333333; 
-            font-size: 16px;
-            border-bottom: 2px solid #dc2626; /* Linea di separazione elegante */
-            padding-bottom: 2px;
+            font-size: 12pt;
+            border-bottom: 2px solid #dc2626;
+            padding-bottom: 5px;
             margin-top: 15px;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
             font-weight: bold;
         }
 
         .service-details p {
-            margin: 5px 0;
-            font-size: 14px;
+            margin: 8px 0;
+            font-size: 11pt;
             padding-left: 0; 
             text-align: justify;
         }
         
         /* Elenchi */
         .service-details ul {
-            margin: 5px 0;
-            padding-left: 20px; 
+            margin: 10px 0;
+            padding-left: 25px; 
             list-style-type: square;
         }
         .service-details li {
-            margin-bottom: 0px;
-            font-size: 14px;
+            margin-bottom: 5px;
+            font-size: 11pt;
         }
         
         .pricing-table {
             width: 100%;
             border-collapse: collapse;
-            margin: 12px 0;
-            font-size: 14px;
+            margin: 15px 0;
+            font-size: 11pt;
+        }
+
+        tr { 
+            page-break-inside: avoid; 
         }
         
         .pricing-table th,
         .pricing-table td {
             border: 1px solid #ccc;
-            padding: 6px 8px;
+            padding: 10px 12px;
             text-align: left;
         }
         
@@ -174,28 +219,28 @@
         }
         
         .total-section {
-            padding: 15px;
-            margin: 25px 0;
         }
 
         .total-section-title {
             color: #dc2626; 
             margin-bottom: 20px; 
-            font-size: 20px;
+            font-size: 16pt;
             background-color: #f8f8f8;
             border: 2px solid #dc2626;
+            padding: 12px;
         }
         
         .grand-total {
-            font-size: 20px;
+            font-size: 16pt;
             font-weight: bold;
             color: #dc2626;
             border-top: 2px solid #dc2626;
-            padding-top: 8px;
+            padding-top: 12px;
         }
         
         .signature-section {
-            margin-top: 0px;
+            margin-top: 30px;
+            padding: 0 1.5cm;
         }
 
         .signature-section p {
@@ -205,7 +250,7 @@
         .signature-row {
             display: flex;
             justify-content: space-between;
-            margin-top: 0px;
+            margin-top: 15px;
         }
         
         .signature-box {
@@ -214,54 +259,93 @@
             border-bottom: 1px solid #333;
             padding-bottom: 50px;
             margin-left: 400px;
-            font-size: 16px;
-        }
-        
-        .page-break {
-            page-break-before: always;
+            font-size: 13pt;
         }
         
         .conditions {
-            font-size: 14px;
-            margin-top: 25px;
-            line-height: 1.3;
+            font-size: 11pt;
+            margin-top: 30px;
+            line-height: 1.5;
+            padding: 0 1.5cm;
         }
         
         .conditions h4 {
             color: #dc2626;
-            margin-bottom: 8px;
-            font-size: 20px;
+            margin-bottom: 15px;
+            font-size: 16pt;
         }
         
         .conditions ul {
-            margin: 5px 0;
-            padding-left: 15px;
+            margin: 10px 0;
+            padding-left: 25px;
         }
         
         .conditions li {
-            margin-bottom: 2px;
+            margin-bottom: 5px;
+        }
+
+        .conditions p {
+            margin-top: 18px;
+            margin-bottom: 8px;
+        }
+
+        .benefits-box {
+            margin-top: 15px;
+        }
+
+        .benefits-box p {
+            margin-bottom: 8px;
+        }
+
+        .benefits-box ul {
+            margin: 8px 0;
+            padding-left: 25px;
+            list-style-type: square;
+        }
+
+        .benefits-box li {
+            margin-bottom: 5px;
+            font-size: 11pt;
+        }
+
+        .section-subtitle {
+            font-weight: bold;
+            margin-bottom: 15px;
+            font-size: 13pt;
+        }
+
+        .service-title {
+            margin-top: 20px;
+            font-size: 13pt;
         }
     </style>
 </head>
 <body>
-    <!-- COPERTINA -->
-    <div class="cover">
-        <div class="cover-title">
-            Intervento sistemistico programmato <span style="color:#dc2626;">ActiveMind</span>
+    <!-- ==================== COPERTINA ==================== -->
+    <div class="cover-page">
+        <!-- Immagine di sfondo a tutta pagina -->
+        <div class="cover-background">
+            <img src="{% static 'images/cover.png' %}" alt="Cover Background">
         </div>
-        <div class="cover-client">
-            <strong>{{ client_info.nome }}</strong><br><br><br>
-            {{ client_info.indirizzo }}<br><br><br><br><br><br><br><br>
-            Massagno, {{ date }}
+        
+        <!-- Contenuto della copertina -->
+        <div class="cover-content">
+            <div class="cover-title">
+                Intervento sistemistico programmato <span style="color:#dc2626;">ActiveMind</span>
+            </div>
+            <div class="cover-client">
+                <strong>{{ client_info.nome }}</strong><br><br><br>
+                {{ client_info.indirizzo }}<br><br><br><br><br><br><br><br>
+                Massagno, {{ date }}
+            </div>
         </div>
     </div>
 
-    <pdf:nexttemplate name="normal" />
-
+    <!-- ==================== SEZIONE 1.0 - SYSTEM ASSURANCE ==================== -->
     {% if offer_data.tiers %}
-    <div class="section page-break">
+    <div class="page section">
         <div class="section-title">Sezione 1.0 - System Assurance</div>
-        <div style="width: 100%; text-align: center; margin-top: 15px;">
+        <div style="width: 100%; text-align: center; margin-top: 5px;">
             <img src="{% static 'images/systemassurance.png' %}" alt="Analisi rete aziendale" style="width: 100%; height: auto;">
         </div>
         <div class="service-item">
@@ -270,20 +354,20 @@
             
             <div class="service-details">
                 
-                <h3><strong>Analisi preliminare dell’infrastruttura di rete</strong></h3>
+                <h3>Analisi preliminare dell'infrastruttura di rete</h3>
                 <p>
                     La struttura della rete aziendale rappresenta il cuore pulsante dei processi digitali e operativi della vostra impresa. 
                     Un check-up preliminare della rete, svolto da tecnici qualificati, è il primo passo fondamentale per ottenere una 
-                    fotografia chiara e oggettiva dello stato dell’infrastruttura IT.
+                    fotografia chiara e oggettiva dello stato dell'infrastruttura IT.
                 </p>
                 <p>Durante questa fase, ci dedichiamo a:</p>
                 <ul>
                     <li>Mappare i dispositivi connessi, analizzando la loro tipologia, posizione, modalità di collegamento e configurazione.</li>
                     <li>Rilevare la disposizione e le configurazioni dei componenti di rete (router, switch, access point, server, firewall).</li>
-                    <li>Individuare carenze strutturali che potrebbero ostacolare l’implementazione di efficaci strategie di sicurezza e conformità.</li>
+                    <li>Individuare carenze strutturali che potrebbero ostacolare l'implementazione di efficaci strategie di sicurezza e conformità.</li>
                 </ul>
                 <p>
-                    Il report della system assurance redatto a seguito dell’analisi fornirà un quadro articolato e accessibile, 
+                    Il report della system assurance redatto a seguito dell'analisi fornirà un quadro articolato e accessibile, 
                     evidenziando le aree su cui concentrarsi per pianificare interventi di sicurezza, ottimizzazione e adeguamento 
                     alle normative in ambito nLPD e NIs2. Questo approccio consente di proporre soluzioni successive specifiche e su misura, 
                     come test di vulnerabilità, analisi di conformità, progettazione di sistemi di monitoraggio e protezione avanzati, 
@@ -324,7 +408,7 @@
                         <li>Fotografare lo "stato dell'arte" dell'infrastruttura del cliente</li>
                         <li>Generare un inventario (asset managed) dei client presenti in azienda</li>
                         <li>Verificare gli aggiornamenti di Windows e pianificarne l'avvio (da integrare nel servizio ActiveMind)</li>
-                        </ul>
+                    </ul>
                 </div>
 
             </div>
@@ -332,27 +416,28 @@
     </div>
     {% endif %}
 
+    <!-- ==================== SEZIONE 2.0 - PRODOTTI RICORRENTI ==================== -->
     {% if section2_products_pages %}
         <!-- Pagina introduttiva dedicata -->
-        <div class="page-break">
+        <div class="page page-break">
             <div class="section-title">Sezione 2.0 - Prodotti Ricorrenti</div>
             
-            <div style="width: 100%; text-align: center; margin-top: 15px;">
+            <div style="width: 100%; text-align: center; margin-top: 20px;">
                 <img src="{% static 'images/prodotti_beall.jpg' %}" alt="Prodotti be all" style="width: 100%; height: auto;">
             </div>
 
             <div class="service-header">Licenze e Prodotti (Costi Mensili o Annuali)</div>
-            <div class="service-details" style="margin-top: 10px;">
+            <div class="service-details" style="margin-top: 15px;">
                 <p>
                     Swissbix adotta soluzioni MSP basate su <strong>SentinelOne RMM</strong>, progettate per offrire gestione remota,
                     automazione e sicurezza avanzata in ambienti IT complessi. Il modello di servizio a canone mensile consente
-                    scalabilità e prevedibilità dei costi, riducendo al minimo gli interventi manuali e migliorando l’efficienza operativa.
+                    scalabilità e prevedibilità dei costi, riducendo al minimo gli interventi manuali e migliorando l'efficienza operativa.
                 </p>
                 <p>
-                    L’infrastruttura RMM integra funzionalità di <strong>monitoraggio continuo</strong>, <strong>patch management</strong>,
+                    L'infrastruttura RMM integra funzionalità di <strong>monitoraggio continuo</strong>, <strong>patch management</strong>,
                     gestione degli asset e <strong>protezione endpoint</strong> con capacità di risposta autonoma alle minacce.
                     Questo approccio proattivo consente di prevenire vulnerabilità, ottimizzare le performance dei sistemi
-                    e garantire un’elevata disponibilità dei servizi.
+                    e garantire un'elevata disponibilità dei servizi.
                 </p>
                 <p>
                     Tutte le soluzioni implementate rispettano pienamente i requisiti della normativa svizzera
@@ -361,7 +446,7 @@
                 </p>
             </div>
 
-            <div style="margin-top: 25px; border-top: 1px solid #999; padding-top: 10px;">
+            <div style="margin-top: 30px; border-top: 1px solid #999; padding-top: 15px;">
                 <p style="font-style: italic; color: #444;">
                     Le pagine seguenti elencano i <strong>prodotti ricorrenti</strong> suddivisi per categoria.<br>
                     (Elenco da pagina 
@@ -379,10 +464,10 @@
 
         <!-- Pagine successive con i prodotti -->
         {% for page in section2_products_pages %}
-            <div class="page-break">
+            <div class="page page-break">
                 {% if forloop.first %}
-                    <div class="service-details" style="margin-bottom: 15px;">
-                        <h3 class="section-subtitle" style="font-weight: bold; margin-bottom: 10px;">
+                    <div class="service-details" style="margin-bottom: 20px;">
+                        <h3 class="section-subtitle" style="font-weight: bold; margin-bottom: 15px;">
                             Elenco Prodotti Ricorrenti
                         </h3>
                     </div>
@@ -390,9 +475,9 @@
 
                 {% for product in page %}
                     <div class="service-item">
-                        <h3 class="service-title" style="margin-top: 15px;">
+                        <h3 class="service-title" style="margin-top: 20px;">
                             {{ product.title }}
-                            <span style="font-weight: normal; font-size: 13px; color: #555;">
+                            <span style="font-weight: normal; font-size: 10pt; color: #555;">
                                 {% if product.billingType == 'yearly' %}(Fatt. Annuale){% else %}(Fatt. Mensile){% endif %}
                             </span>
                         </h3>
@@ -419,44 +504,44 @@
                         </div>
                         {% endif %}
                     </div>
-                    <hr style="border: 0; border-top: 1px dashed #ccc; margin: 10px 0;">
+                    <hr style="border: 0; border-top: 1px dashed #ccc; margin: 5px 0;">
                 {% endfor %}
             </div>
         {% endfor %}
     {% endif %}
 
-
+    <!-- ==================== SEZIONE 2.1 - SERVIZI ACTIVEMIND ==================== -->
     {% if section2_services_pages %}
 
         <!-- Pagina introduttiva dedicata -->
-        <div class="page-break">
+        <div class="page page-break">
             <div class="section-title">Sezione 2.1 - Servizi inclusi in ActiveMind</div>
 
-            <div style="width: 100%; text-align: center; margin-top: 15px;">
+            <div style="width: 100%; text-align: center; margin-top: 20px;">
                 <img src="{% static 'images/servizi.jpg' %}" alt="Prodotti be all" style="width: 100%; height: auto;">
             </div>
 
             <div class="service-header">Panoramica del servizio</div>
 
-            <div class="service-details" style="margin-top: 10px;">
+            <div class="service-details" style="margin-top: 15px;">
                 <p>
-                    Swissbix ha sviluppato un sistema strutturato di interventi programmati per la <strong>manutenzione e l’ottimizzazione</strong> 
+                    Swissbix ha sviluppato un sistema strutturato di interventi programmati per la <strong>manutenzione e l'ottimizzazione</strong> 
                     delle reti e dei dispositivi aziendali. Questo approccio consente di garantire <strong>continuità operativa</strong>, 
-                    <strong>sicurezza</strong> e massime prestazioni dell’infrastruttura IT.
+                    <strong>sicurezza</strong> e massime prestazioni dell'infrastruttura IT.
                 </p>
                 <p>
-                    Il programma integra gli interventi in loco con l’assistenza <strong>MSP da remoto</strong>, offrendo un monitoraggio costante 
+                    Il programma integra gli interventi in loco con l'assistenza <strong>MSP da remoto</strong>, offrendo un monitoraggio costante 
                     e reazioni tempestive a qualsiasi anomalia. I controlli periodici possono essere pianificati con frequenza 
                     <strong>mensile, trimestrale, semestrale o annuale</strong>, a seconda delle esigenze e della complessità 
-                    dell’ambiente aziendale.
+                    dell'ambiente aziendale.
                 </p>
                 <p>
-                    Grazie a questo servizio, Swissbix assicura una <strong>gestione proattiva dell’infrastruttura ICT</strong>, 
-                    riducendo i tempi di inattività e ottimizzando nel tempo l’affidabilità del sistema informativo del cliente.
+                    Grazie a questo servizio, Swissbix assicura una <strong>gestione proattiva dell'infrastruttura ICT</strong>, 
+                    riducendo i tempi di inattività e ottimizzando nel tempo l'affidabilità del sistema informativo del cliente.
                 </p>
             </div>
 
-            <div style="margin-top: 25px; border-top: 1px solid #999; padding-top: 10px;">
+            <div style="margin-top: 30px; border-top: 1px solid #999; padding-top: 15px;">
                 <p style="font-style: italic; color: #444;">
                     Le pagine seguenti presentano in dettaglio i <strong>servizi inclusi nel programma ActiveMind</strong>.<br>
                     (Elenco da pagina
@@ -484,15 +569,17 @@
 
         <!-- Pagine successive con i servizi -->
         {% for page in section2_services_pages %}
-            <div class="page-break">
+            <div class="page page-break">
                 {% if forloop.first %}
-                    <div class="section-subtitle" style="font-weight: bold; margin-bottom: 10px;">
-                        Elenco Servizi ActiveMind
-                        {% for freq in offer_data.frequencies %}
-                        {% if freq.selected %}
-                        - Programmazione {{ freq.label }}
-                        {% endif %}
-                        {%endfor%}
+                    <div class="service-details" style="margin-bottom: 20px;">
+                        <h3 class="section-subtitle" style="font-weight: bold; margin-bottom: 15px;">
+                            Elenco Servizi ActiveMind
+                            {% for freq in offer_data.frequencies %}
+                            {% if freq.selected %}
+                            - Programmazione {{ freq.label }}
+                            {% endif %}
+                            {%endfor%}
+                        </h3>
                     </div>
                 {% endif %}
 
@@ -522,14 +609,15 @@
                         </div>
                         {% endif %}
                     </div>
-                    <hr style="border: 0; border-top: 1px dashed #ccc; margin: 10px 0;">
+                    <hr style="border: 0; border-top: 1px dashed #ccc; margin: 5px 0;">
                 {% endfor %}
             </div>
         {% endfor %}
     {% endif %}
 
+    <!-- ==================== SEZIONE 3.0 - CONDIZIONI ACTIVEMIND ==================== -->
     {% if offer_data.frequencies %}
-    <div class="section page-break">
+    <div class="page section page-break">
         <div class="section-title">Sezione 3.0</div>
         <div class="service-item">
             <div class="service-header">Condizioni incluse in ActiveMind:</div>
@@ -559,9 +647,9 @@
     </div>
     {% endif %}
 
-    <!-- RIEPILOGO ECONOMICO -->
-     {% if offer_data.services or offer_data.products %}
-    <div class="total-section page-break">
+    <!-- ==================== RIEPILOGO ECONOMICO ==================== -->
+    {% if offer_data.services or offer_data.products %}
+    <div class="page total-section page-break">
         <h1 class="total-section-title">Definizione Economica</h1>
         <table class="pricing-table">
             <tr>
@@ -577,9 +665,9 @@
                     <td>
                         {{ product.title }}
                         {% if product.billingType == 'yearly' %}
-                            <span style="font-size: 10px; color: #555;">(Fatt. Annuale)</span>
+                            <span style="font-size: 9pt; color: #555;">(Fatt. Annuale)</span>
                         {% else %}
-                            <span style="font-size: 10px; color: #555;">(Fatt. Mensile)</span>
+                            <span style="font-size: 9pt; color: #555;">(Fatt. Mensile)</span>
                         {% endif %}
                     </td>
                     <td style="text-align: center">{{ product.quantity|floatformat:0 }}</td>
@@ -592,7 +680,7 @@
             {% for service in offer_data.services %}
                 {% if service.quantity > 0 %}
                 <tr {% if forloop.first %}style="border-top: 2px solid #555"{% endif %}>
-                    <td>{{ service.title }} <span style="font-size: 10px; color: #555;">(Base Intervento)</span></td>
+                    <td>{{ service.title }} <span style="font-size: 9pt; color: #555;">(Base Intervento)</span></td>
                     <td style="text-align: center">{{ service.quantity }}</td>
                     <td class="price">CHF {{ service.unitPrice|default:"0.00"|floatformat:0 }}.-</td>
                     <td class="price">CHF {{ service.total|default:"0.00"|floatformat:0 }}.-</td>
@@ -600,115 +688,117 @@
                 {% endif %}
             {% endfor %}
 
-            {% if offer_data.totals.monthly > 0 %}
+            {% if offer_data.totals_raw.monthly > 0 %}
             <tr style="background-color: #f8f8f8; font-weight: bold;">
                 <td colspan="3">SUBTOTALE MENSILE (ricorrente)</td>
                 <td class="price">
-                    CHF {{ offer_data.totals.monthly|floatformat:0 }}.-
+                    CHF {{ offer_data.totals.monthly }}.-
                     <br/>
-                    <span style="font-weight: normal; font-size: 11px;">
-                        CHF {{ offer_data.totals.monthly_annual|floatformat:0 }}.- /anno
+                    <span style="font-weight: normal; font-size: 10pt;">
+                        CHF {{ offer_data.totals.monthly_annual }}.- /anno
                     </span>
                 </td>
             </tr>
             {% endif %}
 
-            {% if offer_data.totals.quarterly > 0 %}
+            {% if offer_data.totals_raw.quarterly > 0 %}
             <tr style="background-color: #f8f8f8; font-weight: bold;">
                 <td colspan="3">SUBTOTALE TRIMESTRALE (ricorrente)</td>
                 <td class="price">
-                    CHF {{ offer_data.totals.quarterly|floatformat:0 }}.-
+                    CHF {{ offer_data.totals.quarterly }}.-
                     <br/>
-                    <span style="font-weight: normal; font-size: 11px;">
-                        CHF {{ offer_data.totals.quarterly_annual|floatformat:0 }}.- /anno
+                    <span style="font-weight: normal; font-size: 10pt;">
+                        CHF {{ offer_data.totals.quarterly_annual }}.- /anno
                     </span>
                 </td>
             </tr>
             {% endif %}
 
-            {% if offer_data.totals.biannual > 0 %}
+            {% if offer_data.totals_raw.biannual > 0 %}
             <tr style="background-color: #f8f8f8; font-weight: bold;">
                 <td colspan="3">SUBTOTALE SEMESTRALE (ricorrente)</td>
                 <td class="price">
-                    CHF {{ offer_data.totals.biannual|floatformat:0 }}.-
+                    CHF {{ offer_data.totals.biannual }}.-
                     <br/>
-                    <span style="font-weight: normal; font-size: 11px;">
-                        CHF {{ offer_data.totals.biannual_annual|floatformat:0 }}.- /anno
+                    <span style="font-weight: normal; font-size: 10pt;">
+                        CHF {{ offer_data.totals.biannual_annual }}.- /anno
                     </span>
                 </td>
             </tr>
             {% endif %}
 
-            {% if offer_data.totals.yearly > 0 %}
+            {% if offer_data.totals_raw.yearly > 0 %}
             <tr style="background-color: #f8f8f8; font-weight: bold;">
                 <td colspan="3">SUBTOTALE ANNUALE (ricorrente)</td>
-                <td class="price">CHF {{ offer_data.totals.yearly|floatformat:0 }}.-</td>
+                <td class="price">CHF {{ offer_data.totals.yearly }}.-</td>
             </tr>
             {% endif %}
 
             <tr style="background-color: #dc2626; color: white; font-weight: bold;">
                 <td colspan="3">TOTALE COMPLESSIVO</td>
-                <td class="price">CHF {{ offer_data.totals.grand_total|floatformat:0 }}.-</td>
+                <td class="price">CHF {{ offer_data.totals.grand_total }}.-</td>
             </tr>
         </table>
     </div>
     {% endif %}
 
-
-    <!-- CONDIZIONI CONTRATTUALI HARDCODED (ripristinate) -->
-    <div class="conditions page-break">
+    <!-- ==================== CONDIZIONI CONTRATTUALI ==================== -->
+    <div class="page conditions page-break">
         <h4>Condizioni contrattuali di vendita</h4>
 
         <p><strong>CONTATTI PER ASSISTENZA TECNICA</strong></p>
         <ul>
-            <li>Tutte le richieste di assistenza devono essere inoltrate tramite apertura di un ticket via e-mail all’indirizzo: <a href="mailto:helpdesk@swissbix.ch">helpdesk@swissbix.ch</a>.</li>
+            <li>Tutte le richieste di assistenza devono essere inoltrate tramite apertura di un ticket via e-mail all'indirizzo: <a href="mailto:helpdesk@swissbix.ch">helpdesk@swissbix.ch</a>.</li>
             <li>Le richieste verranno gestite in ordine cronologico di ricezione e riceveranno risposta entro i termini previsti dal contratto o dal livello di servizio concordato (SLA).</li>
             <li>Orari del servizio Helpdesk: dal lunedì al venerdì, dalle ore 09:00 alle 12:00 e dalle 14:00 alle 17:00, esclusi i giorni festivi riconosciuti dal Cantone Ticino.</li>
         </ul>
 
         <p><strong>CONDIZIONI DI PAGAMENTO E FATTURAZIONE</strong></p>
         <ul>
-            <li>Al momento della conferma dell’ordine è richiesto un acconto pari al 50% dell’importo totale del progetto. Il saldo dovrà essere corrisposto entro 20 (venti) giorni dal completamento dei lavori e dalla firma del relativo verbale di fine lavori.</li>
+            <li>Al momento della conferma dell'ordine è richiesto un acconto pari al 50% dell'importo totale del progetto. Il saldo dovrà essere corrisposto entro 20 (venti) giorni dal completamento dei lavori e dalla firma del relativo verbale di fine lavori.</li>
             <li>Per eventuali servizi ricorrenti a canone, il pagamento decorre dalla data di effettiva messa in opera del servizio e sarà fatturato trimestralmente in via anticipata.</li>
-            <li>La proprietà dei beni forniti verrà trasferita al cliente solo dopo l’avvenuto pagamento integrale degli importi dovuti.</li>
-            <li>Tutti i prezzi si intendono IVA esclusa. Eventuali spese aggiuntive non espressamente indicate nell’offerta saranno fatturate separatamente.</li>
+            <li>La proprietà dei beni forniti verrà trasferita al cliente solo dopo l'avvenuto pagamento integrale degli importi dovuti.</li>
+            <li>Tutti i prezzi si intendono IVA esclusa. Eventuali spese aggiuntive non espressamente indicate nell'offerta saranno fatturate separatamente.</li>
         </ul>
 
         <p><strong>CONDIZIONI GENERALI</strong></p>
         <ul>
-            <li>Le presenti condizioni generali di vendita sono disponibili al seguente link: <a href="https://www.swissbix.ch/cgv.pdf">https://www.swissbix.ch/cgv.pdf</a> e si intendono accettate automaticamente con l’emissione dell’ordine.</li>
-            <li>L’offerta prevede un servizio “chiavi in mano”, conforme agli standard qualitativi svizzeri.</li>
-            <li>Validità dell’offerta: fino al {{limit_acceptance_date}} o salvo esaurimento scorte.</li>
+            <li>Le presenti condizioni generali di vendita sono disponibili al seguente link: <a href="https://www.swissbix.ch/cgv.pdf">https://www.swissbix.ch/cgv.pdf</a> e si intendono accettate automaticamente con l'emissione dell'ordine.</li>
+            <li>L'offerta prevede un servizio "chiavi in mano", conforme agli standard qualitativi svizzeri.</li>
+            <li>Validità dell'offerta: fino al {{limit_acceptance_date}} o salvo esaurimento scorte.</li>
             <li>Swissbix SA declina ogni responsabilità per ritardi imputabili a cause di forza maggiore, a inefficienze dei fornitori o a disservizi di soggetti terzi coinvolti nella logistica, in conformità alla normativa svizzera.</li>
         </ul>
 
         <p><strong>ESCLUSIONI</strong></p>
         <ul>
-            <li>Sono espressamente esclusi dal presente contratto, salvo specifica indicazione nell’offerta:</li>
+            <li>Sono espressamente esclusi dal presente contratto, salvo specifica indicazione nell'offerta:</li>
             <li>Supporto tecnico, installazione e interventi di fornitori esterni relativi ad applicativi di terze parti utilizzati dal cliente.</li>
             <li>Lavori di cablaggio, fissaggio a muro, montaggio dispositivi, interventi elettrici o di adeguamento infrastrutturale, di competenza esclusiva di aziende certificate secondo le normative vigenti.</li>
-            <li>Fornitura di cavi, adattatori, convertitori o altri accessori, che saranno quotati e fatturati a parte, se non esplicitamente inclusi nell’offerta.</li>
+            <li>Fornitura di cavi, adattatori, convertitori o altri accessori, che saranno quotati e fatturati a parte, se non esplicitamente inclusi nell'offerta.</li>
         </ul>
+
+    </div>
+    <div class="conditions">
 
         <p><strong>PROTEZIONE DEI DATI E RISERVATEZZA</strong></p>
         <ul>
             <li>Tutti i dati raccolti saranno trattati in conformità alla Legge federale sulla protezione dei dati (LPD), nonché alle direttive cantonali e UE (ove applicabili).</li>
-            <li>Le Parti si impegnano a mantenere riservate tutte le informazioni confidenziali acquisite nell’ambito del rapporto commerciale.</li>
+            <li>Le Parti si impegnano a mantenere riservate tutte le informazioni confidenziali acquisite nell'ambito del rapporto commerciale.</li>
         </ul>
 
         <p><strong>GARANZIA E RESPONSABILITÀ</strong></p>
         <ul>
-            <li>L’hardware fornito è coperto da garanzia ai sensi del Codice delle Obbligazioni svizzero (CO, art. 197 ss) per un periodo massimo di 24 mesi, salvo diversa indicazione in offerta o nelle condizioni del produttore. Il periodo esatto può essere verificato tramite il seriale del prodotto sul sito del produttore.</li>
-            <li>In caso di discrepanze, prevale la durata determinata dal seriale del prodotto rispetto a quanto indicato nell’offerta o in fattura.</li>
+            <li>L'hardware fornito è coperto da garanzia ai sensi del Codice delle Obbligazioni svizzero (CO, art. 197 ss) per un periodo massimo di 24 mesi, salvo diversa indicazione in offerta o nelle condizioni del produttore. Il periodo esatto può essere verificato tramite il seriale del prodotto sul sito del produttore.</li>
+            <li>In caso di discrepanze, prevale la durata determinata dal seriale del prodotto rispetto a quanto indicato nell'offerta o in fattura.</li>
             <li>Per determinati prodotti, il produttore può richiedere che il cliente finale si rivolga direttamente al servizio assistenza del produttore. In tal caso, Swissbix SA fornirà i contatti utili al cliente.</li>
-            <li>Il software fornito è soggetto a licenza d’uso limitata all’ambito interno del cliente. Qualsiasi uso non autorizzato, riproduzione o cessione è vietato.</li>
+            <li>Il software fornito è soggetto a licenza d'uso limitata all'ambito interno del cliente. Qualsiasi uso non autorizzato, riproduzione o cessione è vietato.</li>
             <li>Swissbix SA risponde esclusivamente dei danni diretti e comprovati. Sono esclusi risarcimenti per danni indiretti, consequenziali, perdita di dati o mancati profitti, salvo dolo o colpa grave.</li>
             <li>La garanzia minima prevista per i prodotti nuovi è di 24 mesi ai sensi del CO, riducibili solo per prodotti di seconda mano o su specifica pattuizione contrattuale.</li>
         </ul>
 
         <p><strong>FORZA MAGGIORE</strong></p>
         <ul>
-            <li>Eventi quali calamità naturali, scioperi, decisioni delle autorità, pandemie, guasti tecnici o altre circostanze imprevedibili e non imputabili a Swissbix SA sospendono l’esecuzione delle prestazioni contrattuali senza che ciò dia luogo a pretese risarcitorie.</li>
+            <li>Eventi quali calamità naturali, scioperi, decisioni delle autorità, pandemie, guasti tecnici o altre circostanze imprevedibili e non imputabili a Swissbix SA sospendono l'esecuzione delle prestazioni contrattuali senza che ciò dia luogo a pretese risarcitorie.</li>
         </ul>
 
         <p><strong>LEGGE APPLICABILE E FORO COMPETENTE</strong></p>
@@ -716,10 +806,9 @@
             <li>Il presente contratto è regolato dal diritto svizzero.</li>
             <li>Foro esclusivamente competente per eventuali controversie è quello della sede di Swissbix SA, salvo diverso accordo scritto tra le parti.</li>
         </ul>
+
     </div>
-
-
-    <!-- FIRMA DIGITALE (ripristinata) -->
+    <!-- ==================== FIRMA DIGITALE ==================== -->
     <div class="signature-section">
         <p>Massagno, {{date}}</p>
         <div class="signature-row">

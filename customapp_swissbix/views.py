@@ -5,7 +5,7 @@ import uuid
 import base64
 import logging
 from pydoc import html
-from django.http import FileResponse, JsonResponse
+from django.http import FileResponse, JsonResponse, HttpResponseNotFound, StreamingHttpResponse
 from rest_framework.decorators import api_view, permission_classes, renderer_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -25,15 +25,7 @@ from commonapp.bixmodels.helper_db import *
 from commonapp.helper import *
 import qrcode
 import subprocess
-from docx import Document
-from docx.shared import Inches, Pt, RGBColor
-from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
-from docx.oxml import OxmlElement
-from docx.enum.section import WD_SECTION
 from docxtpl import DocxTemplate, RichText
-from customapp_swissbix.mock.activeMind.products import products as products_data_mock
-from customapp_swissbix.mock.activeMind.services import services as services_data_mock
-from customapp_swissbix.mock.activeMind.conditions import frequencies as conditions_data_mock
 from customapp_swissbix.customfunc import save_record_fields
 from xhtml2pdf import pisa
 from playwright.sync_api import sync_playwright
@@ -352,20 +344,29 @@ def build_offer_data(recordid_deal, fe_data=None):
 
     grand_total = total_tiers + total_services + total_products + total_frequencies
 
-    offer_data["totals"] = {
+    from babel.numbers import format_decimal
+    def fmt_ch(val):
+        if val is None:
+            return "0"
+        return format_decimal(val, format='#,##0', locale='de_CH')
+
+    raw_totals = {
         "tiers": total_tiers,
         "services": total_services,
         "products": total_products,
         "monthly": monthly_total,
-        "monthly_annual": monthly_total*12,
+        "monthly_annual": monthly_total * 12,
         "quarterly": quarterly_total,
         "quarterly_annual": quarterly_total * 4,
         "biannual": biannual_total,
-        "biannual_annual": biannual_total*2,
+        "biannual_annual": biannual_total * 2,
         "yearly": yearly_total,
         "frequencies": total_frequencies,
         "grand_total": grand_total,
     }
+
+    offer_data["totals_raw"] = raw_totals
+    offer_data["totals"] = {k: fmt_ch(v) for k, v in raw_totals.items()}
 
     return offer_data
 
@@ -482,14 +483,55 @@ def print_pdf_activemind(request):
         }
 
         # 5) render + pdf
-        template = get_template('activeMind/pdf_template.html')
-        html = template.render(context)
-        response = HttpResponse(content_type="application/pdf")
-        response["Content-Disposition"] = 'inline; filename="offerta.pdf"'
-        pisa_status = pisa.CreatePDF(html, dest=response, link_callback=link_callback)
-        if pisa_status.err:
-            return HttpResponse("Errore durante la creazione del PDF", status=500)
-        return response
+        # template = get_template('activeMind/pdf_template.html')
+        # html = template.render(context)
+        # response = HttpResponse(content_type="application/pdf")
+        # response["Content-Disposition"] = 'inline; filename="offerta.pdf"'
+        # pisa_status = pisa.CreatePDF(html, dest=response, link_callback=link_callback)
+        # if pisa_status.err:
+        #     return HttpResponse("Errore durante la creazione del PDF", status=500)
+        # return response
+
+        html_content = render_to_string(
+            'activeMind/pdf_template.html',
+            context,
+            request=request
+        )
+
+        # 6) path PDF temporaneo
+        pdf_filename = f"offerta_{recordid_deal}_{uuid.uuid4().hex}.pdf"
+        temp_pdf_path = os.path.join(
+            BASE_DIR, "tmp", pdf_filename
+        )
+        os.makedirs(os.path.dirname(temp_pdf_path), exist_ok=True)
+
+        # 6) genera PDF con Playwright
+        BrowserManager.generate_pdf(
+            html_content=html_content,
+            output_path=temp_pdf_path,
+        )
+
+        if os.path.exists(temp_pdf_path):            
+            def stream_and_delete(path):
+                try:
+                    with open(path, "rb") as f:
+                        while chunk := f.read(8192):
+                            yield chunk
+                finally:
+                    try:
+                        os.remove(path)
+                    except FileNotFoundError:
+                        pass
+
+            response = StreamingHttpResponse(
+                stream_and_delete(temp_pdf_path),
+                content_type="application/pdf"
+            )
+            
+            return response
+        else:
+            return HttpResponseNotFound("Il file PDF non è stato generato correttamente.")
+
 
     except Exception as e:
         logger.error(f"Errore nella generazione PDF: {str(e)}")
@@ -1327,7 +1369,7 @@ def generate_timesheet_pdf(recordid, signature_path=None):
                 
                 /* Ottimizzazione scala */
                 body {
-                    zoom: 0.98;
+                    zoom: 0.75;
                 }
         """
 
