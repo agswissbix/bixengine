@@ -45,6 +45,7 @@ class BrowserManager:
                     page = context.new_page()
                     try:
                         page.set_content(html_content, wait_until="networkidle")
+                        page.emulate_media(media="print")
                         
                         if css_styles:
                             page.add_style_tag(content=css_styles)
@@ -53,7 +54,7 @@ class BrowserManager:
                             "path": output_path,
                             "format": "A4",
                             "print_background": True,
-                            "scale": 0.75,
+                            "scale": 1,
                             "margin": {"top": "1cm", "bottom": "1cm", "left": "1cm", "right": "1cm"}
                         }
                         if options:

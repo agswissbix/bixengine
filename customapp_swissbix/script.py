@@ -2306,6 +2306,49 @@ def get_timesheet_initial_data(request):
                 servizio_obj = next((s for s in servizi if s['name'] == raw_ts.get('service')), None)
                 opzione_obj = next((o for o in opzioni if o['name'] == raw_ts.get('invoiceoption')), None)
 
+                conditions_list = [f"recordidtimesheet_={recordid}"]
+                attachments_list = UserTable('attachment').get_records(conditions_list=conditions_list)
+
+                attachments = []
+
+                if attachments_list:
+                    for attachment in attachments_list:
+                        attachments.append({
+                            "id": attachment.get("recordid_"),
+                            "tipo": "Allegato generico",
+                            "file": attachment.get("file"),  # sempre null dal backend
+                            "filename": attachment.get("filename"),
+                            "url": attachment.get("file"),  # usata solo per preview
+                            "data": attachment.get("createdon_", ""),  # o campo corretto
+                            "note": "",
+                            "rapportiLavoro": None,
+                            "progetto": None
+                        })
+
+                conditions_list = [f"recordidtimesheet_={recordid}"]
+                timesheetlines_list = UserTable('timesheetline').get_records(conditions_list=conditions_list)
+
+                materiali = []
+
+                if timesheetlines_list:
+                    for timesheetline in timesheetlines_list:
+                        recordidproduct = timesheetline.get("recordidproduct_")
+                        product = UserRecord('product', recordidproduct)
+
+                        materiali.append({
+                            "id": timesheetline.get("recordid_"),
+                            "prodotto": {
+                                "id": str(recordidproduct),
+                                "name": product.values.get("name"),
+                                "details": None,
+                                "icon_slug": None
+                            },
+                            "note": str(timesheetline.get("note", "")),
+                            "qtaPrevista": str(timesheetline.get("plannedquantity", "")),
+                            "qtaEffettiva": str(timesheetline.get("actualquantity", ""))
+                        })
+                
+
                 def safe_time(val):
                     if not val: return '00:00'
                     return str(val)[:5]
@@ -2323,8 +2366,8 @@ def get_timesheet_initial_data(request):
                     'ticket': ticket_obj,
                     'servizio': servizio_obj,
                     'opzioni': opzione_obj,
-                    'materiali': [], 
-                    'allegati': []
+                    'materiali': materiali, 
+                    'allegati': attachments
                 }
 
         response_data = {
