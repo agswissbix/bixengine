@@ -1833,6 +1833,36 @@ def upload_timesheet_in_bexio(request):
         logger.error(f"Errore nell'upload del timesheet in Bexio: {str(e)}")
         return JsonResponse({'error': f'Errore nell\'upload del timesheet in Bexio: {str(e)}'}, status=500)
 
+def calculate_task_total(
+    timetrackings_list,
+    task_id,
+):
+    """
+    Ritorna il totale netto (worktime - pausetime) di un task.
+    """
+    total = 0.0
+    task_key = str(task_id) if task_id else "no_task"
+
+    for timetracking in timetrackings_list:
+        # ---- task match ----
+        tt_task_id = timetracking.get('recordidtask_')
+        tt_task_key = str(tt_task_id) if tt_task_id else "no_task"
+        if tt_task_key != task_key:
+            continue
+
+        # ---- solo record terminati ----
+        if timetracking.get('stato') != "Terminato":
+            continue
+
+        worktime = float(timetracking.get('worktime') or 0)
+        pausetime = float(timetracking.get('pausetime') or 0)
+
+        net_time = max(worktime - pausetime, 0)
+        total += net_time
+
+    return total
+
+
 def get_timetracking(request):
     print("get_timetracking")
     
@@ -1878,18 +1908,10 @@ def get_timetracking(request):
 
             task_id = timetracking.get('recordidtask_')
             task_key = str(task_id) if task_id else "no_task"
-            
-            status = timetracking.get('stato')
-            worktime_val = float(timetracking.get('worktime', 0)) if timetracking.get('worktime') else 0.0
-            pausetime_val = float(timetracking.get('pausetime', 0)) if timetracking.get('pausetime') else 0.0
-
-            net_worktime = max(worktime_val - pausetime_val, 0.0)
-
-            if status == "Terminato":
-                task_totals_map[task_key] = task_totals_map.get(task_key, 0) + net_worktime
-            else:
-                if task_key not in task_totals_map:
-                    task_totals_map[task_key] = 0.0
+            task_totals_map[task_key] = calculate_task_total(
+                timetrackings_list,
+                task_id
+            )
 
             task_name = ""
             expected_duration = 0.0
@@ -1900,6 +1922,8 @@ def get_timetracking(request):
                     task_name = task_record.values.get('description', '')
                     raw_expected = task_record.values.get('duration')
                     expected_duration = float(raw_expected) if raw_expected is not None else 0.0
+                    if not timetracking['worktime'] or timetracking['worktime'] == 0:
+                        timetracking['worktime'] = task_record.values['tracked_time']
 
             timetracking_data = {
                 'id': timetracking['recordid_'],
@@ -1989,6 +2013,15 @@ def stop_active_timetracking(userid):
 
             timetracking.save()
 
+            taskid = timetracking.values['recordidtask_']
+            if taskid:
+                task = UserRecord('task', taskid)
+                task.values['tracked_time'] = calculate_task_total(
+                    active_timetrackings,
+                    taskid
+                )
+                task.save()
+
         return True
     except:
         return False
@@ -2000,6 +2033,7 @@ def stop_timetracking(request):
     try:
         data = json.loads(request.body)
         recordid = data.get('timetracking')
+        total_task = data.get('total_task')
 
         if recordid:
             timetracking = UserRecord('timetracking', recordid)
@@ -2013,8 +2047,13 @@ def stop_timetracking(request):
             )
             timetracking.values['worktime'] = worktime
             timetracking.values['worktime_string'] = worktime_string
-
             timetracking.save()
+
+            taskid = timetracking.values['recordidtask_']
+            if taskid:
+                task = UserRecord('task', taskid)
+                task.values['tracked_time'] = total_task
+                task.save()
 
         return JsonResponse({"status": "completed"}, safe=False)
     except Exception as e:
@@ -2088,6 +2127,20 @@ def delete_timetracking(request):
             timetracking.values['deleted_'] = 'Y'
             timetracking.save()
 
+            taskid = timetracking.values['recordidtask_']
+            if taskid:
+                task = UserRecord('task', taskid)
+                worktime = timetracking.values['worktime']
+                if not worktime:
+                    worktime = 0
+                pausetime = timetracking.values['pausetime']
+                if not pausetime:
+                    pausetime = 0
+                tracked_time = task.values['tracked_time']
+                if tracked_time:
+                    task.values['tracked_time'] = tracked_time - worktime - pausetime  
+                    task.save()
+
         return JsonResponse({"status": "deleted"}, safe=False)
     except Exception as e:
         logger.error(f"Errore nella cancellazione del timetracking: {str(e)}")
@@ -2113,15 +2166,32 @@ def update_timetracking(request):
             timetracking.values['start'] = start
             timetracking.values['end'] = end
             timetracking.values['pausetime_string'] = pausetime_string
-            timetracking.values['pausetime'] = calculate_pausetime(pausetime_string)
+            pausetime = calculate_pausetime(pausetime_string)
+            timetracking.values['pausetime'] = pausetime
 
-            # --- ricalcolo worktime se start ed end sono valorizzati ---
+            # ---- ricalcolo worktime ----
             if start and end:
                 worktime, worktime_string = calculate_worktime(start, end)
                 timetracking.values['worktime'] = worktime
                 timetracking.values['worktime_string'] = worktime_string
 
             timetracking.save()
+
+            if start and end:
+                taskid = timetracking.values.get('recordidtask_')
+                if taskid:
+                    task = UserRecord('task', taskid)
+                    condition_list = []
+                    userid = Helper.get_userid(request)
+                    condition_list.append(f"user={userid}")
+                    condition_list.append(f"recordidtask_={taskid}")
+                    timetrackings = UserTable('timetracking').get_records(conditions_list=condition_list)
+                    task.values['tracked_time'] = calculate_task_total(
+                        timetrackings,
+                        taskid
+                    )
+                    task.save()
+
 
         return JsonResponse({"status": "updated"}, safe=False)
     except Exception as e:
