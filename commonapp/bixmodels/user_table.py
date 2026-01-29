@@ -151,7 +151,7 @@ class UserTable:
 
         cond_map = self.get_condition_map().get(filter_type)
         if not cond_map:
-            return None
+            cond_map = self.get_condition_map().get('Parola')
 
         date_specials = self.get_date_conditions()
 
