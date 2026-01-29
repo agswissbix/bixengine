@@ -113,11 +113,13 @@ class UserTable:
     def get_condition_map(self):
         return {
             "Text": self.TEXT_CONDITIONS,
+            "Memo": self.TEXT_CONDITIONS,
+            "Ora": self.TEXT_CONDITIONS,
             "Parola": self.TEXT_CONDITIONS,
             "lookup": self.LOOKUP_CONDITIONS,
             "Utente": self.LOOKUP_CONDITIONS,
             "Numero": self.NUMBER_CONDITIONS,
-            "Data": self.get_date_conditions()
+            "Data": self.get_date_conditions(),
         }
     
     @timing_decorator
@@ -359,7 +361,7 @@ class UserTable:
                 continue
 
             if filter_value == "NULL_VALUE":
-                sql_condition = f"({field_id} IS NULL OR {field_id} = '' OR {field_id} = '0')"
+                sql_condition = f"({field_id} IS NULL OR {field_id} = '')"
             else:
                 sql_condition = self.build_condition(filter_type, field_id, filter_value, filter_condition)
 
