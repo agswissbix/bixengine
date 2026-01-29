@@ -5485,6 +5485,11 @@ def get_dashboard_blocks(request):
     
     user_id = request.user.id
 
+    try:
+        active_server = Helper.get_activeserver(request).get('value')
+    except Exception:
+        active_server = Helper.get_cliente_id()
+
     dbh = HelpderDB()
     context = {}
     context['blocks'] = []  # Initialize the blocks list
@@ -5537,14 +5542,15 @@ def get_dashboard_blocks(request):
                 # sql = "SELECT * FROM sys_dashboard_block WHERE dashboardid = {dashboard_id} ORDER BY id desc".format(
                 #     dashboard_id=dashboard_id
                 # )
+                category_field = ", uc.category_block" if str(active_server).lower() == 'wegolf' else ""
                 sql = """
-                    SELECT sdb.*, uc.status as status, uc.category_block
+                    SELECT sdb.*, uc.status as status{category_field}
                     FROM sys_dashboard_block sdb
                     LEFT JOIN user_chart uc ON uc.report_id = sdb.chartid
                     WHERE sdb.dashboardid = {dashboard_id}
                     AND (uc.status IS NULL OR uc.status <> 'Riservato' OR sdb.userid = {userid})
                     ORDER BY sdb.id DESC
-                    """.format(dashboard_id=dashboard_id, userid=bixid)
+                """.format(category_field=category_field, dashboard_id=dashboard_id, userid=bixid)
                 all_blocks = dbh.sql_query(sql)
 
                 for block in all_blocks:
