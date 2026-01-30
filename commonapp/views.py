@@ -3188,6 +3188,8 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None):
 
             record.values[fieldid] = normalized_value
 
+    record.save()
+
     # 2️⃣ Salva i file (se presenti)
     if files:
         for file_key, uploaded_file in files.items():
@@ -3199,6 +3201,11 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None):
             _, ext = os.path.splitext(uploaded_file.name)
             record_path = f"{tableid}/{record.recordid}/{clean_key}{ext}"
             file_path = os.path.join(tableid, record.recordid, f"{clean_key}{ext}")
+
+            if tableid =='attachment':
+                original_filename = uploaded_file.name
+                record.values['filename'] = original_filename
+                record.save()
 
             # Rimuovi file esistente se c’è
             if default_storage.exists(file_path):
@@ -4751,7 +4758,7 @@ def get_record_attachments(request):
         file=attachment['file']
         type=attachment['type']
         note=attachment['note']
-        filename=note=attachment['filename']
+        filename=attachment['filename']
         attachment_list.append({'recordid':recordid,'file':file,'type':type, 'note':note, 'filename':filename})
         
     response={ "attachments": attachment_list}

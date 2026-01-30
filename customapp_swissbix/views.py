@@ -1,5 +1,6 @@
 import datetime
 from datetime import timedelta
+import os
 import sys
 import uuid
 import base64
@@ -25,6 +26,7 @@ from commonapp.bixmodels.helper_db import *
 from commonapp.helper import *
 import qrcode
 import subprocess
+import shutil
 from docxtpl import DocxTemplate, RichText
 from customapp_swissbix.customfunc import save_record_fields
 from xhtml2pdf import pisa
@@ -1384,12 +1386,12 @@ def generate_timesheet_pdf(recordid, signature_path=None):
         attachment_record.values['recordidtimesheet_'] = recordid
         attachment_record.save()
 
-        dest_dir = os.path.join(settings.UPLOADS_ROOT, "timesheet", str(recordid))
+        dest_dir = os.path.join(settings.UPLOADS_ROOT, "attachment", str(recordid))
         os.makedirs(dest_dir, exist_ok=True)
         final_pdf_path = os.path.join(dest_dir, pdf_filename)
         shutil.move(temp_pdf_path, final_pdf_path)
 
-        attachment_record.values['file'] = f"timesheet/{recordid}/{pdf_filename}"
+        attachment_record.values['file'] = f"attachment/{recordid}/{pdf_filename}"
         attachment_record.values['filename'] = pdf_filename
         attachment_record.save()
 
@@ -1581,13 +1583,13 @@ def save_signature(request):
         attachment_record.values['recordidtimesheet_'] = recordid
         attachment_record.save()
 
-        uploads_dir = os.path.join(settings.UPLOADS_ROOT, f"timesheet/{attachment_record.values['recordidtimesheet_']}")
+        uploads_dir = os.path.join(settings.UPLOADS_ROOT, f"attachment/{attachment_record.values['recordidtimesheet_']}")
         os.makedirs(uploads_dir, exist_ok=True)
 
         final_pdf_path = os.path.join(uploads_dir, pdf_filename)
         shutil.copy(pdf_path, final_pdf_path)
 
-        relative_path = f"timesheet/{attachment_record.values['recordidtimesheet_']}/{pdf_filename}"
+        relative_path = f"attachment/{attachment_record.values['recordidtimesheet_']}/{pdf_filename}"
         attachment_record.values['file'] = relative_path
         attachment_record.values['filename'] = pdf_filename
         attachment_record.save()
