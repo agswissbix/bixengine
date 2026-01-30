@@ -415,6 +415,27 @@ def save_record_fields(tableid,recordid, old_record=""):
     # ---DEAL---
     if tableid == 'deal':
         deal_record = UserRecord('deal', recordid)
+
+        dealline_records = deal_record.get_linkedrecords_dict(linkedtable='dealline')
+        
+        # fixedprice check
+        if deal_record.values['fixedprice'] == 'Si':
+            fixedprice_product = '00000000000000000000000000000180'
+            found_dl = next((d for d in dealline_records if d.get('recordidproduct_') == fixedprice_product and d.get('deleted_') == 'N'), None)
+            if found_dl:
+                if (found_dl.get('price') or 0) <= 0:
+                    dl_rec = UserRecord('dealline', found_dl['recordid_'])
+                    dl_rec.values['price'] = 10000
+                    dl_rec.save()
+            else:
+                dl_rec = UserRecord('dealline')
+                dl_rec.values['recordiddeal_'] = recordid
+                dl_rec.values['recordidproduct_'] = fixedprice_product
+                dl_rec.values['name'] = 'Installazione e configurazione a progetto'
+                dl_rec.values['price'] = 10000
+                dl_rec.values['quantity'] = 1
+                dl_rec.save()
+
         company_record = UserRecord('company', deal_record.values['recordidcompany_'])
         val_id = str(deal_record.values.get('id') or '')
         val_company = str(company_record.values.get('companyname') or '')
@@ -462,9 +483,10 @@ def save_record_fields(tableid,recordid, old_record=""):
         deal_annualcost = 0
         deal_annualmargin = 0
 
-        deal_record.values['fixedprice'] = 'No'
+
+        # deal_record.values['fixedprice'] = 'No'
         # dealline records
-        dealline_records = deal_record.get_linkedrecords_dict(linkedtable='dealline')
+        
         for dealline_record_dict in dealline_records:
             dealline_recordid = dealline_record_dict['recordid_']
             product_recordid = dealline_record_dict['recordidproduct_']
@@ -588,6 +610,7 @@ def save_record_fields(tableid,recordid, old_record=""):
             deal_record.values['purchaseorder'] = 'No'
 
         deal_record.save()
+
 
     # ---DEALLINE
     if tableid == 'dealline':
