@@ -360,6 +360,9 @@ class UserTable:
             if not field_id or filter_value is None:
                 continue
 
+            if field_id.startswith('_'):
+                field_id = field_id[1:] + "_"
+
             if filter_value == "NULL_VALUE":
                 sql_condition = f"({field_id} IS NULL OR {field_id} = '')"
             else:

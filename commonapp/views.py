@@ -3828,6 +3828,15 @@ def save_record_fields(request):
                     "display_field": "nome_club"
                 }
 
+            if grouping.lower().endswith('_'):
+                field_obj = SysField.objects.filter(tableid=table_name,fieldid=grouping).first()
+                if field_obj:
+                    config_python['group_by_field']["lookup"] = {
+                        "on_key": "recordid_",
+                        "from_table": field_obj.tablelink,
+                        "display_field": field_obj.keyfieldlink
+                    }
+            
             # Date granularity
             if field_type and field_type.lower() in ("date", "datetime", "data"):
                 config_python["group_by_field"]["date_granularity"] = granularity
@@ -6370,8 +6379,20 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
         except SysField.DoesNotExist:
             field_type = None
 
-        select_group_field = f"t1.{fieldid} AS {group_by_alias}"
-        from_clause = f"FROM {main_table} AS t1"
+        if field_type == 'Utente':
+            select_group_field = (
+                "CONCAT(sys_user.firstname,' ', sys_user.lastname) "
+                f"AS {group_by_alias}"
+            )
+            from_clause = (
+                f"FROM {main_table} AS t1 "
+                f"JOIN sys_user "
+                f"ON t1.{fieldid} = sys_user.id"
+            )
+        else:
+            select_group_field = f"t1.{fieldid} AS {group_by_alias}"
+            from_clause = f"FROM {main_table} AS t1"
+
         group_by_clause = f"GROUP BY t1.{fieldid}"
 
         granularity = group_by_config.get('date_granularity')
