@@ -821,14 +821,21 @@ def try_parse_date(val):
 @timing_decorator
 def get_grouped_table_records(request):
     """
-    Recupera i gruppi unici per un campo, calcolando totali e conteggi record
+    Recupera i gruppi unici per uno o più campi, calcolando totali e conteggi record
     per ogni gruppo.
     """
     try:
         data = json.loads(request.body)
         tableid = data.get("tableid")
-        group_fieldid = data.get("fieldid") 
-        group_type = data.get("type")
+        
+        # Gestione fieldid multipli
+        raw_fieldid = data.get("fieldid")
+        if isinstance(raw_fieldid, list):
+            group_fieldids = raw_fieldid
+        else:
+            group_fieldids = [raw_fieldid] if raw_fieldid else []
+
+        group_type = data.get("type") 
         
         viewid = data.get("view")
         searchTerm = data.get("searchTerm", '')
@@ -837,12 +844,19 @@ def get_grouped_table_records(request):
         userid = Helper.get_userid(request)
         table = UserTable(tableid, userid)
 
+        # Costruzione orderby per tutti i campi di raggruppamento
+        orderby_parts = []
+        for fid in group_fieldids:
+             orderby_parts.append(f"{fid} ASC")
+        
+        orderby_clause = ", ".join(orderby_parts) if orderby_parts else "recordid_ ASC"
+
         record_objects = table.get_table_records_obj(
             viewid=viewid,
             searchTerm=searchTerm,
             filters_list=filtersList,
             limit=100000, 
-            orderby=f"{group_fieldid} ASC"
+            orderby=orderby_clause
         )
 
         table_columns = table.get_results_columns()
@@ -856,63 +870,92 @@ def get_grouped_table_records(request):
         m_names = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", 
                    "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"]
 
-        alt_fieldid = None
-        if group_fieldid.endswith('_'):
-            alt_fieldid = '_' + group_fieldid[:-1]
-
         for record in record_objects:
-            field_def = record.fields.get(group_fieldid)
-            if not field_def and alt_fieldid:
-                field_def = record.fields.get(alt_fieldid)
             
-            field_def = field_def or {}
-            raw_val = field_def.get("value") or field_def.get("convertedvalue")
+            composite_key_parts = []
+            composite_label_parts = []
+            composite_sort_parts = []
+            value_list_for_json = [] 
             
-            bucket_key = "NULL_VALUE"
-            display_label = "Nessun valore"
-            sort_key = "zzz"
+            for fid in group_fieldids:
+                # Logica recupero valore singolo campo
+                alt_fid = None
+                if fid.endswith('_'):
+                    alt_fid = '_' + fid[:-1]
 
-            if group_type == 'Data':
-                dt = try_parse_date(raw_val)
-                if dt:
-                    bucket_key = dt.strftime('%Y-%m')
-                    display_label = f"{m_names[dt.month-1]} {dt.year}"
-                    sort_key = bucket_key
-            else:
-                if raw_val not in [None, ""]:
-                    bucket_key = str(raw_val)
-                    display_label = str(field_def.get("convertedvalue", raw_val))
-                    sort_key = display_label.lower()
-
-            if bucket_key not in groups_map:
-                groups_map[bucket_key] = {
-                    "label": display_label,
-                    "value": bucket_key,
-                    "type": group_type,
-                    "count": 0,
-                    "sort_key": sort_key,
-                    "totals": {f['id']: 0.0 for f in numeric_fields}
-                }
+                field_def = record.fields.get(fid)
+                if not field_def and alt_fid:
+                    field_def = record.fields.get(alt_fid)
                 
-                if group_type == 'Data' and bucket_key != "NULL_VALUE":
-                    y, m = map(int, bucket_key.split('-'))
-                    last_day = calendar.monthrange(y, m)[1]
-                    groups_map[bucket_key]["value"] = json.dumps({
-                        "from": f"{y}-{m:02d}-01", 
-                        "to": f"{y}-{m:02d}-{last_day}"
-                    })
+                field_def = field_def or {}
+                raw_val = field_def.get("value") or field_def.get("convertedvalue")
+                field_type_web = field_def.get("fieldtypewebid", "Testo") 
 
-            groups_map[bucket_key]["count"] += 1
+                bucket_part = "NULL_VALUE"
+                label_part = "Nessun valore"
+                sort_part = "zzz"
+                val_for_list = "NULL_VALUE" 
+
+                # Rilevamento tipo Data dinamico o da hint
+                is_date = (group_type == 'Data' and len(group_fieldids) == 1) or (field_type_web == 'Data')
+
+                if is_date:
+                    dt = try_parse_date(raw_val)
+                    if dt:
+                        bucket_part = dt.strftime('%Y-%m')
+                        label_part = f"{m_names[dt.month-1]} {dt.year}"
+                        sort_part = bucket_part
+                        
+                        y, m = dt.year, dt.month
+                        last_day = calendar.monthrange(y, m)[1]
+                        val_for_list = json.dumps({
+                            "from": f"{y}-{m:02d}-01", 
+                            "to": f"{y}-{m:02d}-{last_day}"
+                        })
+                else:
+                    if raw_val not in [None, ""]:
+                        bucket_part = str(raw_val)
+                        label_part = str(field_def.get("convertedvalue", raw_val))
+                        sort_part = label_part.lower()
+                        val_for_list = bucket_part
+
+                composite_key_parts.append(bucket_part)
+                composite_label_parts.append(label_part)
+                composite_sort_parts.append(sort_part)
+                value_list_for_json.append(val_for_list)
+
+            full_bucket_key = "||".join(composite_key_parts)
+            full_display_label = " - ".join(composite_label_parts)
+            full_sort_key = tuple(composite_sort_parts)
+
+            if len(group_fieldids) == 1:
+                final_filter_value = value_list_for_json[0]
+                final_group_type = group_type or "Testo"
+            else:
+                final_filter_value = json.dumps(value_list_for_json)
+                final_group_type = "Composite"
+
+            if full_bucket_key not in groups_map:
+                groups_map[full_bucket_key] = {
+                    "label": full_display_label,
+                    "value": final_filter_value,
+                    "type": final_group_type,
+                    "count": 0,
+                    "sort_key": full_sort_key,
+                    "totals": {f['id']: 0.0 for f in numeric_fields},
+                    "fieldids": group_fieldids 
+                }
+
+            groups_map[full_bucket_key]["count"] += 1
             for nf in numeric_fields:
                 val_to_sum = record.values.get(nf['id'], 0)
                 try:
-                    groups_map[bucket_key]["totals"][nf['id']] += float(val_to_sum or 0)
+                    groups_map[full_bucket_key]["totals"][nf['id']] += float(val_to_sum or 0)
                 except (ValueError, TypeError):
                     continue
 
         def final_sort(x):
-            is_null = (x['value'] == "NULL_VALUE")
-            return (is_null, x['sort_key'])
+            return x['sort_key']
 
         unique_groups = sorted(list(groups_map.values()), key=final_sort)
 
