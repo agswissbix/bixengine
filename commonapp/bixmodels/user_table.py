@@ -236,7 +236,8 @@ class UserTable:
                 # se è dict con min/max
                 if isinstance(val_i, dict):
                     # la funzione della mappa si aspetta il dict
-                    parts.append("(" + fun(self, field_id, val_i) + ")")
+                    if fun:
+                        parts.append("(" + fun(self, field_id, val_i) + ")")
                 else:
                     # valore singolo numerico
                     try:

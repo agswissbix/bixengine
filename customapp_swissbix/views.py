@@ -5,6 +5,7 @@ import sys
 import uuid
 import base64
 import logging
+import json
 from pydoc import html
 from django.http import FileResponse, JsonResponse, HttpResponseNotFound, StreamingHttpResponse
 from rest_framework.decorators import api_view, permission_classes, renderer_classes
@@ -501,6 +502,8 @@ def print_pdf_activemind(request):
         )
 
         # 6) path PDF temporaneo
+        import uuid
+        import os
         pdf_filename = f"offerta_{recordid_deal}_{uuid.uuid4().hex}.pdf"
         temp_pdf_path = os.path.join(
             BASE_DIR, "tmp", pdf_filename
