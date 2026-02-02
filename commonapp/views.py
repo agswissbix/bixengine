@@ -7354,6 +7354,7 @@ def save_newuser(request):
     Gestisce la creazione di un nuovo utente tramite API JSON.
     """
     if request.method != 'POST':
+        print("Metodo non supportato")
         return JsonResponse({"success": False, "error": "Metodo non supportato"}, status=405)
 
     try:
@@ -7376,10 +7377,12 @@ def save_newuser(request):
         lastname = data.get("lastname", "")
         email = data.get("email", "")
     except json.JSONDecodeError:
+        print("Invalid JSON")
         return JsonResponse({"success": False, "error": "Invalid JSON"}, status=400)
 
     # 2. Validazione Dati
     if not all([username, firstname, password]):
+        print("I campi username, firstname e password sono obbligatori.")
         return JsonResponse(
             {
                 "success": False,
@@ -7390,6 +7393,7 @@ def save_newuser(request):
 
     # 3. Verifica Esistenza Utente
     if User.objects.filter(username=username).exists():
+        print("Esiste già un utente con questo username.")
         # L'utente esiste già, non è una creazione. Restituisci un errore.
         return JsonResponse(
             {
@@ -7437,6 +7441,7 @@ def save_newuser(request):
     except Exception as e:
         # In caso di errore, la transazione viene annullata automaticamente
         # grazie a @transaction.atomic.
+        print("Errore interno del server: " + str(e))
         return JsonResponse({"success": False, "error": f"Errore interno del server: {str(e)}"}, status=500)
 
     return JsonResponse({"success": True, "message": "Utente creato con successo."})
