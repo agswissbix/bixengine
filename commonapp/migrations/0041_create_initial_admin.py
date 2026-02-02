@@ -63,7 +63,7 @@ def create_superuser(apps, schema_editor):
         sys_user_settings.objects.create(
             userid=user,
             setting='theme',
-            value='oceanic'
+            value='default'
         )
 
 

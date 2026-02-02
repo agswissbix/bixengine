@@ -5374,8 +5374,9 @@ def update_user_profile_pic(request):
     
     image_file = request.FILES.get('image')
 
-    query = HelpderDB.sql_query_row(f"SELECT sys_user_id FROM v_users WHERE id = {request.user.id}")
-    userid = query['sys_user_id'] 
+    userid = Helper.get_userid(request)
+    if userid is None:
+        return JsonResponse({'error': 'User not found'}, status=404)
 
     # Save the file
     from django.core.files.storage import default_storage
@@ -5392,7 +5393,6 @@ def update_user_profile_pic(request):
 
 @login_required(login_url='/login/')
 def get_dashboard_blocks(request):
-    userid=Helper.get_userid(request)
     request_data = json.loads(request.body)
     #TODO custom wegolf
     filters=request_data.get('filters', None)
@@ -5402,8 +5402,6 @@ def get_dashboard_blocks(request):
     dashboard_id = request_data.get('dashboardid')  # Default to 1 if not provided
     reset_dashboard = request_data.get('resetDashboard', False)
     
-    user_id = request.user.id
-
     try:
         active_server = Helper.get_activeserver(request).get('value')
     except Exception:
@@ -5414,18 +5412,15 @@ def get_dashboard_blocks(request):
     context['blocks'] = []  # Initialize the blocks list
     context['block_list'] = []  # Initialize the block_list list
 
-    with connection.cursor() as cursor2:
-
-        cursor2.execute(
-            "SELECT sys_user_id FROM v_users WHERE id = %s", [user_id]
-        )
-        bixid = cursor2.fetchone()[0]
-        default_bixid = None
-        if reset_dashboard:
-            default_bixid = 22
+    bixid = Helper.get_userid(request)
+    if bixid is None:
+        return JsonResponse({'error': 'User not found'}, status=404)
+    default_bixid = None
+    if reset_dashboard:
+        default_bixid = 22
         
-        # dashboard_id = righe[0][0]
-        context['dashboardid'] = dashboard_id
+    # dashboard_id = righe[0][0]
+    context['dashboardid'] = dashboard_id
 
     if request.method == 'POST':
         if dashboard_id:
@@ -6915,7 +6910,6 @@ def add_dashboard_block(request):
     # Il campo 'size' viene comunque passato, ma ignorato per il calcolo gsw/gsh
     # size = json_data.get('size') 
     dashboardid = json_data.get('dashboardid')
-    user_id = request.user.id
 
     # Coordinate e dimensioni di default del nuovo blocco
     chartid = SysDashboardBlock.objects.filter(id=blockid).values_list("chartid", flat=True).first()
@@ -6930,12 +6924,7 @@ def add_dashboard_block(request):
     
     # 1. Recupera l'ID utente di sistema
     # ... (Il codice per recuperare bixid rimane invariato)
-    dbh = HelpderDB() # Mantenuto se necessario da HelpderDB()
-    with connection.cursor() as cursor2:
-        cursor2.execute(
-            "SELECT sys_user_id FROM v_users WHERE id = %s", [user_id]
-        )
-        bixid = cursor2.fetchone()[0]
+    bixid = Helper.get_userid(request)
 
     # 2. Recupera i blocchi esistenti per questa dashboard
     existing_blocks = []
@@ -7558,13 +7547,7 @@ def new_dashboard(request):
         return JsonResponse({'error': 'Unauthorized'}, status=401)
 
     # Recupera sys_user_id tramite query parametrizzata
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT sys_user_id FROM v_users WHERE id = %s", [user.id])
-        row = cursor.fetchone()
-    if not row:
-        return JsonResponse({'error': 'User not found in v_users'}, status=404)
-
-    sys_user_id = row[0]
+    sys_user_id = Helper.get_userid(request)
 
     # Crea la dashboard con l’ORM
     dashboard = SysDashboard.objects.create(
@@ -7749,8 +7732,7 @@ def delete_dashboard_block(request):
     data = json.loads(request.body)
     blockid = data.get('blockid')
     dashboardid = data.get('dashboardid')
-    userid = request.user.id
-    userid = HelpderDB.sql_query_row(f"SELECT sys_user_id FROM v_users WHERE id = {userid}")['sys_user_id']
+    userid = Helper.get_userid(request)
     
     HelpderDB.sql_execute(
         f"DELETE FROM sys_user_dashboard_block WHERE id = '{blockid}' AND userid = '{userid}' AND dashboardid = '{dashboardid}'"
@@ -7759,10 +7741,9 @@ def delete_dashboard_block(request):
     return JsonResponse({'success': True, 'message': 'Dashboard block deleted successfully.'})
 
 def get_user_theme(request):
-    userid = request.user.id
+    userid = Helper.get_userid(request)
     if userid is None:
         return JsonResponse({'success': False, 'error': 'User not authenticated.'}, status=401)
-    userid = HelpderDB.sql_query_row(f"SELECT sys_user_id FROM v_users WHERE id = {userid}")['sys_user_id']
 
     theme = HelpderDB.sql_query_row(f"SELECT value FROM sys_user_settings WHERE userid = '{userid}' AND setting = 'theme'")
     return JsonResponse({'success': True, 'theme': theme})
@@ -7772,9 +7753,9 @@ def set_user_theme(request):
     data = json.loads(request.body)
     theme = data.get("theme")
 
-    userid = request.user.id
-
-    userid = HelpderDB.sql_query_row(f"SELECT sys_user_id FROM v_users WHERE id = {userid}")['sys_user_id']
+    userid = Helper.get_userid(request)
+    if userid is None:
+        return JsonResponse({'success': False, 'error': 'User not authenticated.'}, status=401)
 
     #check if the record at the db exists before
     existing_record = HelpderDB.sql_query_row(f"SELECT * FROM sys_user_settings WHERE userid = '{userid}' AND setting = 'theme'")

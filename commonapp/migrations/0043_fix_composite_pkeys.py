@@ -54,7 +54,7 @@ def fix_composite_pkeys_safe(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('commonapp', '0043_setup_database_views'),
+        ('commonapp', '0042_create_initial_settings'),
     ]
 
     operations = [
