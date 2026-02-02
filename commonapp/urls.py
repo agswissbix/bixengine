@@ -112,6 +112,8 @@ urlpatterns = [
     path('settings_table_steps_save/', settings_table_steps_save, name='settings_table_steps_save'),
     path('settings_table_fields_delete_field/', settings_table_fields_delete_field, name='settings_table_fields_delete_field'),
     path('delete_table/', delete_table, name='delete_table'),
+    path('check_csv_compatibility/', check_csv_compatibility, name='check_csv_compatibility'),
+    path('import_csv_data/', import_csv_data, name='import_csv_data'),
     
     
     # ------------------  WeGolf views ---------------------------------
