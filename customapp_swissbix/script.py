@@ -1834,14 +1834,22 @@ def upload_timesheet_in_bexio(request):
         return JsonResponse({'error': f'Errore nell\'upload del timesheet in Bexio: {str(e)}'}, status=500)
 
 def calculate_task_total(
-    timetrackings_list,
     task_id,
+    userid,
+    timetrackings_list=None,
+    condition_list=None,
 ):
     """
     Ritorna il totale netto (worktime - pausetime) di un task.
     """
     total = 0.0
     task_key = str(task_id) if task_id else "no_task"
+
+    if not condition_list:
+        condition_list = []
+        condition_list.append(f"user={userid}")
+    if not timetrackings_list:
+        timetrackings_list = UserTable('timetracking').get_records(conditions_list=condition_list)
 
     for timetracking in timetrackings_list:
         # ---- task match ----
@@ -1909,8 +1917,10 @@ def get_timetracking(request):
             task_id = timetracking.get('recordidtask_')
             task_key = str(task_id) if task_id else "no_task"
             task_totals_map[task_key] = calculate_task_total(
+                task_id,
+                userid,
                 timetrackings_list,
-                task_id
+                None,
             )
 
             task_name = ""
@@ -2017,8 +2027,10 @@ def stop_active_timetracking(userid):
             if taskid:
                 task = UserRecord('task', taskid)
                 task.values['tracked_time'] = calculate_task_total(
-                    active_timetrackings,
-                    taskid
+                    taskid,
+                    userid,
+                    None,
+                    None,
                 )
                 task.save()
 
@@ -2033,7 +2045,7 @@ def stop_timetracking(request):
     try:
         data = json.loads(request.body)
         recordid = data.get('timetracking')
-        total_task = data.get('total_task')
+        userid = Helper.get_userid(request)
 
         if recordid:
             timetracking = UserRecord('timetracking', recordid)
@@ -2052,7 +2064,12 @@ def stop_timetracking(request):
             taskid = timetracking.values['recordidtask_']
             if taskid:
                 task = UserRecord('task', taskid)
-                task.values['tracked_time'] = total_task
+                task.values['tracked_time'] = calculate_task_total(
+                    taskid,
+                    userid,
+                    None,
+                    None,
+                )
                 task.save()
 
         return JsonResponse({"status": "completed"}, safe=False)
@@ -2185,10 +2202,11 @@ def update_timetracking(request):
                     userid = Helper.get_userid(request)
                     condition_list.append(f"user={userid}")
                     condition_list.append(f"recordidtask_={taskid}")
-                    timetrackings = UserTable('timetracking').get_records(conditions_list=condition_list)
                     task.values['tracked_time'] = calculate_task_total(
-                        timetrackings,
-                        taskid
+                        taskid,
+                        userid,
+                        None,
+                        condition_list,
                     )
                     task.save()
 
