@@ -106,6 +106,14 @@ class UserTable:
             "Futuro": lambda field: f"{field} > '{self.today()}'",
         }
 
+    TIME_CONDITIONS = {
+        "Valore esatto": lambda self, field, r: f"{field} = '{r['min']}'",
+        "Tra": lambda self, field, r: f"({field} BETWEEN '{r['min']}' AND '{r['max']}')",
+        "Maggiore di": lambda self, field, r: f"{field} > '{r['min']}'",
+        "Minore di": lambda self, field, r: f"{field} < '{r['max']}'",
+        "Diverso da": lambda self, field, r: f"{field} <> '{r['min']}'",
+    }
+
     # ============================
     #   MAPPA GENERALE
     # ============================
@@ -114,7 +122,7 @@ class UserTable:
         return {
             "Text": self.TEXT_CONDITIONS,
             "Memo": self.TEXT_CONDITIONS,
-            "Ora": self.TEXT_CONDITIONS,
+            "Ora": self.TIME_CONDITIONS,
             "Parola": self.TEXT_CONDITIONS,
             "lookup": self.LOOKUP_CONDITIONS,
             "Utente": self.LOOKUP_CONDITIONS,
@@ -162,7 +170,10 @@ class UserTable:
 
             # normalizza cond_i (può essere None)
             if not cond_i:
-                cond_i = "Valore esatto"
+                if filter_type == 'Ora':
+                    cond_i = "Tra"
+                else:
+                    cond_i = "Valore esatto"
 
             # condizioni globali che ignorano il valore
             if cond_i == "Nessun valore":
@@ -235,6 +246,12 @@ class UserTable:
                     except Exception:
                         # valore non numerico -> skip
                         continue
+                continue
+
+            # --- TIPO Ora con set dict {"min","max"} ---
+            if filter_type == "Ora":
+                if isinstance(val_i, dict):
+                    parts.append("(" + fun(self, field_id, val_i) + ")")
                 continue
 
             # --- TIPO lookup / Utente con lista o singolo valore ---
