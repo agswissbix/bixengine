@@ -11,6 +11,7 @@ urlpatterns = [
     path('print_pdf_activemind/', print_pdf_activemind, name='print_pdf_activemind'),
     path('get_services_activemind/', get_services_activemind, name='get_services_activemind'),
     path('get_products_activemind/', get_products_activemind, name='get_products_activemind'),
+    path('get_monte_ore_activemind/', get_monte_ore_activemind, name='get_monte_ore_activemind'),
     path('get_conditions_activemind/', get_conditions_activemind, name='get_conditions_activemind'),
     path("qr/issue", issue_qr_token, name="issue_qr_token"),
     path("qr/verify", verify_qr_token, name="verify_qr_token"),
