@@ -22,7 +22,7 @@ from commonapp.bixmodels.helper_db import HelpderDB
 env = environ.Env()
 environ.Env.read_env()
 
-def save_record_fields(tableid,recordid,old_record):
+def save_record_fields(tableid,recordid,old_record=None):
 
     # ---ORE MENSILI---
     if tableid == 'oremensili':
@@ -35,7 +35,10 @@ def save_record_fields(tableid,recordid,old_record):
     if tableid == 'assenze':
         assenza_record = UserRecord('assenze', recordid)
         dipendente_recordid= assenza_record.values['recordiddipendente_']
-        save_record_fields('dipendente', dipendente_recordid)
+        dipendente_record = UserRecord('dipendente', dipendente_recordid)
+        assenza_record.values['riferimento'] = dipendente_record.values['riferimento'] + " - " + assenza_record.values['tipo_assenza']
+        assenza_record.values['ruolo'] = dipendente_record.values['ruolo']
+        assenza_record.save()
 
     # ---DIPENDENTE---
     if tableid == 'dipendente':
@@ -46,49 +49,20 @@ def save_record_fields(tableid,recordid,old_record):
             dipendente_record.values['nome'] = ""
         riferimento = dipendente_record.values['nome'] + " " + dipendente_record.values['cognome']
         dipendente_record.values['riferimento'] = riferimento
-        dipendente_record.save()
 
         allegati= HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordiddipendente_='{recordid}' AND deleted_='N'")
         nrallegati=len(allegati) 
         dipendente_record.values['nrallegati'] = nrallegati
 
+        ore_mensili_table=UserTable('oremensili')
+        oremensili_recente_records=ore_mensili_table.get_records(conditions_list=[f"recordiddipendente_='{recordid}'","deleted_='N'"], limit=1, orderby="recordid_ DESC")
+        if oremensili_recente_records:
+            oremensili_recente_record= oremensili_recente_records[0]
+            dipendente_record.values['saldoore'] = oremensili_recente_record['saldo_ore']
+            dipendente_record.values['saldovacanze'] = oremensili_recente_record['saldo_vacanze']
         
-
-        #calcolo saldo vacanze
-        saldovacanze_iniziale= Helper.safe_float(dipendente_record.values['saldovacanze_iniziale'])
-        saldovacanze=saldovacanze_iniziale
-        assenze_dict_list=dipendente_record.get_linkedrecords_dict('assenze')
-        for assenza in assenze_dict_list:
-            data_assenza_dal=assenza.get('dal')
-            tipo_assenza=assenza.get('tipo_assenza')
-            if tipo_assenza == 'Vacanza':
-                if data_assenza_dal:
-                    try:
-                        dal_date = date.fromisoformat(str(data_assenza_dal))
-                    except Exception:
-                        try:
-                            dal_date = datetime.strptime(str(data_assenza_dal), '%Y-%m-%d').date()
-                        except Exception:
-                            dal_date = None
-                    if dal_date and dal_date > date(2025, 8, 31):
-                        giorni_assenza= Helper.safe_float(assenza.get('giorni'))
-                        saldovacanze=saldovacanze-giorni_assenza
-
-        dipendente_record.values['saldovacanze'] = saldovacanze
         dipendente_record.save()
 
-        #calcolo saldo ore
-        saldoore_iniziale= Helper.safe_float(dipendente_record.values['saldoore_iniziale'])
-        saldoore= saldoore_iniziale
-        oremensili_dict_list=dipendente_record.get_linkedrecords_dict('oremensili')
-        for oremensili in oremensili_dict_list:
-            anno= oremensili.get('anno')
-            mese= oremensili.get('mese')
-            if anno>'2025' or mese=='10-Ottobre' or mese=='11-Novembre' or mese=='12-Dicembre':
-                differenza_ore= Helper.safe_float(oremensili.get('diffore'))
-                saldoore=saldoore+differenza_ore
-        dipendente_record.values['saldoore'] = saldoore
-        dipendente_record.save()
 
     if tableid == 'stabile':
         stabile_record = UserRecord('stabile', recordid)
