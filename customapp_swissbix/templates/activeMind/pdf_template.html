@@ -806,7 +806,7 @@
     <div class="page total-section page-break">
       <h1 class="total-section-title">Definizione Economica</h1>
       <table class="pricing-table">
-        <tr>
+        <tr style="border-bottom: 2px solid #555">
           <th>Sezione</th>
           <th>Descrizione</th>
           <th>Qta.</th>
@@ -816,9 +816,9 @@
 
 
         {% for monte in context_summary_monte_ore %} 
-        <tr {% if forloop.first %}style="border-top: 2px solid #555"{% endif %}>
+        <tr {% if forloop.last %}style="border-bottom: 2px solid #555 !important"{% endif %}>
           {% if forloop.first %}
-          <td rowspan="{{ context_summary_monte_ore|length }}" class="vertical-header">MONTE ORE</td>
+          <td rowspan="{{ context_summary_monte_ore|length }}" style="border-bottom: 2px solid #555 !important" class="vertical-header">MONTE ORE</td>
           {% endif %}
           <td>
             {{ monte.label }}
@@ -832,10 +832,17 @@
           </td>
         </tr>
         {% endfor %} 
+        <tr style="border-bottom: 2px solid #555; border: 0px 0px 2px 0px; background-color: #ffffff;">
+          <th style="border-bottom: 2px solid #555 !important"></th>
+          <th></th>
+          <th></th>
+          <th></th>
+          <th></th>
+        </tr>
         {% for product in context_summary_products %}
-        <tr {% if forloop.first %}style="border-top: 2px solid #555"{% endif %}>
+        <tr {% if forloop.last %}style="border-bottom: 2px solid #555 !important"{% endif %}>
           {% if forloop.first %}
-          <td rowspan="{{ context_summary_products|length }}" class="vertical-header">PRODOTTI</td>
+          <td rowspan="{{ context_summary_products|length }}" style="border-bottom: 4px solid #555 !important" class="vertical-header">PRODOTTI</td>
           {% endif %}
           <td>
             {{ product.title }} {% if product.billingType == 'yearly' %}
@@ -854,10 +861,11 @@
             CHF {{ product.total|default:"0.00"|floatformat:0 }}.-
           </td>
         </tr>
-        {% endfor %}        {% for service in context_summary_services %} 
-        <tr {% if forloop.first %}style=""{% endif %}>
+        {% endfor %}
+        {% for service in context_summary_services %} 
+        <tr {% if forloop.last %}style="border-bottom: 2px solid #555 !important"{% endif %}>
           {% if forloop.first %}
-          <td rowspan="{{ context_summary_services|length }}" style="border-top: 2px solid #555" class="vertical-header">SERVIZI</td>
+          <td rowspan="{{ context_summary_services|length }}" class="vertical-header">SERVIZI</td>
           {% endif %}
           <td>
             {{ service.title }}
