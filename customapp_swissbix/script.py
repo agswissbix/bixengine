@@ -746,6 +746,7 @@ def sync_bexio_orders():
             record = UserRecord("bexio_orders", field['recordid_'])
 
 
+        record.values['status'] = "In Progress"
         record.values['bexio_id'] = order['id']
         record.values['document_nr'] = order['document_nr']
         record.values['title'] = order['title']
@@ -825,6 +826,7 @@ def sync_bexio_positions(bexiotable,bexio_parent_id):
         else:
             type='invoice'
 
+        record.values['status'] = "In Progress"
         record.values['bexio_id'] = position['id']
         record.values['type'] = type
         record.values['amount'] = position['amount']
