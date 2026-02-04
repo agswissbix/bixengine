@@ -529,7 +529,7 @@ def settings_table_fields_new_field(request):
             description=fielddescription,
             fieldtypewebid=fieldtype,
             length=255,
-            label=linkedtableid,
+            label=label,
             keyfieldlink=keyfieldlink,
             tablelink=linkedtableid,
         ) 
@@ -541,7 +541,7 @@ def settings_table_fields_new_field(request):
             description=fielddescription,
             fieldtypewebid=fieldtype,
             length=255,
-            label="Dati",
+            label=label,
             keyfieldlink=keyfieldlink,
             tablelink=linkedtableid,
         )
