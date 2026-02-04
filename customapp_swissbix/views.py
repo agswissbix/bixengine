@@ -377,21 +377,6 @@ def build_offer_data(recordid_deal, fe_data=None):
             selected_frequency_label = f.get("label")
             break
 
-    if selected_frequency_label:
-        temp_total_freq = total_frequencies
-        for s in services:
-            total = s.get("total", 0.0) + temp_total_freq
-
-            if selected_frequency_label == "Mensile":
-                monthly_total += total
-            elif selected_frequency_label == "Trimestrale":
-                quarterly_total += total
-            elif selected_frequency_label == "Semestrale":
-                biannual_total += total
-            elif selected_frequency_label == "Annuale":
-                yearly_total += total
-            temp_total_freq = 0
-
     grand_total = total_tiers + total_services + total_products
 
     from babel.numbers import format_decimal
