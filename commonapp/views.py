@@ -3222,6 +3222,15 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None):
                 if not HelpderDB.sql_query_value("SELECT id FROM sys_user WHERE id = %s", 'id', (normalized_value,)):
                     normalized_value = None
 
+            if fieldtype == 'Data' and normalized_value:
+                try:
+                    # Prova a convertire in datetime
+                    from dateutil import parser
+                    dt_obj = parser.parse(str(normalized_value), dayfirst=True)
+                    normalized_value = dt_obj.strftime('%Y-%m-%d')
+                except:
+                    normalized_value = None
+
 
             # Gestione campi FK (terminano con "_")
             if fieldid.endswith('_') and normalized_value is not None:
@@ -8337,17 +8346,15 @@ def check_csv_compatibility(request):
             
         # Get compatible fields
         # Using UserTable to get fields configuration
-        userid = Helper.get_userid(request)
-        table = UserTable(tableid, userid)
-        table_columns = table.get_results_columns() # Get all available columns usually, or just table columns
         
+        all_fields = HelpderDB.sql_query(f"SELECT * FROM sys_field WHERE tableid='{tableid}'")
         
         compatible = []
         incompatible = []
         
         # Normalize for comparison
         normalized_fields = {}
-        for field in table_columns:
+        for field in all_fields:
             normalized_fields[field['fieldid'].lower()] = field['fieldid']
             normalized_fields[field['description'].lower()] = field['fieldid']
             
