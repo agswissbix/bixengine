@@ -79,16 +79,20 @@ def save_activemind(request):
         # -------------------------------------------------
         # Helper Functions
         # -------------------------------------------------
-        def fetch_existing_dealline(recordid_deal, category):
+        def fetch_existing_dealline(recordid_deal, subcategory):
             with connection.cursor() as cursor:
                 cursor.execute("""
-                    SELECT recordid_
-                    FROM user_dealline
-                    WHERE recordiddeal_ = %s
-                      AND name LIKE %s
-                      AND deleted_ = 'N'
+                    SELECT dl.recordid_
+                    FROM user_dealline dl
+                    JOIN user_product p
+                    ON p.recordid_ = dl.recordidproduct_
+                    WHERE dl.recordiddeal_ = %s
+                    AND p.subcategory = %s
+                    AND p.category = 'ActiveMind'
+                    AND dl.deleted_ = 'N'
+                    AND p.deleted_ = 'N'
                     LIMIT 1
-                """, [recordid_deal, category])
+                """, [recordid_deal, subcategory])
                 row = cursor.fetchone()
                 return row[0] if row else None
 
@@ -119,7 +123,7 @@ def save_activemind(request):
             if not product or not product.values:
                 return JsonResponse({'success': False, 'message': f'Prodotto con ID {product_id} non trovato.'}, status=404)
 
-            existing_id = fetch_existing_dealline(recordid_deal, "System assurance%")
+            existing_id = fetch_existing_dealline(recordid_deal, "system_assurance")
 
             save_dealline({
                 'recordid_': existing_id,
@@ -144,7 +148,7 @@ def save_activemind(request):
             unit_cost = product_data.get('unitCost', 0)
             billing_type = product_data.get('billingType', 'monthly')
 
-            existing_id = fetch_existing_dealline(recordid_deal, product.values.get('name', ''))
+            existing_id = fetch_existing_dealline(recordid_deal, product.values.get('subcategory', ''))
 
             save_dealline({
                 'recordid_': existing_id,
@@ -161,66 +165,92 @@ def save_activemind(request):
         # SECTION 3 — Servizi
         # -------------------------------------------------
         services = data.get('section2Services', {})
-        if not services:
+        if services:
+            conditions = data.get('section3', {})
+            frequency = conditions.get('selectedFrequency', 'Mensile')
+            frequency_price = float(conditions.get('price', 0))
+
+            total_price = 0
+            total_cost = 0
+            name_parts = []
+
+            for key, service in services.items():
+                qty = int(service.get('quantity', 0))
+                unit_price = float(service.get('unitPrice', 0))
+                unit_cost = float(service.get('unitCost', 0))
+                title = service.get('title', '')
+
+                if qty <= 0:
+                    continue
+
+                name_parts.append(f"{title}: qta. {qty}")
+                service_total = qty * unit_price
+
+                # Sconto speciale solo per clientPC
+                if key == "clientPC" and qty > 1:
+                    discount = 1 - (qty - 1) / 100
+                    service_total *= discount
+
+                total_price += service_total
+                total_cost += qty * unit_cost
+
+            # total_price += frequency_price
+            name_str = "AM - Manutenzione servizi - \n" + ",\n".join(name_parts) if name_parts else "AM - Manutenzione servizi"
+
+            # Recupera productid del servizio
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT recordid_
+                    FROM user_product
+                    WHERE name LIKE 'AM - Manutenzione servizi%%'
+                    AND deleted_ = 'N'
+                    LIMIT 1
+                """)
+                product_row = cursor.fetchone()
+
+            product_id = product_row[0] if product_row else None
+
+            # Check esistenza dealline
+            existing_id = fetch_existing_dealline(recordid_deal, "services_maintenance")
+
+            save_dealline({
+                'recordid_': existing_id,
+                'recordiddeal_': recordid_deal,
+                'recordidproduct_': product_id,
+                'name': name_str,
+                'unitprice': total_price,
+                'unitexpectedcost': total_cost,
+                'quantity': 1,
+                'intervention_frequency': frequency,
+                'frequency': 'Mensile'
+            })
+
+        # -------------------------------------------------
+        # SECTION 4 — Monte Ore
+        # -------------------------------------------------
+        
+        sectionHours = data.get('sectionHours', {})
+        if not sectionHours:
             return JsonResponse({'success': True, 'message': 'Dati ricevuti e processati con successo.'}, status=200)
 
-        conditions = data.get('section3', {})
-        frequency = conditions.get('selectedFrequency', 'Mensile')
-        frequency_price = float(conditions.get('price', 0))
+        product_id = sectionHours.get('selectedOption')
+        if not product_id:
+            return JsonResponse({'success': True, 'message': 'Dati ricevuti e processati con successo.'}, status=200)
 
-        total_price = 0
-        total_cost = 0
-        name_parts = []
+        name_str = sectionHours.get('label')
 
-        for key, service in services.items():
-            qty = int(service.get('quantity', 0))
-            unit_price = float(service.get('unitPrice', 0))
-            unit_cost = float(service.get('unitCost', 0))
-            title = service.get('title', '')
-
-            if qty <= 0:
-                continue
-
-            name_parts.append(f"{title}: qta. {qty}")
-            service_total = qty * unit_price
-
-            # Sconto speciale solo per clientPC
-            if key == "clientPC" and qty > 1:
-                discount = 1 - (qty - 1) / 100
-                service_total *= discount
-
-            total_price += service_total
-            total_cost += qty * unit_cost
-
-        total_price += frequency_price
-        name_str = "AM - Manutenzione servizi - \n" + ",\n".join(name_parts) if name_parts else "AM - Manutenzione servizi"
-
-        # Recupera productid del servizio
-        with connection.cursor() as cursor:
-            cursor.execute("""
-                SELECT recordid_
-                FROM user_product
-                WHERE name LIKE 'AM - Manutenzione servizi%%'
-                  AND deleted_ = 'N'
-                LIMIT 1
-            """)
-            product_row = cursor.fetchone()
-
-        product_id = product_row[0] if product_row else None
-
-        # Check esistenza dealline
-        existing_id = fetch_existing_dealline(recordid_deal, "AM - Manutenzione servizi%")
+        existing_id = fetch_existing_dealline(recordid_deal, 'monte_ore')
 
         save_dealline({
             'recordid_': existing_id,
             'recordiddeal_': recordid_deal,
             'recordidproduct_': product_id,
             'name': name_str,
-            'unitprice': total_price,
-            'unitexpectedcost': total_cost,
+            'unitprice': sectionHours.get('price', 0),
+            'unitexpectedcost': sectionHours.get('cost', 0),
             'quantity': 1,
-            'frequency': frequency
         })
+
 
         return JsonResponse({'success': True, 'message': 'Dati ricevuti e processati con successo.'}, status=200)
 
@@ -293,7 +323,18 @@ def build_offer_data(recordid_deal, fe_data=None):
         offer_data["products"] = []
 
     # -----------------------------
-    # 5. CALCOLO TOTALE → solo su ciò che è stato caricato
+    # 5. SECTION 4 → Monte Ore
+    # -----------------------------
+    if fe_data.get("sectionHours"):
+        req_monte_ore = type('Req', (object,), {"body": json.dumps({"dealid": recordid_deal})})
+        monte_ore_resp = get_monte_ore_activemind(req_monte_ore)
+        monte_ore = json.loads(monte_ore_resp.content)["options"]
+        offer_data["monte_ore"] = monte_ore
+    else:
+        offer_data["monte_ore"] = []
+
+    # -----------------------------
+    # 6. CALCOLO TOTALE → solo su ciò che è stato caricato
     # -----------------------------
 
     tiers = offer_data.get("tiers", [])
@@ -308,6 +349,12 @@ def build_offer_data(recordid_deal, fe_data=None):
         for c in products
         for p in c.get("services", [])
     )
+
+    monte_ore_list = offer_data.get("monte_ore", [])
+    total_monte_ore = 0.0
+    for m in monte_ore_list:
+        if m.get("selected"):
+            total_monte_ore += float(m.get("price", 0.0))
 
     monthly_total = 0.0
     quarterly_total = 0.0
@@ -345,7 +392,7 @@ def build_offer_data(recordid_deal, fe_data=None):
                 yearly_total += total
             temp_total_freq = 0
 
-    grand_total = total_tiers + total_services + total_products + total_frequencies
+    grand_total = total_tiers + total_services + total_products
 
     from babel.numbers import format_decimal
     def fmt_ch(val):
@@ -365,6 +412,7 @@ def build_offer_data(recordid_deal, fe_data=None):
         "biannual_annual": biannual_total * 2,
         "yearly": yearly_total,
         "frequencies": total_frequencies,
+        "monte_ore": total_monte_ore,
         "grand_total": grand_total,
     }
 
@@ -459,6 +507,11 @@ def print_pdf_activemind(request):
                 product_objs.append(make_obj(p))
         section2_products_pages = chunk(product_objs)
 
+        # 2b) Filter lists for Summary Table (needed for correct rowspan calculation)
+        summary_products = [p for p in product_objs if getattr(p, "quantity", 0) > 0]
+        summary_services = [s for s in offer_data.get("services", []) if s.get("quantity", 0) > 0]
+        summary_monte_ore = [m for m in offer_data.get("monte_ore", []) if m.get("selected")]
+
         # 3) info cliente
         cliente = {}
         record_deal = UserRecord('deal', recordid_deal)
@@ -477,6 +530,9 @@ def print_pdf_activemind(request):
             "offer_data": offer_data,
             "section2_services_pages": section2_services_pages,
             "section2_products_pages": section2_products_pages,
+            "context_summary_products": summary_products,
+            "context_summary_services": summary_services,
+            "context_summary_monte_ore": summary_monte_ore,
             # flat per tabella riepilogo finale (se ti serve)
             "section2_products": product_objs,
             "date": datetime.datetime.now().strftime("%d/%m/%Y"),
@@ -743,7 +799,8 @@ def get_products_activemind(request):
         'services',
         'services_maintenance',
         'system_assurance',
-        'conditions'
+        'conditions',
+        'monte_ore'
     }
 
     # 3️⃣ Costruzione dinamica categorie + servizi
@@ -840,13 +897,67 @@ def get_conditions_activemind(request):
             "label": clean_name,
             "description": description or "",
             "recordid_product": recordid_product,
-            "price": float(price) if price else 0.0,
+            "recordid_product": recordid_product,
+            "price": 0.0, # Conditions have no price anymore
             "selected": clean_name == selected_frequency,
             "icon": "Calendar",
             "operationsInOneYear": operations_in_one_year,
         })
 
     return JsonResponse({"frequencies": conditions_list}, safe=False)
+
+
+def get_monte_ore_activemind(request):
+    data = json.loads(request.body)
+    recordid_deal = data.get('dealid')
+
+    if not recordid_deal:
+        return JsonResponse({'error': 'Missing dealid'}, status=400)
+
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT recordid_, name, description, price, cost, note
+            FROM user_product
+            WHERE category LIKE 'ActiveMind' AND subcategory LIKE 'monte_ore' AND deleted_ = 'N'
+            ORDER BY price ASC
+        """)
+        products = cursor.fetchall()
+        
+        # Check for selected hour option in deal (if stored somewhere, e.g. in dealline like conditions)
+        # For now, we assume it might be stored similar to conditions or just rely on frontend default/saving
+        # If we want persistence, we'd need to check user_dealline. 
+        # Making a guess that we might store it as 'subcategory = hours' product in dealline.
+        cursor.execute("""
+            SELECT recordidproduct_
+            FROM user_dealline
+            WHERE recordiddeal_ = %s
+            AND deleted_ = 'N'
+        """, [recordid_deal])
+        selected_rows = cursor.fetchall()
+        selected_ids = {row[0] for row in selected_rows}
+
+    options_list = []
+    for recordid_product, name, description, price, cost, note in products:
+        clean_name = name.replace("AM - ", "").strip()
+        
+        hours_val = 0
+        if note:
+             match_hours = re.search(r'- \s*:\s*(\d+)', note)
+             if match_hours:
+                 hours_val = int(match_hours.group(1))
+
+        options_list.append({
+            "id": str(recordid_product), # Use recordid as ID
+            "label": clean_name,
+            "description": description or "",
+            "price": float(price) if price else 0.0,
+            "cost": float(cost) if cost else 0.0,
+            "selected": recordid_product in selected_ids,
+            "icon": "Clock",
+            "hours": hours_val,
+        })
+
+    return JsonResponse({"options": options_list}, safe=False)
 
 
 def get_record_badge_swissbix_timesheet(request):

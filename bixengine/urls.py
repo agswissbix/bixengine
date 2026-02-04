@@ -19,6 +19,7 @@ urlpatterns = [
     path('customapp_pitservice/', include('customapp_pitservice.urls')),
     path('customapp_belotti/', include('customapp_belotti.urls')),
     path('customapp_wegolf/', include('customapp_wegolf.urls')),
+    path('customapp_heenergy/', include('customapp_heenergy.urls')),
     path('settings/', include('bixsettings.urls')),
 
     path('scheduler/', include('bixscheduler.urls')),

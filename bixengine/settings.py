@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     'customapp_belotti',
     'customapp_swissbix',
     'customapp_wegolf',
+    'customapp_heenergy',
     'bixsettings',
     'corsheaders',
 
