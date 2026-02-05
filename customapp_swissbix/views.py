@@ -329,7 +329,12 @@ def build_offer_data(recordid_deal, fe_data=None):
         req_monte_ore = type('Req', (object,), {"body": json.dumps({"dealid": recordid_deal})})
         monte_ore_resp = get_monte_ore_activemind(req_monte_ore)
         monte_ore = json.loads(monte_ore_resp.content)["options"]
-        offer_data["monte_ore"] = monte_ore
+        for m in monte_ore:
+            if m.get("selected"):
+                offer_data["monte_ore"] = monte_ore
+                break
+        if not offer_data.get("monte_ore"):
+            offer_data["monte_ore"] = []
     else:
         offer_data["monte_ore"] = []
 
@@ -377,7 +382,7 @@ def build_offer_data(recordid_deal, fe_data=None):
             selected_frequency_label = f.get("label")
             break
 
-    grand_total = total_tiers + total_services + total_products
+    grand_total = total_services + total_products
 
     from babel.numbers import format_decimal
     def fmt_ch(val):
@@ -426,19 +431,26 @@ def chunk(iterable):
     pages = []
     page = []
     counter = 0
+    limit = 4
     for s in iterable:
         # supporta sia oggetti sia dict
         qty = getattr(s, "quantity", s.get("quantity", 0) if isinstance(s, dict) else 0)
         feats = getattr(s, "features", s.get("features", []) if isinstance(s, dict) else [])
         if qty == 0:
             continue
-        limit = 2 if len(feats) > 7 else 3
+        if len(feats) > 6:
+            limit = 3
+            if counter >= 3:
+                pages.append(page)
+                page = []
+                counter = 0
         page.append(s)
         counter += 1
         if counter >= limit:
             pages.append(page)
             page = []
             counter = 0
+            limit = 4
     if page:
         pages.append(page)
     return pages

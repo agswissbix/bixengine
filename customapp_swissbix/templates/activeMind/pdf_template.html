@@ -325,15 +325,22 @@
       }
 
       .vertical-header {
-        writing-mode: vertical-rl;
-        transform: rotate(180deg);
+        /* OLD: writing-mode: vertical-rl; transform: rotate(180deg); text-align: center; vertical-align: middle; */
         text-align: center;
         vertical-align: middle;
         font-weight: bold;
-        width: 40px;
-        padding: 5px;
+        width: auto;
+        padding: 0;
         background-color: #f0f0f0;
+        border-bottom: 2px solid #555 !important;
+      }
+
+      .vertical-header-content {
+        writing-mode: vertical-rl;
+        transform: rotate(180deg);
         white-space: nowrap;
+        display: inline-block;
+        /* padding: 20px; */
       }
     </style>
   </head>
@@ -807,7 +814,7 @@
       <h1 class="total-section-title">Definizione Economica</h1>
       <table class="pricing-table">
         <tr style="border-bottom: 2px solid #555">
-          <th>Sezione</th>
+          <th></th>
           <th>Descrizione</th>
           <th>Qta.</th>
           <th>Prezzo unitario</th>
@@ -818,7 +825,9 @@
         {% for monte in context_summary_monte_ore %} 
         <tr {% if forloop.last %}style="border-bottom: 2px solid #555 !important"{% endif %}>
           {% if forloop.first %}
-          <td rowspan="{{ context_summary_monte_ore|length }}" style="border-bottom: 2px solid #555 !important" class="vertical-header">MONTE ORE</td>
+          <td rowspan="{{ context_summary_monte_ore|length }}" class="vertical-header">
+             <div class="vertical-header-content">MONTE ORE</div>
+          </td>
           {% endif %}
           <td>
             {{ monte.label }}
@@ -842,7 +851,9 @@
         {% for product in context_summary_products %}
         <tr {% if forloop.last %}style="border-bottom: 2px solid #555 !important"{% endif %}>
           {% if forloop.first %}
-          <td rowspan="{{ context_summary_products|length }}" style="border-bottom: 6px solid #555 !important" class="vertical-header">PRODOTTI</td>
+          <td rowspan="{{ context_summary_products|length }}" class="vertical-header">
+            <div class="vertical-header-content">PRODOTTI</div>
+          </td>
           {% endif %}
           <td>
             {{ product.title }} {% if product.billingType == 'yearly' %}
@@ -865,7 +876,9 @@
         {% for service in context_summary_services %} 
         <tr {% if forloop.last %}style="border-bottom: 2px solid #555 !important"{% endif %}>
           {% if forloop.first %}
-          <td rowspan="{{ context_summary_services|length }}" class="vertical-header">SERVIZI</td>
+          <td rowspan="{{ context_summary_services|length }}" class="vertical-header">
+            <div class="vertical-header-content">SERVIZI</div>
+          </td>
           {% endif %}
           <td>
             {{ service.title }}
