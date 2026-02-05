@@ -7,7 +7,7 @@ ENV IN_DOCKER=1
 
 WORKDIR /app
 
-# Installazione dipendenze di sistema
+# Installazione dipendenze di sistema (Base per il progetto)
 RUN apt-get update && apt-get install -y \
     build-essential \
     pkg-config \
@@ -28,6 +28,11 @@ RUN apt-get update && apt-get install -y \
 # Installazione dipendenze Python
 COPY requirements.txt /app/
 RUN pip install --upgrade pip && pip install -r requirements.txt
+
+# --- FIX PLAYWRIGHT ---
+# Installiamo Chromium e le dipendenze di sistema necessarie (libnss, libgbm, ecc.)
+# Questo DEVE essere fatto dopo aver installato il pacchetto pip 'playwright'
+RUN playwright install --with-deps chromium
 
 # Copia del codice sorgente
 COPY . /app/
@@ -76,10 +81,9 @@ ENV GRAPH_CLIENT_ID="dummy"
 ENV GRAPH_CLIENT_SECRET="dummy"
 ENV GRAPH_TENANT_ID="dummy"
 
-# Chiavi Fernet (Evitano il RuntimeError del tuo settings.py)
+# Chiavi Fernet
 ENV QR_FERNET_KEY="dummy-key-per-la-build-non-usare-in-prod"
 ENV HASHEDID_FERNET_KEY="dummy-key-per-la-build-non-usare-in-prod"
-
 
 # Esecuzione collectstatic
 RUN python manage.py collectstatic --noinput --clear
