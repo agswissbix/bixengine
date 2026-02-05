@@ -6,4 +6,6 @@ bixengine/.env
 /commonapp/__pycache__
 */static
 staticfiles/*
+uploads/*
+uploads_backup/*
 venv/
