@@ -342,7 +342,7 @@
     <div class="cover-page">
       <!-- Immagine di sfondo a tutta pagina -->
       <div class="cover-background">
-        <img src="{% static 'images/cover.png' %}" alt="Cover Background" />
+        <img src="{{ img_cover }}" alt="Cover Background" />
       </div>
 
       <!-- Contenuto della copertina -->
@@ -365,7 +365,7 @@
       <div class="section-title">Sezione 1.0 - System Assurance</div>
       <div style="width: 100%; text-align: center; margin-top: 5px">
         <img
-          src="{% static 'images/systemassurance.png' %}"
+          src="{{ img_systemassurance }}"
           alt="Analisi rete aziendale"
           style="width: 100%; height: auto"
         />
@@ -470,7 +470,7 @@
 
       <div style="width: 100%; text-align: center; margin-top: 20px">
         <img
-          src="{% static 'images/prodotti_beall.jpg' %}"
+          src="{{ img_prodotti }}"
           alt="Prodotti be all"
           style="width: 100%; height: auto"
         />
@@ -582,7 +582,7 @@
 
       <div style="width: 100%; text-align: center; margin-top: 20px">
         <img
-          src="{% static 'images/servizi.jpg' %}"
+          src="{{ img_servizi }}"
           alt="Prodotti be all"
           style="width: 100%; height: auto"
         />
@@ -1086,7 +1086,7 @@
         >
           <strong>Per Accettazione</strong><br /><br />
           <img
-            src="{% static digital_signature_url %}"
+            src="{{ digital_signature_url }}"
             alt="Firma Digitale"
             style="max-width: 100%; width: 250px; height: auto"
           />

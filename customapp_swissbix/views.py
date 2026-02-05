@@ -463,19 +463,27 @@ def print_pdf_activemind(request):
 
         signature_url = None
         if digital_signature_b64:
-            try:
-                import base64, os, uuid
+            # Se è già un data URL, lo usiamo direttamente
+            if "data:image" in digital_signature_b64 and ";base64," in digital_signature_b64:
+                signature_url = digital_signature_b64
+            else:
+                # Altrimenti proviamo a ricostruire il data URL assumendo sia PNG o che vada bene così
+                # Se c'è una virgola ma mancava l'intestazione, prendiamo la parte dopo
                 if "," in digital_signature_b64:
-                    digital_signature_b64 = digital_signature_b64.split(",")[1]
-                signature_bytes = base64.b64decode(digital_signature_b64)
-                filename = f"signature_{uuid.uuid4().hex}.png"
-                signature_path = os.path.join(BASE_DIR, "customapp_swissbix/static/signatures", filename)
-                os.makedirs(os.path.dirname(signature_path), exist_ok=True)
-                with open(signature_path, "wb") as f:
-                    f.write(signature_bytes)
-                signature_url = f"signatures/{filename}"
-            except Exception as e:
-                logger.error(f"Errore salvataggio firma: {e}")
+                    # Probabilmente ha un'intestazione parziale o diversa, normalizziamo?
+                    # Nel dubbio, se il frontend manda data:image/png;base64,... è perfetto.
+                    signature_url = digital_signature_b64
+                else:
+                    signature_url = f"data:image/png;base64,{digital_signature_b64}"
+
+        # Convertiamo le immagini statiche in Base64
+        import os
+        from django.conf import settings
+        static_img_path = os.path.join(settings.BASE_DIR, "customapp_swissbix/static/images")
+        img_cover = to_base64(os.path.join(static_img_path, "cover.png"))
+        img_systemassurance = to_base64(os.path.join(static_img_path, "systemassurance.png"))
+        img_prodotti = to_base64(os.path.join(static_img_path, "prodotti_beall.jpg"))
+        img_servizi = to_base64(os.path.join(static_img_path, "servizi.jpg"))
 
         # 1) ricostruzione offerta
         offer_data = build_offer_data(recordid_deal, data.get('data'))
@@ -523,6 +531,10 @@ def print_pdf_activemind(request):
             "date": datetime.datetime.now().strftime("%d/%m/%Y"),
             "limit_acceptance_date": (datetime.datetime.now() + timedelta(days=10)).strftime("%d/%m/%Y"),
             "digital_signature_url": signature_url,
+            "img_cover": img_cover,
+            "img_systemassurance": img_systemassurance,
+            "img_prodotti": img_prodotti,
+            "img_servizi": img_servizi,
             "nameSignature": nameSignature,
         }
 
@@ -1388,7 +1400,8 @@ def ensure_playwright_installed():
             browser = p.chromium.launch(headless=True)
             browser.close()
     except Exception:
-        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
+        # subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
+        print("Playwright non installato")
 
 def to_base64(path):
     """Converte immagine locale in Base64 per l'incorporamento nel PDF."""
@@ -1434,6 +1447,9 @@ def generate_timesheet_pdf(recordid, signature_path=None):
         row['qrUrl'] = to_base64(q_path)
         row['signatureUrl'] = to_base64(signature_path)
         row['recordid'] = recordid
+
+        print("GPDF: signatureUrl", row['signatureUrl'])
+        print("GPDF: qrUrl", row['qrUrl'])
 
         timesheetlines = HelpderDB.sql_query(
             f"SELECT * FROM user_timesheetline WHERE recordidtimesheet_='{recordid}'"
@@ -1634,16 +1650,24 @@ def save_signature(request):
         for value in row:
             row[value] = row[value] or ''
 
+        
+        import pathlib
+        firma_path = pathlib.Path(settings.STATIC_ROOT) / "pdf" / filename_firma
+        qr_path = pathlib.Path(settings.STATIC_ROOT) / "pdf" / qr_name
+
         server = os.environ.get('BIXENGINE_SERVER')
-        firma_url = f"{server}/static/pdf/{filename_firma}"
-        qr_url = f"{server}/static/pdf/{qr_name}"
+        # firma_url = f"{server}/static/pdf/{filename_firma}"
+        # qr_url = f"{server}/static/pdf/{qr_name}"
 
         # -------------------------
         # 4️⃣ Prepara i dati per il template
         # -------------------------
+        static_img_path = os.path.join(settings.BASE_DIR, "customapp_swissbix/static/images")
         row['recordid'] = recordid
-        row['qrUrl'] = qr_url
-        row['signatureUrl'] = firma_url
+        row['logoUrl'] = to_base64(os.path.join(static_img_path, "logo_w.png"))
+        row['qrUrl'] = to_base64(qr_path.resolve())
+        row['signatureUrl'] = to_base64(firma_path.resolve())
+
 
         timesheetlines = HelpderDB.sql_query(
             f"SELECT * FROM user_timesheetline WHERE recordidtimesheet_='{recordid}'"

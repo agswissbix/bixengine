@@ -3,6 +3,9 @@ import logging
 import os
 import uuid
 import datetime
+import base64
+from django.conf import settings
+from django.contrib.staticfiles import finders
 from django.http import JsonResponse, HttpResponseNotFound, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.template.loader import render_to_string
@@ -11,6 +14,16 @@ from commonapp.bixmodels.user_record import UserRecord
 from customapp_swissbix.utils.browser_manager import BrowserManager
 
 logger = logging.getLogger(__name__)
+
+def to_base64(path):
+    """Converte immagine locale in Base64 per l'incorporamento nel PDF."""
+    if path and os.path.exists(path):
+        try:
+            with open(path, "rb") as f:
+                return f"data:image/png;base64,{base64.b64encode(f.read()).decode('utf-8')}"
+        except Exception as e:
+            print(f"Errore conversione Base64: {e}")
+    return None
 
 @csrf_exempt
 def print_pdf_heenergy(request):
@@ -93,11 +106,30 @@ def print_pdf_heenergy(request):
             "payable_by": f"{client_info['nome']}\n{client_info['indirizzo']}\n{client_info['cap']} {client_info['citta']}",
         }
         
+        # --- BASE64 IMAGES CONVERSION ---
+        static_img_path = os.path.join(settings.BASE_DIR, "customapp_heenergy/static/images")
+        
+        img_heenergy = to_base64(os.path.join(static_img_path, "heenergy.png"))
+        img_paradigma = to_base64(os.path.join(static_img_path, "para_digma.png"))
+        img_kronoterm = to_base64(os.path.join(static_img_path, "kronoterm.png"))
+        img_saj = to_base64(os.path.join(static_img_path, "saj.png"))
+        img_messana = to_base64(os.path.join(static_img_path, "messana.png"))
+        img_sinum = to_base64(os.path.join(static_img_path, "sinum.png"))
+        img_qrcode_placeholder = to_base64(os.path.join(static_img_path, "qrcode.png"))
+
         context = {
             "client_info": client_info,
             "offer_data": offer_data,
             "qr_data": qr_data,
             "date": datetime.datetime.now().strftime("%d.%m.%Y"),
+            # Images
+            "img_heenergy": img_heenergy,
+            "img_paradigma": img_paradigma,
+            "img_kronoterm": img_kronoterm,
+            "img_saj": img_saj,
+            "img_messana": img_messana,
+            "img_sinum": img_sinum,
+            "img_qrcode_placeholder": img_qrcode_placeholder,
         }
         
         # Uncomment to use real DB data later
