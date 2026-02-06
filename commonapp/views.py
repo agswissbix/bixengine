@@ -3226,7 +3226,7 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None):
                 try:
                     # Prova a convertire in datetime
                     from dateutil import parser
-                    dt_obj = parser.parse(str(normalized_value), dayfirst=True)
+                    dt_obj = parser.parse(str(normalized_value))
                     normalized_value = dt_obj.strftime('%Y-%m-%d')
                 except:
                     normalized_value = None
