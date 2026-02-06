@@ -1456,9 +1456,23 @@ def generate_timesheet_pdf(recordid, signature_path=None):
         row = rows[0]
         for k in row: row[k] = row[k] or ''
 
-        row['qrUrl'] = to_base64(q_path)
-        row['signatureUrl'] = to_base64(signature_path)
+        import pathlib
+        firma_path = None
+        if signature_path:
+            firma_path = pathlib.Path(signature_path)
+        qr_path = pathlib.Path(q_path)
+
+        # -------------------------
+        # 4️⃣ Prepara i dati per il template
+        # -------------------------
+        static_img_path = os.path.join(settings.BASE_DIR, "customapp_swissbix/static/images")
         row['recordid'] = recordid
+        row['logoUrl'] = to_base64(os.path.join(static_img_path, "logo_w.png"))
+        row['qrUrl'] = to_base64(qr_path.resolve())
+        if firma_path:
+            row['signatureUrl'] = to_base64(firma_path.resolve())
+        else:
+            row['signatureUrl'] = None
 
         print("GPDF: signatureUrl", row['signatureUrl'])
         print("GPDF: qrUrl", row['qrUrl'])
