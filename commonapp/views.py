@@ -3532,6 +3532,7 @@ def save_record_fields(request):
         func_button = values.get("function_button", None)
         colors = values.get("colors", None)
         category_dashboard = values.get("category_dashboard", None)
+        userid_chart = values.get("user", None)
 
 
         # =======================
@@ -3751,6 +3752,9 @@ def save_record_fields(request):
             # Date granularity
             if field_type and field_type.lower() in ("date", "datetime", "data"):
                 config_python["group_by_field"]["date_granularity"] = granularity
+
+        if userid_chart and layout == 'user':
+            config_python['userid'] = userid_chart
 
         # =======================
         # CHART SAVE (ORM)
@@ -6792,6 +6796,11 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
                         except Exception:
                             pass
                 final_datasets1[0]['fn'] = custom_func
+
+    if chart_record['layout'] in ('user'):
+        userid = config['userid']
+        final_datasets1[0]['userid'] = userid
+        
 
     return _build_chart_context_base(chart_id, chart_record, labels, final_datasets1, final_datasets2 or None)
 

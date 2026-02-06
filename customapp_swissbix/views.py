@@ -2106,3 +2106,7 @@ def check_ai_chat_status(request):
 def get_bixhub_initial_data(request):
     from customapp_swissbix.script import get_bixhub_initial_data
     return get_bixhub_initial_data(request)
+
+def get_widget_employee(request):
+    from customapp_swissbix.script import get_widget_employee
+    return get_widget_employee(request)

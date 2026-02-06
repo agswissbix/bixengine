@@ -75,4 +75,5 @@ urlpatterns = [
     path('ask_ai/', ask_ai, name='ask_ai'),
     path('check_ai_chat_status/', check_ai_chat_status, name='check_ai_chat_status'),
     path('get_bixhub_initial_data/', get_bixhub_initial_data, name='get_bixhub_initial_data'),
+    path('get_widget_employee/', get_widget_employee, name='get_widget_employee'),
 ]

@@ -3127,3 +3127,112 @@ def get_bixhub_initial_data(request):
 
     except Exception as e:
         return JsonResponse({"error": f"Errore nel prendere i dati iniziali: {str(e)}"}, status=500)
+
+
+def get_widget_employee(request):
+    try:
+        data = json.loads(request.body)
+        userid = data.get('userid')
+        
+        user = SysUser.objects.filter(id=userid).first()
+        if not user:
+            return JsonResponse({"error": "User not found"}, status=404)
+            
+        today = datetime.date.today()
+        start_month = today.replace(day=1)
+        today_str = today.strftime("%Y-%m-%d")
+        start_month_str = start_month.strftime("%Y-%m-%d")
+
+        # 1. Timesheets di oggi
+        ts_today_cond = [f"user='{userid}'", f"date='{today_str}'", "deleted_='N'"]
+        ts_today = UserTable("timesheet").get_records(conditions_list=ts_today_cond)
+        count_today = len(ts_today)
+
+        # 2. Ore del mese
+        ts_month_cond = [f"user='{userid}'", f"date>='{start_month_str}'", "deleted_='N'"]
+        ts_month = UserTable("timesheet").get_records(conditions_list=ts_month_cond)
+        
+        month_hours = 0.0
+        for ts in ts_month:
+            try:
+                val = float(ts.get('worktime_decimal') or 0) + float(ts.get('traveltime_decimal') or 0)
+                month_hours += val
+            except:
+                pass
+                
+        # 3. Attività corrente (Timetracking o Ultimo Timesheet)
+        activity_data = {
+            "recordid": "",
+            "status": "Stopped",
+            "description": "Nessuna attività recente",
+            "start_time": "",
+            "project_name": "",
+            "client_name": ""
+        }
+
+        # Cerca timetracking attivo
+        tt_cond = [
+            f"user='{userid}'",
+            "stato != 'Terminato'",
+            "deleted_='N'"
+        ]
+        active_tt_list = UserTable("timetracking").get_records(conditions_list=tt_cond)
+        
+        if active_tt_list:
+            active_tt = active_tt_list[0]
+            activity_data["recordid"] = active_tt.get("recordid_")
+            activity_data["status"] = "Running"
+            activity_data["description"] = active_tt.get("description") or "Senza descrizione"
+            activity_data["start_time"] = active_tt.get("start")
+            
+            if active_tt.get('recordidcompany_'):
+                c_rec = UserRecord('company', active_tt.get('recordidcompany_'))
+                if c_rec.values:
+                    activity_data["client_name"] = c_rec.values.get('companyname', '')
+                
+            if active_tt.get('recordidproject_'):
+                p_rec = UserRecord('project', active_tt.get('recordidproject_'))
+                if p_rec.values:
+                    activity_data["project_name"] = p_rec.values.get('projectname', '')
+
+        else:
+            # Se non c'è timetracking attivo, prendiamo l'ultimo timesheet
+            last_ts_cond = [f"user='{userid}'", "deleted_='N'"]
+            last_ts_list = UserTable("timesheet").get_records(
+                conditions_list=last_ts_cond, 
+                limit=1, 
+                orderby="date desc" 
+            )
+            
+            if last_ts_list:
+                last_ts = last_ts_list[0]
+                activity_data["recordid"] = last_ts.get("recordid_")
+                activity_data["status"] = "Stopped"
+                activity_data["description"] = last_ts.get("description") or "Senza descrizione"
+                activity_data["start_time"] = last_ts.get("date").strftime("%d/%m/%Y")
+                
+                if last_ts.get('recordidcompany_'):
+                    c_rec = UserRecord('company', last_ts.get('recordidcompany_'))
+                    if c_rec.values:
+                        activity_data["client_name"] = c_rec.values.get('companyname', '')
+                    
+                if last_ts.get('recordidproject_'):
+                    p_rec = UserRecord('project', last_ts.get('recordidproject_'))
+                    if p_rec.values:
+                        activity_data["project_name"] = p_rec.values.get('projectname', '')
+
+        return JsonResponse({
+            "user": {
+                "id": user.id,
+                "firstname": user.firstname,
+                "lastname": user.lastname,
+                "email": user.email
+            },
+            "stats": {
+                "today_count": count_today,
+                "month_hours": round(month_hours, 2)
+            },
+            "activity": activity_data
+        })
+    except Exception as e:
+        return JsonResponse({"error": f"Errore nel prendere i dati iniziali: {str(e)}"}, status=500)
