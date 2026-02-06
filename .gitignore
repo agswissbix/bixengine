@@ -4,7 +4,8 @@ __pycache__/
 .env
 bixengine/.env
 /commonapp/__pycache__
-*/static
+commonapp/static
+customapp_swissbix/static
 staticfiles/*
 uploads/*
 uploads_backup/*
