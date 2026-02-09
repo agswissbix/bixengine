@@ -366,6 +366,54 @@
       </div>
     </div>
 
+    <!-- ==================== SEZIONE SERVICE & ASSET ==================== -->
+    {% if context_service_assets %}
+    <div class="page section page-break">
+      <div class="section-title">Service & Asset in possesso</div>
+
+      <div class="service-header">Riepilogo Asset Attuali</div>
+
+      <div class="service-details" style="margin-top: 15px">
+        <p>
+          Di seguito vengono riportati i servizi e gli asset attualmente attivi
+          e in possesso del cliente. Queste informazioni sono fornite a titolo
+          di inventario e non concorrono alla formazione del prezzo della
+          presente offerta.
+        </p>
+      </div>
+
+      <div class="service-item" style="margin-top: 20px">
+        <table class="pricing-table">
+          <tr>
+            <th>Descrizione</th>
+            <th>Settore</th>
+            <th>Tipo</th>
+            <th>Stato</th>
+            <th>Nota</th>
+            <th>Qta</th>
+          </tr>
+          {% for item in context_service_assets %}
+          <tr>
+            <td>
+              <strong>{{ item.label }}</strong>
+              {% if item.product_name and item.product_name != item.label %}
+              <br /><span style="font-size: 8pt; color: #666"
+                >{{ item.product_name }}</span
+              >
+              {% endif %}
+            </td>
+            <td>{{ item.sector }}</td>
+            <td>{{ item.type }}</td>
+            <td>{{ item.status }}</td>
+            <td style="font-style: italic; color: #555">{{ item.note }}</td>
+            <td style="text-align: center">{{ item.quantity }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
     <!-- ==================== SEZIONE 1.0 - SYSTEM ASSURANCE ==================== -->
     {% if offer_data.tiers %}
     <div class="page section">
@@ -695,7 +743,7 @@
     <!-- ==================== SEZIONE 3.0 - CONDIZIONI ACTIVEMIND ==================== -->
     {% if offer_data.frequencies %}
     <div class="page section page-break">
-      <div class="section-title">Sezione 3.0</div>
+      <div class="section-title">Sezione 3.0 - Pianificazione Interventi</div>
       <div class="service-item">
         <div class="service-header">Condizioni incluse in ActiveMind:</div>
         <div class="service-details">
@@ -752,7 +800,7 @@
     <!-- ==================== SEZIONE 4.0 - MONTE ORE ==================== -->
     {% if offer_data.monte_ore %}
     <div class="page section page-break">
-      <div class="section-title">Sezione 4.0</div>
+      <div class="section-title">Sezione 4.0 - Monte Ore</div>
       <div class="service-item">
         <div class="service-header">Monte Ore Assistenza Tecnica</div>
         <div class="service-details">
@@ -822,16 +870,14 @@
         </tr>
 
 
-        {% for monte in context_summary_monte_ore %} 
+        {% for monte in context_summary_monte_ore %}
         <tr {% if forloop.last %}style="border-bottom: 2px solid #555 !important"{% endif %}>
           {% if forloop.first %}
           <td rowspan="{{ context_summary_monte_ore|length }}" class="vertical-header">
-             <div class="vertical-header-content">MONTE ORE</div>
+            <div class="vertical-header-content">MONTE ORE</div>
           </td>
           {% endif %}
-          <td>
-            {{ monte.label }}
-          </td>
+          <td>{{ monte.label }}</td>
           <td style="text-align: center">1</td>
           <td class="price">
             CHF {{ monte.price|default:"0.00"|floatformat:0 }}.-
@@ -840,7 +886,7 @@
             CHF {{ monte.price|default:"0.00"|floatformat:0 }}.-
           </td>
         </tr>
-        {% endfor %} 
+        {% endfor %}
         <tr style="border-bottom: 2px solid #555; border: 0px 0px 2px 0px; background-color: #ffffff;">
           <th style="border-bottom: 2px solid #555 !important; height: 30px; background-color: #ffffff; border-right: 0px; border-left: 0px;"></th>
           <th style="background-color: #ffffff; border-right: 0px; border-left: 0px;"></th>
@@ -880,9 +926,7 @@
             <div class="vertical-header-content">SERVIZI</div>
           </td>
           {% endif %}
-          <td>
-            {{ service.title }}
-          </td>
+          <td>{{ service.title }}</td>
           <td style="text-align: center">{{ service.quantity }}</td>
           <td class="price">
             CHF {{ service.unitPrice|default:"0.00"|floatformat:0 }}.-

@@ -339,6 +339,14 @@ def build_offer_data(recordid_deal, fe_data=None):
         offer_data["monte_ore"] = []
 
     # -----------------------------
+    # 7. SERVICE & ASSETS (Pass-through)
+    # -----------------------------
+    req_service_asset = type('Req', (object,), {"body": json.dumps({"dealid": recordid_deal})})
+    service_asset_resp = get_service_and_asset_activemind(req_service_asset)
+    service_asset = json.loads(service_asset_resp.content)["options"]
+    offer_data["service_assets"] = service_asset
+
+    # -----------------------------
     # 6. CALCOLO TOTALE → solo su ciò che è stato caricato
     # -----------------------------
 
@@ -382,7 +390,8 @@ def build_offer_data(recordid_deal, fe_data=None):
             selected_frequency_label = f.get("label")
             break
 
-    grand_total = total_services + total_products
+    monthly_total += total_services
+    grand_total = total_services + total_products + total_monte_ore
 
     from babel.numbers import format_decimal
     def fmt_ch(val):
@@ -538,6 +547,7 @@ def print_pdf_activemind(request):
             "context_summary_products": summary_products,
             "context_summary_services": summary_services,
             "context_summary_monte_ore": summary_monte_ore,
+            "context_service_assets": offer_data.get("service_assets", []),
             # flat per tabella riepilogo finale (se ti serve)
             "section2_products": product_objs,
             "date": datetime.datetime.now().strftime("%d/%m/%Y"),
@@ -964,6 +974,50 @@ def get_monte_ore_activemind(request):
             "selected": recordid_product in selected_ids,
             "icon": "Clock",
             "hours": hours_val,
+        })
+
+    return JsonResponse({"options": options_list}, safe=False)
+
+
+def get_service_and_asset_activemind(request):
+    data = json.loads(request.body)
+    recordid_deal = data.get('dealid')
+
+    if not recordid_deal:
+        return JsonResponse({'error': 'Missing dealid'}, status=400)
+
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT sa.recordid_, sa.description, sa.type, sa.status, sa.sector, sa.note, sa.provider, sa.quantity, sa.recordidproduct_
+            FROM user_serviceandasset as sa
+            JOIN user_deal as d ON d.recordidcompany_ = sa.recordidcompany_
+            WHERE d.recordid_ = %s AND sa.status = 'Active' AND sa.deleted_ = 'N'
+            ORDER BY sa.id ASC
+        """, [recordid_deal])
+        servicesandassets = cursor.fetchall()
+
+    options_list = []
+    for recordid_service, description, type, status, sector, note, provider, quantity, recordidproduct_ in servicesandassets:
+        clean_desc = description.strip()
+        product_name = ""
+        product_price = 0.0
+
+        if recordidproduct_:
+            product_record = UserRecord('product',recordidproduct_)
+            product_name = product_record.values.get("name", '')
+            product_price = product_record.values.get("price", 0.0)
+
+        options_list.append({
+            "id": str(recordid_service),
+            "label": clean_desc,
+            "note": note or "",
+            "provider": provider or "",
+            "quantity": quantity or 1,
+            "sector": sector or "",
+            "type": type or "",
+            "status": status or "",
+            "product_name": product_name or "",
+            "product_price": float(product_price) if product_price else 0.0,
         })
 
     return JsonResponse({"options": options_list}, safe=False)
