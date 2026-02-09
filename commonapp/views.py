@@ -5709,6 +5709,12 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
             # benchmark → usa clubs selezionati
             if not selected_clubs or selected_clubs == []:
                 # Se non ci sono club li prendo tutti
+                
+                # Se nationalAvg, includo anche i dati anonimi
+                where_anonimi = "(g.dati_anonimi = 'false' OR g.dati_anonimi IS NULL)"
+                if dashboard_category == 'nationalAvg':
+                    where_anonimi = "1=1"
+
                 sql = f"""
                     SELECT g.nome_club AS title,
                         g.recordid_ AS recordid,
@@ -5717,7 +5723,7 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
                     FROM user_golfclub AS g
                     JOIN user_metrica_annuale AS m
                     ON g.recordid_ = m.recordidgolfclub_
-                    WHERE (g.dati_anonimi = 'false' OR g.dati_anonimi IS NULL) 
+                    WHERE {where_anonimi} 
                         AND g.deleted_ = 'N' AND m.deleted_ = 'N' 
                     GROUP BY title, recordid
                     ORDER BY title ASC
