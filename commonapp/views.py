@@ -4290,15 +4290,32 @@ def get_input_linked(request):
             kyefieldlink=HelpderDB.sql_query_value(sql,'keyfieldlink')
             additional_conditions = ''
             #TODO temp
-            if tableid == 'letturagasolio' and fieldid == 'recordidstabile_':
-                recordid_cliente=formValues['recordidcliente_']
-                if recordid_cliente:
-                    additional_conditions = " AND recordidcliente_ = '"+recordid_cliente+"'"
+            # if tableid == 'letturagasolio' and fieldid == 'recordidstabile_':
+            #     recordid_cliente=formValues['recordidcliente_']
+            #     if recordid_cliente:
+            #         additional_conditions = " AND recordidcliente_ = '"+recordid_cliente+"'"
 
-            if tableid == 'letturagasolio' and fieldid == 'recordidinformazionigasolio_':
-                recordid_stabile=formValues['recordidstabile_']
-                if recordid_stabile:
-                    additional_conditions = " AND recordidstabile_ = '"+recordid_stabile+"'"
+            # if tableid == 'letturagasolio' and fieldid == 'recordidinformazionigasolio_':
+            #     recordid_stabile=formValues['recordidstabile_']
+            #     if recordid_stabile:
+            #         additional_conditions = " AND recordidstabile_ = '"+recordid_stabile+"'"
+            # Generic context filtering
+            if formValues and linkedmaster_tableid:
+                try:
+                    # Get all valid fields for the target table to avoid errors
+                    fields_query = f"SELECT fieldid FROM sys_field WHERE tableid='{linkedmaster_tableid}'"
+                    rows = HelpderDB.sql_query(fields_query)
+                    valid_fields = {row['fieldid'] for row in rows}
+
+                    # Filter formValues for potential matches
+                    for key, value in formValues.items():
+                        if key.endswith('_') and value:
+                             if key in valid_fields:
+                                additional_conditions += f" AND {key} = '{value}'"
+                except Exception as e:
+                    print(f"Error in generic context filtering: {e}")
+
+
             if recordid:
                 sql = f"""
                     SELECT recordid_ as recordid, {kyefieldlink} as name 
