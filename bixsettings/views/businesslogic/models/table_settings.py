@@ -43,6 +43,11 @@ class TableSettings:
             'options': ['true', 'false'],
             'value': 'true'
         },
+        'add': {
+            'type': 'select',
+            'options': ['true', 'false'],
+            'value': 'true'
+        },
         'risultati_edit': {
             'type': 'select',
             'options': ['true', 'false'],
@@ -54,6 +59,16 @@ class TableSettings:
             'value': 'true'
         },
         'delete': {
+            'type': 'select',
+            'options': ['true', 'false'],
+            'value': 'true'
+        },
+        'add_linked': {
+            'type': 'select',
+            'options': ['true', 'false'],
+            'value': 'true'
+        },
+        'edit_linked': {
             'type': 'select',
             'options': ['true', 'false'],
             'value': 'true'
@@ -678,13 +693,13 @@ class TableSettings:
 
         return base_settings
     
-    def has_permission_for_record(self, setting, recordid):
+    def has_permission_for_record(self, setting, recordid=None):
         value = setting.get("value") == "true"
         valid_records = setting.get("valid_records", [])
         has_conditions = bool(setting.get("conditions", None))
 
         # nessuna lista → si usa value direttamente
-        if not has_conditions:
+        if not has_conditions or recordid is None:
             return value
 
         match = str(recordid) in valid_records

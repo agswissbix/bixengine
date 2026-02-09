@@ -3347,6 +3347,8 @@ def duplicate_record(request):
 def save_record_fields(request):
     recordid = request.POST.get('recordid')
     tableid = request.POST.get('tableid')
+    mastertableid = request.POST.get('mastertableid')
+    masterrecordid = request.POST.get('masterrecordid')
     saved_fields = request.POST.get('fields')
 
     if not tableid or not saved_fields:
@@ -3354,6 +3356,8 @@ def save_record_fields(request):
             data = json.loads(request.body)
             recordid = data.get('recordid', recordid)
             tableid = data.get('tableid', tableid)
+            mastertableid = data.get('mastertableid', mastertableid)
+            masterrecordid = data.get('masterrecordid', masterrecordid)
             saved_fields = data.get('fields', saved_fields)
         except (json.JSONDecodeError, AttributeError):
             return JsonResponse({'error': 'Invalid or missing data'}, status=400)
@@ -3363,8 +3367,17 @@ def save_record_fields(request):
 
     tablesettings = TableSettings(tableid, userid)
     can_edit_settings = tablesettings.get_specific_settings('edit')['edit']
+    can_add_settings = tablesettings.get_specific_settings('add')['add']
 
-    if not tablesettings.has_permission_for_record(can_edit_settings, recordid):
+    if mastertableid and masterrecordid:
+        tablesettings = TableSettings(mastertableid, userid)
+        can_edit_settings = tablesettings.get_specific_settings('edit_linked')['edit_linked']
+        can_add_settings = tablesettings.get_specific_settings('add_linked')['add_linked']
+
+    if not recordid and not tablesettings.has_permission_for_record(can_add_settings):
+        return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
+
+    if recordid and not tablesettings.has_permission_for_record(can_edit_settings, recordid):
         return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
 
     # 3. Parsing del campo fields
