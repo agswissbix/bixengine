@@ -982,18 +982,27 @@ def get_monte_ore_activemind(request):
 def get_service_and_asset_activemind(request):
     data = json.loads(request.body)
     recordid_deal = data.get('dealid')
+    recordid_company = data.get('companyid')
 
-    if not recordid_deal:
-        return JsonResponse({'error': 'Missing dealid'}, status=400)
+    if not recordid_deal and not recordid_company:
+        return JsonResponse({'error': 'Missing dealid or companyid'}, status=400)
 
     with connection.cursor() as cursor:
-        cursor.execute("""
-            SELECT sa.recordid_, sa.description, sa.type, sa.status, sa.sector, sa.note, sa.provider, sa.quantity, sa.recordidproduct_
-            FROM user_serviceandasset as sa
-            JOIN user_deal as d ON d.recordidcompany_ = sa.recordidcompany_
-            WHERE d.recordid_ = %s AND sa.status = 'Active' AND sa.deleted_ = 'N'
-            ORDER BY sa.id ASC
-        """, [recordid_deal])
+        if recordid_company:
+            cursor.execute("""
+                SELECT recordid_, description, type, status, sector, note, provider, quantity, recordidproduct_
+                FROM user_serviceandasset
+                WHERE recordidcompany_ = %s AND status = 'Active' AND deleted_ = 'N'
+                ORDER BY id ASC
+            """, [recordid_company])
+        else:
+            cursor.execute("""
+                SELECT sa.recordid_, sa.description, sa.type, sa.status, sa.sector, sa.note, sa.provider, sa.quantity, sa.recordidproduct_
+                FROM user_serviceandasset as sa
+                JOIN user_deal as d ON d.recordidcompany_ = sa.recordidcompany_
+                WHERE d.recordid_ = %s AND sa.status = 'Active' AND sa.deleted_ = 'N'
+                ORDER BY sa.id ASC
+            """, [recordid_deal])
         servicesandassets = cursor.fetchall()
 
     options_list = []
@@ -1131,6 +1140,19 @@ def get_record_badge_swissbix_company(request):
     return_badgeItems["total_timesheet"] = total_timesheet
     return_badgeItems["total_deals"]     = total_deals
     return_badgeItems["total_invoices"]  = total_invoices
+
+    # --- Active Services & Assets (Reusing logic) ---
+    try:
+        req_mock = type('Req', (object,), {"body": json.dumps({"companyid": recordid})})
+        resp = get_service_and_asset_activemind(req_mock)
+        if resp.status_code == 200:
+            content = json.loads(resp.content)
+            return_badgeItems["active_services"] = content.get("options", [])
+        else:
+            return_badgeItems["active_services"] = []
+    except Exception as e:
+        print(f"Error fetching active services for badge: {e}")
+        return_badgeItems["active_services"] = []
 
     response = {"badgeItems": return_badgeItems}
     return JsonResponse(response)
