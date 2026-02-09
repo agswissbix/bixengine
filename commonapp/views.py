@@ -3226,7 +3226,7 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None):
                 try:
                     # Prova a convertire in datetime
                     from dateutil import parser
-                    dt_obj = parser.parse(str(normalized_value), dayfirst=True)
+                    dt_obj = parser.parse(str(normalized_value))
                     normalized_value = dt_obj.strftime('%Y-%m-%d')
                 except:
                     normalized_value = None
@@ -3532,6 +3532,7 @@ def save_record_fields(request):
         func_button = values.get("function_button", None)
         colors = values.get("colors", None)
         category_dashboard = values.get("category_dashboard", None)
+        userid_chart = values.get("user", None)
 
 
         # =======================
@@ -3751,6 +3752,9 @@ def save_record_fields(request):
             # Date granularity
             if field_type and field_type.lower() in ("date", "datetime", "data"):
                 config_python["group_by_field"]["date_granularity"] = granularity
+
+        if userid_chart and layout == 'user':
+            config_python['userid'] = userid_chart
 
         # =======================
         # CHART SAVE (ORM)
@@ -4286,15 +4290,32 @@ def get_input_linked(request):
             kyefieldlink=HelpderDB.sql_query_value(sql,'keyfieldlink')
             additional_conditions = ''
             #TODO temp
-            if tableid == 'letturagasolio' and fieldid == 'recordidstabile_':
-                recordid_cliente=formValues['recordidcliente_']
-                if recordid_cliente:
-                    additional_conditions = " AND recordidcliente_ = '"+recordid_cliente+"'"
+            # if tableid == 'letturagasolio' and fieldid == 'recordidstabile_':
+            #     recordid_cliente=formValues['recordidcliente_']
+            #     if recordid_cliente:
+            #         additional_conditions = " AND recordidcliente_ = '"+recordid_cliente+"'"
 
-            if tableid == 'letturagasolio' and fieldid == 'recordidinformazionigasolio_':
-                recordid_stabile=formValues['recordidstabile_']
-                if recordid_stabile:
-                    additional_conditions = " AND recordidstabile_ = '"+recordid_stabile+"'"
+            # if tableid == 'letturagasolio' and fieldid == 'recordidinformazionigasolio_':
+            #     recordid_stabile=formValues['recordidstabile_']
+            #     if recordid_stabile:
+            #         additional_conditions = " AND recordidstabile_ = '"+recordid_stabile+"'"
+            # Generic context filtering
+            if formValues and linkedmaster_tableid:
+                try:
+                    # Get all valid fields for the target table to avoid errors
+                    fields_query = f"SELECT fieldid FROM sys_field WHERE tableid='{linkedmaster_tableid}'"
+                    rows = HelpderDB.sql_query(fields_query)
+                    valid_fields = {row['fieldid'] for row in rows}
+
+                    # Filter formValues for potential matches
+                    for key, value in formValues.items():
+                        if key.endswith('_') and value:
+                             if key in valid_fields:
+                                additional_conditions += f" AND {key} = '{value}'"
+                except Exception as e:
+                    print(f"Error in generic context filtering: {e}")
+
+
             if recordid:
                 sql = f"""
                     SELECT recordid_ as recordid, {kyefieldlink} as name 
@@ -6798,6 +6819,11 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
                         except Exception:
                             pass
                 final_datasets1[0]['fn'] = custom_func
+
+    if chart_record['layout'] in ('user'):
+        userid = config['userid']
+        final_datasets1[0]['userid'] = userid
+        
 
     return _build_chart_context_base(chart_id, chart_record, labels, final_datasets1, final_datasets2 or None)
 

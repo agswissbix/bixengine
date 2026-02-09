@@ -641,6 +641,7 @@ def settings_table_fields_settings_block(request):
 
     fieldsettings_obj = FieldSettings(tableid=tableid, fieldid=field_record.fieldid, userid=userid)
 
+    items = []
     with connection.cursor() as cursor:
         cursor.execute(
             f"SELECT * FROM sys_field WHERE tableid = '{tableid}' AND id = '{fieldid}'"

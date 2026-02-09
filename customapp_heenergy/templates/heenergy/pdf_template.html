@@ -248,7 +248,7 @@
               <!-- Left: BeHeenergy Logo + Info -->
               <div class="header-left">
                   <div class="logo-main">
-                      <img src="{% static 'images/heenergy.png' %}" alt="Heenergy" />
+                      <img src="{{ img_heenergy }}" alt="Heenergy" />
                   </div>
                   <div class="header-info">
                       Via Campagna 32 | 6934 Bioggio<br/>
@@ -260,11 +260,11 @@
               
               <!-- Right: Partner Logos -->
               <div class="header-right">
-                  <img src="{% static 'images/para_digma.png' %}" class="partner-logo-header" />
-                  <img src="{% static 'images/kronoterm.png' %}" class="partner-logo-header" />
-                  <img src="{% static 'images/saj.png' %}" class="partner-logo-header" />
-                  <img src="{% static 'images/messana.png' %}" class="partner-logo-header" />
-                  <img src="{% static 'images/sinum.png' %}" class="partner-logo-header"/>
+                  <img src="{{ img_paradigma }}" class="partner-logo-header" />
+                  <img src="{{ img_kronoterm }}" class="partner-logo-header" />
+                  <img src="{{ img_saj }}" class="partner-logo-header" />
+                  <img src="{{ img_messana }}" class="partner-logo-header" />
+                  <img src="{{ img_sinum }}" class="partner-logo-header"/>
               </div>
           </div>
           
@@ -429,8 +429,7 @@
                     <div style="margin-right: 20px;">
                          <div class="qr-title">Sezione pagamento</div>
                          <div class="qr-code-box">
-                             <!-- Placeholder for QR Image -->
-                             <img src="{% static 'images/qrcode.png' %}" style="width: 40mm; " />
+                             <img src="{{ img_qrcode_placeholder }}" style="width: 40mm; " />
                          </div>
                          
                          <div style="display: flex; justify-content: space-between;">

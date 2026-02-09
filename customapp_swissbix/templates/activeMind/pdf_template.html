@@ -26,7 +26,7 @@
       }
 
       body {
-        font-family: Arial, sans-serif;
+        font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
         font-size: 11pt;
         line-height: 1.2;
         color: #333;
@@ -325,15 +325,22 @@
       }
 
       .vertical-header {
-        writing-mode: vertical-rl;
-        transform: rotate(180deg);
+        /* OLD: writing-mode: vertical-rl; transform: rotate(180deg); text-align: center; vertical-align: middle; */
         text-align: center;
         vertical-align: middle;
         font-weight: bold;
-        width: 40px;
-        padding: 5px;
+        width: auto;
+        padding: 0;
         background-color: #f0f0f0;
+        border-bottom: 2px solid #555 !important;
+      }
+
+      .vertical-header-content {
+        writing-mode: vertical-rl;
+        transform: rotate(180deg);
         white-space: nowrap;
+        display: inline-block;
+        /* padding: 20px; */
       }
     </style>
   </head>
@@ -342,7 +349,7 @@
     <div class="cover-page">
       <!-- Immagine di sfondo a tutta pagina -->
       <div class="cover-background">
-        <img src="{% static 'images/cover.png' %}" alt="Cover Background" />
+        <img src="{{ img_cover }}" alt="Cover Background" />
       </div>
 
       <!-- Contenuto della copertina -->
@@ -359,13 +366,61 @@
       </div>
     </div>
 
+    <!-- ==================== SEZIONE SERVICE & ASSET ==================== -->
+    {% if context_service_assets %}
+    <div class="page section page-break">
+      <div class="section-title">Service & Asset in possesso</div>
+
+      <div class="service-header">Riepilogo Asset Attuali</div>
+
+      <div class="service-details" style="margin-top: 15px">
+        <p>
+          Di seguito vengono riportati i servizi e gli asset attualmente attivi
+          e in possesso del cliente. Queste informazioni sono fornite a titolo
+          di inventario e non concorrono alla formazione del prezzo della
+          presente offerta.
+        </p>
+      </div>
+
+      <div class="service-item" style="margin-top: 20px">
+        <table class="pricing-table">
+          <tr>
+            <th>Descrizione</th>
+            <th>Settore</th>
+            <th>Tipo</th>
+            <th>Stato</th>
+            <th>Nota</th>
+            <th>Qta</th>
+          </tr>
+          {% for item in context_service_assets %}
+          <tr>
+            <td>
+              <strong>{{ item.label }}</strong>
+              {% if item.product_name and item.product_name != item.label %}
+              <br /><span style="font-size: 8pt; color: #666"
+                >{{ item.product_name }}</span
+              >
+              {% endif %}
+            </td>
+            <td>{{ item.sector }}</td>
+            <td>{{ item.type }}</td>
+            <td>{{ item.status }}</td>
+            <td style="font-style: italic; color: #555">{{ item.note }}</td>
+            <td style="text-align: center">{{ item.quantity }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
     <!-- ==================== SEZIONE 1.0 - SYSTEM ASSURANCE ==================== -->
     {% if offer_data.tiers %}
     <div class="page section">
       <div class="section-title">Sezione 1.0 - System Assurance</div>
       <div style="width: 100%; text-align: center; margin-top: 5px">
         <img
-          src="{% static 'images/systemassurance.png' %}"
+          src="{{ img_systemassurance }}"
           alt="Analisi rete aziendale"
           style="width: 100%; height: auto"
         />
@@ -470,7 +525,7 @@
 
       <div style="width: 100%; text-align: center; margin-top: 20px">
         <img
-          src="{% static 'images/prodotti_beall.jpg' %}"
+          src="{{ img_prodotti }}"
           alt="Prodotti be all"
           style="width: 100%; height: auto"
         />
@@ -582,7 +637,7 @@
 
       <div style="width: 100%; text-align: center; margin-top: 20px">
         <img
-          src="{% static 'images/servizi.jpg' %}"
+          src="{{ img_servizi }}"
           alt="Prodotti be all"
           style="width: 100%; height: auto"
         />
@@ -688,7 +743,7 @@
     <!-- ==================== SEZIONE 3.0 - CONDIZIONI ACTIVEMIND ==================== -->
     {% if offer_data.frequencies %}
     <div class="page section page-break">
-      <div class="section-title">Sezione 3.0</div>
+      <div class="section-title">Sezione 3.0 - Pianificazione Interventi</div>
       <div class="service-item">
         <div class="service-header">Condizioni incluse in ActiveMind:</div>
         <div class="service-details">
@@ -745,7 +800,7 @@
     <!-- ==================== SEZIONE 4.0 - MONTE ORE ==================== -->
     {% if offer_data.monte_ore %}
     <div class="page section page-break">
-      <div class="section-title">Sezione 4.0</div>
+      <div class="section-title">Sezione 4.0 - Monte Ore</div>
       <div class="service-item">
         <div class="service-header">Monte Ore Assistenza Tecnica</div>
         <div class="service-details">
@@ -807,7 +862,7 @@
       <h1 class="total-section-title">Definizione Economica</h1>
       <table class="pricing-table">
         <tr style="border-bottom: 2px solid #555">
-          <th>Sezione</th>
+          <th></th>
           <th>Descrizione</th>
           <th>Qta.</th>
           <th>Prezzo unitario</th>
@@ -815,14 +870,14 @@
         </tr>
 
 
-        {% for monte in context_summary_monte_ore %} 
+        {% for monte in context_summary_monte_ore %}
         <tr {% if forloop.last %}style="border-bottom: 2px solid #555 !important"{% endif %}>
           {% if forloop.first %}
-          <td rowspan="{{ context_summary_monte_ore|length }}" style="border-bottom: 2px solid #555 !important" class="vertical-header">MONTE ORE</td>
-          {% endif %}
-          <td>
-            {{ monte.label }}
+          <td rowspan="{{ context_summary_monte_ore|length }}" class="vertical-header">
+            <div class="vertical-header-content">MONTE ORE</div>
           </td>
+          {% endif %}
+          <td>{{ monte.label }}</td>
           <td style="text-align: center">1</td>
           <td class="price">
             CHF {{ monte.price|default:"0.00"|floatformat:0 }}.-
@@ -831,18 +886,20 @@
             CHF {{ monte.price|default:"0.00"|floatformat:0 }}.-
           </td>
         </tr>
-        {% endfor %} 
+        {% endfor %}
         <tr style="border-bottom: 2px solid #555; border: 0px 0px 2px 0px; background-color: #ffffff;">
-          <th style="border-bottom: 2px solid #555 !important"></th>
-          <th></th>
-          <th></th>
-          <th></th>
-          <th></th>
+          <th style="border-bottom: 2px solid #555 !important; height: 30px; background-color: #ffffff; border-right: 0px; border-left: 0px;"></th>
+          <th style="background-color: #ffffff; border-right: 0px; border-left: 0px;"></th>
+          <th style="background-color: #ffffff; border-right: 0px; border-left: 0px;"></th>
+          <th style="background-color: #ffffff; border-right: 0px; border-left: 0px;"></th>
+          <th style="background-color: #ffffff; border-right: 0px; border-left: 0px;"></th>
         </tr>
         {% for product in context_summary_products %}
         <tr {% if forloop.last %}style="border-bottom: 2px solid #555 !important"{% endif %}>
           {% if forloop.first %}
-          <td rowspan="{{ context_summary_products|length }}" style="border-bottom: 4px solid #555 !important" class="vertical-header">PRODOTTI</td>
+          <td rowspan="{{ context_summary_products|length }}" class="vertical-header">
+            <div class="vertical-header-content">PRODOTTI</div>
+          </td>
           {% endif %}
           <td>
             {{ product.title }} {% if product.billingType == 'yearly' %}
@@ -865,11 +922,11 @@
         {% for service in context_summary_services %} 
         <tr {% if forloop.last %}style="border-bottom: 2px solid #555 !important"{% endif %}>
           {% if forloop.first %}
-          <td rowspan="{{ context_summary_services|length }}" class="vertical-header">SERVIZI</td>
-          {% endif %}
-          <td>
-            {{ service.title }}
+          <td rowspan="{{ context_summary_services|length }}" class="vertical-header">
+            <div class="vertical-header-content">SERVIZI</div>
           </td>
+          {% endif %}
+          <td>{{ service.title }}</td>
           <td style="text-align: center">{{ service.quantity }}</td>
           <td class="price">
             CHF {{ service.unitPrice|default:"0.00"|floatformat:0 }}.-
@@ -887,28 +944,6 @@
             <br />
             <span style="font-weight: normal; font-size: 10pt">
               CHF {{ offer_data.totals.monthly_annual }}.- /anno
-            </span>
-          </td>
-        </tr>
-        {% endif %} {% if offer_data.totals_raw.quarterly > 0 %}
-        <tr style="background-color: #f8f8f8; font-weight: bold">
-          <td colspan="4">SUBTOTALE TRIMESTRALE (ricorrente)</td>
-          <td class="price">
-            CHF {{ offer_data.totals.quarterly }}.-
-            <br />
-            <span style="font-weight: normal; font-size: 10pt">
-              CHF {{ offer_data.totals.quarterly_annual }}.- /anno
-            </span>
-          </td>
-        </tr>
-        {% endif %} {% if offer_data.totals_raw.biannual > 0 %}
-        <tr style="background-color: #f8f8f8; font-weight: bold">
-          <td colspan="4">SUBTOTALE SEMESTRALE (ricorrente)</td>
-          <td class="price">
-            CHF {{ offer_data.totals.biannual }}.-
-            <br />
-            <span style="font-weight: normal; font-size: 10pt">
-              CHF {{ offer_data.totals.biannual_annual }}.- /anno
             </span>
           </td>
         </tr>
@@ -1108,7 +1143,7 @@
         >
           <strong>Per Accettazione</strong><br /><br />
           <img
-            src="{% static digital_signature_url %}"
+            src="{{ digital_signature_url }}"
             alt="Firma Digitale"
             style="max-width: 100%; width: 250px; height: auto"
           />

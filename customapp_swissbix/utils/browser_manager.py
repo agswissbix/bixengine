@@ -27,7 +27,10 @@ class BrowserManager:
         print("BrowserManager: Avvio worker thread...")
         with sync_playwright() as p:
             # Avvio browser una volta sola
-            browser = p.chromium.launch(headless=True)
+            browser = p.chromium.launch(headless=True, args=[
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+            ])
             print("BrowserManager: Browser avviato nel thread.")
 
             while True:
@@ -43,28 +46,52 @@ class BrowserManager:
                     # Logica generazione PDF
                     context = browser.new_context()
                     page = context.new_page()
+
+                    # blocca roba inutile (analytics, fonts, ecc)
+                    page.route(
+                        "**/*",
+                        lambda route, request: (
+                            route.abort()
+                            if request.resource_type in {"image", "font", "media"}
+                            else route.continue_()
+                        )
+                    )
+
                     try:
-                        page.set_content(html_content, wait_until="networkidle")
+                        page.set_content(
+                            html_content,
+                            wait_until="load",
+                            timeout=0
+                        )
+
                         page.emulate_media(media="print")
-                        
+
                         if css_styles:
                             page.add_style_tag(content=css_styles)
-                        
+
                         pdf_options = {
                             "path": output_path,
                             "format": "A4",
                             "print_background": True,
                             "scale": 1,
-                            "margin": {"top": "1cm", "bottom": "1cm", "left": "1cm", "right": "1cm"}
+                            "margin": {
+                                "top": "1cm",
+                                "bottom": "1cm",
+                                "left": "1cm",
+                                "right": "1cm",
+                            }
                         }
+
                         if options:
                             pdf_options.update(options)
 
                         page.pdf(**pdf_options)
                         result_queue.put({"success": True})
+
                     except Exception as e:
                         print(f"BrowserManager Error making PDF: {e}")
                         result_queue.put({"success": False, "error": str(e)})
+
                     finally:
                         page.close()
                         context.close()

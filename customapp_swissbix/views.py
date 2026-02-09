@@ -329,9 +329,22 @@ def build_offer_data(recordid_deal, fe_data=None):
         req_monte_ore = type('Req', (object,), {"body": json.dumps({"dealid": recordid_deal})})
         monte_ore_resp = get_monte_ore_activemind(req_monte_ore)
         monte_ore = json.loads(monte_ore_resp.content)["options"]
-        offer_data["monte_ore"] = monte_ore
+        for m in monte_ore:
+            if m.get("selected"):
+                offer_data["monte_ore"] = monte_ore
+                break
+        if not offer_data.get("monte_ore"):
+            offer_data["monte_ore"] = []
     else:
         offer_data["monte_ore"] = []
+
+    # -----------------------------
+    # 7. SERVICE & ASSETS (Pass-through)
+    # -----------------------------
+    req_service_asset = type('Req', (object,), {"body": json.dumps({"dealid": recordid_deal})})
+    service_asset_resp = get_service_and_asset_activemind(req_service_asset)
+    service_asset = json.loads(service_asset_resp.content)["options"]
+    offer_data["service_assets"] = service_asset
 
     # -----------------------------
     # 6. CALCOLO TOTALE → solo su ciò che è stato caricato
@@ -377,22 +390,8 @@ def build_offer_data(recordid_deal, fe_data=None):
             selected_frequency_label = f.get("label")
             break
 
-    if selected_frequency_label:
-        temp_total_freq = total_frequencies
-        for s in services:
-            total = s.get("total", 0.0) + temp_total_freq
-
-            if selected_frequency_label == "Mensile":
-                monthly_total += total
-            elif selected_frequency_label == "Trimestrale":
-                quarterly_total += total
-            elif selected_frequency_label == "Semestrale":
-                biannual_total += total
-            elif selected_frequency_label == "Annuale":
-                yearly_total += total
-            temp_total_freq = 0
-
-    grand_total = total_tiers + total_services + total_products
+    monthly_total += total_services
+    grand_total = total_services + total_products + total_monte_ore
 
     from babel.numbers import format_decimal
     def fmt_ch(val):
@@ -441,19 +440,26 @@ def chunk(iterable):
     pages = []
     page = []
     counter = 0
+    limit = 4
     for s in iterable:
         # supporta sia oggetti sia dict
         qty = getattr(s, "quantity", s.get("quantity", 0) if isinstance(s, dict) else 0)
         feats = getattr(s, "features", s.get("features", []) if isinstance(s, dict) else [])
         if qty == 0:
             continue
-        limit = 2 if len(feats) > 7 else 3
+        if len(feats) > 6:
+            limit = 3
+            if counter >= 3:
+                pages.append(page)
+                page = []
+                counter = 0
         page.append(s)
         counter += 1
         if counter >= limit:
             pages.append(page)
             page = []
             counter = 0
+            limit = 4
     if page:
         pages.append(page)
     return pages
@@ -478,19 +484,27 @@ def print_pdf_activemind(request):
 
         signature_url = None
         if digital_signature_b64:
-            try:
-                import base64, os, uuid
+            # Se è già un data URL, lo usiamo direttamente
+            if "data:image" in digital_signature_b64 and ";base64," in digital_signature_b64:
+                signature_url = digital_signature_b64
+            else:
+                # Altrimenti proviamo a ricostruire il data URL assumendo sia PNG o che vada bene così
+                # Se c'è una virgola ma mancava l'intestazione, prendiamo la parte dopo
                 if "," in digital_signature_b64:
-                    digital_signature_b64 = digital_signature_b64.split(",")[1]
-                signature_bytes = base64.b64decode(digital_signature_b64)
-                filename = f"signature_{uuid.uuid4().hex}.png"
-                signature_path = os.path.join(BASE_DIR, "customapp_swissbix/static/signatures", filename)
-                os.makedirs(os.path.dirname(signature_path), exist_ok=True)
-                with open(signature_path, "wb") as f:
-                    f.write(signature_bytes)
-                signature_url = f"signatures/{filename}"
-            except Exception as e:
-                logger.error(f"Errore salvataggio firma: {e}")
+                    # Probabilmente ha un'intestazione parziale o diversa, normalizziamo?
+                    # Nel dubbio, se il frontend manda data:image/png;base64,... è perfetto.
+                    signature_url = digital_signature_b64
+                else:
+                    signature_url = f"data:image/png;base64,{digital_signature_b64}"
+
+        # Convertiamo le immagini statiche in Base64
+        import os
+        from django.conf import settings
+        static_img_path = os.path.join(settings.BASE_DIR, "customapp_swissbix/static/images")
+        img_cover = to_base64(os.path.join(static_img_path, "cover.png"))
+        img_systemassurance = to_base64(os.path.join(static_img_path, "systemassurance.png"))
+        img_prodotti = to_base64(os.path.join(static_img_path, "prodotti_beall.jpg"))
+        img_servizi = to_base64(os.path.join(static_img_path, "servizi.jpg"))
 
         # 1) ricostruzione offerta
         offer_data = build_offer_data(recordid_deal, data.get('data'))
@@ -533,11 +547,16 @@ def print_pdf_activemind(request):
             "context_summary_products": summary_products,
             "context_summary_services": summary_services,
             "context_summary_monte_ore": summary_monte_ore,
+            "context_service_assets": offer_data.get("service_assets", []),
             # flat per tabella riepilogo finale (se ti serve)
             "section2_products": product_objs,
             "date": datetime.datetime.now().strftime("%d/%m/%Y"),
             "limit_acceptance_date": (datetime.datetime.now() + timedelta(days=10)).strftime("%d/%m/%Y"),
             "digital_signature_url": signature_url,
+            "img_cover": img_cover,
+            "img_systemassurance": img_systemassurance,
+            "img_prodotti": img_prodotti,
+            "img_servizi": img_servizi,
             "nameSignature": nameSignature,
         }
 
@@ -960,6 +979,59 @@ def get_monte_ore_activemind(request):
     return JsonResponse({"options": options_list}, safe=False)
 
 
+def get_service_and_asset_activemind(request):
+    data = json.loads(request.body)
+    recordid_deal = data.get('dealid')
+    recordid_company = data.get('companyid')
+
+    if not recordid_deal and not recordid_company:
+        return JsonResponse({'error': 'Missing dealid or companyid'}, status=400)
+
+    with connection.cursor() as cursor:
+        if recordid_company:
+            cursor.execute("""
+                SELECT recordid_, description, type, status, sector, note, provider, quantity, recordidproduct_
+                FROM user_serviceandasset
+                WHERE recordidcompany_ = %s AND status = 'Active' AND deleted_ = 'N'
+                ORDER BY id ASC
+            """, [recordid_company])
+        else:
+            cursor.execute("""
+                SELECT sa.recordid_, sa.description, sa.type, sa.status, sa.sector, sa.note, sa.provider, sa.quantity, sa.recordidproduct_
+                FROM user_serviceandasset as sa
+                JOIN user_deal as d ON d.recordidcompany_ = sa.recordidcompany_
+                WHERE d.recordid_ = %s AND sa.status = 'Active' AND sa.deleted_ = 'N'
+                ORDER BY sa.id ASC
+            """, [recordid_deal])
+        servicesandassets = cursor.fetchall()
+
+    options_list = []
+    for recordid_service, description, type, status, sector, note, provider, quantity, recordidproduct_ in servicesandassets:
+        clean_desc = description.strip()
+        product_name = ""
+        product_price = 0.0
+
+        if recordidproduct_:
+            product_record = UserRecord('product',recordidproduct_)
+            product_name = product_record.values.get("name", '')
+            product_price = product_record.values.get("price", 0.0)
+
+        options_list.append({
+            "id": str(recordid_service),
+            "label": clean_desc,
+            "note": note or "",
+            "provider": provider or "",
+            "quantity": quantity or 1,
+            "sector": sector or "",
+            "type": type or "",
+            "status": status or "",
+            "product_name": product_name or "",
+            "product_price": float(product_price) if product_price else 0.0,
+        })
+
+    return JsonResponse({"options": options_list}, safe=False)
+
+
 def get_record_badge_swissbix_timesheet(request):
     data = json.loads(request.body)
     tableid= data.get("tableid")
@@ -1068,6 +1140,19 @@ def get_record_badge_swissbix_company(request):
     return_badgeItems["total_timesheet"] = total_timesheet
     return_badgeItems["total_deals"]     = total_deals
     return_badgeItems["total_invoices"]  = total_invoices
+
+    # --- Active Services & Assets (Reusing logic) ---
+    try:
+        req_mock = type('Req', (object,), {"body": json.dumps({"companyid": recordid})})
+        resp = get_service_and_asset_activemind(req_mock)
+        if resp.status_code == 200:
+            content = json.loads(resp.content)
+            return_badgeItems["active_services"] = content.get("options", [])
+        else:
+            return_badgeItems["active_services"] = []
+    except Exception as e:
+        print(f"Error fetching active services for badge: {e}")
+        return_badgeItems["active_services"] = []
 
     response = {"badgeItems": return_badgeItems}
     return JsonResponse(response)
@@ -1403,7 +1488,8 @@ def ensure_playwright_installed():
             browser = p.chromium.launch(headless=True)
             browser.close()
     except Exception:
-        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
+        # subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
+        print("Playwright non installato")
 
 def to_base64(path):
     """Converte immagine locale in Base64 per l'incorporamento nel PDF."""
@@ -1446,9 +1532,26 @@ def generate_timesheet_pdf(recordid, signature_path=None):
         row = rows[0]
         for k in row: row[k] = row[k] or ''
 
-        row['qrUrl'] = to_base64(q_path)
-        row['signatureUrl'] = to_base64(signature_path)
+        import pathlib
+        firma_path = None
+        if signature_path:
+            firma_path = pathlib.Path(signature_path)
+        qr_path = pathlib.Path(q_path)
+
+        # -------------------------
+        # 4️⃣ Prepara i dati per il template
+        # -------------------------
+        static_img_path = os.path.join(settings.BASE_DIR, "customapp_swissbix/static/images")
         row['recordid'] = recordid
+        row['logoUrl'] = to_base64(os.path.join(static_img_path, "logo_w.png"))
+        row['qrUrl'] = to_base64(qr_path.resolve())
+        if firma_path:
+            row['signatureUrl'] = to_base64(firma_path.resolve())
+        else:
+            row['signatureUrl'] = None
+
+        print("GPDF: signatureUrl", row['signatureUrl'])
+        print("GPDF: qrUrl", row['qrUrl'])
 
         timesheetlines = HelpderDB.sql_query(
             f"SELECT * FROM user_timesheetline WHERE recordidtimesheet_='{recordid}'"
@@ -1649,16 +1752,24 @@ def save_signature(request):
         for value in row:
             row[value] = row[value] or ''
 
+        
+        import pathlib
+        firma_path = pathlib.Path(settings.STATIC_ROOT) / "pdf" / filename_firma
+        qr_path = pathlib.Path(settings.STATIC_ROOT) / "pdf" / qr_name
+
         server = os.environ.get('BIXENGINE_SERVER')
-        firma_url = f"{server}/static/pdf/{filename_firma}"
-        qr_url = f"{server}/static/pdf/{qr_name}"
+        # firma_url = f"{server}/static/pdf/{filename_firma}"
+        # qr_url = f"{server}/static/pdf/{qr_name}"
 
         # -------------------------
         # 4️⃣ Prepara i dati per il template
         # -------------------------
+        static_img_path = os.path.join(settings.BASE_DIR, "customapp_swissbix/static/images")
         row['recordid'] = recordid
-        row['qrUrl'] = qr_url
-        row['signatureUrl'] = firma_url
+        row['logoUrl'] = to_base64(os.path.join(static_img_path, "logo_w.png"))
+        row['qrUrl'] = to_base64(qr_path.resolve())
+        row['signatureUrl'] = to_base64(firma_path.resolve())
+
 
         timesheetlines = HelpderDB.sql_query(
             f"SELECT * FROM user_timesheetline WHERE recordidtimesheet_='{recordid}'"
@@ -2085,3 +2196,7 @@ def check_ai_chat_status(request):
 def get_bixhub_initial_data(request):
     from customapp_swissbix.script import get_bixhub_initial_data
     return get_bixhub_initial_data(request)
+
+def get_widget_employee(request):
+    from customapp_swissbix.script import get_widget_employee
+    return get_widget_employee(request)
