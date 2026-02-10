@@ -2200,3 +2200,225 @@ def get_bixhub_initial_data(request):
 def get_widget_employee(request):
     from customapp_swissbix.script import get_widget_employee
     return get_widget_employee(request)
+
+# --- LENOVO INTAKE APP VIEWS ---
+
+@csrf_exempt
+def get_lenovo_intake_context(request):
+    """
+    Returns initial context for the Lenovo Intake App, including dynamic field settings.
+    """
+    try:
+        # Fetch field settings dynamically
+        rec = UserRecord('ticket_lenovo')
+        # We use a default view or just get fields. 
+        # get_record_card_fields returns a list of field definitions with settings
+        card_fields = rec.get_record_card_fields()
+        
+        field_settings = {}
+        for f in card_fields:
+            if 'settings' in f:
+                field_id = f.get('fieldid', '')
+                # Handle potential suffix like '_' if typical in this system, 
+                # but UserRecord usually handles it.
+                settings = f.get('settings', {})
+                field_settings[field_id] = {
+                    'required': settings.get('obbligatorio') == 'true',
+                    'hidden': settings.get('nascosto') == 'true',
+                    'label': f.get('label', ''),
+                    'read_only': settings.get('sola_lettura') == 'true' # Hypothetical, check if exists
+                }
+
+        return JsonResponse({
+            'success': True,
+            'field_settings': field_settings
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+@csrf_exempt
+def get_lenovo_ticket(request):
+    """
+    Fetch a specific ticket by ID.
+    """
+    try:
+        data = json.loads(request.body)
+        ticket_id = data.get('ticket_id')
+        
+        if not ticket_id:
+            return JsonResponse({'success': False, 'error': 'Ticket ID missing'}, status=400)
+            
+        rec = UserRecord('ticket_lenovo', ticket_id)
+        if not rec.recordid:
+             return JsonResponse({'success': False, 'error': 'Ticket not found'}, status=404)
+        
+        # Serialize fields securely
+        ticket_data = {
+            'recordid': rec.recordid,
+            'name': rec.values.get('name', ''),
+            'surname': rec.values.get('surname', ''),
+            'company_name': rec.values.get('company_name', ''),
+            'serial': rec.values.get('serial', ''),
+            'product_photo': rec.values.get('product_photo', ''),
+            'problem_description': rec.values.get('problem_description', ''),
+            'status': rec.values.get('status', ''),
+            'reception_date': str(rec.values.get('reception_date', ''))[:10] if rec.values.get('reception_date') else '',
+        }
+        
+        return JsonResponse({'success': True, 'ticket': ticket_data})
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+@csrf_exempt
+def save_lenovo_ticket(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
+        
+    try:
+        recordid = request.POST.get('recordid')
+        fields_raw = request.POST.get('fields', '{}')
+        
+        # Trasforma la stringa JSON in un dizionario Python
+        fields = json.loads(fields_raw)
+        
+        if recordid:
+            rec = UserRecord('ticket_lenovo', recordid)
+        else:
+            rec = UserRecord('ticket_lenovo')
+            rec.values['reception_date'] = datetime.date.today().strftime('%Y-%m-%d')
+            # Status default is Draft, but we accept override from fields
+            if 'status' not in fields:
+                rec.values['status'] = 'Draft'
+            
+        # Mappatura dei campi
+        allowed_fields = ['name', 'surname', 'company_name', 'email', 'phone', 'serial', 'product_photo', 'problem_description', 'status', 'recordidcompany_']
+        
+        for key in allowed_fields:
+            if key in fields:
+                rec.values[key] = fields[key]
+                
+        rec.save()
+        
+        return JsonResponse({'success': True, 'recordid': rec.recordid})
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON format in fields'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+@csrf_exempt
+def upload_lenovo_photo(request):
+    """
+    Uploads a photo for the Lenovo Ticket.
+    """
+    from django.core.files.storage import default_storage
+    
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
+        
+    try:
+        ticket_id = request.POST.get('ticket_id')
+        file_obj = request.FILES.get('file')
+        
+        if not ticket_id or not file_obj:
+            return JsonResponse({'success': False, 'error': 'Missing ticket_id or file'}, status=400)
+            
+        # 1. Save file
+        fname, ext = os.path.splitext(file_obj.name)
+        storage_path = f"lenovo_intake/{ticket_id}/product_photo{ext}"
+        final_path = default_storage.save(storage_path, file_obj)
+        
+        # 2. Update Ticket 'product_photo'
+        rec = UserRecord('ticket_lenovo', ticket_id)
+        rec.values['product_photo'] = final_path
+        rec.save()
+
+        return JsonResponse({'success': True, 'path': final_path})
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@csrf_exempt
+def upload_lenovo_attachment(request):
+    """
+    Uploads a GENERIC attachment (photo/doc) to user_attachment.
+    path: attachment/{ticket_id}/{filename}
+    """
+    try:
+        ticket_id = request.POST.get('ticket_id')
+        file_obj = request.FILES.get('file')
+        note = request.POST.get('note', '')
+        
+        if not ticket_id or not file_obj:
+            return JsonResponse({'success': False, 'error': 'Missing ticket_id or file'}, status=400)
+            
+        # 1. Save file to attachment/{ticket_id}/{filename}
+        import re
+        clean_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', file_obj.name)
+        storage_path = f"attachment/{ticket_id}/{clean_name}"
+        final_path = default_storage.save(storage_path, file_obj)
+        
+        # 2. Create user_attachment record
+        att = UserRecord('attachment')
+        att.values['recordidticket_lenovo_'] = ticket_id
+        att.values['type'] = 'Allegato generico'
+        att.values['file'] = final_path
+        att.values['filename'] = clean_name
+        att.values['note'] = note
+        att.values['date'] = datetime.date.today().strftime('%Y-%m-%d')
+        att.save()
+
+        return JsonResponse({
+            'success': True, 
+            'mod': {
+                'id': att.recordid,
+                'url': final_path,
+                'filename': clean_name,
+                'note': note,
+                'date': att.values['date']
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Error uploading attachment: {e}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@csrf_exempt
+def get_lenovo_attachments(request):
+    try:
+        data = json.loads(request.body)
+        ticket_id = data.get('ticket_id')
+        
+        if not ticket_id:
+             return JsonResponse({'success': False, 'error': 'Missing ticket_id'})
+
+        query = """
+            SELECT recordid_, filename, file, note, date 
+            FROM user_attachment 
+            WHERE recordidticket_lenovo_ = %s 
+            AND deleted_ = 'N'
+            ORDER BY date DESC, recordid_ DESC
+        """
+        
+        attachments = []
+        with connection.cursor() as cursor:
+            cursor.execute(query, [ticket_id])
+            rows = cursor.fetchall()
+            for row in rows:
+                attachments.append({
+                    'id': row[0],
+                    'filename': row[1],
+                    'url': row[2],
+                    'note': row[3],
+                    'date': row[4].strftime('%Y-%m-%d') if row[4] else ''
+                })
+                
+        return JsonResponse({'success': True, 'attachments': attachments})
+
+    except Exception as e:
+        logger.error(f"Error getting attachments: {e}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+

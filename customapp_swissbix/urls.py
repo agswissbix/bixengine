@@ -77,4 +77,10 @@ urlpatterns = [
     path('get_bixhub_initial_data/', get_bixhub_initial_data, name='get_bixhub_initial_data'),
     path('get_widget_employee/', get_widget_employee, name='get_widget_employee'),
     path('get_service_and_asset_activemind/', get_service_and_asset_activemind, name='get_service_and_asset_activemind'),
+    path('get_lenovo_intake_context/', get_lenovo_intake_context, name='get_lenovo_intake_context'),
+    path('get_lenovo_ticket/', get_lenovo_ticket, name='get_lenovo_ticket'),
+    path('save_lenovo_ticket/', save_lenovo_ticket, name='save_lenovo_ticket'),
+    path('upload_lenovo_photo/', upload_lenovo_photo, name='upload_lenovo_photo'),
+    path('upload_lenovo_attachment/', upload_lenovo_attachment, name='upload_lenovo_attachment'),
+    path('get_lenovo_attachments/', get_lenovo_attachments, name='get_lenovo_attachments'),
 ]
