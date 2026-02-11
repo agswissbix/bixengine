@@ -4,14 +4,17 @@ import os
 import uuid
 import datetime
 import base64
+import io
+import re
 from django.conf import settings
 from django.contrib.staticfiles import finders
-from django.http import JsonResponse, HttpResponseNotFound, StreamingHttpResponse
+from django.http import JsonResponse, HttpResponseNotFound, StreamingHttpResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.template.loader import render_to_string
 from bixengine.settings import BASE_DIR
 from commonapp.bixmodels.user_record import UserRecord
 from customapp_swissbix.utils.browser_manager import BrowserManager
+from docxtpl import DocxTemplate
 
 logger = logging.getLogger(__name__)
 
@@ -190,3 +193,86 @@ def print_pdf_heenergy(request):
     except Exception as e:
         logger.error(f"Error generating Heenergy PDF: {str(e)}")
         return JsonResponse({'error': f'Error generating PDF: {str(e)}'}, status=500)
+
+
+def print_deal(request):
+    data = json.loads(request.body)
+    recordid_deal = data.get('recordid')
+    
+    # Percorso al template Word
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    template_path = os.path.join(base_dir, 'templates', 'template.docx')
+
+    if not os.path.exists(template_path):
+        return HttpResponse("File non trovato", status=404)
+
+    deal_record = UserRecord('trattativa', recordid_deal)
+    deal_values = deal_record.values
+    
+    # --- Azienda ---
+    company_values = {}
+    recordid_azienda = deal_values.get('recordidazienda_')
+    if recordid_azienda:
+        company_record = UserRecord('azienda', recordid_azienda)
+        company_values = company_record.values
+
+    # --- Riga Trattativa (Items) ---
+    items = []
+    lines = deal_record.get_linkedrecords_dict('riga_trattativa')
+    for line in lines:
+        items.append({
+            'descrizione': line.get('descrizione') or line.get('nome', ''),
+            'qt': line.get('quantita', 0),
+            'prezzo_unitario': line.get('prezzounitario', 0),
+            'prezzo_totale': line.get('prezzoriga', 0),
+        })
+
+    # --- Contesto ---
+    # Helper per formattare date se necessario (ma docxtpl gestisce oggetti datetime spesso, oppure stringhe)
+    def fmt(val):
+        return val if val is not None else ''
+
+    data_attuale = datetime.datetime.now().strftime("%d/%m/%Y")
+
+    dati_trattativa = {
+        # Trattativa
+        'titolo': deal_values.get('titolo'),
+        
+        # Azienda (Mappatura campi richiesti + originali DB)
+        'azienda_id': company_values.get('id'), # o codicecliente?
+        'azienda': company_values.get('nominativo'), # Mapping requested: nome -> nominativo
+        'indirizzo': company_values.get('Via'), # Mapping requested: indirizzo -> Via
+        'azienda_citta': company_values.get('Comune'), # Mapping requested: citta -> Comune
+        'azienda_nazione': company_values.get('cantone'), # Mapping requested: nazione -> cantone (o altro)
+
+        # Items Loop
+        'items': items,
+
+        # Totali
+        'totale_complessivo': deal_values.get('importo'),
+        
+        # Extra (Legacy support if template uses them)
+        'data_attuale': data_attuale,
+    }
+
+    # Carica il template e fai il rendering
+    doc = DocxTemplate(template_path)
+    doc.render(dati_trattativa)
+
+    # Salva il documento in memoria
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    
+    filename = f"offerta_{recordid_deal}"
+    # Try to make a better filename if we have details
+    if dati_trattativa.get('titolo'):
+         safe_title = re.sub(r'[^a-zA-Z0-9\-_]', '', dati_trattativa['titolo'].replace(' ', '_'))
+         filename = f"{safe_title}_{data_attuale}"
+
+    response = HttpResponse(
+        buffer.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}.docx"'
+    return response
