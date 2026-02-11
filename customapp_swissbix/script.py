@@ -2641,6 +2641,7 @@ def search_timesheet_entities(request):
 
     if target == 'progetto' and azienda_id:
         conditions.append(f"recordidcompany_ = '{azienda_id}'")
+        conditions.append(f"(completed != 'Si' OR completed IS NULL)")
 
     try:
         records = UserTable(table_name).get_records(conditions_list=conditions, limit=20)
