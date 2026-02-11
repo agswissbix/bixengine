@@ -73,6 +73,10 @@ class TableSettings:
             'options': ['true', 'false'],
             'value': 'true'
         },
+        'deadline_actions': {
+            'type': 'parola',
+            'value': ''
+        },
         'hidden': {
             'type': 'select',
             'options': ['true', 'false'],

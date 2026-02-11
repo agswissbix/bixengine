@@ -345,7 +345,7 @@ class UserRecord:
         else:
             sqlmax=f"SELECT MAX(recordid_) as max_recordid FROM user_{self.tableid}"
             result=HelpderDB.sql_query_row(sqlmax)
-            max_recordid=result['max_recordid']
+            max_recordid=result['max_recordid'] if result else None
             if max_recordid is None:
                 next_recordid = '00000000000000000000000000000001'
             else:
@@ -353,7 +353,7 @@ class UserRecord:
             
             sqlmax=f"SELECT MAX(id) as max_id FROM user_{self.tableid}"
             result=HelpderDB.sql_query_row(sqlmax)
-            max_id=result['max_id']
+            max_id=result['max_id'] if result else None
             if max_id is None:
                 next_id = 1
             else:
@@ -361,7 +361,7 @@ class UserRecord:
 
             sqlmax=f"SELECT MAX(linkedorder_) as max_order FROM user_{self.tableid}"
             result=HelpderDB.sql_query_row(sqlmax)
-            max_order=result['max_order']
+            max_order=result['max_order'] if result else None
             if max_order is None:
                 next_order = 1
             else:

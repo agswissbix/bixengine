@@ -58,6 +58,143 @@ def task_monitor(data_type):
         return wrapper
     return decorator
 
+
+@task_monitor(data_type="no_output")
+@csrf_exempt
+def check_deadlines(request):
+    """
+    Controlla le scadenze ed esegue le relative actions
+    """
+    condition_list = []
+    records = UserTable('deadline').get_records(conditions_list=condition_list)
+    for record in records:
+        recordid = record['recordid_']
+        rec = UserRecord('deadline', recordid)
+        deadline_date = rec.values['date_deadline']
+        today = date.today()
+        days_remaining = (deadline_date - today).days
+
+        notice_days = rec.values.get('notice_days') or 0
+
+        if days_remaining < 0:
+            status = "Scaduto"
+        elif days_remaining <= int(notice_days):
+            status = "In scadenza"
+        else:
+            status = "Attivo"
+
+        if status != rec.values['status']:
+            rec.values['notification_sent'] = 'No'
+            rec.values['status'] = status
+            rec.save()
+
+        if status != "Attivo" and rec.values['notification_sent'] != 'Si':
+            actions = rec.values['actions'].split(',')
+
+            for action in actions:
+                match action:
+                    case "email":
+                        send_email_deadline(recordid)
+                    case "notification":
+                        pass
+                    case default:
+                        pass
+
+            rec.values['notification_sent'] = 'Si'
+            rec.save()
+    
+    return {
+        "status": "success",
+        "value": "Scadenze controllate",
+        "type": "no_output"
+    }
+
+
+
+def send_email_deadline(recordid):
+    """
+    Invia un'email di avviso per la scadenza.
+    """
+    try:
+        deadline = UserRecord('deadline', recordid)
+
+        # INFO PRINCIPALI
+        descrizione = deadline.values.get("description", "")
+        data_scadenza = deadline.values.get("date_deadline", "")
+        status = deadline.values.get("status", "")
+        
+        # UTENTE / DESTINATARIO
+        # Si prova a prendere l'utente assegnato, altrimenti il creatore
+        user_id = deadline.values.get("assigned_to")
+        creator_id = deadline.values.get("creatorid_")
+        
+        if user_id:
+             recipient_id = user_id
+        else:
+             recipient_id = creator_id
+
+        recipient_email = SysUser.objects.filter(id=recipient_id).values_list("email", flat=True).first()
+
+        if not recipient_email:
+            print(f"Nessun destinatario trovato per deadline {recordid}")
+            return
+
+        #OGGETTO
+        subject = f"Avviso Scadenza: {descrizione}"
+
+        # CORPO EMAIL HTML
+        link_web = "https://bixportal.dc.swissbix.ch/home"
+        
+        mailbody = f"""
+        <p style="margin:0 0 6px 0;">Ciao,</p>
+
+        <p style="margin:0 0 10px 0;">
+            Ti ricordiamo la seguente scadenza:
+        </p>
+
+        <table style="border-collapse:collapse; width:100%; font-size:14px;">
+            <tr><td style="padding:4px 0; font-weight:bold;">Descrizione:</td><td>{descrizione}</td></tr>
+            <tr><td style="padding:4px 0; font-weight:bold;">Data Scadenza:</td><td>{data_scadenza}</td></tr>
+            <tr><td style="padding:4px 0; font-weight:bold;">Stato:</td><td>{status}</td></tr>
+        """
+        
+        # Aggiungi campi opzionali se presenti (es. progetto)
+        project_id = deadline.values.get("recordidproject_")
+        if project_id:
+            project_val = deadline.fields.get("recordidproject_", {}).get("convertedvalue", "")
+            mailbody += f"""
+            <tr><td style="padding:4px 0; font-weight:bold;">Progetto:</td><td>{project_val}</td></tr>
+            """
+
+        mailbody += "</table>"
+
+        mailbody += f"""
+        <p style="margin:16px 0 0 0;">
+            Puoi vedere maggiori informazioni accedendo alla piattaforma:
+            <a href="{link_web}">{link_web}</a>
+        </p>
+
+        <p style="margin:0;">Cordiali saluti,</p>
+        <p style="margin:0;">Il team</p>
+        """
+
+        email_data = {
+            "to": recipient_email,
+            "subject": subject,
+            "text": mailbody,
+            "cc": "",
+            "bcc": "",
+            "attachment_relativepath": "",
+            "attachment_name": ""
+        }
+
+        EmailSender.save_email("deadline", recordid, email_data)
+        print(f"Email inviata per deadline {recordid} a {recipient_email}")
+
+    except Exception as e:
+        print(f"Errore invio email deadline {recordid}: {str(e)}")
+        logger.error(f"Errore invio email deadline {recordid}: {str(e)}")    
+
 # ritorna dei contatori (ad esempio: numero di stabili, numero di utenti, ecc.)
 @task_monitor(data_type="counters")
 def monitor_timesheet_daily_count():

@@ -4,7 +4,11 @@ from django.utils import timezone
 from django.db import connection
 
 
-DISABLE_SCRIPT = True
+DISABLE_SCRIPT = False
+
+INCLUDE_FIELDS = { "commonapp.UserDeadline"}
+INDIFFERENT_FIELDS = {"commonapp.UserJobStatus","commonapp.UserSchedulerLog","commonapp.UserMonitoring","commonapp.UserEmail","commonapp.UserChart", "commonapp.UserSystemLog","commonapp.UserEvents", "commonapp.UserUserLog" }
+
 
 FIELD_TYPE_MAPPING = {
     "chart": {
@@ -72,6 +76,19 @@ FIELD_TYPE_MAPPING = {
         "status": "lookup",
         "monitoring_output": "html"
     },
+    "deadline": {
+        "date_deadline": "Data",
+        "date_start": "Data",
+        "description": "Memo",
+        "time": "Ora",
+        "status": "lookup",
+        "frequency": "lookup",
+        "frequency_months": "Numero",
+        "actions": "multiselect",
+        "notice_days": "Numero",
+        "assigned_to": "Utente",
+        "notification_sent": "lookup",
+    },
 }
 
 LOOKUP_ITEMS_MAP = {
@@ -87,8 +104,6 @@ LOOKUP_ITEMS_MAP = {
     "date_granularity_chart": ["year", "month", "day"],
 }
 
-INDIFFERENT_FIELDS = { }
-INCLUDE_FIELDS = {"commonapp.UserJobStatus","commonapp.UserSchedulerLog","commonapp.UserMonitoring","commonapp.UserEmail","commonapp.UserChart", "commonapp.UserSystemLog","commonapp.UserEvents", "commonapp.UserUserLog" }
 
 EXCLUDED_FIELDS = {
     "record_id",
@@ -100,6 +115,7 @@ EXCLUDED_FIELDS = {
     "first_page_filename",
     "record_status",
     "deleted_flag",
+    "linked_order"
 }
 
 

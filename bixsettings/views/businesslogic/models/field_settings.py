@@ -40,6 +40,11 @@ class FieldSettings:
             'options': ['true', 'false'],
             'value': 'false'
         },
+        'is_deadline_field': {
+            'type': 'select',
+            'options': ['date_deadline', 'date_start', 'frequency', 'frequency_months', 'assigned_to'],
+            'value': ''
+        },
         'default': {
             'type': 'parola',
             'value': ''

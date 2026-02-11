@@ -3199,7 +3199,7 @@ def insert_domains_test(request):
 
 
 
-def _save_record_data(tableid, recordid=None, fields=None, files=None):
+def _save_record_data(tableid, recordid=None, fields=None, files=None, userid=1):
     """
     Funzione di utilità condivisa per creare o aggiornare un record.
     - tableid: stringa (obbligatoria)
@@ -3210,43 +3210,207 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None):
     def normalize_value(value):
         return value if value not in ('', 'null', None) and str(value).strip() else None
 
-    record = UserRecord(tableid, recordid)
+    record = UserRecord(tableid, recordid, userid)
 
-    # 1️⃣ Assegna i campi
+    fieldsettings = FieldSettings(tableid).get_all_settings()
+
+    # Precarico tutti i fieldtype in una sola query
+    field_types = {}
+    if fields:
+        field_ids = tuple(fields.keys())
+        placeholders = ",".join(["%s"] * len(field_ids))
+
+        sql = f"""
+            SELECT fieldid, fieldtypewebid
+            FROM sys_field
+            WHERE tableid = %s
+            AND fieldid IN ({placeholders})
+        """
+
+        results = HelpderDB.sql_query(sql, (tableid, *field_ids))
+        field_types = {row["fieldid"]: row["fieldtypewebid"] for row in results}
+
+    # ===============================
+    # 🔹 ASSEGNAZIONE CAMPI
+    # ===============================
+
+    deadline_updates = {}
+
     if fields:
         for fieldid, value in fields.items():
             normalized_value = normalize_value(value)
+            fieldtype = field_types.get(fieldid)
 
-            fieldtype = HelpderDB.sql_query_value("SELECT fieldtypewebid FROM sys_field WHERE fieldid = %s AND tableid = %s", 'fieldtypewebid', (fieldid, tableid))
+            # --- Validazione Utente ---
             if fieldtype == 'Utente' and normalized_value:
-                if not HelpderDB.sql_query_value("SELECT id FROM sys_user WHERE id = %s", 'id', (normalized_value,)):
+                exists = HelpderDB.sql_query_value(
+                    "SELECT 1 FROM sys_user WHERE id = %s",
+                    '1',
+                    (normalized_value,)
+                )
+                if not exists:
                     normalized_value = None
 
+            # --- Validazione Data ---
             if fieldtype == 'Data' and normalized_value:
                 try:
-                    # Prova a convertire in datetime
                     from dateutil import parser
-                    dt_obj = parser.parse(str(normalized_value))
+                    dt_obj = parser.parse(normalized_value)
                     normalized_value = dt_obj.strftime('%Y-%m-%d')
-                except:
+                except Exception:
                     normalized_value = None
 
-
-            # Gestione campi FK (terminano con "_")
-            if fieldid.endswith('_') and normalized_value is not None:
+            # --- Validazione FK ---
+            if fieldid.endswith('_') and normalized_value:
+                fk_table = fieldid.replace('_', '').replace('recordid', '')
                 sql = f"""
-                    SELECT recordid_
-                    FROM user_{fieldid.replace('_', '').replace('recordid', '')}
+                    SELECT 1
+                    FROM user_{fk_table}
                     WHERE recordid_ = %s
                     LIMIT 1
                 """
-                existing_id = HelpderDB.sql_query_value(sql, 'recordid_', (normalized_value,))
-                if not existing_id:
+                exists = HelpderDB.sql_query_value(sql, '1', (normalized_value,))
+                if not exists:
                     normalized_value = None
 
             record.values[fieldid] = normalized_value
 
+            # --- Gestione Deadline (solo raccolta dati, non save qui) ---
+            setting = fieldsettings.get(fieldid, {}).get('is_deadline_field', {}).get('value')
+            if setting:
+                deadline_updates[setting] = normalized_value
+
     record.save()
+
+    # Se era in creazione ora abbiamo il recordid
+    current_recordid = record.recordid
+
+    if deadline_updates:
+
+        try:
+            # Recupero eventuale deadline esistente
+            deadline_recordid = None
+            if recordid:
+                sql = """
+                    SELECT recordid_
+                    FROM user_deadline
+                    WHERE tableid = %s
+                    AND recordidtable = %s
+                    LIMIT 1
+                """
+                deadline_recordid = HelpderDB.sql_query_value(
+                    sql,
+                    'recordid_',
+                    (tableid, current_recordid)
+                )
+
+            deadline_record = UserRecord('deadline', deadline_recordid, userid)
+
+            # Recupero descrizione tabella in modo sicuro
+            label_table = "Record"
+            try:
+                table_obj = SysTable.objects.filter(id=tableid).first()
+                if table_obj:
+                    label_table = table_obj.description
+            except Exception:
+                pass
+
+            deadline_record.values['tableid'] = tableid
+            deadline_record.values['recordidtable'] = current_recordid
+            deadline_record.values['description'] = label_table
+            deadline_record.values['notice_days'] = 2
+
+            # Recupero actions in modo sicuro
+            deadline_record.values['actions'] = ""
+            try:
+                settings_obj = TableSettings(tableid).get_specific_settings('deadline_actions')
+                if settings_obj and 'deadline_actions' in settings_obj:
+                    deadline_record.values['actions'] = settings_obj['deadline_actions'].get('value', "")
+            except Exception as e:
+                print(f"Errore recupero actions deadline: {e}")
+
+            for key, value in deadline_updates.items():
+                deadline_record.values[key] = value
+
+
+            start_date = deadline_record.values.get('start_date')
+            frequency_label = deadline_record.values.get('frequency')
+            frequency_months = deadline_record.values.get('frequency_months')
+
+            # 🔹 Calcolo data scadenza
+            if start_date:
+                try:
+                    if isinstance(start_date, str):
+                        # Tenta parsing sicuro
+                        try:
+                            start_date_obj = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
+                        except ValueError:
+                            # Se fallisce formato standard, prova parser dateutil o fallback
+                            from dateutil import parser
+                            start_date_obj = parser.parse(start_date).date()
+                    elif isinstance(start_date, (datetime.date, datetime.datetime)):
+                         start_date_obj = start_date
+                    else:
+                        start_date_obj = None
+
+                    if start_date_obj:
+                        deadline_date = None
+
+                        # 🔹 Caso 1: frequenza testuale
+                        if frequency_label and isinstance(frequency_label, str):
+                            frequency_map = {
+                                "mensile": relativedelta(months=1),
+                                "trimestrale": relativedelta(months=3),
+                                "semestrale": relativedelta(months=6),
+                                "annuale": relativedelta(years=1),
+                            }
+                            
+                            delta = frequency_map.get(frequency_label.lower())
+                            if delta:
+                                deadline_date = start_date_obj + delta
+
+                        # 🔹 Caso 2: mesi numerici
+                        elif frequency_months:
+                            try:
+                                months_val = int(frequency_months)
+                                deadline_date = start_date_obj + relativedelta(months=months_val)
+                            except (ValueError, TypeError):
+                                pass
+
+                        if deadline_date:
+                            deadline_record.values['date_deadline'] = deadline_date.strftime("%Y-%m-%d")
+                except Exception as e:
+                    print(f"Errore calcolo data scadenza: {e}")
+
+            # Calcolo STATUS
+            deadline_date_str = deadline_record.values.get('date_deadline')
+            if deadline_date_str and isinstance(deadline_date_str, str):
+                try:
+                    deadline_date = datetime.datetime.strptime(deadline_date_str, "%Y-%m-%d").date()
+                    today = date.today()
+                    days_remaining = (deadline_date - today).days
+
+                    notice_days_val = deadline_record.values.get('notice_days')
+                    try:
+                        notice_days = int(notice_days_val)
+                    except (ValueError, TypeError):
+                        notice_days = 0
+
+                    if days_remaining < 0:
+                        status = "Scaduto"
+                    elif days_remaining <= notice_days:
+                        status = "In scadenza"
+                    else:
+                        status = "Attivo"
+
+                    deadline_record.values['status'] = status
+                    deadline_record.save()
+                    
+                except Exception as e:
+                    print(f"Errore calcolo status deadline: {e}")
+
+        except Exception as e:
+            print(f"Errore generale gestione deadline in _save_record_data: {e}")
 
     # 2️⃣ Salva i file (se presenti)
     if files:

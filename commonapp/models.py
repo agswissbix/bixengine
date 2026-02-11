@@ -857,6 +857,7 @@ class BaseUserTable(models.Model):
         blank=True,
         db_column='recordstatus_'
     )
+    linked_order = models.IntegerField(null=True, blank=True, db_column='linkedorder_')
     deleted_flag = models.CharField(
         max_length=1,
         default='N',
@@ -1028,3 +1029,23 @@ class UserJobStatus(BaseUserTable):
     class Meta:
         db_table = 'user_job_status'
         verbose_name_plural = 'Stato Lavori'
+
+class UserDeadline(BaseUserTable):
+    tableid = models.ForeignKey(SysTable, models.DO_NOTHING, null=True, blank=True, db_column='tableid')
+    recordidtable = models.CharField(max_length=255, null=True, blank=True, db_column='recordidtable')
+
+    date_deadline = models.DateField(null=True, blank=True)
+    date_start = models.DateField(null=True, blank=True)
+    description = models.TextField(null=True, blank=True)
+    time = models.TimeField(null=True, blank=True)
+    status = models.CharField(max_length=255, null=True, blank=True)
+    frequency = models.CharField(max_length=255, null=True, blank=True)
+    frequency_months = models.CharField(max_length=255, null=True, blank=True)
+    actions = models.CharField(max_length=255, null=True, blank=True)
+    notice_days = models.IntegerField(null=True, blank=True)
+    assigned_to = models.ForeignKey(SysUser, models.DO_NOTHING, null=True, blank=True, db_column='assigned_to')
+    notification_sent = models.CharField(max_length=255, null=True, blank=True)
+    
+    class Meta:
+        db_table = 'user_deadline'
+        verbose_name_plural = 'Scadenze'
