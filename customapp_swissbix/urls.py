@@ -83,4 +83,6 @@ urlpatterns = [
     path('upload_lenovo_photo/', upload_lenovo_photo, name='upload_lenovo_photo'),
     path('upload_lenovo_attachment/', upload_lenovo_attachment, name='upload_lenovo_attachment'),
     path('get_lenovo_attachments/', get_lenovo_attachments, name='get_lenovo_attachments'),
+    path('print_lenovo_ticket/', print_lenovo_ticket, name='print_lenovo_ticket'),
+    path('save_lenovo_signature/', save_lenovo_signature, name='save_lenovo_signature'),
 ]

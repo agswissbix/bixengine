@@ -2512,7 +2512,11 @@ def search_timesheet_entities(request):
             {
                 'id': str(x.get('recordid_')),
                 'name': x.get(name_field) or "N/D",
-                'details': x.get(detail_field) if detail_field else ""
+                'details': x.get(detail_field) if detail_field else "",
+                'address': x.get('address') or "",
+                'city': x.get('city') or "",
+                'email': x.get('email') or "",
+                'phonenumber': x.get('phonenumber') or "",
             } for x in records
         ]
         

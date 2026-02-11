@@ -19,7 +19,7 @@ import pdfkit
 import io
 from io import BytesIO
 from django.contrib.staticfiles import finders
-from django.template.loader import get_template
+from django.template.loader import get_template, render_to_string
 from bixengine.settings import BASE_DIR
 from commonapp.bixmodels.user_record import *
 from commonapp.bixmodels.user_table import *
@@ -2255,14 +2255,27 @@ def get_lenovo_ticket(request):
         # Serialize fields securely
         ticket_data = {
             'recordid': rec.recordid,
-            'name': rec.values.get('name', ''),
-            'surname': rec.values.get('surname', ''),
-            'company_name': rec.values.get('company_name', ''),
-            'serial': rec.values.get('serial', ''),
-            'product_photo': rec.values.get('product_photo', ''),
-            'problem_description': rec.values.get('problem_description', ''),
-            'status': rec.values.get('status', ''),
+            'name': rec.values.get('name'),
+            'surname': rec.values.get('surname'),
+            'company_name': rec.values.get('company_name'),
+            'serial': rec.values.get('serial'),
+            'product_photo': rec.values.get('product_photo'),
+            'problem_description': rec.values.get('problem_description'),
+            'status': rec.values.get('status'),
             'reception_date': str(rec.values.get('reception_date', ''))[:10] if rec.values.get('reception_date') else '',
+            'address': rec.values.get('address'),
+            'place': rec.values.get('place'),
+            'brand': rec.values.get('brand'),
+            'model': rec.values.get('model'),
+            'username': rec.values.get('username'),
+            'password': rec.values.get('password'),
+            'warranty': rec.values.get('warranty'),
+            'warranty_type': rec.values.get('warranty_type'),
+            'auth_factory_reset': rec.values.get('auth_factory_reset'),
+            'request_quote': rec.values.get('request_quote'),
+            'direct_repair': rec.values.get('direct_repair'),
+            'direct_repair_limit': rec.values.get('direct_repair_limit'),
+            'auth_formatting': rec.values.get('auth_formatting'),
         }
         
         return JsonResponse({'success': True, 'ticket': ticket_data})
@@ -2292,7 +2305,13 @@ def save_lenovo_ticket(request):
                 rec.values['status'] = 'Draft'
             
         # Mappatura dei campi
-        allowed_fields = ['name', 'surname', 'company_name', 'email', 'phone', 'serial', 'product_photo', 'problem_description', 'status', 'recordidcompany_']
+        allowed_fields = [
+            'name', 'surname', 'company_name', 'email', 'phone', 'serial', 'product_photo', 
+            'problem_description', 'status', 'recordidcompany_',
+            'address', 'place', 'brand', 'model', 'username', 'password',
+            'warranty', 'warranty_type',
+            'auth_factory_reset', 'request_quote', 'direct_repair', 'direct_repair_limit', 'auth_formatting'
+        ]
         
         for key in allowed_fields:
             if key in fields:
@@ -2422,3 +2441,194 @@ def get_lenovo_attachments(request):
         logger.error(f"Error getting attachments: {e}")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
+
+def image_to_base64(path):
+    if not path or not os.path.exists(path):
+        return None
+    try:
+        with open(path, "rb") as image_file:
+            return "data:image/png;base64," + base64.b64encode(image_file.read()).decode('utf-8')
+    except Exception as e:
+        print(f"Error converting image to base64: {e}")
+        return None
+
+def generate_lenovo_pdf(recordid, signature_path=None):
+    try:
+        base_path = os.path.normpath(os.path.join(settings.STATIC_ROOT, 'pdf'))
+        os.makedirs(base_path, exist_ok=True)
+        
+        # Get Ticket Data
+        rec = UserRecord('ticket_lenovo', recordid)
+        if not rec.recordid:
+            raise Exception("Ticket not found")
+
+        row = rec.values
+        row['recordid'] = recordid
+        
+        # Attachments
+        query = """
+            SELECT filename, file, note 
+            FROM user_attachment 
+            WHERE recordidticket_lenovo_ = %s 
+            AND deleted_ = 'N'
+            ORDER BY date DESC, recordid_ DESC
+        """
+        
+        attachments = []
+        with connection.cursor() as cursor:
+            cursor.execute(query, [recordid])
+            rows = cursor.fetchall()
+            for row_att in rows:
+                file_rel_path = row_att[1]
+                note = row_att[2]
+                
+                # Check extension (images only)
+                ext = os.path.splitext(file_rel_path)[1].lower()
+                if ext in ['.jpg', '.jpeg', '.png', '.gif']:
+                     abs_att_path = os.path.join(settings.UPLOADS_ROOT, file_rel_path)
+                     b64 = image_to_base64(abs_att_path)
+                     if b64:
+                         attachments.append({
+                             'image': b64,
+                             'note': note
+                         })
+                         
+        row['attachments'] = attachments
+
+        # Asset Paths (Logo, etc)
+        # Use the frontend logo which is known to be colored/visible
+        logo_path = "c:/bixdata/bixui/bixportal/public/bixdata/logos/lenovo.png"
+            
+        row['logoUrl'] = image_to_base64(logo_path) or ""
+
+        certificate_path = os.path.join(settings.BASE_DIR, 'customapp_swissbix', 'static', 'images', 'lenovo_certificated.png')
+        row['certificateUrl'] = image_to_base64(certificate_path) or ""
+
+        # Signature
+        if signature_path:
+             row['signatureUrl'] = image_to_base64(signature_path)
+
+        # Product Photo & Conditions
+        if row.get('product_photo'):
+            # Path is relative 'lenovo_intake/...'
+            # Need absolute path
+            abs_photo_path = os.path.join(settings.UPLOADS_ROOT, row['product_photo'])
+            row['product_photo_b64'] = image_to_base64(abs_photo_path)
+        
+        # Render HTML
+        html_content = render_to_string('pdf/lenovo_ticket.html', row)
+        pdf_filename = f"lenovo_ticket_{recordid}.pdf"
+        temp_pdf_path = os.path.join(base_path, pdf_filename)
+        
+        css = """
+            html, body { margin: 0; padding: 0; }
+            body { zoom: 0.8; }
+        """
+
+        BrowserManager.generate_pdf(
+            html_content=html_content,
+            output_path=temp_pdf_path,
+            css_styles=css
+        )
+        
+        # Save as attachment
+        att = UserRecord('attachment')
+        att.values['recordidticket_lenovo_'] = recordid
+        att.values['type'] = 'Ricevuta Firmata' # Or just Signature/PDF
+        att.values['date'] = datetime.date.today().strftime('%Y-%m-%d')
+        att.save()
+
+        # Move file
+        dest_dir = os.path.join(settings.UPLOADS_ROOT, "attachment", str(att.recordid))
+        os.makedirs(dest_dir, exist_ok=True)
+        final_pdf_path = os.path.join(dest_dir, pdf_filename)
+        shutil.move(temp_pdf_path, final_pdf_path)
+
+        att.values['file'] = f"attachment/{att.recordid}/{pdf_filename}"
+        att.values['filename'] = pdf_filename
+        att.save()
+        
+        return att.recordid
+
+    except Exception as e:
+        print(f"Error generating PDF: {e}")
+        raise
+
+@csrf_exempt
+def save_lenovo_signature(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Invalid method'}, status=405)
+
+    try:
+        recordid = request.POST.get('recordid')
+        img_base64 = request.POST.get('img_base64')
+
+        if not recordid or not img_base64:
+             return JsonResponse({'success': False, 'error': 'Missing data'}, status=400)
+
+        # Save Signature Image temporarily
+        if ',' in img_base64:
+            _, img_base64 = img_base64.split(',', 1)
+        img_data = base64.b64decode(img_base64)
+        
+        base_path = os.path.join(settings.STATIC_ROOT, 'pdf')
+        os.makedirs(base_path, exist_ok=True)
+        sig_filename = f"sig_{recordid}_{uuid.uuid4().hex}.png"
+        sig_path = os.path.join(base_path, sig_filename)
+        
+        with open(sig_path, "wb") as f:
+            f.write(img_data)
+            
+        # Generate PDF
+        att_id = generate_lenovo_pdf(recordid, signature_path=sig_path)
+        
+        if os.path.exists(sig_path): os.remove(sig_path)
+        
+        return JsonResponse({'success': True, 'attachment_id': att_id})
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@csrf_exempt
+def print_lenovo_ticket(request):
+    try:
+        data = json.loads(request.body)
+        recordid = data.get('recordid')
+        
+        # Find latest PDF attachment
+        query = """
+            SELECT file, filename 
+            FROM user_attachment 
+            WHERE recordidticket_lenovo_ = %s 
+            AND type = 'Ricevuta Firmata'
+            ORDER BY recordid_ DESC LIMIT 1
+        """
+        row = HelpderDB.sql_query_row(query, [recordid])
+        
+        if row:
+             relative_path = row['file']
+             filename = row['filename']
+        else:
+             # Generate on fly? calling generate_lenovo_pdf without signature?
+             # User said "Sign & Print", so likely they sign first.
+             # If just printing, maybe generate draft?
+             # Let's try to generate one without signature if missing
+             try:
+                att_id = generate_lenovo_pdf(recordid)
+                rec = UserRecord('attachment', att_id)
+                relative_path = rec.values['file']
+                filename = rec.values['filename']
+             except Exception as e:
+                 return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+        abs_path = os.path.join(settings.UPLOADS_ROOT, relative_path)
+        if not os.path.exists(abs_path):
+             return JsonResponse({'success': False, 'error': 'File not found'}, status=404)
+             
+        response = FileResponse(open(abs_path, 'rb'), content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
