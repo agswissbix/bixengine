@@ -2278,6 +2278,13 @@ def get_lenovo_ticket(request):
             'auth_formatting': rec.values.get('auth_formatting'),
         }
         
+        # Check for signature file (Fixed Path)
+        sig_path = f"lenovo_intake/{ticket_id}/signature.png"
+        if default_storage.exists(sig_path):
+            ticket_data['signatureUrl'] = sig_path
+        else:
+            ticket_data['signatureUrl'] = ""
+        
         return JsonResponse({'success': True, 'ticket': ticket_data})
         
     except Exception as e:
@@ -2507,6 +2514,12 @@ def generate_lenovo_pdf(recordid, signature_path=None):
         # Signature
         if signature_path:
              row['signatureUrl'] = image_to_base64(signature_path)
+        else:
+             # Check for fixed signature file
+             sig_rel_path = f"lenovo_intake/{recordid}/signature.png"
+             if default_storage.exists(sig_rel_path):
+                 abs_sig_path = os.path.join(settings.UPLOADS_ROOT, sig_rel_path)
+                 row['signatureUrl'] = image_to_base64(abs_sig_path)
 
         # Product Photo & Conditions
         if row.get('product_photo'):
@@ -2566,23 +2579,26 @@ def save_lenovo_signature(request):
         if not recordid or not img_base64:
              return JsonResponse({'success': False, 'error': 'Missing data'}, status=400)
 
-        # Save Signature Image temporarily
+        # Save Signature Image
         if ',' in img_base64:
             _, img_base64 = img_base64.split(',', 1)
         img_data = base64.b64decode(img_base64)
         
-        base_path = os.path.join(settings.STATIC_ROOT, 'pdf')
-        os.makedirs(base_path, exist_ok=True)
-        sig_filename = f"sig_{recordid}_{uuid.uuid4().hex}.png"
-        sig_path = os.path.join(base_path, sig_filename)
+        from django.core.files.base import ContentFile
+        from django.core.files.storage import default_storage
         
-        with open(sig_path, "wb") as f:
-            f.write(img_data)
+        # Fixed filename for signature (one per ticket)
+        filename = "signature.png"
+        storage_path = f"lenovo_intake/{recordid}/{filename}"
+        
+        # Overwrite if exists
+        if default_storage.exists(storage_path):
+            default_storage.delete(storage_path)
             
-        # Generate PDF
-        att_id = generate_lenovo_pdf(recordid, signature_path=sig_path)
+        final_path = default_storage.save(storage_path, ContentFile(img_data))
         
-        if os.path.exists(sig_path): os.remove(sig_path)
+        # Generate PDF (will use the saved signature file)
+        att_id = generate_lenovo_pdf(recordid)
         
         return JsonResponse({'success': True, 'attachment_id': att_id})
 
@@ -2626,9 +2642,9 @@ def print_lenovo_ticket(request):
         if not os.path.exists(abs_path):
              return JsonResponse({'success': False, 'error': 'File not found'}, status=404)
              
-        response = FileResponse(open(abs_path, 'rb'), content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        return response
+        with open(abs_path, 'rb') as pdf_file:
+            b64 = base64.b64encode(pdf_file.read()).decode('utf-8')
+            return JsonResponse({'success': True, 'pdf_base64': f"data:application/pdf;base64,{b64}"})
 
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
