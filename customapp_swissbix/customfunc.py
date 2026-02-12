@@ -242,24 +242,21 @@ def save_record_fields(tableid,recordid, old_record=""):
                 if service == 'Assistenza PBX':
                     if ((travel_time_decimal == 0 and worktime_decimal == 0.25) or invoiceoption == 'In contract'):
                         flat_service_contract = servicecontract_table.get_records(
-                            conditions_list=[f"recordidcompany_='{timesheet_record.values['recordidcompany_']}'",
-                                             "(type='Manutenzione PBX')"])
+                            conditions_list=[f"recordidcompany_='{timesheet_record.values['recordidcompany_']}'", "type='Manutenzione PBX'",  "status='In Progress'"])
 
                 if service == 'Assistenza IT':
                     if travel_time_decimal == 0 or invoiceoption == 'In contract':
                         flat_service_contract = servicecontract_table.get_records(
-                            conditions_list=[f"recordidcompany_='{timesheet_record.values['recordidcompany_']}'",
-                                             "(type='BeAll (All-inclusive)')"])
+                            conditions_list=[f"recordidcompany_='{timesheet_record.values['recordidcompany_']}'","type='BeAll (All-inclusive)'",  "status='In Progress'"])
 
                 if service == 'Printing':
                     flat_service_contract = servicecontract_table.get_records(
-                        conditions_list=[f"recordidcompany_='{timesheet_record.values['recordidcompany_']}'",
-                                         "(type='Manutenzione Printing')"])
+                        conditions_list=[f"recordidcompany_='{timesheet_record.values['recordidcompany_']}'","type='Manutenzione Printing'",  "status='In Progress'"])
 
+                #TODO verificare se esiste davvero questa gestione di contratti hosting
                 if service == 'Assistenza Web Hosting':
                     flat_service_contract = servicecontract_table.get_records(
-                        conditions_list=[f"recordidcompany_='{timesheet_record.values['recordidcompany_']}'",
-                                         "(service='Assistenza Web Hosting')"])
+                        conditions_list=[f"recordidcompany_='{timesheet_record.values['recordidcompany_']}'","service='Assistenza Web Hosting'",  "status='In Progress'"])
 
                 if flat_service_contract:
                     servicecontract_record = UserRecord('servicecontract', flat_service_contract[0]['recordid_'])
