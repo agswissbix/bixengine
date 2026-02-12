@@ -4508,6 +4508,7 @@ def get_input_linked(request):
                 sql=f"SELECT recordid_ as recordid, {kyefieldlink} as name FROM user_{linkedmaster_tableid} where deleted_='N' {additional_conditions} ORDER BY recordid_ desc LIMIT 20 "
 
             query_result=HelpderDB.sql_query(sql)
+            # Name != None ?
             items=query_result
             # Filtra gli elementi in base al searchTerm
             #filtered_items = [item for item in items if searchTerm in item['name'].lower()]
