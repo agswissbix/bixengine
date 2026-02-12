@@ -65,39 +65,72 @@ def check_deadlines(request):
     """
     Controlla le scadenze ed esegue le relative actions
     """
+    # TODO refactoring, funzione unica in commonapp e nelle custom solo switch delle action
     condition_list = []
     records = UserTable('deadline').get_records(conditions_list=condition_list)
+
+    today = date.today()
+
     for record in records:
         recordid = record['recordid_']
         rec = UserRecord('deadline', recordid)
-        deadline_date = rec.values['date_deadline']
-        today = date.today()
+
+        deadline_date = rec.values.get('date_deadline')
+        if not deadline_date:
+            continue  # Salta record senza data
+
         days_remaining = (deadline_date - today).days
 
-        notice_days = rec.values.get('notice_days') or 0
+        # Notice days sicuro
+        try:
+            notice_days = int(rec.values.get('notice_days') or 0)
+        except (ValueError, TypeError):
+            notice_days = 0
 
+        # Determinazione status
         if days_remaining < 0:
-            status = "Scaduto"
-        elif days_remaining <= int(notice_days):
-            status = "In scadenza"
+            new_status = "Scaduto"
+            if rec.values['frequency'] or rec.values['frequency_months']:
+                # TODO: implementare logica corretta per la data di scadenza
+                new_status = "Attivo"
+                rec.values['date_deadline'] = rec.values['date_deadline'] + timedelta(days=rec.values['frequency_months'] * 30)
+        elif days_remaining <= notice_days:
+            new_status = "In scadenza"
         else:
-            status = "Attivo"
+            new_status = "Attivo"
 
-        if status != rec.values['status']:
+        old_status = rec.values.get('status')
+
+        # Aggiorna status se cambiato
+        if new_status != old_status:
+            rec.values['status'] = new_status
             rec.values['notification_sent'] = 'No'
-            rec.values['status'] = status
             rec.save()
 
-        if status != "Attivo" and rec.values['notification_sent'] != 'Si':
-            actions = rec.values['actions'].split(',')
+        # Invio notifiche solo se necessario
+        if new_status != "Attivo" and rec.values.get('notification_sent') != 'Si':
 
-            for action in actions:
-                match action:
+            actions_raw = rec.values.get('actions', '')
+            actions = [a.strip() for a in actions_raw.split(',') if a.strip()]
+
+            for action_str in actions:
+                match_obj = re.match(r"(\w+)(?:\((.*)\))?", action_str)
+                if not match_obj:
+                    continue
+
+                action_name = match_obj.group(1)
+                action_params = match_obj.group(2)
+
+                match action_name:
                     case "email":
-                        send_email_deadline(recordid)
+                        send_email_deadline(recordid, action_params)
                     case "notification":
                         pass
-                    case default:
+                    case "custom_sb_create_task":
+                        # create_task(recordid, action_params)
+                        # Chiama la funzione interna _save_record_data
+                        views._save_record_data(tableid='task', fields={'creator': '50', 'description': 'Task automatico da scadenza', 'duedate': deadline_date.strftime('%Y-%m-%d')}, userid=1)
+                    case _:
                         pass
 
             rec.values['notification_sent'] = 'Si'
@@ -111,7 +144,7 @@ def check_deadlines(request):
 
 
 
-def send_email_deadline(recordid):
+def send_email_deadline(recordid, send_to):
     """
     Invia un'email di avviso per la scadenza.
     """
@@ -128,7 +161,9 @@ def send_email_deadline(recordid):
         user_id = deadline.values.get("assigned_to")
         creator_id = deadline.values.get("creatorid_")
         
-        if user_id:
+        if send_to:
+            recipient_id = send_to
+        elif user_id:
              recipient_id = user_id
         else:
              recipient_id = creator_id

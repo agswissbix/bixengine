@@ -73,6 +73,7 @@ from commonapp.bixmodels.helper_db import *
 
 from . import graph_service
 from dateutil import parser
+from dateutil.relativedelta import relativedelta
 
 from customapp_wegolf.helper import Helper as WegolfHelper
 from customapp_wegolf.views import sync_translation_dashboards as wegolf_sync_translation_dashboards
@@ -3286,7 +3287,7 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None, userid=1)
     current_recordid = record.recordid
 
     if deadline_updates:
-
+        # TODO refactoring, funzione nell'helper
         try:
             # Recupero eventuale deadline esistente
             deadline_recordid = None
@@ -3333,7 +3334,7 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None, userid=1)
                 deadline_record.values[key] = value
 
 
-            start_date = deadline_record.values.get('start_date')
+            start_date = deadline_record.values.get('date_start')
             frequency_label = deadline_record.values.get('frequency')
             frequency_months = deadline_record.values.get('frequency_months')
 
@@ -3346,7 +3347,6 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None, userid=1)
                             start_date_obj = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
                         except ValueError:
                             # Se fallisce formato standard, prova parser dateutil o fallback
-                            from dateutil import parser
                             start_date_obj = parser.parse(start_date).date()
                     elif isinstance(start_date, (datetime.date, datetime.datetime)):
                          start_date_obj = start_date
@@ -3372,8 +3372,17 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None, userid=1)
                         # 🔹 Caso 2: mesi numerici
                         elif frequency_months:
                             try:
-                                months_val = int(frequency_months)
-                                deadline_date = start_date_obj + relativedelta(months=months_val)
+                                value = float(frequency_months)
+
+                                months_val = int(value)  # parte intera
+                                fractional_part = value - months_val  # parte decimale
+
+                                days_val = round(fractional_part * 30)  # mese medio = 30 giorni
+
+                                deadline_date = start_date_obj + relativedelta(
+                                    months=months_val,
+                                    days=days_val
+                                )
                             except (ValueError, TypeError):
                                 pass
 
@@ -3565,7 +3574,8 @@ def save_record_fields(request):
         tableid=tableid,
         recordid=recordid,
         fields=saved_fields_dict,
-        files=uploaded_files
+        files=uploaded_files,
+        userid=userid
     )
     recordid = record.recordid
 
