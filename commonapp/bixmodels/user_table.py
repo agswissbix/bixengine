@@ -472,6 +472,9 @@ class UserTable:
     def get_pivot_records(self,viewid='',searchTerm='', conditions_list=None,fields=None,offset=0,limit=None,orderby='recordid_ desc'):
         if conditions_list is None:
             conditions_list = []
+        conditions_list.append("anno='2026'")
+
+        #TODO pItservice rendere dinamico
         sql=f"""
             SELECT *
             FROM sys_field

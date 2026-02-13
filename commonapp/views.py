@@ -4477,20 +4477,22 @@ def get_input_linked(request):
             #     if recordid_stabile:
             #         additional_conditions = " AND recordidstabile_ = '"+recordid_stabile+"'"
             # Generic context filtering
-            if formValues and linkedmaster_tableid:
-                try:
-                    # Get all valid fields for the target table to avoid errors
-                    fields_query = f"SELECT fieldid FROM sys_field WHERE tableid='{linkedmaster_tableid}'"
-                    rows = HelpderDB.sql_query(fields_query)
-                    valid_fields = {row['fieldid'] for row in rows}
+            #TODO pitservice. metto questa condizione temporaneaa perchè su queste tabelle mi da problemi ma penso perchè artigiano e contatti hanno collegamento diretto a stabile che non dovrebbero avere avendo poi introdotto contattostabile e artigianostabile
+            if linkedmaster_tableid != 'artigiano' and linkedmaster_tableid != 'contatti':
+                if formValues and linkedmaster_tableid:
+                    try:
+                        # Get all valid fields for the target table to avoid errors
+                        fields_query = f"SELECT fieldid FROM sys_field WHERE tableid='{linkedmaster_tableid}'"
+                        rows = HelpderDB.sql_query(fields_query)
+                        valid_fields = {row['fieldid'] for row in rows}
 
-                    # Filter formValues for potential matches
-                    for key, value in formValues.items():
-                        if key.endswith('_') and value:
-                             if key in valid_fields:
-                                additional_conditions += f" AND {key} = '{value}'"
-                except Exception as e:
-                    print(f"Error in generic context filtering: {e}")
+                        # Filter formValues for potential matches
+                        for key, value in formValues.items():
+                            if key.endswith('_') and value:
+                                if key in valid_fields:
+                                    additional_conditions += f" AND {key} = '{value}'"
+                    except Exception as e:
+                        print(f"Error in generic context filtering: {e}")
 
 
             if recordid:

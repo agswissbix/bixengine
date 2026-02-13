@@ -95,6 +95,7 @@ def save_record_fields(tableid,recordid,old_record=None):
         contatto_record.values['riferimento'] = riferimento
         contatto_record.save()
 
+    #---CONTATTO STABILE---
     if tableid == 'contattostabile':
         contattostabile_record = UserRecord('contattostabile', recordid)
         contatto_record = UserRecord('contatti', contattostabile_record.values['recordidcontatti_'])
@@ -104,6 +105,15 @@ def save_record_fields(tableid,recordid,old_record=None):
         contattostabile_record.values['telefono'] = contatto_record.values['telefono']
         contattostabile_record.values['ruolo'] = contatto_record.values['ruolo']
         contattostabile_record.save()
+
+    #---ARTIGIANO STABILE---
+    if tableid == 'artigianostabile':
+        artigianostabile_record = UserRecord('artigianostabile', recordid)
+        artigiano_record = UserRecord('artigiano', artigianostabile_record.values['recordidartigiano_'])
+        artigianostabile_record.values['email'] = artigiano_record.values['email']
+        artigianostabile_record.values['telefono'] = artigiano_record.values['telefono']
+        artigianostabile_record.values['ruolo'] = artigiano_record.values['ramo']
+        artigianostabile_record.save()
 
     # ---LETTURE GASOLIO---
     if tableid == 'letturagasolio':
@@ -179,13 +189,39 @@ def save_record_fields(tableid,recordid,old_record=None):
         offerta_record.values['nrofferta'] = offerta_id
         offerta_record.save()
 
+    #---CONTRATTO---
+    if tableid == 'contratto':
+        contratto_record = UserRecord('contratto', recordid)
+        pianificazioni=contratto_record.get_linkedrecords_dict('pianificazione_contrattuale')
+        if pianificazioni and len(pianificazioni) > 0:
+            contratto_record.values['pianificazioni'] = 'Si'
+
+        righe=contratto_record.get_linkedrecords_dict('righe')
+        if righe and len(righe) > 0:
+            contratto_record.values['dettagli'] = 'Si'
+        
+        contratto_record.save()
+
+    #---PIANIFICAZiONE CONTRATTUALE---
+    if tableid == 'pianificazione_contrattuale':
+        pianificazione_contrattuale_record = UserRecord('pianificazione_contrattuale', recordid)
+        contratto_recordid=pianificazione_contrattuale_record.values['recordidcontratto_']
+        save_record_fields('contratto', contratto_recordid)
+
+    #---RIGHE DI DETTAGLIO---
+    if tableid == 'righe':
+        righe_record = UserRecord('righe', recordid)
+        contratto_recordid=righe_record.values['recordidcontratto_']
+        save_record_fields('contratto', contratto_recordid)
     
 
     # ---ATTACHMENT---
     if tableid == 'attachment':
         attachment_record = UserRecord('attachment', recordid)
-        #TODO pitservice sistemare per pitservice
-        #dipendente_record = UserRecord('dipendente', attachment_record.values['recordiddipendente_'])
+        dipendente_recordid=attachment_record.values['recordiddipendente_']
+        if dipendente_recordid:
+            save_record_fields('dipendente', dipendente_recordid)
+        #dipendente_record = UserRecord('dipendente', dipendente_recordid)
         #allegati= HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordiddipendente_='{attachment_record.values['recordiddipendente_']}' AND deleted_='N'")
         #nrallegati=len(allegati) 
         #dipendente_record.values['nrallegati'] = nrallegati
