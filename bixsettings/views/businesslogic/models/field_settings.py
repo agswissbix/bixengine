@@ -42,7 +42,7 @@ class FieldSettings:
         },
         'is_deadline_field': {
             'type': 'select',
-            'options': ['date_deadline', 'date_start', 'frequency', 'frequency_months', 'assigned_to'],
+            'options': ['date_deadline', 'date_start', 'frequency', 'frequency_months', 'assigned_to', 'notice_days'],
             'value': ''
         },
         'default': {
