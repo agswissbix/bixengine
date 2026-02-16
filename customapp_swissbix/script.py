@@ -1463,6 +1463,12 @@ def sync_bixdata_salesorders():
     return {"message": "Sincronizzazione salesorder completata"}
 
 
+@task_monitor(data_type="sync")
+def sync_servicecontract():
+    print("sync_servicecontract")
+    sync_output = sync_table('servicecontract')
+    return {"message": "Sincronizzazione servicecontract completata"}
+
 def print_servicecontract(request):
     print("print_servicecontract")
 
