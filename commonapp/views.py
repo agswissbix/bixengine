@@ -6702,7 +6702,7 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
     
     dictrows = HelpderDB.sql_query(query)
     if not dictrows:
-        return {'id': chart_id, 'name': chart_record['name'], 'error': '$empty$'}
+        return {'id': chart_id, 'name': chart_record['name'], 'error': '$empty$', 'sql_debug': query}
 
     show_total_average = filters.get('showTotalAverage', False)
 
@@ -7015,7 +7015,83 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
         final_datasets1[0]['userid'] = userid
         
 
-    return _build_chart_context_base(chart_id, chart_record, labels, final_datasets1, final_datasets2 or None)
+    # --- DETTAGLIO NATIONAL AVERAGE (Nuova funzionalità) ---
+    detailed_data = []
+    detailed_query = None
+
+    if dashboard_category == 'nationalAvg':
+        # Costruiamo una query per ottenere i dati grezzi per ogni club
+        # Vogliamo: Nome Club, Anno (o altro raggruppamento temporale), Valore
+        
+        # 1. Recupera la definizione della metrica principale (assumiamo la prima)
+        if db_defs:
+            main_def = db_defs[0]
+            metric_expr = main_def['expression']
+            # Rimuoviamo AVG/SUM per ottenere il valore grezzo, se possibile
+            # Questa è una manipolazione stringa un po' fragile, ma per ora seguiamo la logica esistente
+            # Se expression è "SUM(t1.col)", vogliamo "t1.col"
+            # Se expression è "AVG(t1.col)", vogliamo "t1.col"
+            
+            # Un approccio più sicuro è prendere il campo originale se disponibile
+             # Ma qui 'expression' è quello che abbiamo. Proviamo a rimuovere l'aggregazione esterna.
+            raw_expr = metric_expr
+            if raw_expr.upper().startswith("SUM(") or raw_expr.upper().startswith("AVG(") or raw_expr.upper().startswith("COUNT(") or raw_expr.upper().startswith("MAX(") or raw_expr.upper().startswith("MIN("):
+                raw_expr = raw_expr[4:-1] # Rimuove "XXX(" e ")"
+            
+            # Se c'è un alias secondario (es. Anno), lo usiamo
+            # Se c'è un alias primario (es. Club o Anno), lo usiamo
+            
+            # Vogliamo mostrare: Club | [Alias Raggruppamento] | Valore
+            
+            cols_to_select = []
+            
+            # Aggiungiamo sempre il nome del club
+            cols_to_select.append("user_golfclub.nome_club as Club")
+            
+            # Aggiungiamo il campo di raggruppamento temporale se presente (es. Anno)
+            # Se group_by_alias è l'anno, usalo. Se secondary_alias è l'anno, usalo.
+            
+            time_col = None
+            if secondary_alias:
+                time_col = secondary_select_part.replace(", ", "") # Rimuove virgola iniziale
+            elif group_by_alias:
+                 # Se il raggruppamento principale non è il club, probabilmente è il tempo
+                 if "recordidgolfclub_" not in group_by_config['field']:
+                     time_col = select_group_field
+            
+            if time_col:
+                 cols_to_select.append(time_col)
+
+            cols_to_select.append(f"{raw_expr} as Valore")
+            
+            # JOIN con user_golfclub se non già presente (dovrebbe esserci nella query principale o accessibile)
+            # La from_clause originale potrebbe non avere la join esplicita se non serve per il raggruppamento
+            # Ma qui ci serve per il nome.
+            
+            # Ricostruiamo la from clause per essere sicuri
+            det_from = f"FROM {main_table} AS t1 JOIN user_golfclub ON t1.recordidgolfclub_ = user_golfclub.recordid_"
+            
+            detailed_query = (
+                f"SELECT {', '.join(cols_to_select)} "
+                f"{det_from} "
+                f"WHERE {qc} AND t1.deleted_='N' "
+                f"ORDER BY Club, Valore DESC" # Ordinamento base
+                 # Limitiamo per sicurezza, anche se per debug va bene tutto
+                f" LIMIT 2000"
+            )
+            
+            try:
+                detailed_data = HelpderDB.sql_query(detailed_query)
+            except Exception as e:
+                detailed_data = [{'error': str(e)}]
+
+    context = _build_chart_context_base(chart_id, chart_record, labels, final_datasets1, final_datasets2 or None)
+    context['sql_debug'] = query
+    if detailed_query:
+        context['sql_debug_details'] = detailed_query
+        context['detailed_data'] = detailed_data
+    
+    return context
 
 
 
