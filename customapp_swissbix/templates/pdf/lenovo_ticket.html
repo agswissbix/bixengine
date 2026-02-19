@@ -284,16 +284,12 @@
             
             <div style="margin-bottom: 25px;">
                 <div style="font-weight: bold; font-size: 10px;">Data/Luogo</div>
-                <div style="border-bottom: 1px solid #000; margin-top: 15px;">Massagno, {{ reception_date }}</div>
+                <div style="border-bottom: 1px solid #000; height: 16px; margin-top: 10px;"></div>
             </div>
 
             <div>
                 <div style="font-weight: bold; font-size: 10px;">Firma</div>
-                {% if signatureUrl %}
-                    <img src="{{ signatureUrl }}" style="height: 40px; border-bottom: 1px solid #000; width: 100%; object-fit: contain; object-position: left bottom;" />
-                {% else %}
-                    <div style="border-bottom: 1px solid #000; height: 30px; margin-top: 10px;"></div>
-                {% endif %}
+                <div style="border-bottom: 1px solid #000; height: 30px; margin-top: 10px;"></div>
             </div>
         </div>
 
@@ -303,12 +299,16 @@
             
             <div style="margin-bottom: 25px;">
                 <div style="font-weight: bold; font-size: 10px;">Data/Luogo</div>
-                <div style="border-bottom: 1px solid #000; height: 16px; margin-top: 10px;"></div>
+                <div style="border-bottom: 1px solid #000; margin-top: 10px;">Massagno, {{ reception_date }}</div>
             </div>
 
             <div>
                 <div style="font-weight: bold; font-size: 10px;">Firma</div>
-                <div style="border-bottom: 1px solid #000; height: 30px; margin-top: 10px;"></div>
+                {% if signatureUrl %}
+                    <img src="{{ signatureUrl }}" style="height: 40px; border-bottom: 1px solid #000; width: 100%; object-fit: contain; object-position: left bottom;" />
+                {% else %}
+                    <div style="border-bottom: 1px solid #000; height: 30px; margin-top: 10px;"></div>
+                {% endif %}
             </div>
         </div>
     </div>

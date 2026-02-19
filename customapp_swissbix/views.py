@@ -1788,16 +1788,35 @@ def save_signature(request):
         pdf_path = os.path.join(base_path, pdf_filename)
 
         css = """
-                html, body { height: auto !important; overflow: hidden !important; margin: 0 !important; }
-                body { zoom: 0.98; }
-                div[style*="position:fixed"] { position: absolute !important; bottom: 0 !important; }
+                /* Rimuove l'altezza forzata che spesso crea la seconda pagina */
+                html, body { 
+                    height: auto !important; 
+                    overflow: hidden !important; 
+                    margin: 0 !important; 
+                    padding: 0 !important;
+                }
+                
+                /* Evita che il footer fixed forzi un salto pagina se troppo vicino al bordo */
+                div[style*="position:fixed"] {
+                    position: absolute !important;
+                    bottom: 0 !important;
+                }
+
+                /* Rimuove spazi bianchi finali indesiderati */
+                body:after {
+                    content: none !important;
+                }
+                
+                /* Ottimizzazione scala */
+                body {
+                    zoom: 0.75;
+                }
         """
         
         BrowserManager.generate_pdf(
             html_content=content, 
             output_path=pdf_path, 
-            css_styles=css,
-            options={"margin": {"top": "1cm", "bottom": "0.5cm", "left": "1cm", "right": "1cm"}}
+            css_styles=css
         )
 
         # -------------------------
@@ -2229,9 +2248,15 @@ def get_lenovo_intake_context(request):
                     'read_only': settings.get('sola_lettura') == 'true' # Hypothetical, check if exists
                 }
 
+            if 'lookupitems' in f and f['fieldtypewebid'] == 'multiselect':
+                accessories_lookup = f['lookupitems']
+
         return JsonResponse({
             'success': True,
-            'field_settings': field_settings
+            'field_settings': field_settings,
+            'lookups': {
+                'accessories': accessories_lookup
+            }
         })
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
@@ -2276,6 +2301,7 @@ def get_lenovo_ticket(request):
             'direct_repair': rec.values.get('direct_repair'),
             'direct_repair_limit': rec.values.get('direct_repair_limit'),
             'auth_formatting': rec.values.get('auth_formatting'),
+            'accessories': rec.values.get('accessories'),
         }
         
         # Check for signature file (Fixed Path)
@@ -2317,7 +2343,7 @@ def save_lenovo_ticket(request):
             'problem_description', 'status', 'recordidcompany_',
             'address', 'place', 'brand', 'model', 'username', 'password',
             'warranty', 'warranty_type',
-            'auth_factory_reset', 'request_quote', 'direct_repair', 'direct_repair_limit', 'auth_formatting'
+            'auth_factory_reset', 'request_quote', 'direct_repair', 'direct_repair_limit', 'auth_formatting', 'accessories'
         ]
         
         for key in allowed_fields:
