@@ -2611,6 +2611,7 @@ def get_timesheet_initial_data(request):
                                 "icon_slug": None
                             },
                             "note": str(timesheetline.get("note", "")),
+                            "description": str(timesheetline.get("description", "")),
                             "qtaPrevista": str(timesheetline.get("plannedquantity", "")),
                             "qtaEffettiva": str(timesheetline.get("actualquantity", ""))
                         })
@@ -2662,6 +2663,7 @@ def search_timesheet_entities(request):
     target = request.POST.get('target')
     query = request.POST.get('q', '').strip()
     azienda_id = request.POST.get('azienda_id')
+    record_id = request.POST.get('id')
     
     table_map = {
         'azienda': ('company', 'companyname', 'details'),
@@ -2677,7 +2679,9 @@ def search_timesheet_entities(request):
     table_name, name_field, detail_field = table_map[target]
     
     conditions = []
-    if query:
+    if record_id:
+        conditions.append(f"recordid_ = '{record_id}'")
+    elif query:
         conditions.append(f"{name_field} LIKE '%{query}%'")
 
     if target == 'progetto' and azienda_id:
@@ -2925,6 +2929,7 @@ def save_timesheet_material(request):
             m_rec.values['expectedquantity'] = mat.get('expectedquantity')
             m_rec.values['actualquantity'] = mat.get('actualquantity')
             m_rec.values['note'] = mat.get('note', '')
+            m_rec.values['description'] = mat.get('description', '')
             m_rec.save()
             saved_ids.append(m_rec.recordid)
 
@@ -3296,9 +3301,37 @@ def get_bixhub_initial_data(request):
                     "company": company_name,
                 })
 
+        closed_timesheets = []
+        if userid:
+            # Condizioni per timesheet CHIUSI: description e worktime compilati
+            condition_list_closed = []
+            condition_list_closed.append(f"user='{userid}'")
+            condition_list_closed.append("(description IS NOT NULL AND description != '' AND worktime IS NOT NULL AND worktime != '')")
+            
+            ts_closed_records = UserTable('timesheet').get_records(
+                conditions_list=condition_list_closed, 
+                limit=5, 
+                orderby="date desc"
+            )
+
+            for ts in ts_closed_records:
+                company_name = "N/D"
+                cid = ts.get('recordidcompany_')
+                if cid:
+                    c_rec = UserRecord('company', cid)
+                    if c_rec and hasattr(c_rec, 'values'):
+                        company_name = c_rec.values.get('companyname', 'N/D')
+
+                closed_timesheets.append({
+                    "id": str(ts.get('recordid_')),
+                    "date": str(ts.get('date'))[:10] if ts.get('date') else "",
+                    "company": company_name,
+                })
+
         data = {
             "bixApps": bix_apps,
             "timesheets": recent_timesheets,
+            "closedTimesheets": closed_timesheets,
             "user": {
                 "name": username
             },
