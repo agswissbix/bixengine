@@ -413,16 +413,16 @@
                         <td style="vertical-align: top; padding-top: 2px;">{{ product.code }}</td>
                         <td style="vertical-align: top; padding-top: 2px;">
                             <!-- Preserve whitespace/newlines in description -->
-                            <span style="white-space: pre-wrap; overflow: hidden; text-overflow: ellipsis;">{{
-                                product.title }}</span><br />
+                            <span
+                                style="white-space: pre-wrap; overflow: hidden; text-overflow: ellipsis;">{{product.title}}</span><br />
                         </td>
                         <td style="text-align: center; vertical-align: top; padding-top: 2px;">{{ product.um }}</td>
-                        <td style="text-align: center; vertical-align: top; padding-top: 2px;">{{
-                            product.quantity|floatformat:0 }}</td>
-                        <td style="text-align: right; vertical-align: top; padding-top: 2px;">{{
-                            product.unitPrice|floatformat:2 }} CHF</td>
-                        <td style="text-align: right; vertical-align: top; padding-top: 2px; font-weight: bold;">{{
-                            product.total|floatformat:2 }} CHF</td>
+                        <td style="text-align: center; vertical-align: top; padding-top: 2px;">
+                            {{product.quantity|floatformat:0 }}</td>
+                        <td style="text-align: right; vertical-align: top; padding-top: 2px;">
+                            {{product.unitPrice|floatformat:2 }} CHF</td>
+                        <td style="text-align: right; vertical-align: top; padding-top: 2px; font-weight: bold;">
+                            {{product.total|floatformat:2 }} CHF</td>
                     </tr>
                     <!-- Spacer between rows -->
                     <!-- <tr style="height: 5px;"><td colspan="6"></td></tr> -->
