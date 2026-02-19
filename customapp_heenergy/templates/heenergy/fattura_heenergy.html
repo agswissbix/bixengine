@@ -1,0 +1,518 @@
+{% load static %}
+<!doctype html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="{{ request.scheme }}://{{ request.get_host }}/" />
+    <title>Fattura HEENERGY</title>
+    <style>
+        /* ==================== STILI GENERALI ==================== */
+        * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            box-sizing: border-box;
+        }
+
+        @page {
+            size: A4;
+            margin: 0;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Helvetica', Arial, sans-serif;
+            color: #333;
+            font-size: 9pt;
+            /* Reduced */
+            background: #fff;
+        }
+
+        .page {
+            position: relative;
+            width: 210mm;
+            height: 297mm;
+            margin: 0 auto;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .content-area {
+            padding: 5mm 8mm;
+            /* Reduced padding further */
+            height: 195mm;
+            /* Increased height */
+        }
+
+        /* ==================== HEADER ==================== */
+        .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            /* Revert to top alignment if needed, or keep center */
+            margin-bottom: 15px;
+            /* Reduced */
+            padding-bottom: 10px;
+            /* Reduced */
+        }
+
+        .header-left {
+            width: 35%;
+        }
+
+        .logo-main {
+            width: 200px;
+            margin-bottom: 15px;
+        }
+
+        .logo-main img {
+            width: 100%;
+            height: auto;
+        }
+
+        .header-info {
+            font-size: 8pt;
+            color: #555;
+            line-height: 1.4;
+        }
+
+        .header-right {
+            width: 60%;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            align-items: center;
+            justify-items: center;
+        }
+
+        .partner-logo-header {
+            height: 55px;
+            /* Larger */
+            max-width: 100%;
+            object-fit: contain;
+        }
+
+        /* ==================== INDIRIZZO / INFO ==================== */
+        .address-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 40px;
+        }
+
+        .doc-info {
+            font-size: 10pt;
+        }
+
+        .doc-title {
+            font-size: 16pt;
+            font-weight: bold;
+            color: #000;
+            margin-bottom: 10px;
+        }
+
+        .client-box {
+            width: 40%;
+            padding: 10px 0;
+            font-size: 11pt;
+            line-height: 1.4;
+        }
+
+        /* ==================== TABELLA ARTICOLI ==================== */
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        .items-table th {
+            text-align: left;
+            padding: 8px 5px;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 9pt;
+            background-color: #f0f8ff;
+        }
+
+        .items-table td {
+            border-bottom: 1px solid #eee;
+            padding: 8px 5px;
+            vertical-align: top;
+        }
+
+        .col-qty {
+            text-align: center;
+            width: 10%;
+        }
+
+        .col-price {
+            text-align: right;
+            width: 15%;
+            white-space: nowrap;
+        }
+
+        .col-total {
+            text-align: right;
+            width: 15%;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+
+        /* ==================== TOTALI ==================== */
+        .totals-box {
+            width: 100%;
+            margin-left: auto;
+            margin-top: 0px;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+
+        .total-row.grand {
+            font-weight: bold;
+            font-size: 12pt;
+        }
+
+        /* ==================== SWISS QR CODE SECTION ==================== */
+        .qr-section {
+            position: absolute;
+            bottom: 15mm;
+            padding: 15mm 20mm;
+            width: 170mm;
+            /* 210mm */
+            height: 75mm;
+            /* Standard A4 bottom 1/3 ~105-110mm */
+            border-top: 1px dashed #000;
+            /* Scissors line */
+            font-family: Arial, sans-serif;
+            /* QR bill requires sans-serif */
+            font-size: 8pt;
+            background: #fff;
+        }
+
+        /* Receipt Part (Left) */
+        .receipt-part {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 62mm;
+            height: 100%;
+            padding: 5mm;
+            border-right: 1px dashed #000;
+        }
+
+        /* Payment Part (Right) */
+        .payment-part {
+            position: absolute;
+            top: 0;
+            left: 62mm;
+            width: 108mm;
+            /* 210 - 62 */
+            height: 100%;
+            padding: 5mm;
+        }
+
+        .qr-title {
+            font-weight: bold;
+            font-size: 11pt;
+            margin-bottom: 15px;
+        }
+
+        .qr-subtitle {
+            font-weight: bold;
+            font-size: 8pt;
+            margin-bottom: 5px;
+            margin-top: 10px;
+        }
+
+        .qr-text {
+            font-size: 8pt;
+            line-height: 1.2;
+            margin-bottom: 2px;
+        }
+
+        /* QR Code Placeholder */
+        .qr-code-box {
+            width: 42mm;
+            height: 42mm;
+            background: #f0f0f0;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .cross-icon {
+            width: 7mm;
+            height: 7mm;
+            background: #000;
+            /* Swiss Cross placeholder */
+        }
+
+        /* Scissors Icon placeholder */
+        .scissors {
+            position: absolute;
+            top: -3mm;
+            left: 30mm;
+            font-size: 12pt;
+            background: #fff;
+            padding: 0 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page">
+
+        <!-- CONTENUTO FATTURA (TOP 2/3) -->
+        <div class="content-area">
+
+            <div class="header-container">
+                <!-- Left: BeHeenergy Logo + Info -->
+                <div class="header-left">
+                    <div class="logo-main">
+                        <img src="{{ img_heenergy }}" alt="Heenergy" />
+                    </div>
+                    <div class="header-info">
+                        Via Campagna 32 | 6934 Bioggio<br />
+                        Tel. 091 210 31 48 | info@he-energy.ch<br />
+                        N. IVA: CHE-446.727.008<br />
+                        www.he-energy.ch
+                    </div>
+                </div>
+
+                <!-- Right: Partner Logos -->
+                <div class="header-right">
+                    <img src="{{ img_paradigma }}" class="partner-logo-header" />
+                    <img src="{{ img_kronoterm }}" class="partner-logo-header" />
+                    <img src="{{ img_saj }}" class="partner-logo-header" />
+                    <img src="{{ img_messana }}" class="partner-logo-header" />
+                    <img src="{{ img_sinum }}" class="partner-logo-header" />
+                </div>
+            </div>
+
+            <!-- INFO DOC & CLIENTE -->
+            <div class="address-row" style="margin-top: 10px;">
+
+                <!-- Info Documento (Table Style) -->
+                <div class="doc-info" style="width: 50%;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 10pt;">
+                        <!-- FATTURA n. row -->
+                        <tr>
+                            <td style="font-weight: bold; padding: 2px 0;">FATTURA n.</td>
+                            <td style="font-weight: bold; text-align: right; padding: 2px 0;">{{ nr_documento }}</td>
+                        </tr>
+                        <!-- Data row -->
+                        <tr>
+                            <td style="padding: 2px 0;">Data:</td>
+                            <td style="text-align: right; padding: 2px 0;">{{ date }}</td>
+                        </tr>
+                        <!-- Numero cliente row -->
+                        <tr>
+                            <td style="padding: 2px 0;">Il suo numero cliente:</td>
+                            <td style="text-align: right; padding: 2px 0;">{{ client_info.id|default:"-" }}</td>
+                        </tr>
+                        <!-- Condizioni row -->
+                        <tr>
+                            <td style="padding: 2px 0;">Condizioni di pagamento:</td>
+                            <td style="text-align: right; padding: 2px 0;">{{ tipologia_pagamento|default:"" }}</td>
+                        </tr>
+                        <!-- Riferimento row -->
+                        <tr>
+                            <td style="padding: 2px 0;">Riferimento:</td>
+                            <td style="text-align: right; padding: 2px 0; text-transform: uppercase;">
+                                {{riferimento|default:"" }}</td>
+                        </tr>
+                        <!-- Extra address line from screenshot -->
+                        <tr>
+                            <td colspan="2" style="text-align: right; font-size: 8pt; padding-top: 5px;">
+                                {{ client_info.indirizzo }} - {{ client_info.citta }}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+
+                <!-- Indirizzo Cliente -->
+                <div class="client-box"
+                    style="display: flex; justify-content: center; align-items: center; width: 50%; font-size: 10pt; line-height: 1.5;">
+                    {{ client_info.appellativo|default:"Spettabile" }}<br />
+                    {{ client_info.nome }}<br />
+                    {{ client_info.indirizzo }}<br />
+                    {{ client_info.cap }} {{ client_info.citta }}
+                </div>
+            </div>
+
+            <!-- TABELLA -->
+            <!-- TABELLA -->
+            <table class="items-table" style="margin-top: 5x; font-size: 8pt; width: 100%;">
+                <thead>
+                    <tr style="border-bottom: none;">
+                        <th style="text-align: left; width: 10%;">Cod.</th>
+                        <th style="text-align: left; width: 45%;">Descrizione</th>
+                        <th style="text-align: center; width: 5%;">Um.</th>
+                        <th style="text-align: center; width: 10%;">Quantità</th>
+                        <th style="text-align: right; width: 15%;">Importo</th>
+                        <th style="text-align: right; width: 15%;">Totale</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Spacer row for visual separation like in image -->
+                    <tr style="height: 5px;">
+                        <td colspan="6"></td>
+                    </tr>
+
+                    {% for product in offer_data.products %}
+                    <tr style="padding: 2px 0;">
+                        <td style="vertical-align: top; padding-top: 2px;">{{ product.code }}</td>
+                        <td style="vertical-align: top; padding-top: 2px;">
+                            <!-- Preserve whitespace/newlines in description -->
+                            <span style="white-space: pre-wrap; overflow: hidden; text-overflow: ellipsis;">{{
+                                product.title }}</span><br />
+                        </td>
+                        <td style="text-align: center; vertical-align: top; padding-top: 2px;">{{ product.um }}</td>
+                        <td style="text-align: center; vertical-align: top; padding-top: 2px;">{{
+                            product.quantity|floatformat:0 }}</td>
+                        <td style="text-align: right; vertical-align: top; padding-top: 2px;">{{
+                            product.unitPrice|floatformat:2 }} CHF</td>
+                        <td style="text-align: right; vertical-align: top; padding-top: 2px; font-weight: bold;">{{
+                            product.total|floatformat:2 }} CHF</td>
+                    </tr>
+                    <!-- Spacer between rows -->
+                    <!-- <tr style="height: 5px;"><td colspan="6"></td></tr> -->
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <!-- TOTALI -->
+            <div style="margin-top: 5px; width: 100%;">
+                <!-- Spacer to push totals to right or full width layout -->
+
+                <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 5px;">
+                    <!-- <div style="width: 50%;"></div> Left spacing -->
+                    <div style="width: 100%;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <span>Totale imponibile</span>
+                            <span style="font-weight: bold;">{{ offer_data.totals.imponibile|floatformat:2 }} CHF</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <span>Imposta</span>
+                            <div style="display: flex; gap: 20px;">
+                                <span>IVA 8.1%</span>
+                                <span style="font-weight: bold;">{{ offer_data.totals.iva|floatformat:2 }} CHF</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Grand Total Bar -->
+                <div
+                    style="background-color: #f0f8ff; padding: 5px; display: flex; justify-content: space-between; align-items: center; font-size: 12pt; font-weight: bold;">
+                    <span>Totale fattura</span>
+                    <span>{{ offer_data.totals.grand_total|floatformat:2 }} CHF</span>
+                </div>
+
+                <div style="text-align: right; font-size: 9pt; margin-top: 10px; color: #555;">
+                    Contestazioni entro 5 giorni
+                </div>
+            </div>
+            <!-- SEZIONE QR (BOTTOM) -->
+            <div class="qr-section">
+                <div class="scissors">✂</div>
+
+                <!-- RICEVUTA (SX) -->
+                <div class="receipt-part">
+                    <div class="qr-title">Ricevuta</div>
+
+                    <div class="qr-subtitle">Conto / Pagabile a</div>
+                    <div class="qr-text">
+                        {{ qr_data.iban }}<br />
+                        {{ qr_data.payable_to|linebreaksbr }}
+                    </div>
+
+                    <br />
+                    <br />
+
+                    <div class="qr-subtitle">Pagabile da</div>
+                    <div class="qr-text">
+                        {{ qr_data.payable_by|linebreaksbr }}
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between;">
+                        <div>
+                            <div class="qr-subtitle">Valuta</div>
+                            <div class="qr-text" style="font-size: 10pt; font-weight: bold;">
+                                {{ qr_data.currency }}
+                            </div>
+                        </div>
+                        <div>
+                            <div class="qr-subtitle" style="text-align: right;">Importo</div>
+                            <div class="qr-text" style="text-align: right; font-size: 10pt; font-weight: bold;">
+                                {{ qr_data.amount }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SEZIONE PAGAMENTO (DX) -->
+                <div class="payment-part">
+                    <!-- QR Code + Info -->
+                    <div style="display: flex;">
+                        <!-- QR IMAGE -->
+                        <div style="margin-right: 20px;">
+                            <div class="qr-title">Sezione pagamento</div>
+                            <div class="qr-code-box">
+                                <img src="{{ img_qrcode_placeholder }}" style="width: 40mm; " />
+                            </div>
+
+                            <div style="display: flex; justify-content: space-between;">
+                                <div>
+                                    <div class="qr-subtitle">Valuta</div>
+                                    <div class="qr-text" style="font-size: 10pt; font-weight: bold;">
+                                        {{ qr_data.currency }}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="qr-subtitle" style="text-align: right;">Importo</div>
+                                    <div class="qr-text" style="text-align: right; font-size: 10pt; font-weight: bold;">
+                                        {{ qr_data.amount }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Payment Info -->
+                        <div style="padding-top: 15px; padding-left: 20px;">
+                            <div class="qr-subtitle">Conto / Pagabile a</div>
+                            <div class="qr-text">
+                                {{ qr_data.iban }}<br />
+                                {{ qr_data.payable_to|linebreaksbr }}
+                            </div>
+
+                            <div class="qr-subtitle">Riferimento</div>
+                            <div class="qr-text">{{ qr_data.ref }}</div>
+
+                            <div class="qr-subtitle">Informazioni aggiuntive</div>
+                            <div class="qr-text">Fattura {{ nr_documento }}</div>
+
+                            <div class="qr-subtitle">Pagabile da</div>
+                            <div class="qr-text">
+                                {{ qr_data.payable_by|linebreaksbr }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+
+    </div>
+</body>
+
+</html>
