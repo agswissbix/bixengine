@@ -151,7 +151,7 @@ def print_pdf_heenergy(request):
 
         # 3. Render HTML
         html_content = render_to_string(
-            'heenergy/pdf_template.html',
+            'heenergy/fattura_heenergy.html',
             context,
             request=request
         )
@@ -167,6 +167,7 @@ def print_pdf_heenergy(request):
         BrowserManager.generate_pdf(
             html_content=html_content,
             output_path=temp_pdf_path,
+            options={'margin': {'top': '0', 'bottom': '0', 'left': '0', 'right': '0'}}
         )
 
         # 6. Stream and Delete
