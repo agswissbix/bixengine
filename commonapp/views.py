@@ -3208,9 +3208,6 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None, userid=1)
     - fields: dizionario dei campi {fieldid: value}
     - files: dict di file caricati (es. da request.FILES)
     """
-    def normalize_value(value):
-        return value if value not in ('', 'null', None) and str(value).strip() else None
-
     record = UserRecord(tableid, recordid, userid)
 
     fieldsettings = FieldSettings(tableid).get_all_settings()
@@ -3237,10 +3234,16 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None, userid=1)
 
     deadline_updates = {}
 
+    errors = {}
+
     if fields:
         for fieldid, value in fields.items():
-            normalized_value = normalize_value(value)
             fieldtype = field_types.get(fieldid)
+            normalized_value = cast_value(value, fieldtype)
+
+            if normalized_value is None and value not in ('', None):
+                errors[fieldid] = f"Valore non valido: {value}"
+                continue
 
             # --- Validazione Utente ---
             if fieldtype == 'Utente' and normalized_value:
@@ -3282,6 +3285,8 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None, userid=1)
                 deadline_updates[setting] = normalized_value
 
     record.save()
+
+    print(errors)
 
     # Se era in creazione ora abbiamo il recordid
     current_recordid = record.recordid
@@ -3327,6 +3332,54 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None, userid=1)
 
     record.save()
     return record
+
+def cast_value(value, fieldtype):
+    if value in ('', 'null', None):
+        return None
+    
+    FIELDTYPES = {
+        "Parola": "VARCHAR(255)",
+        "Seriale": "VARCHAR(255)",
+        "Data": "DATE",
+        "Ora": "TIME",
+        "Numero": "FLOAT",
+        "lookup": "VARCHAR(255)",
+        "multiselect": "VARCHAR(255)",
+        "Utente": "VARCHAR(255)",
+        "Memo": "TEXT",
+        "html": "LONGTEXT",
+        "Markdown": "LONGTEXT",
+        "SimpleMarkdown": "LONGTEXT",
+        "linked": "VARCHAR(255)"
+    }
+    sql_column_type = FIELDTYPES.get(fieldtype, "VARCHAR(255)").lower()
+
+    try:
+        if sql_column_type in ('int', 'integer'):
+            return int(value)
+
+        if sql_column_type in ('decimal', 'float', 'double'):
+            return float(str(value).replace(',', '.'))
+
+        if sql_column_type == 'boolean':
+            return 1 if str(value).lower() in ('1','true','yes','on') else 0
+
+        if sql_column_type == 'date':
+            from dateutil import parser
+            return parser.parse(value).strftime('%Y-%m-%d')
+
+        if sql_column_type == 'time':
+            from dateutil import parser
+            return parser.parse(value).strftime('%H:%M:%S')
+
+        if sql_column_type == 'datetime':
+            from dateutil import parser
+            return parser.parse(value).strftime('%Y-%m-%d %H:%M:%S')
+
+        return str(value).strip()
+
+    except Exception:
+        return None
 
 @csrf_exempt
 def duplicate_record(request):

@@ -7,6 +7,7 @@ from commonapp.bixmodels.helper_db import *
 from commonapp.bixmodels.helper_sys import *
 from commonapp.helper import *
 from datetime import date
+from django.db import transaction
 
 bixdata_server = os.environ.get('BIXDATA_SERVER')
 
@@ -324,7 +325,8 @@ class UserRecord:
 
         return fields_detailed
     
-    def save(self):
+    def save_old(self):
+        # NOT USED
         if self.recordid:
             counter=0
             sql=f"UPDATE user_{self.tableid} SET "
@@ -373,61 +375,100 @@ class UserRecord:
             self.values['id']=next_id
             self.recordid=next_recordid
             self.values['linkedorder_'] = next_order
-            self.save()
+            self.save_old()
 
+    def _generate_next_values(self):
+        sql = f"""
+            SELECT 
+                MAX(recordid_) as max_recordid,
+                MAX(id) as max_id,
+                MAX(linkedorder_) as max_order
+            FROM user_{self.tableid}
+            FOR UPDATE
+        """
 
-    def save_safe(self):
-        if self.recordid:
-            counter=0
-            params_list=[]
-            sql=f"UPDATE user_{self.tableid} SET "
-            for fieldid,value in self.values.items():
-                if counter>0:
-                    sql=sql+","
-                if value!=None:  
-                    sql=sql+f" {fieldid}=%s "
-                    params_list.append(value)
+        result = HelpderDB.sql_query_row(sql)
+
+        max_recordid = result['max_recordid']
+        max_id = result['max_id']
+        max_order = result['max_order']
+
+        next_recordid = (
+            '00000000000000000000000000000001'
+            if max_recordid is None
+            else str(int(max_recordid) + 1).zfill(32)
+        )
+
+        next_id = 1 if max_id is None else max_id + 1
+        next_order = 1 if max_order is None else max_order + 1
+
+        return next_recordid, next_id, next_order
+
+    def save(self):
+        try:
+            with transaction.atomic():
+
+                # =====================================================
+                # UPDATE
+                # =====================================================
+                if self.recordid:
+
+                    if not self.values:
+                        return True
+
+                    fields_sql = []
+                    params_list = []
+
+                    for fieldid, value in self.values.items():
+                        if value is not None:
+                            fields_sql.append(f"{fieldid}=%s")
+                            params_list.append(value)
+                        else:
+                            fields_sql.append(f"{fieldid}=NULL")
+
+                    sql = f"""
+                        UPDATE user_{self.tableid}
+                        SET {', '.join(fields_sql)}
+                        WHERE recordid_=%s
+                    """
+
+                    params_list.append(self.recordid)
+
+                    HelpderDB.sql_execute_safe(sql, params_list)
+
+                # =====================================================
+                # INSERT
+                # =====================================================
                 else:
-                    sql=sql+f" {fieldid}=null "
-                counter+=1
-            sql=sql+f" WHERE recordid_='{self.recordid}'"  
-            
-            HelpderDB.sql_execute_safe(sql,params_list) 
-        else:
-            sqlmax=f"SELECT MAX(recordid_) as max_recordid FROM user_{self.tableid}"
-            result=HelpderDB.sql_query_row(sqlmax)
-            max_recordid=result['max_recordid']
-            if max_recordid is None:
-                next_recordid = '00000000000000000000000000000001'
-            else:
-                next_recordid = str(int(max_recordid) + 1).zfill(32)
-            
-            sqlmax=f"SELECT MAX(id) as max_id FROM user_{self.tableid}"
-            result=HelpderDB.sql_query_row(sqlmax)
-            max_id=result['max_id']
-            if max_id is None:
-                next_id = 1
-            else:
-                next_id = max_id+1
+                    next_recordid, next_id, next_order = self._generate_next_values()
 
-            sqlmax=f"SELECT MAX(linkedorder_) as max_order FROM user_{self.tableid}"
-            result=HelpderDB.sql_query_row(sqlmax)
-            max_order=result['max_order']
-            if max_order is None:
-                next_order = 1
-            else:
-                next_order = max_order+1
-            
-            current_datetime=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            sqlinsert=f"INSERT INTO user_{self.tableid} (recordid_,creatorid_,creation_,id,linkedorder_) VALUES (%s,%s,%s,%s,%s) "
-            params_list=[next_recordid,self.userid,current_datetime,next_id, next_order]
+                    sqlinsert = f"""
+                        INSERT INTO user_{self.tableid}
+                        (recordid_, creatorid_, creation_, id, linkedorder_)
+                        VALUES (%s, %s, NOW(), %s, %s)
+                    """
 
-            HelpderDB.sql_execute_safe(sqlinsert, params_list)
+                    params_list = [
+                        next_recordid,
+                        self.userid,
+                        next_id,
+                        next_order
+                    ]
 
-            self.values['id']=next_id
-            self.recordid=next_recordid
-            self.values['linkedorder_'] = next_order
-            self.save_safe()
+                    HelpderDB.sql_execute_safe(sqlinsert, params_list)
+
+                    # aggiorno oggetto
+                    self.recordid = next_recordid
+                    self.values['id'] = next_id
+                    self.values['linkedorder_'] = next_order
+
+                    self.save()
+
+                return True
+
+        except Exception as e:
+            print(f"Errore salvataggio record {self.tableid} ({self.recordid}): {e}")
+            return False
         
 
 

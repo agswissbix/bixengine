@@ -138,7 +138,7 @@ def create_scheduler_log(task):
         scheduler_log.values['hour'] = lastupdate_date.strftime('%H:%M:%S')
 
         # Salva il record nel DB
-        scheduler_log.save_safe()
+        scheduler_log.save()
             
     except Exception as e:
         logger.error(f"[HOOK ERROR] Errore nel salvataggio: {e}")
@@ -175,7 +175,7 @@ def create_monitoring(schedule, task):
         monitoring.values['scheduleid'] = schedule.id
 
         # Salva il record nel DB
-        monitoring.save_safe()
+        monitoring.save()
             
     except Exception as e:
         logger.error(f"[HOOK ERROR] Errore nel salvataggio: {e}")
