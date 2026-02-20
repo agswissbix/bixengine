@@ -3363,6 +3363,14 @@ def get_widget_employee(request):
         ts_today = UserTable("timesheet").get_records(conditions_list=ts_today_cond)
         count_today = len(ts_today)
 
+        today_hours = 0.0
+        for ts in ts_today:
+            try:
+                val = float(ts.get('worktime_decimal') or 0) + float(ts.get('traveltime_decimal') or 0)
+                today_hours += val
+            except:
+                pass
+
         # 2. Ore del mese
         ts_month_cond = [f"user='{userid}'", f"date>='{start_month_str}'", "deleted_='N'"]
         ts_month = UserTable("timesheet").get_records(conditions_list=ts_month_cond)
@@ -3444,8 +3452,8 @@ def get_widget_employee(request):
                 "email": user.email
             },
             "stats": {
-                "today_count": count_today,
-                "month_hours": round(month_hours, 2)
+                "today_count": today_hours,
+                "month_hours": month_hours
             },
             "activity": activity_data
         })
