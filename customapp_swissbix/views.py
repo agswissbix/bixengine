@@ -2495,6 +2495,11 @@ def generate_lenovo_pdf(recordid, signature_path=None):
         if not rec.recordid:
             raise Exception("Ticket not found")
 
+        rec.values['return_date'] = datetime.date.today().strftime('%Y-%m-%d')
+        rec.save()
+
+        rec = UserRecord('ticket_lenovo', recordid)
+
         row = rec.values
         row['recordid'] = recordid
         

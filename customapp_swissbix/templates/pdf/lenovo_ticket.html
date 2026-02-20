@@ -284,7 +284,7 @@
             
             <div style="margin-bottom: 25px;">
                 <div style="font-weight: bold; font-size: 10px;">Data/Luogo</div>
-                <div style="border-bottom: 1px solid #000; height: 16px; margin-top: 10px;"></div>
+                <div style="border-bottom: 1px solid #000; height: 16px; margin-top: 10px;">{% if reception_date %}Massagno / {{ reception_date }}{% endif %}</div>
             </div>
 
             <div>
@@ -299,7 +299,7 @@
             
             <div style="margin-bottom: 25px;">
                 <div style="font-weight: bold; font-size: 10px;">Data/Luogo</div>
-                <div style="border-bottom: 1px solid #000; margin-top: 10px;">Massagno, {{ reception_date }}</div>
+                <div style="border-bottom: 1px solid #000; height: 16px; margin-top: 10px;">{% if return_date %}Massagno / {{ return_date }}{% endif %}</div>
             </div>
 
             <div>
