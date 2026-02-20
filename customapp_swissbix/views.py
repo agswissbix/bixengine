@@ -64,6 +64,198 @@ def get_activemind(request):
             'message': f'Si è verificato un errore inatteso: {str(e)}'
         }, status=500)
 
+def process_save_activemind_data(data):
+    recordid_deal = data.get('recordIdTrattativa')
+
+    if not recordid_deal:
+        raise ValueError('recordIdTrattativa mancante.')
+
+    # -------------------------------------------------
+    # Helper Functions
+    # -------------------------------------------------
+    def fetch_existing_dealline(recordid_deal, subcategory, name=None):
+        query = """
+            SELECT dl.recordid_
+            FROM user_dealline dl
+            JOIN user_product p
+            ON p.recordid_ = dl.recordidproduct_
+            WHERE dl.recordiddeal_ = %s
+            AND p.subcategory = %s
+            AND p.category = 'ActiveMind'
+            AND dl.deleted_ = 'N'
+            AND p.deleted_ = 'N'
+        """
+        params = [recordid_deal, subcategory]
+
+        if name is not None:
+            query += " AND dl.name = %s"
+            params.append(name)
+
+        query += " LIMIT 1"
+
+        with connection.cursor() as cursor:
+            cursor.execute(query, params)
+            row = cursor.fetchone()
+            return row[0] if row else None
+
+    def save_dealline(values):
+        rec_id = values.get('recordid_')
+        record = UserRecord('dealline', rec_id) if rec_id else UserRecord('dealline')
+
+        for k, v in values.items():
+            if k != 'recordid_':
+                record.values[k] = v
+
+        computed = Helper.compute_dealline_fields(record.values, UserRecord)
+        record.values.update(computed)
+        record.save()
+        save_record_fields('dealline', record.recordid)
+        return record.recordid
+
+    # -------------------------------------------------
+    # SECTION 1 — Prodotto principale
+    # -------------------------------------------------
+    section1 = data.get('section1', {})
+    product_id = section1.get('selectedTier')
+    price = section1.get('price', 0)
+    cost = section1.get('cost', 0)
+
+    if product_id:
+        product = UserRecord('product', product_id)
+        if not product or not product.values:
+            raise ValueError(f'Prodotto con ID {product_id} non trovato.')
+
+        existing_id = fetch_existing_dealline(recordid_deal, "system_assurance")
+
+        save_dealline({
+            'recordid_': existing_id,
+            'recordiddeal_': recordid_deal,
+            'recordidproduct_': product.values.get('recordid_'),
+            'name': product.values.get('name'),
+            'unitprice': price,
+            'unitexpectedcost': cost,
+            'quantity': 1
+        })
+
+    # -------------------------------------------------
+    # SECTION 2 — Prodotti multipli
+    # -------------------------------------------------
+    for product_key, product_data in data.get('section2Products', {}).items():
+        product = UserRecord('product', product_key)
+        if not product or not product.values:
+            continue
+
+        quantity = product_data.get('quantity', 1)
+        unit_price = product_data.get('unitPrice', 0)
+        unit_cost = product_data.get('unitCost', 0)
+        billing_type = product_data.get('billingType', 'monthly')
+        name = product.values.get('name')
+
+        existing_id = fetch_existing_dealline(recordid_deal, product.values.get('subcategory', ''), name)
+
+        save_dealline({
+            'recordid_': existing_id,
+            'recordiddeal_': recordid_deal,
+            'recordidproduct_': product.values.get('recordid_'),
+            'name': name,
+            'unitprice': unit_price,
+            'unitexpectedcost': unit_cost,
+            'quantity': quantity,
+            'frequency': 'Annuale' if billing_type == 'yearly' else 'Mensile'
+        })
+
+    # -------------------------------------------------
+    # SECTION 3 — Servizi
+    # -------------------------------------------------
+    services = data.get('section2Services', {})
+    if services:
+        conditions = data.get('section3', {})
+        frequency = conditions.get('selectedFrequency', 'Mensile')
+        frequency_price = float(conditions.get('price', 0))
+
+        total_price = 0
+        total_cost = 0
+        name_parts = []
+
+        for key, service in services.items():
+            qty = int(service.get('quantity', 0))
+            unit_price = float(service.get('unitPrice', 0))
+            unit_cost = float(service.get('unitCost', 0))
+            title = service.get('title', '')
+
+            if qty <= 0:
+                continue
+
+            name_parts.append(f"{title}: qta. {qty}")
+            service_total = qty * unit_price
+
+            # Sconto speciale solo per clientPC
+            if key == "clientPC" and qty > 1:
+                discount = 1 - (qty - 1) / 100
+                service_total *= discount
+
+            total_price += service_total
+            total_cost += qty * unit_cost
+
+        # total_price += frequency_price
+        name_str = "AM - Manutenzione servizi - \n" + ",\n".join(name_parts) if name_parts else "AM - Manutenzione servizi"
+
+        # Recupera productid del servizio
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT recordid_
+                FROM user_product
+                WHERE name LIKE 'AM - Manutenzione servizi%%'
+                AND deleted_ = 'N'
+                LIMIT 1
+            """)
+            product_row = cursor.fetchone()
+
+        product_id = product_row[0] if product_row else None
+
+        # Check esistenza dealline
+        existing_id = fetch_existing_dealline(recordid_deal, "services_maintenance")
+
+        save_dealline({
+            'recordid_': existing_id,
+            'recordiddeal_': recordid_deal,
+            'recordidproduct_': product_id,
+            'name': name_str,
+            'unitprice': total_price,
+            'unitexpectedcost': total_cost,
+            'quantity': 1,
+            'intervention_frequency': frequency,
+            'frequency': 'Mensile'
+        })
+
+    # -------------------------------------------------
+    # SECTION 4 — Monte Ore
+    # -------------------------------------------------
+    
+    sectionHours = data.get('sectionHours', {})
+    if not sectionHours:
+        return True
+
+    product_id = sectionHours.get('selectedOption')
+    if not product_id:
+        return True
+
+    name_str = sectionHours.get('label')
+
+    existing_id = fetch_existing_dealline(recordid_deal, 'monte_ore')
+
+    save_dealline({
+        'recordid_': existing_id,
+        'recordiddeal_': recordid_deal,
+        'recordidproduct_': product_id,
+        'name': name_str,
+        'unitprice': sectionHours.get('price', 0),
+        'unitexpectedcost': sectionHours.get('cost', 0),
+        'quantity': 1,
+    })
+
+    return True
+
 def save_activemind(request):
     if request.method != 'POST':
         return JsonResponse({'success': False, 'message': 'Metodo non permesso. Utilizza POST.'}, status=405)
@@ -71,186 +263,8 @@ def save_activemind(request):
     try:
         request_body = json.loads(request.body or "{}")
         data = request_body.get('data', {})
-        recordid_deal = data.get('recordIdTrattativa')
-
-        if not recordid_deal:
-            return JsonResponse({'success': False, 'message': 'recordIdTrattativa mancante.'}, status=400)
-
-        # -------------------------------------------------
-        # Helper Functions
-        # -------------------------------------------------
-        def fetch_existing_dealline(recordid_deal, subcategory):
-            with connection.cursor() as cursor:
-                cursor.execute("""
-                    SELECT dl.recordid_
-                    FROM user_dealline dl
-                    JOIN user_product p
-                    ON p.recordid_ = dl.recordidproduct_
-                    WHERE dl.recordiddeal_ = %s
-                    AND p.subcategory = %s
-                    AND p.category = 'ActiveMind'
-                    AND dl.deleted_ = 'N'
-                    AND p.deleted_ = 'N'
-                    LIMIT 1
-                """, [recordid_deal, subcategory])
-                row = cursor.fetchone()
-                return row[0] if row else None
-
-        def save_dealline(values):
-            rec_id = values.get('recordid_')
-            record = UserRecord('dealline', rec_id) if rec_id else UserRecord('dealline')
-
-            for k, v in values.items():
-                if k != 'recordid_':
-                    record.values[k] = v
-
-            computed = Helper.compute_dealline_fields(record.values, UserRecord)
-            record.values.update(computed)
-            record.save()
-            save_record_fields('dealline', record.recordid)
-            return record.recordid
-
-        # -------------------------------------------------
-        # SECTION 1 — Prodotto principale
-        # -------------------------------------------------
-        section1 = data.get('section1', {})
-        product_id = section1.get('selectedTier')
-        price = section1.get('price', 0)
-        cost = section1.get('cost', 0)
-
-        if product_id:
-            product = UserRecord('product', product_id)
-            if not product or not product.values:
-                return JsonResponse({'success': False, 'message': f'Prodotto con ID {product_id} non trovato.'}, status=404)
-
-            existing_id = fetch_existing_dealline(recordid_deal, "system_assurance")
-
-            save_dealline({
-                'recordid_': existing_id,
-                'recordiddeal_': recordid_deal,
-                'recordidproduct_': product.values.get('recordid_'),
-                'name': product.values.get('name'),
-                'unitprice': price,
-                'unitexpectedcost': cost,
-                'quantity': 1
-            })
-
-        # -------------------------------------------------
-        # SECTION 2 — Prodotti multipli
-        # -------------------------------------------------
-        for product_key, product_data in data.get('section2Products', {}).items():
-            product = UserRecord('product', product_key)
-            if not product or not product.values:
-                continue
-
-            quantity = product_data.get('quantity', 1)
-            unit_price = product_data.get('unitPrice', 0)
-            unit_cost = product_data.get('unitCost', 0)
-            billing_type = product_data.get('billingType', 'monthly')
-
-            existing_id = fetch_existing_dealline(recordid_deal, product.values.get('subcategory', ''))
-
-            save_dealline({
-                'recordid_': existing_id,
-                'recordiddeal_': recordid_deal,
-                'recordidproduct_': product.values.get('recordid_'),
-                'name': product.values.get('name'),
-                'unitprice': unit_price,
-                'unitexpectedcost': unit_cost,
-                'quantity': quantity,
-                'frequency': 'Annuale' if billing_type == 'yearly' else 'Mensile'
-            })
-
-        # -------------------------------------------------
-        # SECTION 3 — Servizi
-        # -------------------------------------------------
-        services = data.get('section2Services', {})
-        if services:
-            conditions = data.get('section3', {})
-            frequency = conditions.get('selectedFrequency', 'Mensile')
-            frequency_price = float(conditions.get('price', 0))
-
-            total_price = 0
-            total_cost = 0
-            name_parts = []
-
-            for key, service in services.items():
-                qty = int(service.get('quantity', 0))
-                unit_price = float(service.get('unitPrice', 0))
-                unit_cost = float(service.get('unitCost', 0))
-                title = service.get('title', '')
-
-                if qty <= 0:
-                    continue
-
-                name_parts.append(f"{title}: qta. {qty}")
-                service_total = qty * unit_price
-
-                # Sconto speciale solo per clientPC
-                if key == "clientPC" and qty > 1:
-                    discount = 1 - (qty - 1) / 100
-                    service_total *= discount
-
-                total_price += service_total
-                total_cost += qty * unit_cost
-
-            # total_price += frequency_price
-            name_str = "AM - Manutenzione servizi - \n" + ",\n".join(name_parts) if name_parts else "AM - Manutenzione servizi"
-
-            # Recupera productid del servizio
-            with connection.cursor() as cursor:
-                cursor.execute("""
-                    SELECT recordid_
-                    FROM user_product
-                    WHERE name LIKE 'AM - Manutenzione servizi%%'
-                    AND deleted_ = 'N'
-                    LIMIT 1
-                """)
-                product_row = cursor.fetchone()
-
-            product_id = product_row[0] if product_row else None
-
-            # Check esistenza dealline
-            existing_id = fetch_existing_dealline(recordid_deal, "services_maintenance")
-
-            save_dealline({
-                'recordid_': existing_id,
-                'recordiddeal_': recordid_deal,
-                'recordidproduct_': product_id,
-                'name': name_str,
-                'unitprice': total_price,
-                'unitexpectedcost': total_cost,
-                'quantity': 1,
-                'intervention_frequency': frequency,
-                'frequency': 'Mensile'
-            })
-
-        # -------------------------------------------------
-        # SECTION 4 — Monte Ore
-        # -------------------------------------------------
         
-        sectionHours = data.get('sectionHours', {})
-        if not sectionHours:
-            return JsonResponse({'success': True, 'message': 'Dati ricevuti e processati con successo.'}, status=200)
-
-        product_id = sectionHours.get('selectedOption')
-        if not product_id:
-            return JsonResponse({'success': True, 'message': 'Dati ricevuti e processati con successo.'}, status=200)
-
-        name_str = sectionHours.get('label')
-
-        existing_id = fetch_existing_dealline(recordid_deal, 'monte_ore')
-
-        save_dealline({
-            'recordid_': existing_id,
-            'recordiddeal_': recordid_deal,
-            'recordidproduct_': product_id,
-            'name': name_str,
-            'unitprice': sectionHours.get('price', 0),
-            'unitexpectedcost': sectionHours.get('cost', 0),
-            'quantity': 1,
-        })
-
+        process_save_activemind_data(data)
 
         return JsonResponse({'success': True, 'message': 'Dati ricevuti e processati con successo.'}, status=200)
 
@@ -506,8 +520,17 @@ def print_pdf_activemind(request):
         img_prodotti = to_base64(os.path.join(static_img_path, "prodotti_beall.jpg"))
         img_servizi = to_base64(os.path.join(static_img_path, "servizi.jpg"))
 
+        # 0) Salva dati prima di stampare
+        save_data = data.get('data', {})
+        save_data['recordIdTrattativa'] = recordid_deal
+        try:
+            process_save_activemind_data(save_data)
+        except Exception as e:
+            logger.error(f"Errore nel salvataggio prima della stampa: {str(e)}")
+            return JsonResponse({'error': f'Errore nel salvataggio preliminare: {str(e)}'}, status=500)
+
         # 1) ricostruzione offerta
-        offer_data = build_offer_data(recordid_deal, data.get('data'))
+        offer_data = build_offer_data(recordid_deal, save_data)
 
         # 2) preparo oggetti per impaginazione (chunk)
         # servizi (flat -> oggetti)
