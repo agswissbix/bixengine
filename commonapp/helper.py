@@ -20,6 +20,10 @@ import re
 from typing import Any, List, Tuple, Dict
 import time
 import functools # <-- Aggiungi se non c'è
+from datetime import date, timedelta
+from dateutil import parser
+from dateutil.relativedelta import relativedelta
+
 
 
 def login_required_api(view_func):
@@ -567,3 +571,224 @@ class Helper:
                 }
 
         return changed_fields
+
+
+    # ==========================
+    #  DEADLINE METHODS
+    # ==========================
+
+    @classmethod
+    def save_record_deadline(cls, tableid, current_recordid, recordid, userid, deadline_updates):
+        from bixsettings.views.businesslogic.models.table_settings import TableSettings
+        from commonapp.models import SysTable
+        from commonapp.bixmodels.user_record import UserRecord
+
+        try:
+            # Recupero eventuale deadline esistente
+            deadline_recordid = None
+            if recordid:
+                sql = """
+                    SELECT recordid_
+                    FROM user_deadline
+                    WHERE tableid = %s
+                    AND recordidtable = %s
+                    LIMIT 1
+                """
+                deadline_recordid = HelpderDB.sql_query_value(
+                    sql,
+                    'recordid_',
+                    (tableid, current_recordid)
+                )
+
+            deadline_record = UserRecord('deadline', deadline_recordid, userid)
+
+            # Recupero descrizione tabella in modo sicuro
+            label_table = "Record"
+            try:
+                table_obj = SysTable.objects.filter(id=tableid).first()
+                if table_obj:
+                    label_table = table_obj.description
+            except Exception:
+                pass
+
+            deadline_record.values['tableid'] = tableid
+            deadline_record.values['recordidtable'] = current_recordid
+            deadline_record.values['description'] = label_table
+            deadline_record.values['notice_days'] = 2
+
+            # Recupero actions in modo sicuro
+            deadline_record.values['actions'] = ""
+            try:
+                settings_obj = TableSettings(tableid).get_specific_settings('deadline_actions')
+                if settings_obj and 'deadline_actions' in settings_obj:
+                    deadline_record.values['actions'] = settings_obj['deadline_actions'].get('value', "")
+            except Exception as e:
+                print(f"Errore recupero actions deadline: {e}")
+
+            for key, value in deadline_updates.items():
+                deadline_record.values[key] = value
+
+            start_date = deadline_record.values.get('date_start')
+            frequency_label = deadline_record.values.get('frequency')
+            frequency_months = deadline_record.values.get('frequency_months')
+
+            # 🔹 Calcolo data scadenza
+            if start_date:
+                try:
+                    if isinstance(start_date, str):
+                        # Tenta parsing sicuro
+                        try:
+                            start_date_obj = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
+                        except ValueError:
+                            # Se fallisce formato standard, prova parser dateutil o fallback
+                            start_date_obj = parser.parse(start_date).date()
+                    elif isinstance(start_date, (datetime.date, datetime.datetime)):
+                         start_date_obj = start_date
+                    else:
+                        start_date_obj = None
+
+                    if start_date_obj:
+                        deadline_date = None
+
+                        # 🔹 Caso 1: frequenza testuale
+                        if frequency_label and isinstance(frequency_label, str):
+                            frequency_map = {
+                                "mensile": relativedelta(months=1),
+                                "trimestrale": relativedelta(months=3),
+                                "semestrale": relativedelta(months=6),
+                                "annuale": relativedelta(years=1),
+                            }
+                            
+                            delta = frequency_map.get(frequency_label.lower())
+                            if delta:
+                                deadline_date = start_date_obj + delta
+
+                        # 🔹 Caso 2: mesi numerici
+                        elif frequency_months:
+                            try:
+                                value = float(frequency_months)
+
+                                months_val = int(value)  # parte intera
+                                fractional_part = value - months_val  # parte decimale
+
+                                days_val = round(fractional_part * 30)  # mese medio = 30 giorni
+
+                                deadline_date = start_date_obj + relativedelta(
+                                    months=months_val,
+                                    days=days_val
+                                )
+                            except (ValueError, TypeError):
+                                pass
+
+                        if deadline_date:
+                            deadline_record.values['date_deadline'] = deadline_date.strftime("%Y-%m-%d")
+                except Exception as e:
+                    print(f"Errore calcolo data scadenza: {e}")
+
+            # Calcolo STATUS
+            deadline_date_str = deadline_record.values.get('date_deadline')
+            if deadline_date_str and isinstance(deadline_date_str, str):
+                try:
+                    deadline_date = datetime.datetime.strptime(deadline_date_str, "%Y-%m-%d").date()
+                    today = date.today()
+                    days_remaining = (deadline_date - today).days
+
+                    notice_days_val = deadline_record.values.get('notice_days')
+                    try:
+                        notice_days = int(notice_days_val)
+                    except (ValueError, TypeError):
+                        notice_days = 0
+
+                    if days_remaining < 0:
+                        status = "Scaduto"
+                    elif days_remaining <= notice_days:
+                        status = "In scadenza"
+                    else:
+                        status = "Attivo"
+
+                    deadline_record.values['status'] = status
+                    deadline_record.save()
+                    
+                except Exception as e:
+                    print(f"Errore calcolo status deadline: {e}")
+
+        except Exception as e:
+            print(f"Errore generale gestione deadline in save_record_deadline: {e}")
+
+    @classmethod
+    def check_all_deadlines(cls):
+        from commonapp.bixmodels.user_table import UserTable
+        from commonapp.bixmodels.user_record import UserRecord
+
+        actions_to_trigger = []
+        condition_list = []
+        records = UserTable('deadline').get_records(conditions_list=condition_list)
+        today = date.today()
+
+        for record in records:
+            recordid = record['recordid_']
+            rec = UserRecord('deadline', recordid)
+
+            deadline_date = rec.values.get('date_deadline')
+            if not deadline_date:
+                continue  # Salta record senza data
+
+            days_remaining = (deadline_date - today).days
+
+            # Notice days sicuro
+            try:
+                notice_days = int(rec.values.get('notice_days') or 0)
+            except (ValueError, TypeError):
+                notice_days = 0
+
+            # Determinazione status
+            if days_remaining < 0:
+                new_status = "Scaduto"
+                if rec.values.get('frequency') or rec.values.get('frequency_months'):
+                    # TODO: implementare logica corretta per la data di scadenza
+                    new_status = "Attivo"
+                    try:
+                        months = float(rec.values.get('frequency_months') or 0)
+                    except ValueError:
+                        months = 0
+                    rec.values['date_deadline'] = rec.values['date_deadline'] + timedelta(days=months * 30)
+            elif days_remaining <= notice_days:
+                new_status = "In scadenza"
+            else:
+                new_status = "Attivo"
+
+            old_status = rec.values.get('status')
+
+            # Aggiorna status se cambiato
+            if new_status != old_status:
+                rec.values['status'] = new_status
+                rec.values['notification_sent'] = 'No'
+                rec.save()
+
+            # Invio notifiche solo se necessario
+            if new_status != "Attivo" and rec.values.get('notification_sent') != 'Si':
+
+                actions_raw = rec.values.get('actions', '')
+                if actions_raw is None:
+                    actions_raw = ''
+                actions = [a.strip() for a in actions_raw.split(',') if a.strip()]
+
+                for action_str in actions:
+                    match_obj = re.match(r"(\w+)(?:\((.*)\))?", action_str)
+                    if not match_obj:
+                        continue
+
+                    action_name = match_obj.group(1)
+                    action_params = match_obj.group(2)
+                    
+                    actions_to_trigger.append({
+                        'action_name': action_name,
+                        'action_params': action_params,
+                        'recordid': recordid,
+                        'deadline_date': deadline_date
+                    })
+
+                rec.values['notification_sent'] = 'Si'
+                rec.save()
+
+        return actions_to_trigger

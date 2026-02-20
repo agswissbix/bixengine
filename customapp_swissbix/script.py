@@ -28,6 +28,7 @@ import pyodbc
 from cryptography.fernet import Fernet, InvalidToken
 
 from commonapp import views
+from commonapp.helper import Helper
 
 from xhtml2pdf import pisa
 from django.template.loader import get_template
@@ -65,76 +66,34 @@ def check_deadlines(request):
     """
     Controlla le scadenze ed esegue le relative actions
     """
-    # TODO refactoring, funzione unica in commonapp e nelle custom solo switch delle action
-    condition_list = []
-    records = UserTable('deadline').get_records(conditions_list=condition_list)
+    actions_to_trigger = Helper.check_all_deadlines()
+    for action in actions_to_trigger:
+        action_name = action['action_name']
+        action_params = action['action_params']
+        recordid = action['recordid']
+        deadline_date = action['deadline_date']
 
-    today = date.today()
-
-    for record in records:
-        recordid = record['recordid_']
-        rec = UserRecord('deadline', recordid)
-
-        deadline_date = rec.values.get('date_deadline')
-        if not deadline_date:
-            continue  # Salta record senza data
-
-        days_remaining = (deadline_date - today).days
-
-        # Notice days sicuro
-        try:
-            notice_days = int(rec.values.get('notice_days') or 0)
-        except (ValueError, TypeError):
-            notice_days = 0
-
-        # Determinazione status
-        if days_remaining < 0:
-            new_status = "Scaduto"
-            if rec.values['frequency'] or rec.values['frequency_months']:
-                # TODO: implementare logica corretta per la data di scadenza
-                new_status = "Attivo"
-                rec.values['date_deadline'] = rec.values['date_deadline'] + timedelta(days=rec.values['frequency_months'] * 30)
-        elif days_remaining <= notice_days:
-            new_status = "In scadenza"
-        else:
-            new_status = "Attivo"
-
-        old_status = rec.values.get('status')
-
-        # Aggiorna status se cambiato
-        if new_status != old_status:
-            rec.values['status'] = new_status
-            rec.values['notification_sent'] = 'No'
-            rec.save()
-
-        # Invio notifiche solo se necessario
-        if new_status != "Attivo" and rec.values.get('notification_sent') != 'Si':
-
-            actions_raw = rec.values.get('actions', '')
-            actions = [a.strip() for a in actions_raw.split(',') if a.strip()]
-
-            for action_str in actions:
-                match_obj = re.match(r"(\w+)(?:\((.*)\))?", action_str)
-                if not match_obj:
-                    continue
-
-                action_name = match_obj.group(1)
-                action_params = match_obj.group(2)
-
-                match action_name:
-                    case "email":
-                        send_email_deadline(recordid, action_params)
-                    case "notification":
-                        pass
-                    case "custom_sb_create_task":
-                        # create_task(recordid, action_params)
-                        # Chiama la funzione interna _save_record_data
-                        views._save_record_data(tableid='task', fields={'creator': '50', 'description': 'Task automatico da scadenza', 'duedate': deadline_date.strftime('%Y-%m-%d')}, userid=1)
-                    case _:
-                        pass
-
-            rec.values['notification_sent'] = 'Si'
-            rec.save()
+        match action_name:
+            case "email":
+                send_email_deadline(recordid, action_params)
+            case "notification":
+                pass
+            case "custom_sb_create_task":
+                deadline = UserRecord('deadline', recordid)
+                deadline_user = deadline.values.get("assigned_to")
+                # Chiama la funzione interna _save_record_data
+                views._save_record_data(
+                    tableid='task', 
+                    fields={
+                        'creator': '50', 
+                        'description': 'Task automatico da scadenza', 
+                        'duedate': deadline_date.strftime('%Y-%m-%d') if deadline_date else None,
+                        'user': deadline_user if deadline_user else '50'
+                    }, 
+                    userid=1
+                )
+            case _:
+                pass
     
     return {
         "status": "success",
