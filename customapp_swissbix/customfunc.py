@@ -1176,16 +1176,20 @@ def swissbix_create_timesheet_from_timetracking(request):
             desc_val = timetracking.fields.get('description', {}).get('value', '')
                 
             worktime_val = timetracking.fields.get('worktime', {}).get('value', 0)
+            pausetime_val = timetracking.fields.get('pausetime', {}).get('value', 0)
 
+            sanitized_pausetime = float(pausetime_val) if pausetime_val is not None else 0.0
             sanitized_worktime = float(worktime_val) if worktime_val is not None else 0.0
             sanitized_description = str(desc_val) if desc_val is not None else ""
 
+            net_worktime = sanitized_worktime - sanitized_pausetime
+
             timetracking_list.append({
                 "description": sanitized_description,
-                "worktime": sanitized_worktime
+                "worktime": net_worktime
             })
 
-            worktime_decimal += sanitized_worktime
+            worktime_decimal += net_worktime
             
             processed_count += 1
 
