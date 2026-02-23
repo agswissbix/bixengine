@@ -112,6 +112,11 @@ def process_save_activemind_data(data):
         save_record_fields('dealline', record.recordid)
         return record.recordid
 
+    def remove_dealline(recordid_dealline):
+        record = UserRecord('dealline', recordid_dealline)
+        record.values['deleted_'] = 'Y'
+        record.save()
+
     # -------------------------------------------------
     # SECTION 1 — Prodotto principale
     # -------------------------------------------------
@@ -136,6 +141,8 @@ def process_save_activemind_data(data):
             'unitexpectedcost': cost,
             'quantity': 1
         })
+    else:
+        remove_dealline(fetch_existing_dealline(recordid_deal, "system_assurance"))
 
     # -------------------------------------------------
     # SECTION 2 — Prodotti multipli
@@ -152,6 +159,10 @@ def process_save_activemind_data(data):
         name = product.values.get('name')
 
         existing_id = fetch_existing_dealline(recordid_deal, product.values.get('subcategory', ''), name)
+
+        if existing_id and quantity <= 0:
+            remove_dealline(existing_id)
+            continue
 
         save_dealline({
             'recordid_': existing_id,
@@ -182,6 +193,7 @@ def process_save_activemind_data(data):
             unit_price = float(service.get('unitPrice', 0))
             unit_cost = float(service.get('unitCost', 0))
             title = service.get('title', '')
+            total = service.get('total', 0)
 
             if qty <= 0:
                 continue
@@ -205,7 +217,8 @@ def process_save_activemind_data(data):
             cursor.execute("""
                 SELECT recordid_
                 FROM user_product
-                WHERE name LIKE 'AM - Manutenzione servizi%%'
+                WHERE category = 'ActiveMind'
+                AND subcategory = 'services_maintenance'
                 AND deleted_ = 'N'
                 LIMIT 1
             """)
@@ -228,6 +241,9 @@ def process_save_activemind_data(data):
             'frequency': 'Mensile'
         })
 
+    else:
+        remove_dealline(fetch_existing_dealline(recordid_deal, "services_maintenance"))
+
     # -------------------------------------------------
     # SECTION 4 — Monte Ore
     # -------------------------------------------------
@@ -237,12 +253,15 @@ def process_save_activemind_data(data):
         return True
 
     product_id = sectionHours.get('selectedOption')
-    if not product_id:
-        return True
 
     name_str = sectionHours.get('label')
 
     existing_id = fetch_existing_dealline(recordid_deal, 'monte_ore')
+
+    if not product_id or product_id == '':
+        if existing_id:
+            remove_dealline(existing_id)
+        return True
 
     save_dealline({
         'recordid_': existing_id,
@@ -339,7 +358,7 @@ def build_offer_data(recordid_deal, fe_data=None):
     # -----------------------------
     # 5. SECTION 4 → Monte Ore
     # -----------------------------
-    if fe_data.get("sectionHours"):
+    if fe_data.get("sectionHours").get("selectedOption"):
         req_monte_ore = type('Req', (object,), {"body": json.dumps({"dealid": recordid_deal})})
         monte_ore_resp = get_monte_ore_activemind(req_monte_ore)
         monte_ore = json.loads(monte_ore_resp.content)["options"]
@@ -908,7 +927,7 @@ def get_conditions_activemind(request):
         products = cursor.fetchall()
 
         cursor.execute("""
-            SELECT dl.frequency
+            SELECT dl.intervention_frequency
             FROM user_dealline dl
             JOIN user_product p
             ON p.recordid_ = dl.recordidproduct_

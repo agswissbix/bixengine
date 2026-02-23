@@ -834,21 +834,16 @@
           <h3 style="margin-top: 20px">Modalità di gestione assistenza</h3>
           <ul>
             <li>
-              <strong>Richiesta Assistenza:</strong> Apertura ticket via mail a
-              helpdesk@swissbix.ch.
+              <strong>Richiesta Assistenza:</strong> Apertura ticket via mail a helpdesk@swissbix.ch o telefonicamente al (+41) 91 960 22 09.
             </li>
             <li>
-              <strong>Assistenza Remota:</strong> Le ore sono scalate dal monte
-              ore.
+              <strong>Assistenza Remota:</strong> Il tempo di supporto verrà scalato dal monte ore a disposizione qualora il singolo intervento di assistenza tecnica abbia una durata superiore a 20 minuti; al di sotto di tale soglia il supporto non verrà conteggiato.
             </li>
             <li>
-              <strong>Assistenza On-Site:</strong> Ore effettive
-              (arrivo-partenza) senza diritto di chiamata (trasferta esclusa se
-              non diversamente specificato).
+              <strong>Assistenza On-Site:</strong> Ore effettive (arrivo-partenza) senza diritto di chiamata (trasferta esclusa se non diversamente specificato). 
             </li>
             <li>
-              <strong>Validità:</strong> Il Monte Ore non ha scadenza e si
-              rinnova in automatico all'esaurimento (soglia 1 ora residua).
+              <strong>Validità:</strong> Il Monte Ore non ha scadenza temporale e si rinnova in automatico all'esaurimento (soglia 1 ora residua).
             </li>
           </ul>
         </div>
@@ -937,8 +932,8 @@
         </tr>
         {% endfor %} 
         {% if offer_data.totals_raw.monthly > 0 %}
-        <tr style="background-color: #f8f8f8; font-weight: bold">
-          <td colspan="4">SUBTOTALE MENSILE (ricorrente)</td>
+        <tr style="background-color: #dc2626; color: white; font-weight: bold">
+          <td colspan="4">TOTALE MENSILE (ricorrente)</td>
           <td class="price">
             CHF {{ offer_data.totals.monthly }}.-
             <br />
@@ -948,16 +943,16 @@
           </td>
         </tr>
         {% endif %} {% if offer_data.totals_raw.yearly > 0 %}
-        <tr style="background-color: #f8f8f8; font-weight: bold">
-          <td colspan="4">SUBTOTALE ANNUALE (ricorrente)</td>
+        <tr style="background-color: #dc2626; color: white; font-weight: bold">
+          <td colspan="4">TOTALE ANNUALE (ricorrente)</td>
           <td class="price">CHF {{ offer_data.totals.yearly }}.-</td>
         </tr>
         {% endif %}
 
-        <tr style="background-color: #dc2626; color: white; font-weight: bold">
+        <!-- <tr style="background-color: #dc2626; color: white; font-weight: bold">
           <td colspan="4">TOTALE COMPLESSIVO</td>
           <td class="price">CHF {{ offer_data.totals.grand_total }}.-</td>
-        </tr>
+        </tr> -->
       </table>
     </div>
     {% endif %}
