@@ -463,8 +463,92 @@
                 </div>
             </div>
             <!-- SEZIONE QR (BOTTOM) -->
-            <div class="qr-section" style="width: 100%; height: 350px; padding: 0; bottom: 0; left: 0; border: none;">
-                <img src="{{ img_pdf_footer }}" alt="img_pdf_footer" style="width: 100%; display: block;" />
+            <div class="qr-section">
+                <div class="scissors">✂</div>
+
+                <!-- RICEVUTA (SX) -->
+                <div class="receipt-part">
+                    <div class="qr-title">Ricevuta</div>
+
+                    <div class="qr-subtitle">Conto / Pagabile a</div>
+                    <div class="qr-text">
+                        {{ qr_data.iban }}<br />
+                        {{ qr_data.payable_to|linebreaksbr }}
+                    </div>
+
+                    <br />
+                    <br />
+
+                    <div class="qr-subtitle">Pagabile da</div>
+                    <div class="qr-text">
+                        {{ qr_data.payable_by|linebreaksbr }}
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between;">
+                        <div>
+                            <div class="qr-subtitle">Valuta</div>
+                            <div class="qr-text" style="font-size: 10pt; font-weight: bold;">
+                                {{ qr_data.currency }}
+                            </div>
+                        </div>
+                        <div>
+                            <div class="qr-subtitle" style="text-align: right;">Importo</div>
+                            <div class="qr-text" style="text-align: right; font-size: 10pt; font-weight: bold;">
+                                {{ qr_data.amount }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SEZIONE PAGAMENTO (DX) -->
+                <div class="payment-part">
+                    <!-- QR Code + Info -->
+                    <div style="display: flex;">
+                        <!-- QR IMAGE -->
+                        <div style="margin-right: 20px;">
+                            <div class="qr-title">Sezione pagamento</div>
+                            <div class="qr-code-box">
+                                <img src="{{ img_qrcode_placeholder }}" style="width: 40mm; " />
+                            </div>
+
+                            <div style="display: flex; justify-content: space-between;">
+                                <div>
+                                    <div class="qr-subtitle">Valuta</div>
+                                    <div class="qr-text" style="font-size: 10pt; font-weight: bold;">
+                                        {{ qr_data.currency }}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="qr-subtitle" style="text-align: right;">Importo</div>
+                                    <div class="qr-text" style="text-align: right; font-size: 10pt; font-weight: bold;">
+                                        {{ qr_data.amount }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Payment Info -->
+                        <div style="padding-top: 15px; padding-left: 20px;">
+                            <div class="qr-subtitle">Conto / Pagabile a</div>
+                            <div class="qr-text">
+                                {{ qr_data.iban }}<br />
+                                {{ qr_data.payable_to|linebreaksbr }}
+                            </div>
+
+                            <div class="qr-subtitle">Riferimento</div>
+                            <div class="qr-text">{{ qr_data.ref }}</div>
+
+                            <div class="qr-subtitle">Informazioni aggiuntive</div>
+                            <div class="qr-text">Fattura {{ nr_documento }}</div>
+
+                            <div class="qr-subtitle">Pagabile da</div>
+                            <div class="qr-text">
+                                {{ qr_data.payable_by|linebreaksbr }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
 

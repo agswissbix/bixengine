@@ -7557,8 +7557,9 @@ def get_form_fields(request):
                     for field in section['fields']:
                         field['locale'] = formato_numerico.replace('_', '-') if is_valid_locale(formato_numerico) else 'it-CH'
                         if field.get('name') in saved_values:
-                            # Assegna il valore salvato, gestendo il caso di None
-                            field['value'] = saved_values[field['name']] or ""
+                            # Assegna il valore salvato, gestendo il caso di 0
+                            val = saved_values[field['name']]
+                            field['value'] = val if val is not None else ""
         final_response = {"config": form_config}
         return JsonResponse(final_response)
 
