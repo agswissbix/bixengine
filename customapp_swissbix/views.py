@@ -2387,13 +2387,22 @@ def save_lenovo_ticket(request):
             'warranty', 'warranty_type',
             'auth_factory_reset', 'request_quote', 'direct_repair', 'direct_repair_limit', 'auth_formatting', 'accessories'
         ]
-        
+
+        fields_cleaned = {}
+
         for key in allowed_fields:
             if key in fields:
-                rec.values[key] = fields[key]
-                
-        rec.save()
-        
+                fields_cleaned[key] = fields[key]
+
+        from commonapp import views
+        views._save_record_data(
+            'ticket_lenovo',
+            recordid,
+            fields_cleaned,
+            None,
+            1
+        )
+                        
         return JsonResponse({'success': True, 'recordid': rec.recordid})
         
     except json.JSONDecodeError:

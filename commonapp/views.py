@@ -3241,7 +3241,7 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None, userid=1)
             fieldtype = field_types.get(fieldid)
             normalized_value = cast_value(value, fieldtype)
 
-            if normalized_value is None and value not in ('', None):
+            if normalized_value is None and value not in ('', None, []):
                 errors[fieldid] = f"Valore non valido: {value}"
                 continue
 
@@ -3336,6 +3336,17 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None, userid=1)
 def cast_value(value, fieldtype):
     if value in ('', 'null', None):
         return None
+
+    if isinstance(value, list):
+        # se multiselect
+        if fieldtype == "multiselect":
+            return ','.join(map(str, value)) if value else None
+        
+        # se vuoi salvarle come JSON
+        # import json
+        # return json.dumps(value)
+
+        return ','.join(map(str, value))
     
     FIELDTYPES = {
         "Parola": "VARCHAR(255)",
@@ -7626,7 +7637,7 @@ def save_newuser(request):
         )
 
     # 3. Verifica Esistenza Utente
-    if User.objects.filter(username=username).exists():
+    if SysUser.objects.filter(username=username).exists():
         print("Esiste già un utente con questo username.")
         # L'utente esiste già, non è una creazione. Restituisci un errore.
         return JsonResponse(
@@ -7639,7 +7650,7 @@ def save_newuser(request):
 
     # 4. Creazione Utente
     try:
-        user = User.objects.create_user(
+        user = SysUser.objects.create_user(
             username=username,
             password=password,
             first_name=firstname,
