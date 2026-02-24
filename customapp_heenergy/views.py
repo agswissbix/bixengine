@@ -30,29 +30,49 @@ def to_base64(path):
 
 def extract_pdf_footer_base64(pdf_path, footer_ratio=0.20):
     """Estrae la parte inferiore (footer) della prima pagina di un PDF come immagine Base64."""
+    logger.info(f"[DEBUG PDF] Tentativo estrazione footer dal file all'indirizzo previsto: '{pdf_path}'")
+    
     if not os.path.exists(pdf_path):
+        logger.error(f"[DEBUG PDF] FALLITO: Il file '{pdf_path}' non esiste! Assicurati che il file sia presente e che il percorso assoluto nel container Docker corrisponda ai tuoi mount/volumi.")
         return None
+        
+    logger.info(f"[DEBUG PDF] File PDF trovato correttamente: '{pdf_path}'")
+    
     try:
-        import fitz  # PyMuPDF
+        try:
+            import fitz  # PyMuPDF
+            logger.info("[DEBUG PDF] Libreria PyMuPDF (fitz) importata correttamente.")
+        except ImportError:
+            logger.error("[DEBUG PDF] ERRORE CRITICO: PyMuPDF non è installato! Nel tuo Dockerfile devi assicurarti di installarlo tramite 'pip install PyMuPDF'.")
+            return None
+
         doc = fitz.open(pdf_path)
         if len(doc) == 0:
+            logger.warning("[DEBUG PDF] Il documento PDF risulta essere vuoto (0 pagine).")
             return None
+            
         page = doc[0]
         rect = page.rect
+        logger.info(f"[DEBUG PDF] Letta pagina 1 del PDF. Dimensioni: larghezza {rect.width}, altezza {rect.height}")
         
         # Calcola l'altezza del footer (es. 20% del fondo)
         footer_height = rect.height * footer_ratio
         
         # Definisci il rettangolo di ritaglio (x0, y0, x1, y1)
         clip_rect = fitz.Rect(rect.x0, rect.y1 - footer_height, rect.x1, rect.y1)
+        logger.info(f"[DEBUG PDF] Ritaglio area (clip_rect) calcolato: x0={clip_rect.x0}, y0={clip_rect.y0}, x1={clip_rect.x1}, y1={clip_rect.y1}")
         
         # Renderizza il rettangolo in formato immagine (ingrandito leggermente per qualità)
         pix = page.get_pixmap(clip=clip_rect, matrix=fitz.Matrix(2, 2))
         png_data = pix.tobytes("png")
         
-        return f"data:image/png;base64,{base64.b64encode(png_data).decode('utf-8')}"
+        logger.info("[DEBUG PDF] Immagine png estratta, procedo alla conversione in base64.")
+        result = f"data:image/png;base64,{base64.b64encode(png_data).decode('utf-8')}"
+        logger.info("[DEBUG PDF] Conversione in base64 completata con successo.")
+        return result
+        
     except Exception as e:
-        logger.error(f"Errore estrazione footer da PDF ({pdf_path}): {e}")
+        logger.exception(f"[DEBUG PDF] Eccezione grave durante l'estrazione o la lettura di PyMuPDF: {str(e)}")
         return None
 
 
