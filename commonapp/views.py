@@ -3381,11 +3381,11 @@ def cast_value(value, fieldtype):
 
         if sql_column_type == 'time':
             from dateutil import parser
-            return parser.parse(value).strftime('%H:%M:%S')
+            return parser.parse(value).strftime('%H:%M')
 
         if sql_column_type == 'datetime':
             from dateutil import parser
-            return parser.parse(value).strftime('%Y-%m-%d %H:%M:%S')
+            return parser.parse(value).strftime('%Y-%m-%d %H:%M')
 
         return str(value).strip()
 
