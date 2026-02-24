@@ -95,22 +95,12 @@ def get_filtered_clubs(request):
     filters = data.get('filters', {})
     dashboard_category = data.get('dashboardCategory')
 
-    conditions = " TRUE"
+    conditions_g = " TRUE"
     numeric_filters = filters.get('numericFilters', [])
     demographic_filters = filters.get('demographicFilters', [])
 
     # --------------------------------------------------------
-    # 1. FILTRI NUMERICI → inclusi nella SQL
-    # --------------------------------------------------------
-    for nf in numeric_filters:
-        field = nf.get('field')
-        operator = nf.get('operator')
-        value = nf.get('value')
-        if value is not None:
-            conditions += f" AND m.{field} {operator} {value}"
-
-    # --------------------------------------------------------
-    # 2. FILTRI DEMOGRAFICI (tranne distance) → inclusi nella SQL
+    # 1. FILTRI DEMOGRAFICI (tranne distance) → inclusi nella SQL
     # --------------------------------------------------------
     # li tengo da parte per il filtro distanza
     distance_filter = None
@@ -128,25 +118,61 @@ def get_filtered_clubs(request):
         if field in ['colelgamenti_pubblici', 'infrastrutture_turistiche']:
             if isinstance(value, bool):
                 value_db = 'Si' if value else 'No'
-                conditions += f" AND g.{field} = '{value_db}'"
+                conditions_g += f" AND g.{field} = '{value_db}'"
             continue
 
         # anno fondazione
         if field == "anno_fondazione":
             if value is not None:
-                conditions += f" AND g.{field} {operator} {value}"
+                conditions_g += f" AND g.{field} {operator} {value}"
             continue
 
         # altri campi testuali
         if value:
-            conditions += f" AND g.{field} = '{value}'"
+            conditions_g += f" AND g.{field} = '{value}'"
 
     anonimi_condition = "(g.dati_anonimi = 'false' OR g.dati_anonimi IS NULL) AND"
     if dashboard_category == 'nationalAvg':
         anonimi_condition = ""
 
     # --------------------------------------------------------
-    # 3. ESECUZIONE QUERY senza distanza
+    # 2. COSTRUZIONE DEI JOIN DINAMICI PER FILTRI NUMERICI 
+    # (Applico i filtri solo sui dati più recenti)
+    # --------------------------------------------------------
+    join_clauses = []
+    
+    if not numeric_filters:
+        # Se non ci sono filtri numerici, assicuro comunque che il club abbia inserito almeno un dato
+        join_clauses.append("JOIN user_metrica_annuale m ON m.recordidgolfclub_ = g.recordid_ AND m.deleted_ = 'N'")
+
+    for i, nf in enumerate(numeric_filters, start=1):
+        field = nf.get('field')
+        operator = nf.get('operator')
+        value = nf.get('value')
+
+        alias = f"m{i}"
+
+        # INNER JOIN subquery: prende il max_anno per club in cui 'field' non è nullo e contemporaneamente valida la condizione
+        join_clause = f"""
+        JOIN (
+            SELECT m.recordidgolfclub_, m.{field}
+            FROM user_metrica_annuale m
+            WHERE m.deleted_ = 'N'
+            AND m.{field} IS NOT NULL
+            AND m.anno = (
+                SELECT MAX(m2.anno)
+                FROM user_metrica_annuale m2
+                WHERE m2.recordidgolfclub_ = m.recordidgolfclub_
+                    AND m2.deleted_ = 'N'
+                    AND m2.{field} IS NOT NULL
+            )
+            {"AND m." + field + f" {operator} {value}" if value is not None else ""}
+        ) {alias} ON {alias}.recordidgolfclub_ = g.recordid_
+        """
+        join_clauses.append(join_clause)
+
+    # --------------------------------------------------------
+    # 3. ESECUZIONE QUERY (senza distanza)
     # --------------------------------------------------------
     sql = f"""
         SELECT g.nome_club AS title,
@@ -154,63 +180,13 @@ def get_filtered_clubs(request):
                g.Logo AS logo,
                g.paese AS paese
         FROM user_golfclub AS g
-        JOIN user_metrica_annuale AS m
-           ON g.recordid_ = m.recordidgolfclub_
+        {" ".join(join_clauses)}
         WHERE {anonimi_condition} 
-            g.deleted_ = 'N' AND m.deleted_ = 'N' 
-            AND {conditions}
-        GROUP BY title, recordid
+            g.deleted_ = 'N' 
+            AND {conditions_g}
+        GROUP BY title, recordid, logo, paese
         ORDER BY title ASC
     """
-
-    # # --------------------------------------------------------
-    # # 2. COSTRUZIONE DEI JOIN DINAMICI PER FILTRI NUMERICI
-    # # --------------------------------------------------------
-    # join_clauses = []
-    # select_fields = []
-
-    # for i, nf in enumerate(numeric_filters, start=1):
-    #     field = nf.get('field')
-    #     operator = nf.get('operator')
-    #     value = nf.get('value')
-
-    #     alias = f"m{i}"
-    #     select_fields.append(f"{alias}.{field} AS {field}_value")
-
-    #     join_clause = f"""
-    #     LEFT JOIN (
-    #         SELECT m.recordidgolfclub_, m.{field}
-    #         FROM user_metrica_annuale m
-    #         WHERE m.deleted_ = 'N'
-    #         AND m.{field} IS NOT NULL
-    #         AND m.anno = (
-    #             SELECT MAX(m2.anno)
-    #             FROM user_metrica_annuale m2
-    #             WHERE m2.recordidgolfclub_ = m.recordidgolfclub_
-    #                 AND m2.deleted_ = 'N'
-    #                 AND m2.{field} IS NOT NULL
-    #         )
-    #         {"AND m." + field + f" {operator} {value}" if value is not None else ""}
-    #     ) {alias} ON {alias}.recordidgolfclub_ = g.recordid_
-    #     """
-    #     join_clauses.append(join_clause)
-
-    # # --------------------------------------------------------
-    # # 3. COSTRUZIONE QUERY FINALE
-    # # --------------------------------------------------------
-    # sql = f"""
-    #     SELECT g.nome_club AS title,
-    #         g.recordid_ AS recordid,
-    #         g.Logo AS logo,
-    #         g.paese AS paese,
-    #         {', '.join(select_fields)}
-    #     FROM user_golfclub AS g
-    #     {" ".join(join_clauses)}
-    #     WHERE (g.dati_anonimi = 'false' OR g.dati_anonimi IS NULL)
-    #     AND g.deleted_ = 'N'
-    #     AND {conditions_g}
-    #     ORDER BY title ASC
-    # """
 
     clubs = HelpderDB.sql_query(sql)
 
