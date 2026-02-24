@@ -43,3 +43,39 @@ def save_record_fields(tableid,recordid, old_record=""):
         create_notification(recordid)
 
         notification_record.save()
+
+
+
+def change_password(request):
+    userid = Helper.get_userid(request)
+    sys_user = SysUser.objects.filter(id=userid).first()
+    if not sys_user:
+        return JsonResponse({"success": False, "detail": "User not found"})
+    if sys_user.disabled == 'N':
+        return JsonResponse({"success": True, "detail": "User is already enabled"})
+    sys_user.disabled = 'N'
+    return sys_user.save()
+    
+
+
+def new_user(userid):
+    sys_user = SysUser.objects.filter(id=userid).first()
+    if not sys_user:
+        return JsonResponse({"success": False, "detail": "User not found"})
+    if sys_user.disabled == 'Y':
+        return JsonResponse({"success": True, "detail": "User is already disabled"})
+    sys_user.disabled = 'Y'
+    return sys_user.save()
+
+def get_user_info(request, page):
+    userid = Helper.get_userid(request)
+    user = SysUser.objects.filter(id=userid).first()
+    return JsonResponse({
+        "isAuthenticated": True,
+        "username": request.user.username,
+        "role": 'admin' if request.user.is_superuser else 'user',
+        "chat": '',
+        "telefono": '',
+        "disabled": True if user.disabled == 'Y' else False
+    })
+    

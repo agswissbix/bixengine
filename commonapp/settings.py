@@ -16,12 +16,14 @@ from django.db import connection, transaction
 from django.http import JsonResponse
 from commonapp.models import *
 
-@superuser_required
 def get_users_and_groups(request):
     """
     API per ottenere la lista di utenti e gruppi.
     Restituisce un JSON con due liste separate.
     """
+    active_server = Helper.get_cliente_id()
+    if not request.user.is_superuser and active_server != "wegolf":
+        return JsonResponse({"success": False, "error": "Unauthorized"}, status=401)
 
     try:
         # Esegui la query una sola volta

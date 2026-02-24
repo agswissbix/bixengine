@@ -59,6 +59,11 @@ from faker import Faker
 import xml.etree.ElementTree as ET
 import importlib
 
+from django.contrib.auth.models import User
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes, force_str
+
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -179,32 +184,9 @@ def user_info(request):
     data = json.loads(request.body) 
     page = data.get("page", "default")
     if request.user.is_authenticated:
-        #Temp solution
-        activeServer = HelpderDB.sql_query_row("SELECT value FROM sys_settings WHERE setting='cliente_id'")
-        if activeServer['value'] == 'telefonoamico':
-            sql=f"SELECT * FROM user_utenti WHERE nomeutente='{request.user.username}' AND deleted_='N'"
-            record_utente=HelpderDB.sql_query_row(sql)
-            nome=record_utente['nome']
-            ruolo=record_utente['ruolo']
-            
-            if page=="/home" and ruolo != 'Amministratore':
-                return JsonResponse({
-                    "isAuthenticated": False,
-                    "username": request.user.username,
-                    "name": nome,
-                    "role": record_utente['ruolo'],
-                    "chat": record_utente['tabchat'],
-                    "telefono": record_utente['tabtelefono']
-                })
-            else:
-                return JsonResponse({
-                    "isAuthenticated": True,
-                    "username": request.user.username,
-                    "name": nome,
-                    "role": record_utente['ruolo'],
-                    "chat": record_utente['tabchat'],
-                    "telefono": record_utente['tabtelefono']
-                })
+        custom_response = call_custom_function("get_user_info", request, page)
+        if custom_response is not None:
+            return custom_response
         else:
             return JsonResponse({
                 "isAuthenticated": True,
@@ -431,9 +413,93 @@ def change_password(request):
         # Importante: aggiorna la sessione per mantenere l'utente loggato
         update_session_auth_hash(request, request.user)
         
+        custom_change_password(request)
         return JsonResponse({'message': 'Password aggiornata con successo'})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def request_password_reset(request):
+    try:
+        data = json.loads(request.body)
+        email = data.get('email')
+        origin = data.get('origin', 'http://localhost:3000')
+
+        if not email:
+             return JsonResponse({'error': 'Email mancante'}, status=400)
+
+        user = User.objects.filter(email=email).first()
+        if not user:
+            return JsonResponse({'error': 'Nessun utente trovato con questa email'}, status=404)
+
+        uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+
+        reset_link = f"{origin}/reset-password?uid={uidb64}&token={token}"
+
+        email_data = {
+            'to': user.email,
+            'subject': 'Ripristino Password',
+            'text': f'<p>Ciao {user.username},</p><p>Hai richiesto il ripristino della password. Clicca sul link sottostante per impostarne una nuova:</p><p><a href="{reset_link}">Reimposta password</a></p><p>Se non hai richiesto il ripristino, ignora questa email.</p>',
+            'cc': '',
+            'bcc': '',
+            'attachment_relativepath': '',
+            'attachment_name': ''
+        }
+
+        EmailSender.save_email('user', user.pk, email_data)
+
+        return JsonResponse({'message': 'Email di ripristino inviata con successo'})
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def reset_password_with_token(request):
+    try:
+        data = json.loads(request.body)
+        uidb64 = data.get('uid')
+        token = data.get('token')
+        new_password = data.get('new_password')
+
+        if not uidb64 or not token or not new_password:
+             return JsonResponse({'error': 'Dati mancanti'}, status=400)
+
+        try:
+            uid = force_str(urlsafe_base64_decode(uidb64))
+            user = User.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            user = None
+
+        if user is not None and default_token_generator.check_token(user, token):
+            user.set_password(new_password)
+            user.save()
+            return JsonResponse({'message': 'Password reimpostata con successo'})
+        else:
+            return JsonResponse({'error': 'Il link di ripristino non è valido o è scaduto'}, status=400)
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+def call_custom_function(func_name, *args, **kwargs):
+    idcliente = Helper.get_cliente_id()
+    module_name = f"customapp_{idcliente}.customfunc"
+
+    try:
+        customfunc = importlib.import_module(module_name)
+        if hasattr(customfunc, func_name):
+            func = getattr(customfunc, func_name)
+            return func(*args, **kwargs)
+        else:
+            print(f"Funzione '{func_name}' non trovata in {module_name}")
+    except ModuleNotFoundError:
+        print(f"Modulo personalizzato {module_name} non trovato")
+    except Exception as e:
+        print(f"Errore durante l'importazione o l'esecuzione di '{func_name}' in {module_name}: {e}")
+    return None
+
+def custom_change_password(request):
+    return call_custom_function("change_password", request)
 
 @csrf_exempt
 def get_active_server(request):
@@ -3241,7 +3307,7 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None, userid=1)
             fieldtype = field_types.get(fieldid)
             normalized_value = cast_value(value, fieldtype)
 
-            if normalized_value is None and value not in ('', None):
+            if normalized_value is None and value not in ('', None, []):
                 errors[fieldid] = f"Valore non valido: {value}"
                 continue
 
@@ -3336,6 +3402,17 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None, userid=1)
 def cast_value(value, fieldtype):
     if value in ('', 'null', None):
         return None
+
+    if isinstance(value, list):
+        # se multiselect
+        if fieldtype == "multiselect":
+            return ','.join(map(str, value)) if value else None
+        
+        # se vuoi salvarle come JSON
+        # import json
+        # return json.dumps(value)
+
+        return ','.join(map(str, value))
     
     FIELDTYPES = {
         "Parola": "VARCHAR(255)",
@@ -3370,11 +3447,11 @@ def cast_value(value, fieldtype):
 
         if sql_column_type == 'time':
             from dateutil import parser
-            return parser.parse(value).strftime('%H:%M:%S')
+            return parser.parse(value).strftime('%H:%M')
 
         if sql_column_type == 'datetime':
             from dateutil import parser
-            return parser.parse(value).strftime('%Y-%m-%d %H:%M:%S')
+            return parser.parse(value).strftime('%Y-%m-%d %H:%M')
 
         return str(value).strip()
 
@@ -3939,23 +4016,7 @@ def save_record_fields(request):
 
 
 def custom_save_record_fields(tableid, recordid, params):
-    idcliente = Helper.get_cliente_id()
-    # Nome del modulo dinamico
-    module_name = f"customapp_{idcliente}.customfunc"
-
-    try:
-        # Import dinamico
-        customfunc = importlib.import_module(module_name)
-
-        # Chiama la funzione se esiste
-        if hasattr(customfunc, "save_record_fields"):
-            return customfunc.save_record_fields(tableid, recordid, old_record=params)
-        else:
-            print(f"Funzione 'save_record_fields' non trovata in {module_name}")
-    except ModuleNotFoundError:
-        print(f"Modulo personalizzato {module_name} non trovato")
-    except Exception as e:
-        print(f"Errore durante l'importazione o l'esecuzione: {e}")
+    return call_custom_function("save_record_fields", tableid, recordid, old_record=params)
 
 def get_table_views(request):
     data = json.loads(request.body)
@@ -7679,9 +7740,13 @@ def save_newuser(request):
         print("Errore interno del server: " + str(e))
         return JsonResponse({"success": False, "error": f"Errore interno del server: {str(e)}"}, status=500)
 
+    
+    custom_new_user(userid)
     return JsonResponse({"success": True, "message": "Utente creato con successo."})
 
 
+def custom_new_user(userid):
+    return call_custom_function("new_user", userid)
         
 #TODO
 #TEMP
