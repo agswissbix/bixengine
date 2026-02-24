@@ -170,7 +170,7 @@ def login_view(request):
     else:
         return JsonResponse({"success": False, "detail": "Invalid credentials"}, status=401)
 
-@login_required_api  
+@login_required_api
 def logout_view(request):
     logout(request)
     # Pulisci la sessione
@@ -4085,6 +4085,8 @@ def get_record_card_fields(request):
             tid = str(f["tableid"])
             if tid not in fields_lookup:
                 fields_lookup[tid] = []
+            if f['fieldid'].startswith('_'):
+                continue
             fields_lookup[tid].append({
                 "value": f["fieldid"],
                 "label": f["description"],
