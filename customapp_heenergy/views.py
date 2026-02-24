@@ -28,6 +28,34 @@ def to_base64(path):
             print(f"Errore conversione Base64: {e}")
     return None
 
+def extract_pdf_footer_base64(pdf_path, footer_ratio=0.20):
+    """Estrae la parte inferiore (footer) della prima pagina di un PDF come immagine Base64."""
+    if not os.path.exists(pdf_path):
+        return None
+    try:
+        import fitz  # PyMuPDF
+        doc = fitz.open(pdf_path)
+        if len(doc) == 0:
+            return None
+        page = doc[0]
+        rect = page.rect
+        
+        # Calcola l'altezza del footer (es. 20% del fondo)
+        footer_height = rect.height * footer_ratio
+        
+        # Definisci il rettangolo di ritaglio (x0, y0, x1, y1)
+        clip_rect = fitz.Rect(rect.x0, rect.y1 - footer_height, rect.x1, rect.y1)
+        
+        # Renderizza il rettangolo in formato immagine (ingrandito leggermente per qualità)
+        pix = page.get_pixmap(clip=clip_rect, matrix=fitz.Matrix(2, 2))
+        png_data = pix.tobytes("png")
+        
+        return f"data:image/png;base64,{base64.b64encode(png_data).decode('utf-8')}"
+    except Exception as e:
+        logger.error(f"Errore estrazione footer da PDF ({pdf_path}): {e}")
+        return None
+
+
 @csrf_exempt
 def print_pdf_heenergy(request):
     """
@@ -108,6 +136,10 @@ def print_pdf_heenergy(request):
             "payable_to": "HE-Energy Sagl\nVia Campagna 32\n6934 Bioggio",
             "payable_by": f"{client_info['nome']}\n{client_info['indirizzo']}\n{client_info['cap']} {client_info['citta']}",
         }
+
+        # Carica srimg.png che si trova al di fuori della root (bixengine), in ../uploads/fattura/qrimg.png
+        qr_img_path = os.path.abspath(os.path.join(settings.BASE_DIR, "..", "uploads", "fattura",recordid_fattura, "qrcode.png"))
+        img_qrcode = to_base64(qr_img_path)
         
         # --- BASE64 IMAGES CONVERSION ---
         static_img_path = os.path.join(settings.BASE_DIR, "customapp_heenergy/static/images")
@@ -119,6 +151,10 @@ def print_pdf_heenergy(request):
         img_messana = to_base64(os.path.join(static_img_path, "messana.png"))
         img_sinum = to_base64(os.path.join(static_img_path, "sinum.png"))
         img_qrcode_placeholder = to_base64(os.path.join(static_img_path, "qrcode.png"))
+        pdf_banca = os.path.abspath(os.path.join(settings.BASE_DIR, "..", "uploads", "fattura",recordid_fattura, "pdfbanca.pdf"))
+        
+        # Estrai il footer del PDF (20% dal basso)
+        img_pdf_footer = extract_pdf_footer_base64(pdf_banca, 0.40)
 
         context = {
             "client_info": client_info,
@@ -132,7 +168,8 @@ def print_pdf_heenergy(request):
             "img_saj": img_saj,
             "img_messana": img_messana,
             "img_sinum": img_sinum,
-            "img_qrcode_placeholder": img_qrcode_placeholder,
+            "img_qrcode_placeholder": img_qrcode,
+            "img_pdf_footer": img_pdf_footer,
         }
         
         # Uncomment to use real DB data later
