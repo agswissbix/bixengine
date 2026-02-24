@@ -157,8 +157,8 @@ def print_pdf_heenergy(request):
             "payable_by": f"{client_info['nome']}\n{client_info['indirizzo']}\n{client_info['cap']} {client_info['citta']}",
         }
 
-        # Carica srimg.png che si trova al di fuori della root (bixengine), in ../uploads/fattura/qrimg.png
-        qr_img_path = os.path.abspath(os.path.join(settings.BASE_DIR, "..", "uploads", "fattura",recordid_fattura, "qrcode.png"))
+        # Carica srimg.png risolvendo la ROOT in base all'ambiente (Docker o Locale) tramite MEDIA_ROOT
+        qr_img_path = os.path.abspath(os.path.join(settings.MEDIA_ROOT, "fattura", recordid_fattura, "qrcode.png"))
         img_qrcode = to_base64(qr_img_path)
         
         # --- BASE64 IMAGES CONVERSION ---
@@ -171,7 +171,7 @@ def print_pdf_heenergy(request):
         img_messana = to_base64(os.path.join(static_img_path, "messana.png"))
         img_sinum = to_base64(os.path.join(static_img_path, "sinum.png"))
         img_qrcode_placeholder = to_base64(os.path.join(static_img_path, "qrcode.png"))
-        pdf_banca = os.path.abspath(os.path.join(settings.BASE_DIR, "..", "uploads", "fattura",recordid_fattura, "pdfbanca.pdf"))
+        pdf_banca = os.path.abspath(os.path.join(settings.MEDIA_ROOT, "fattura", recordid_fattura, "pdfbanca.pdf"))
         
         # Estrai il footer del PDF (20% dal basso)
         img_pdf_footer = extract_pdf_footer_base64(pdf_banca, 0.40)
