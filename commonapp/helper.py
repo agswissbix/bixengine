@@ -228,7 +228,8 @@ class Helper:
             
             field_mappings.append({
                 "tech_field": field_name,
-                "display_label": display_name
+                "display_label": display_name,
+                "original_label": label
             })
 
         # 2. Recupera tutti i progressi del golf club
@@ -270,6 +271,7 @@ class Helper:
             for mapping in field_mappings:
                 tech_field = mapping["tech_field"]
                 display_label = mapping["display_label"]
+                original_label = mapping["original_label"]
                 
                 value = row.get(tech_field)
 
@@ -279,7 +281,7 @@ class Helper:
                         wrong_values[year] = {}
                     
                     # Usiamo la label localizzata come chiave per l'errore
-                    wrong_values[year][display_label] = value
+                    wrong_values[year][original_label] = value
 
         # 4. Risultato finale
         complete = len(missing_years) == 0 and len(wrong_values) == 0
