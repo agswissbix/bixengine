@@ -421,10 +421,10 @@ class UserRecord:
 
                     for fieldid, value in self.values.items():
                         if value is not None:
-                            fields_sql.append(f"{fieldid}=%s")
+                            fields_sql.append(f"`{fieldid}`=%s")
                             params_list.append(value)
                         else:
-                            fields_sql.append(f"{fieldid}=NULL")
+                            fields_sql.append(f"`{fieldid}`=NULL")
 
                     sql = f"""
                         UPDATE user_{self.tableid}
