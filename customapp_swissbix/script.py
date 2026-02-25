@@ -3281,10 +3281,24 @@ def get_bixhub_initial_data(request):
                     if c_rec and hasattr(c_rec, 'values'):
                         company_name = c_rec.values.get('companyname', 'N/D')
 
+                is_signed = False
+                condition_list_signed = []
+                condition_list_signed.append(f"recordidtimesheet_='{ts.get('recordid_')}'")
+                condition_list_signed.append("type = 'Signature'")
+                
+                ts_signed_records = UserTable('attachment').get_records(
+                    conditions_list=condition_list_signed, 
+                    limit=1,
+                )
+
+                if ts_signed_records:
+                    is_signed = True
+
                 closed_timesheets.append({
                     "id": str(ts.get('recordid_')),
                     "date": str(ts.get('date'))[:10] if ts.get('date') else "",
                     "company": company_name,
+                    "is_signed": is_signed
                 })
 
         data = {

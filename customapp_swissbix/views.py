@@ -1813,12 +1813,12 @@ def save_signature(request):
         row['signatureUrl'] = to_base64(firma_path.resolve())
 
 
-        timesheetlines = HelpderDB.sql_query(
-            f"SELECT * FROM user_timesheetline WHERE recordidtimesheet_='{recordid}'"
-        )
+        condition_list = [f"recordidtimesheet_='{recordid}'"]
+        timesheetlines = UserTable('timesheetline').get_records(conditions_list=condition_list)
         for line in timesheetlines:
-            line['note'] = line.get('note') or ''
-            line['expectedquantity'] = line.get('expectedquantity') or ''
+            product = UserRecord('product', line.get('recordidproduct_'))
+            line['product'] = product.values.get('name') or ''
+            line['description'] = line.get('description') or ''
             line['actualquantity'] = line.get('actualquantity') or ''
         row['timesheetlines'] = timesheetlines
 
