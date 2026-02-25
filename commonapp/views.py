@@ -5743,6 +5743,8 @@ def get_dashboard_blocks(request):
                     block['gsh'] = data['gsh']
                     block['viewid'] = results['viewid']
                     block['widgetid'] = results['widgetid']
+                    block['status'] = results.get('status')
+                    
                     # if they are null set default values
                     if block['gsw'] == None or block['gsw'] == '':
                         block['gsw'] = 3
