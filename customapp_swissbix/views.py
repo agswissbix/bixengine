@@ -2312,8 +2312,8 @@ def get_lenovo_ticket(request):
         data = json.loads(request.body)
         ticket_id = data.get('ticket_id')
         
-        if not ticket_id:
-            return JsonResponse({'success': False, 'error': 'Ticket ID missing'}, status=400)
+        if not ticket_id or str(ticket_id).lower() in ('null', 'none', 'undefined', ''):
+            return JsonResponse({'success': False, 'error': 'Ticket ID missing or invalid'}, status=400)
             
         rec = UserRecord('ticket_lenovo', ticket_id)
         if not rec.recordid:
@@ -2395,7 +2395,7 @@ def save_lenovo_ticket(request):
                 fields_cleaned[key] = fields[key]
 
         from commonapp import views
-        views._save_record_data(
+        saved_rec = views._save_record_data(
             'ticket_lenovo',
             recordid,
             fields_cleaned,
@@ -2403,7 +2403,7 @@ def save_lenovo_ticket(request):
             1
         )
                         
-        return JsonResponse({'success': True, 'recordid': rec.recordid})
+        return JsonResponse({'success': True, 'recordid': saved_rec.recordid})
         
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'Invalid JSON format in fields'}, status=400)
@@ -2453,6 +2453,7 @@ def upload_lenovo_attachment(request):
         ticket_id = request.POST.get('ticket_id')
         file_obj = request.FILES.get('file')
         note = request.POST.get('note', '')
+        attachment_type = request.POST.get('attachment_type', 'pre-intervento')
         
         if not ticket_id or not file_obj:
             return JsonResponse({'success': False, 'error': 'Missing ticket_id or file'}, status=400)
@@ -2466,7 +2467,7 @@ def upload_lenovo_attachment(request):
         # 2. Create user_attachment record
         att = UserRecord('attachment')
         att.values['recordidticket_lenovo_'] = ticket_id
-        att.values['type'] = 'Allegato generico'
+        att.values['type'] = attachment_type
         att.values['file'] = final_path
         att.values['filename'] = clean_name
         att.values['note'] = note
@@ -2480,6 +2481,7 @@ def upload_lenovo_attachment(request):
                 'url': final_path,
                 'filename': clean_name,
                 'note': note,
+                'type': attachment_type,
                 'date': att.values['date']
             }
         })
@@ -2499,7 +2501,7 @@ def get_lenovo_attachments(request):
              return JsonResponse({'success': False, 'error': 'Missing ticket_id'})
 
         query = """
-            SELECT recordid_, filename, file, note, date 
+            SELECT recordid_, filename, file, note, date, type 
             FROM user_attachment 
             WHERE recordidticket_lenovo_ = %s 
             AND deleted_ = 'N'
@@ -2516,7 +2518,8 @@ def get_lenovo_attachments(request):
                     'filename': row[1],
                     'url': row[2],
                     'note': row[3],
-                    'date': row[4].strftime('%Y-%m-%d') if row[4] else ''
+                    'date': row[4].strftime('%Y-%m-%d') if row[4] else '',
+                    'type': row[5]
                 })
                 
         return JsonResponse({'success': True, 'attachments': attachments})
