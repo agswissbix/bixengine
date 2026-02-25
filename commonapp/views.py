@@ -3400,7 +3400,7 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None, userid=1)
     return record
 
 def cast_value(value, fieldtype):
-    if value in ('', 'null', None):
+    if value in ('', 'null', None, []):
         return None
 
     if isinstance(value, list):
@@ -5598,9 +5598,6 @@ def update_user_profile_pic(request):
 
     return JsonResponse({'success': True})
 
-    
-    
-
 @login_required(login_url='/login/')
 def get_dashboard_blocks(request):
     request_data = json.loads(request.body)
@@ -5677,9 +5674,45 @@ def get_dashboard_blocks(request):
                 """.format(category_field=category_field, dashboard_id=dashboard_id, userid=bixid)
                 all_blocks = dbh.sql_query(sql)
 
+                chart_ids = [str(b['chartid']) for b in all_blocks if b.get('chartid')]
+                chart_info = {}
+                is_wegolf = str(active_server).lower() == 'wegolf'
+                user_language = 'en'
+
+                if chart_ids:
+                    ids_str = ",".join([f"'{cid}'" for cid in chart_ids])
+                    
+                    sc_query = f"SELECT id, name, config FROM sys_chart WHERE id IN ({ids_str})"
+                    sys_charts = dbh.sql_query(sc_query)
+                    for sc in sys_charts:
+                        chart_info[str(sc['id'])] = {'name': sc['name'], 'config': sc.get('config')}
+                    
+                    if is_wegolf:
+                        try:
+                            user_language = WegolfHelper.get_user_language(bixid)
+                        except Exception:
+                            pass
+                        
+                        uc_query = f"SELECT * FROM user_chart WHERE report_id IN ({ids_str})"
+                        user_charts = dbh.sql_query(uc_query)
+                        for uc in user_charts:
+                            cid = str(uc.get('report_id', ''))
+                            if cid in chart_info:
+                                chart_info[cid]['user_chart_row'] = uc
+
                 for block in all_blocks:
-                    chart= HelpderDB.sql_query_row(f"SELECT name FROM sys_chart WHERE id='{block['chartid']}'")
-                    block['description'] = chart['name'] if chart else 'N/A'
+                    cid = str(block.get('chartid', ''))
+                    info = chart_info.get(cid, {})
+                    sys_name = info.get('name', 'N/A')
+
+                    description = sys_name
+                    if is_wegolf:
+                        try:
+                            description = WegolfHelper.resolve_localized_chart_title(sys_name, info.get('user_chart_row'), user_language)
+                        except Exception:
+                            pass
+
+                    block['description'] = description
                     context['block_list'].append(block)
 
                 for data in datas:
@@ -5781,8 +5814,6 @@ def get_chart_data(request):
 
 
 def build_chart_data(request, chart_id, viewid=None, filters=None, block_category=None, viewMode=None, referenceYear=None):
-    import re
-
     userid = Helper.get_userid(request)
     cliente_id = Helper.get_cliente_id()
     request_data = json.loads(request.body)
@@ -5804,6 +5835,18 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
         chart_config = json.loads(chart_config)
     from_table = chart_config.get('from_table')
 
+    try:
+        is_wegolf = cliente_id == "wegolf"
+        user_language = "en"
+        user_chart = None
+
+        if is_wegolf:
+            user_language = WegolfHelper.get_user_language(userid)
+            user_chart = HelpderDB.sql_query_row(f"SELECT * FROM user_chart WHERE report_id='{chart_id}'")
+            chart_name = WegolfHelper.resolve_localized_chart_title(chart_name, user_chart, user_language)
+
+    except Exception as e:
+        print(f"Error getting localized title: {str(e)}")
     # ----------------------------------------------------------
     # 2) Ricavo categoria del blocco se non fornita
     # ----------------------------------------------------------

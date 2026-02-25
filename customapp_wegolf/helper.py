@@ -218,3 +218,21 @@ class Helper:
 
         except Exception as e:
             return ""
+
+    @classmethod
+    def resolve_localized_chart_title(cls, sys_chart_name, user_chart_row, user_language):
+        """
+        Risolve il titolo localizzato accedendo a user_chart_row.
+        Usa title_{lingua} se la lingua != 'en', altrimenti (o come fallback) usa title.
+        """
+        if not user_chart_row:
+            return sys_chart_name
+            
+        loc_title = None
+        if user_language and user_language != 'en':
+            loc_title = user_chart_row.get(f"title_{user_language}")
+            
+        if not loc_title:
+            loc_title = user_chart_row.get("title")
+            
+        return loc_title if loc_title else sys_chart_name
