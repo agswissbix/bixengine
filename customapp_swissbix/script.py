@@ -43,18 +43,30 @@ def task_monitor(data_type):
         @wraps(func)
         def wrapper(*args, **kwargs):
             try:
-                result_value = func(*args, **kwargs)
+                result = func(*args, **kwargs)
+
+                # Gestione di due casi: la funzione ritorna una tupla (value, log) oppure solo un singolo valore
+                if isinstance(result, tuple) and len(result) == 2:
+                    result_value, hidden_log = result
+                else:
+                    result_value = result
+                    hidden_log = []
+
                 return {
                     "status": "success",
                     "value": result_value,
-                    "type": data_type
+                    "type": data_type,
+                    "timestamp": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                    "hidden_log": hidden_log
                 }
             except Exception as e:
                 logger.error(f"Errore nel task {data_type}: {str(e)}")
                 return {
                     "status": "error",
                     "value": {"error": str(e), "message": "Esecuzione fallita"},
-                    "type": data_type
+                    "type": data_type,
+                    "timestamp": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                    "hidden_log": []
                 }
         return wrapper
     return decorator
@@ -650,7 +662,7 @@ def update_deals():
         condition_list.append("dealstatus='Vinta'")
         condition_list.append("dealstage IS NULL OR (dealstage!='Progetto fatturato'  and dealstage!='Invoiced')")
         condition_list.append("deleted_='N'")
-        deals=deal_table.get_records(conditions_list=condition_list)
+        deals=deal_table.get_records(conditions_list=condition_list, limit=2)
         sorted_deals = sorted(deals, key=lambda deal: deal['recordid_'])
         
         # Numero di record da aggiornare
@@ -668,27 +680,28 @@ def update_deals():
             print(f"Fetched Rows: {len(rows)}")
 
             for row in rows:
-                if (row):
-                    updated_status = row.F1033
-                    project = row.F1162
-                    tech_adiutoid = row.F1067
-                    deal_record.values['adiuto_tech'] = tech_adiutoid
-                    
-                    bixdata_tech = None
-                    if tech_adiutoid is not None:
+                if not row:
+                    continue
 
-                        bixdata_tech = HelpderDB.sql_query_row(f"SELECT * FROM sys_user WHERE adiutoid='{tech_adiutoid}'")
+                updated_status = row.F1033
+                project = row.F1162
+                tech_adiutoid = row.F1067
+                deal_record.values['adiuto_tech'] = tech_adiutoid
+                
+                bixdata_tech = None
+                if tech_adiutoid is not None:
+                    bixdata_tech = HelpderDB.sql_query_row(f"SELECT * FROM sys_user WHERE adiutoid='{tech_adiutoid}'")
 
-                    if (bixdata_tech):
-                        deal_record.values['project_assignedto'] = bixdata_tech["id"]
+                if (bixdata_tech):
+                    deal_record.values['project_assignedto'] = bixdata_tech["id"]
 
-                    deal_record.values["dealstage"] = updated_status
+                deal_record.values["dealstage"] = updated_status
 
-                    if ((updated_status == "Progetto in corso") or (updated_status == "Ordine materiale")): 
-                        deal_record.values["sync_project"] = "Si"
-                    
-                    deal_record.save()
-                    print(updated_status)
+                if ((updated_status == "Progetto in corso") or (updated_status == "Ordine materiale")): 
+                    deal_record.values["sync_project"] = "Si"
+                
+                deal_record.save()
+                print(updated_status)
 
             # Aggiornamento dealline
             print("Righe dettaglio: ")
@@ -699,7 +712,6 @@ def update_deals():
             condition_list.append(f"recordiddeal_='{recordid_deal}' AND deleted_='N'")
             deal_lines=deal_lines_table.get_records(conditions_list=condition_list)
             
-
             for deal_line in deal_lines:
                 recordid_dealline = deal_line['recordid_']
                 dealline_record=UserRecord('dealline', recordid_dealline)
@@ -711,12 +723,14 @@ def update_deals():
                 rows = stmt.fetchall()
 
                 for row in rows:
-                    if (row):
-                        dealline_uniteffectivecost = row.F1043
-                        dealline_record.values['uniteffectivecost'] = dealline_uniteffectivecost
-                        dealline_record.save()
-                        print("dealline updated")
-                        result_log.append("dealline updated")
+                    if not row:
+                        continue
+
+                    dealline_uniteffectivecost = row.F1043
+                    dealline_record.values['uniteffectivecost'] = dealline_uniteffectivecost
+                    dealline_record.save()
+                    print("dealline updated")
+                    result_log.append("dealline updated")
 
             save_record_fields('deal', recordid_deal)
             updated_deal_counter += 1
@@ -734,7 +748,9 @@ def update_deals():
         return {
             "updated_count": updated_deal_counter,
             "message": f"Sincronizzazione completata: {updated_deal_counter} trattative",
-            # "details": "<br>".join(result_log)
+            
+        }, {
+            "details": "\n".join(result_log)
         }
 
 
