@@ -3206,6 +3206,7 @@ def get_bixhub_initial_data(request):
         bix_apps = []
         
         timesheet_fn_obj = None 
+        lenovo_fn_obj = None
 
         for fn in customs_fn:
             raw_params = fn.get('params')
@@ -3227,6 +3228,9 @@ def get_bixhub_initial_data(request):
                 "description": params_dict.get('description', ''),
                 "params": params_dict 
             }
+
+            if fn.get('tableid_id') and fn['tableid_id'].lower() == "ticket_lenovo" and params_dict.get('linkable') is True:
+                lenovo_fn_obj = app_data
 
             if fn.get('tableid_id') and fn['tableid_id'].lower() == "timesheet" and params_dict.get('linkable') is True:
                 timesheet_fn_obj = app_data
@@ -3301,14 +3305,40 @@ def get_bixhub_initial_data(request):
                     "is_signed": is_signed
                 })
 
+        lenovo_tickets = []
+        if userid:
+            condition_list_lenovo = []
+            condition_list_lenovo.append(f"technician='{userid}'")
+            condition_list_lenovo.append("status != 'Riconsegnato'")
+            condition_list_lenovo.append("deleted_ = 'N'")
+
+            lenovo_records = UserTable('ticket_lenovo').get_records(
+                conditions_list=condition_list_lenovo,
+                limit=10,
+                orderby="reception_date desc"
+            )
+
+            for tk in lenovo_records:
+                lenovo_tickets.append({
+                    "id": str(tk.get('recordid_')),
+                    "name": tk.get('name') or "",
+                    "surname": tk.get('surname') or "",
+                    "company": tk.get('company_name') or "",
+                    "status": tk.get('status') or "Bozza",
+                    "date": str(tk.get('reception_date'))[:10] if tk.get('reception_date') else "",
+                    "problem_description": tk.get('problem_description') or "",
+                })
+
         data = {
             "bixApps": bix_apps,
             "timesheets": recent_timesheets,
             "closedTimesheets": closed_timesheets,
+            "lenovoTickets": lenovo_tickets,
             "user": {
                 "name": username
             },
-            "timesheet_fn": timesheet_fn_obj 
+            "timesheet_fn": timesheet_fn_obj,
+            "lenovo_fn": lenovo_fn_obj
         }
 
         return JsonResponse(data)
