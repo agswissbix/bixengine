@@ -1925,13 +1925,14 @@ def save_email_timesheet(request):
         timesheet = UserRecord("timesheet", recordid_timesheet)
 
         # INFO PRINCIPALI
-        user_id = timesheet.values.get("user")                    # chi ha svolto il lavoro
-        creator_id = timesheet.values.get("creatorid_")          # chi ha creato il record
+        company_id = timesheet.values.get("recordidcompany_")
         company_name = timesheet.fields["recordidcompany_"]["convertedvalue"]
 
         # DESTINATARIO EMAIL
         # esempio: email al responsabile (creator)
-        recipient = SysUser.objects.filter(id=creator_id).values_list("email", flat=True).first()
+        recipient = UserRecord('company', company_id).values['email']
+        if not recipient:
+            return JsonResponse({"status": "error", "messagecustom": "L'azienda non ha un email associata."}, status=400)
 
         # SUBJECT
         subject = f"Nuovo timesheet registrato per {company_name}"

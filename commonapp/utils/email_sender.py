@@ -102,7 +102,12 @@ class EmailSender:
                 fullpath_originale = Path(file_path)
                 fullpath_originale=str(fullpath_originale)
             else:
-                    fullpath_originale=HelpderDB.get_uploadedfile_fullpath(tableid,recordid,'allegato')
+                fullpath_originale = None
+                file_path = os.path.join(settings.UPLOADS_ROOT, attachment_relativepath)
+                if default_storage.exists(file_path):
+                    full_path = default_storage.path(file_path)
+                    if os.path.exists(full_path):
+                        fullpath_originale = full_path
             
             fullpath_email=HelpderDB.get_upload_fullpath('email',record_email.recordid,'attachment')
             #  Assicurati che la cartella di destinazione esista
