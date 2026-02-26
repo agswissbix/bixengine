@@ -4444,76 +4444,116 @@ def save_email(request):
 
 @csrf_exempt
 def get_input_linked(request):
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            searchTerm = data.get('searchTerm', '').lower()
-            recordid = data.get('recordid')
-            #linkedmaster_tableid_array = data.get('linkedmaster_tableid') # Puoi usare tableid se necessario
-            #linkedmaster_tableid=linkedmaster_tableid_array[0]
-            linkedmaster_tableid=data.get('linkedmaster_tableid')
-            tableid=data.get('tableid')
-            fieldid=data.get('fieldid')
-            formValues=data.get('formValues')
-            # Qui dovresti sostituire i dati di esempio con la tua logica di database
-            # o qualsiasi altra fonte di dati.
-            sql=f"SELECT keyfieldlink FROM sys_field WHERE tableid='{tableid}' AND fieldid='{fieldid}'"
-            kyefieldlink=HelpderDB.sql_query_value(sql,'keyfieldlink')
-            additional_conditions = ''
-            #TODO temp
-            # if tableid == 'letturagasolio' and fieldid == 'recordidstabile_':
-            #     recordid_cliente=formValues['recordidcliente_']
-            #     if recordid_cliente:
-            #         additional_conditions = " AND recordidcliente_ = '"+recordid_cliente+"'"
-
-            # if tableid == 'letturagasolio' and fieldid == 'recordidinformazionigasolio_':
-            #     recordid_stabile=formValues['recordidstabile_']
-            #     if recordid_stabile:
-            #         additional_conditions = " AND recordidstabile_ = '"+recordid_stabile+"'"
-            # Generic context filtering
-            #TODO pitservice. metto questa condizione temporaneaa perchè su queste tabelle mi da problemi ma penso perchè artigiano e contatti hanno collegamento diretto a stabile che non dovrebbero avere avendo poi introdotto contattostabile e artigianostabile
-            if linkedmaster_tableid != 'artigiano' and linkedmaster_tableid != 'contatti':
-                if formValues and linkedmaster_tableid:
-                    try:
-                        # Get all valid fields for the target table to avoid errors
-                        fields_query = f"SELECT fieldid FROM sys_field WHERE tableid='{linkedmaster_tableid}'"
-                        rows = HelpderDB.sql_query(fields_query)
-                        valid_fields = {row['fieldid'] for row in rows}
-
-                        # Filter formValues for potential matches
-                        for key, value in formValues.items():
-                            if key.endswith('_') and value:
-                                if key in valid_fields:
-                                    additional_conditions += f" AND {key} = '{value}'"
-                    except Exception as e:
-                        print(f"Error in generic context filtering: {e}")
-
-
-            if recordid:
-                sql = f"""
-                    SELECT recordid_ as recordid, {kyefieldlink} as name 
-                    FROM user_{linkedmaster_tableid} 
-                    WHERE recordid_ = '{recordid}' 
-                    AND deleted_='N' 
-                    {additional_conditions}
-                    LIMIT 1
-                """
-            elif searchTerm:
-                sql=f"SELECT recordid_ as recordid, {kyefieldlink} as name FROM user_{linkedmaster_tableid} where {kyefieldlink} like '%{searchTerm}%' {additional_conditions} AND deleted_='N' ORDER BY recordid_ DESC LIMIT 20"
-            else:
-                sql=f"SELECT recordid_ as recordid, {kyefieldlink} as name FROM user_{linkedmaster_tableid} where deleted_='N' {additional_conditions} ORDER BY recordid_ desc LIMIT 20 "
-
-            query_result=HelpderDB.sql_query(sql)
-            # Name != None ?
-            items=query_result
-            # Filtra gli elementi in base al searchTerm
-            #filtered_items = [item for item in items if searchTerm in item['name'].lower()]
-
-            return JsonResponse(items, safe=False)
-        except json.JSONDecodeError:
-            return JsonResponse({'error': 'Invalid JSON'}, status=400)
-    else:
+    if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    search_term = data.get('searchTerm', '').lower()
+    recordid = data.get('recordid')
+    linkedmaster_tableid = data.get('linkedmaster_tableid')
+    tableid = data.get('tableid')
+    fieldid = data.get('fieldid')
+    form_values = data.get('formValues')
+
+    keyfieldlink = HelpderDB.sql_query_value(
+        f"SELECT keyfieldlink FROM sys_field WHERE tableid='{tableid}' AND fieldid='{fieldid}'",
+        'keyfieldlink'
+    )
+
+    additional_conditions = ''
+    active_filters = []
+
+    EXCLUDED_TABLES = {}
+    if linkedmaster_tableid not in EXCLUDED_TABLES and form_values and linkedmaster_tableid:
+        try:
+            valid_fields = {
+                row['fieldid'] for row in HelpderDB.sql_query(
+                    f"SELECT fieldid FROM sys_field WHERE tableid='{linkedmaster_tableid}' AND keyfieldlink IS NOT NULL"
+                )
+            }
+
+            for key, value in form_values.items():
+                if not (key.endswith('_') and value):
+                    continue
+
+                converted_value = value
+                field_desc_rows = HelpderDB.sql_query(
+                    f"SELECT description FROM sys_field WHERE tableid='{tableid}' AND fieldid='{key}'"
+                )
+                field_desc = (field_desc_rows[0].get('description') or key) if field_desc_rows else key
+
+                if key.startswith('recordid'):
+                    f_info = HelpderDB.sql_query(
+                        f"SELECT keyfieldlink, tablelink FROM sys_field WHERE tableid='{tableid}' AND fieldid='{key}'"
+                    )
+                    if f_info:
+                        k_link = f_info[0].get('keyfieldlink')
+                        t_link = f_info[0].get('tablelink')
+                        if k_link and t_link:
+                            cv_res = HelpderDB.sql_query(
+                                f"SELECT {k_link} FROM user_{t_link} WHERE recordid_='{value}'"
+                            )
+                            if cv_res:
+                                converted_value = cv_res[0].get(k_link) or value
+
+                if key in valid_fields:
+                    additional_conditions += f" AND {key} = '{value}'"
+                    active_filters.append({"field": field_desc, "value": value, "convertedvalue": converted_value})
+
+                elif key.startswith('recordid') and key.endswith('_'):
+                    other_table = key[8:-1]
+                    reverse_field = f"recordid{linkedmaster_tableid}_"
+                    field_exists = HelpderDB.sql_query(
+                        f"SELECT fieldid FROM sys_field WHERE tableid='{other_table}' AND fieldid='{reverse_field}'"
+                    )
+                    if field_exists:
+                        foreign_rows = HelpderDB.sql_query(
+                            f"SELECT {reverse_field} FROM user_{other_table} WHERE recordid_ = '{value}'"
+                        )
+                        if foreign_rows:
+                            foreign_val = foreign_rows[0].get(reverse_field)
+                            if foreign_val and foreign_val != 'None':
+                                additional_conditions += f" AND recordid_ = '{foreign_val}'"
+                                active_filters.append({"field": field_desc, "value": value, "convertedvalue": converted_value})
+
+        except Exception as e:
+            print(f"Error in generic context filtering: {e}")
+
+    if recordid:
+        sql = f"""
+            SELECT recordid_ as recordid, {keyfieldlink} as name
+            FROM user_{linkedmaster_tableid}
+            WHERE recordid_ = '{recordid}'
+            AND deleted_='N'
+            {additional_conditions}
+            LIMIT 1
+        """
+    elif search_term:
+        sql = f"""
+            SELECT recordid_ as recordid, {keyfieldlink} as name
+            FROM user_{linkedmaster_tableid}
+            WHERE {keyfieldlink} LIKE '%{search_term}%'
+            {additional_conditions}
+            AND deleted_='N'
+            ORDER BY recordid_ DESC
+            LIMIT 20
+        """
+    else:
+        sql = f"""
+            SELECT recordid_ as recordid, {keyfieldlink} as name
+            FROM user_{linkedmaster_tableid}
+            WHERE deleted_='N'
+            {additional_conditions}
+            ORDER BY recordid_ DESC
+            LIMIT 20
+        """
+
+    items = HelpderDB.sql_query(sql)
+    return JsonResponse({"items": items, "active_filters": active_filters}, safe=False)
 
 
 
