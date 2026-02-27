@@ -5663,14 +5663,25 @@ def get_dashboard_blocks(request):
                     cid = str(block.get('chartid', ''))
                     info = chart_info.get(cid, {})
                     sys_name = info.get('name', 'N/A')
+                    sys_name = info.get('name', 'N/A')
+                    sys_desc = ""
 
-                    description = sys_name
+                    name = sys_name
+                    description = sys_desc
+                    
                     if is_wegolf:
+                        user_chart_row = info.get('user_chart_row')
+                        if user_chart_row:
+                            sys_desc = user_chart_row.get('description', '')
+                            description = sys_desc
+                        
                         try:
-                            description = WegolfHelper.resolve_localized_chart_title(sys_name, info.get('user_chart_row'), user_language)
+                            name = WegolfHelper.resolve_localized_chart_field(sys_name, user_chart_row, user_language, field="title")
+                            description = WegolfHelper.resolve_localized_chart_field(sys_desc, user_chart_row, user_language, field="description")
                         except Exception:
                             pass
 
+                    block['name'] = name
                     block['description'] = description
                     context['block_list'].append(block)
 

@@ -220,19 +220,19 @@ class Helper:
             return ""
 
     @classmethod
-    def resolve_localized_chart_title(cls, sys_chart_name, user_chart_row, user_language):
+    def resolve_localized_chart_field(cls, sys_chart_name, user_chart_row, user_language, field="title"):
         """
-        Risolve il titolo localizzato accedendo a user_chart_row.
-        Usa title_{lingua} se la lingua != 'en', altrimenti (o come fallback) usa title.
+        Risolve il titolo o la descrizione localizzata accedendo a user_chart_row.
+        Usa {field}_{lingua} se la lingua != 'en', altrimenti (o come fallback) usa {field}.
         """
         if not user_chart_row:
             return sys_chart_name
             
         loc_title = None
         if user_language and user_language != 'en':
-            loc_title = user_chart_row.get(f"title_{user_language}")
+            loc_title = user_chart_row.get(f"{field}_{user_language}")
             
         if not loc_title:
-            loc_title = user_chart_row.get("title")
+            loc_title = user_chart_row.get(field)
             
         return loc_title if loc_title else sys_chart_name
