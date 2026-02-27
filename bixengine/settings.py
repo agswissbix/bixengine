@@ -38,6 +38,7 @@ ALLOWED_HOSTS = [
     '10.0.0.119',
     env('BIXENGINE_DOMAIN'),
     env('BIXPORTAL_DOMAIN'),
+    env('BIXCUSTOM_DOMAIN'),
     env('BIXMOBILE_DOMAIN'),
     env('BIXENGINE_IP'),
     env('BIXPORTAL_IP'),
@@ -156,9 +157,15 @@ CORS_ALLOWED_ORIGINS = [
     'https://' + env('BIXPORTAL_DOMAIN') + ':' + env('BIXCUSTOM_PORT'),
     'http://' + env('BIXPORTAL_DOMAIN') + ':' + env('BIXCUSTOM_NGINX_PORT'),
     'https://' + env('BIXPORTAL_DOMAIN') + ':' + env('BIXCUSTOM_NGINX_PORT'),
-    'https://' + env('BIXMOBILE_DOMAIN') + ':' + env('BIXMOBILE_PORT'),
     'https://' + env('BIXPORTAL_DOMAIN'),
-    'https://' + env('BIXMOBILE_DOMAIN') 
+    'http://' + env('BIXCUSTOM_DOMAIN') + ':' + env('BIXCUSTOM_PORT'),
+    'http://' + env('BIXCUSTOM_DOMAIN') + ':' + env('BIXCUSTOM_NGINX_PORT'),
+    'https://' + env('BIXCUSTOM_DOMAIN') + ':' + env('BIXCUSTOM_NGINX_PORT'),
+    'http://' + env('BIXCUSTOM_DOMAIN') + ':' + env('BIXCUSTOM_PORT'),
+    'https://' + env('BIXCUSTOM_DOMAIN') + ':' + env('BIXCUSTOM_PORT'),
+    'http://' + env('BIXCUSTOM_DOMAIN') + ':' + env('BIXCUSTOM_NGINX_PORT'),
+    'https://' + env('BIXCUSTOM_DOMAIN') + ':' + env('BIXCUSTOM_NGINX_PORT'),
+    'https://' + env('BIXCUSTOM_DOMAIN')
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -185,9 +192,14 @@ CSRF_TRUSTED_ORIGINS = [
     'https://' + env('BIXPORTAL_DOMAIN') + ':' + env('BIXCUSTOM_PORT'),
     'http://' + env('BIXPORTAL_DOMAIN') + ':' + env('BIXCUSTOM_NGINX_PORT'),
     'https://' + env('BIXPORTAL_DOMAIN') + ':' + env('BIXCUSTOM_NGINX_PORT'),
-    'https://' + env('BIXMOBILE_DOMAIN') + ':' + env('BIXMOBILE_PORT'),
     'https://' + env('BIXPORTAL_DOMAIN'),
-    'https://' + env('BIXMOBILE_DOMAIN')
+    'http://' + env('BIXCUSTOM_DOMAIN') + ':' + env('BIXCUSTOM_NGINX_PORT'),
+    'https://' + env('BIXCUSTOM_DOMAIN') + ':' + env('BIXCUSTOM_NGINX_PORT'),
+    'http://' + env('BIXCUSTOM_DOMAIN') + ':' + env('BIXCUSTOM_PORT'),
+    'https://' + env('BIXCUSTOM_DOMAIN') + ':' + env('BIXCUSTOM_PORT'),
+    'http://' + env('BIXCUSTOM_DOMAIN') + ':' + env('BIXCUSTOM_NGINX_PORT'),
+    'https://' + env('BIXCUSTOM_DOMAIN') + ':' + env('BIXCUSTOM_NGINX_PORT'),
+    'https://' + env('BIXCUSTOM_DOMAIN'),
 ]
 
 QR_FERNET_KEY = os.getenv("QR_FERNET_KEY")
