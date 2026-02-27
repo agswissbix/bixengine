@@ -3278,81 +3278,18 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None, userid=1)
 
     fieldsettings = FieldSettings(tableid).get_all_settings()
 
-    # Precarico tutti i fieldtype in una sola query
-    field_types = {}
-    if fields:
-        field_ids = tuple(fields.keys())
-        placeholders = ",".join(["%s"] * len(field_ids))
-
-        sql = f"""
-            SELECT fieldid, fieldtypewebid
-            FROM sys_field
-            WHERE tableid = %s
-            AND fieldid IN ({placeholders})
-        """
-
-        results = HelpderDB.sql_query(sql, (tableid, *field_ids))
-        field_types = {row["fieldid"]: row["fieldtypewebid"] for row in results}
-
-    # ===============================
-    # 🔹 ASSEGNAZIONE CAMPI
-    # ===============================
-
-    deadline_updates = {}
-
-    errors = {}
-
     if fields:
         for fieldid, value in fields.items():
-            fieldtype = field_types.get(fieldid)
-            normalized_value = cast_value(value, fieldtype)
-
-            if normalized_value is None and value not in ('', None, []):
-                errors[fieldid] = f"Valore non valido: {value}"
-                continue
-
-            # --- Validazione Utente ---
-            if fieldtype == 'Utente' and normalized_value:
-                exists = HelpderDB.sql_query_value(
-                    "SELECT 1 FROM sys_user WHERE id = %s",
-                    '1',
-                    (normalized_value,)
-                )
-                if not exists:
-                    normalized_value = None
-
-            # --- Validazione Data ---
-            if fieldtype == 'Data' and normalized_value:
-                try:
-                    from dateutil import parser
-                    dt_obj = parser.parse(normalized_value)
-                    normalized_value = dt_obj.strftime('%Y-%m-%d')
-                except Exception:
-                    normalized_value = None
-
-            # --- Validazione FK ---
-            if fieldid.endswith('_') and normalized_value:
-                fk_table = fieldid.removeprefix("recordid").rsplit('_', 1)[0]
-                sql = f"""
-                    SELECT 1
-                    FROM user_{fk_table}
-                    WHERE recordid_ = %s
-                    LIMIT 1
-                """
-                exists = HelpderDB.sql_query_value(sql, '1', (normalized_value,))
-                if not exists:
-                    normalized_value = None
-
-            record.values[fieldid] = normalized_value
-
-            # --- Gestione Deadline (solo raccolta dati, non save qui) ---
-            setting = fieldsettings.get(fieldid, {}).get('is_deadline_field', {}).get('value')
-            if setting:
-                deadline_updates[setting] = normalized_value
+            record.values[fieldid] = value
 
     record.save()
 
-    print(errors)
+    deadline_updates = {}
+    if fields:
+        for fieldid in fields.keys():
+            setting = fieldsettings.get(fieldid, {}).get('is_deadline_field', {}).get('value')
+            if setting:
+                deadline_updates[setting] = record.values.get(fieldid)
 
     # Se era in creazione ora abbiamo il recordid
     current_recordid = record.recordid
@@ -3398,65 +3335,6 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None, userid=1)
 
     record.save()
     return record
-
-def cast_value(value, fieldtype):
-    if value in ('', 'null', None, []):
-        return None
-
-    if isinstance(value, list):
-        # se multiselect
-        if fieldtype == "multiselect":
-            return ','.join(map(str, value)) if value else None
-        
-        # se vuoi salvarle come JSON
-        # import json
-        # return json.dumps(value)
-
-        return ','.join(map(str, value))
-    
-    FIELDTYPES = {
-        "Parola": "VARCHAR(255)",
-        "Seriale": "VARCHAR(255)",
-        "Data": "DATE",
-        "Ora": "TIME",
-        "Numero": "FLOAT",
-        "lookup": "VARCHAR(255)",
-        "multiselect": "VARCHAR(255)",
-        "Utente": "VARCHAR(255)",
-        "Memo": "TEXT",
-        "html": "LONGTEXT",
-        "Markdown": "LONGTEXT",
-        "SimpleMarkdown": "LONGTEXT",
-        "linked": "VARCHAR(255)"
-    }
-    sql_column_type = FIELDTYPES.get(fieldtype, "VARCHAR(255)").lower()
-
-    try:
-        if sql_column_type in ('int', 'integer'):
-            return int(value)
-
-        if sql_column_type in ('decimal', 'float', 'double'):
-            return float(str(value).replace(',', '.'))
-
-        if sql_column_type == 'boolean':
-            return 1 if str(value).lower() in ('1','true','yes','on') else 0
-
-        if sql_column_type == 'date':
-            from dateutil import parser
-            return parser.parse(value).strftime('%Y-%m-%d')
-
-        if sql_column_type == 'time':
-            from dateutil import parser
-            return parser.parse(value).strftime('%H:%M')
-
-        if sql_column_type == 'datetime':
-            from dateutil import parser
-            return parser.parse(value).strftime('%Y-%m-%d %H:%M')
-
-        return str(value).strip()
-
-    except Exception:
-        return None
 
 @csrf_exempt
 def duplicate_record(request):
