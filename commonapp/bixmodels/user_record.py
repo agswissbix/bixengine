@@ -553,6 +553,9 @@ class UserRecord:
                 continue
 
             fieldtype = field_types.get(fieldid)
+            if not fieldtype:
+                del self.values[fieldid]
+                continue
 
             normalized = cast_value(raw_value, fieldtype)
 

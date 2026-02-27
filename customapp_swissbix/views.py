@@ -2374,7 +2374,7 @@ def save_lenovo_ticket(request):
         return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
         
     try:
-        recordid = request.POST.get('recordid')
+        recordid = request.POST.get('recordid', None)
         fields_raw = request.POST.get('fields', '{}')
         
         # Trasforma la stringa JSON in un dizionario Python
@@ -2390,27 +2390,20 @@ def save_lenovo_ticket(request):
             'technician'
         ]
 
-        fields_cleaned = {}
+        rec = UserRecord('ticket_lenovo', recordid)
 
         if not recordid:
-            fields_cleaned['reception_date'] = datetime.date.today().strftime('%Y-%m-%d')
+            rec.values['reception_date'] = datetime.date.today().strftime('%Y-%m-%d')
             if 'status' not in fields:
-                fields_cleaned['status'] = 'Draft'
+                rec.values['status'] = 'Draft'
 
         for key in allowed_fields:
             if key in fields:
-                fields_cleaned[key] = fields[key]
+                rec.values[key] = fields[key]
 
-        from commonapp import views
-        saved_rec = views._save_record_data(
-            'ticket_lenovo',
-            recordid,
-            fields_cleaned,
-            None,
-            1
-        )
+        rec.save()
                         
-        return JsonResponse({'success': True, 'recordid': saved_rec.recordid})
+        return JsonResponse({'success': True, 'recordid': rec.recordid})
         
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'Invalid JSON format in fields'}, status=400)
