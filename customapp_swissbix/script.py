@@ -2099,7 +2099,8 @@ def get_timetracking(request):
                 'client_name': companyname,
                 'task_id': task_key,
                 'task_name': task_name,
-                'task_expected_duration': expected_duration
+                'task_expected_duration': expected_duration,
+                'service_name': timetracking['service']
             }
             timetrackings.append(timetracking_data)
 
@@ -2113,8 +2114,18 @@ def get_timetracking(request):
             }
             companies.append(company_data)
 
+        # Servizi
+        services_sql = "SELECT itemcode, itemdesc FROM sys_lookup_table_item WHERE lookuptableid='service_timetracking' ORDER BY itemorder"
+        services_data = HelpderDB.sql_query(services_sql)
+        services = []
+        for s in services_data:
+            services.append({
+                'itemcode': s['itemcode'],
+                'itemdesc': s['itemdesc']
+            })
+
         return JsonResponse({"timetracking": timetrackings, "clients": companies,
-                "task_totals": task_totals_map}, safe=False)
+                "task_totals": task_totals_map, "services": services}, safe=False)
 
     except Exception as e:
         logger.error(f"Errore nell'ottenimento dei timetracker per l'utente: {str(e)}")
@@ -2140,6 +2151,9 @@ def save_timetracking(request):
 
         if data.get('clientid'):
             timetracking.values['recordidcompany_'] = data.get('clientid')    
+            
+        if data.get('service'):
+            timetracking.values['service'] = data.get('service')
 
         timetracking.save()
 
