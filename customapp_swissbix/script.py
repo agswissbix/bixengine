@@ -1517,15 +1517,10 @@ def print_servicecontract(request):
         except Exception as e:
             print(f"Errore ordinamento date: {e}")
 
-        try:
-            c_hours = float(contracthours) if str(contracthours).replace('.','',1).isdigit() else 0.0
-            p_res = float(previousresidual) if str(previousresidual).replace('.','',1).replace('-', '').isdigit() else 0.0
-            
-            residual_val = c_hours + p_res - total_used_hours
-            residualhours = "{:.2f}".format(residual_val)
-        except:
-            residualhours = "N/A"
+        
 
+        residualhours = servicecontract.values.get('residualhours', 'N/A')
+        
         context = {
             'companyname': companyname,
             'address': address,
