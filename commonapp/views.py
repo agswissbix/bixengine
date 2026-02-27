@@ -3278,81 +3278,18 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None, userid=1)
 
     fieldsettings = FieldSettings(tableid).get_all_settings()
 
-    # Precarico tutti i fieldtype in una sola query
-    field_types = {}
-    if fields:
-        field_ids = tuple(fields.keys())
-        placeholders = ",".join(["%s"] * len(field_ids))
-
-        sql = f"""
-            SELECT fieldid, fieldtypewebid
-            FROM sys_field
-            WHERE tableid = %s
-            AND fieldid IN ({placeholders})
-        """
-
-        results = HelpderDB.sql_query(sql, (tableid, *field_ids))
-        field_types = {row["fieldid"]: row["fieldtypewebid"] for row in results}
-
-    # ===============================
-    # 🔹 ASSEGNAZIONE CAMPI
-    # ===============================
-
-    deadline_updates = {}
-
-    errors = {}
-
     if fields:
         for fieldid, value in fields.items():
-            fieldtype = field_types.get(fieldid)
-            normalized_value = cast_value(value, fieldtype)
-
-            if normalized_value is None and value not in ('', None, []):
-                errors[fieldid] = f"Valore non valido: {value}"
-                continue
-
-            # --- Validazione Utente ---
-            if fieldtype == 'Utente' and normalized_value:
-                exists = HelpderDB.sql_query_value(
-                    "SELECT 1 FROM sys_user WHERE id = %s",
-                    '1',
-                    (normalized_value,)
-                )
-                if not exists:
-                    normalized_value = None
-
-            # --- Validazione Data ---
-            if fieldtype == 'Data' and normalized_value:
-                try:
-                    from dateutil import parser
-                    dt_obj = parser.parse(normalized_value)
-                    normalized_value = dt_obj.strftime('%Y-%m-%d')
-                except Exception:
-                    normalized_value = None
-
-            # --- Validazione FK ---
-            if fieldid.endswith('_') and normalized_value:
-                fk_table = fieldid.replace('_', '').replace('recordid', '')
-                sql = f"""
-                    SELECT 1
-                    FROM user_{fk_table}
-                    WHERE recordid_ = %s
-                    LIMIT 1
-                """
-                exists = HelpderDB.sql_query_value(sql, '1', (normalized_value,))
-                if not exists:
-                    normalized_value = None
-
-            record.values[fieldid] = normalized_value
-
-            # --- Gestione Deadline (solo raccolta dati, non save qui) ---
-            setting = fieldsettings.get(fieldid, {}).get('is_deadline_field', {}).get('value')
-            if setting:
-                deadline_updates[setting] = normalized_value
+            record.values[fieldid] = value
 
     record.save()
 
-    print(errors)
+    deadline_updates = {}
+    if fields:
+        for fieldid in fields.keys():
+            setting = fieldsettings.get(fieldid, {}).get('is_deadline_field', {}).get('value')
+            if setting:
+                deadline_updates[setting] = record.values.get(fieldid)
 
     # Se era in creazione ora abbiamo il recordid
     current_recordid = record.recordid
@@ -3398,65 +3335,6 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None, userid=1)
 
     record.save()
     return record
-
-def cast_value(value, fieldtype):
-    if value in ('', 'null', None, []):
-        return None
-
-    if isinstance(value, list):
-        # se multiselect
-        if fieldtype == "multiselect":
-            return ','.join(map(str, value)) if value else None
-        
-        # se vuoi salvarle come JSON
-        # import json
-        # return json.dumps(value)
-
-        return ','.join(map(str, value))
-    
-    FIELDTYPES = {
-        "Parola": "VARCHAR(255)",
-        "Seriale": "VARCHAR(255)",
-        "Data": "DATE",
-        "Ora": "TIME",
-        "Numero": "FLOAT",
-        "lookup": "VARCHAR(255)",
-        "multiselect": "VARCHAR(255)",
-        "Utente": "VARCHAR(255)",
-        "Memo": "TEXT",
-        "html": "LONGTEXT",
-        "Markdown": "LONGTEXT",
-        "SimpleMarkdown": "LONGTEXT",
-        "linked": "VARCHAR(255)"
-    }
-    sql_column_type = FIELDTYPES.get(fieldtype, "VARCHAR(255)").lower()
-
-    try:
-        if sql_column_type in ('int', 'integer'):
-            return int(value)
-
-        if sql_column_type in ('decimal', 'float', 'double'):
-            return float(str(value).replace(',', '.'))
-
-        if sql_column_type == 'boolean':
-            return 1 if str(value).lower() in ('1','true','yes','on') else 0
-
-        if sql_column_type == 'date':
-            from dateutil import parser
-            return parser.parse(value).strftime('%Y-%m-%d')
-
-        if sql_column_type == 'time':
-            from dateutil import parser
-            return parser.parse(value).strftime('%H:%M')
-
-        if sql_column_type == 'datetime':
-            from dateutil import parser
-            return parser.parse(value).strftime('%Y-%m-%d %H:%M')
-
-        return str(value).strip()
-
-    except Exception:
-        return None
 
 @csrf_exempt
 def duplicate_record(request):
@@ -3508,6 +3386,47 @@ def duplicate_record(request):
         fields=fields_copy,
         files=files_to_copy
     )
+
+    # 5️⃣ Duplicazione delle righe collegate (linked tables)
+    linked_tables = source_record.get_linked_tables()
+
+    for table_info in linked_tables:
+        linked_table_id = table_info.get("tableid")
+        if not linked_table_id:
+            continue
+            
+        linked_records = source_record.get_linkedrecords_dict(linked_table_id)
+
+        for old_record_data in linked_records:
+            child_fields_copy = {
+                k: v for k, v in old_record_data.items()
+                if k not in excluded_fields
+            }
+            child_fields_copy["id"] = None
+
+            # Aggiorna il riferimento (foreign key) al nuovo record padre creato
+            link_field_name = f"recordid{tableid}_"
+            child_fields_copy[link_field_name] = new_record.recordid
+
+            # Copia eventuali file fisici per le righe collegate (simile al padre)
+            child_files_to_copy = {}
+            for fieldid, value in old_record_data.items():
+                if isinstance(value, str) and '/' in value:
+                    try:
+                        old_path = default_storage.path(value)
+                        if os.path.exists(old_path):
+                            _, ext = os.path.splitext(old_path)
+                            with open(old_path, 'rb') as f:
+                                child_files_to_copy[fieldid] = ContentFile(f.read(), name=f"{fieldid}{ext}")
+                    except Exception as e:
+                        print(f"Errore copia file collegato {fieldid}: {e}")
+
+            _save_record_data(
+                tableid=linked_table_id,
+                recordid='',
+                fields=child_fields_copy,
+                files=child_files_to_copy
+            )
 
     return JsonResponse({
         'success': True,
@@ -4444,76 +4363,116 @@ def save_email(request):
 
 @csrf_exempt
 def get_input_linked(request):
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            searchTerm = data.get('searchTerm', '').lower()
-            recordid = data.get('recordid')
-            #linkedmaster_tableid_array = data.get('linkedmaster_tableid') # Puoi usare tableid se necessario
-            #linkedmaster_tableid=linkedmaster_tableid_array[0]
-            linkedmaster_tableid=data.get('linkedmaster_tableid')
-            tableid=data.get('tableid')
-            fieldid=data.get('fieldid')
-            formValues=data.get('formValues')
-            # Qui dovresti sostituire i dati di esempio con la tua logica di database
-            # o qualsiasi altra fonte di dati.
-            sql=f"SELECT keyfieldlink FROM sys_field WHERE tableid='{tableid}' AND fieldid='{fieldid}'"
-            kyefieldlink=HelpderDB.sql_query_value(sql,'keyfieldlink')
-            additional_conditions = ''
-            #TODO temp
-            # if tableid == 'letturagasolio' and fieldid == 'recordidstabile_':
-            #     recordid_cliente=formValues['recordidcliente_']
-            #     if recordid_cliente:
-            #         additional_conditions = " AND recordidcliente_ = '"+recordid_cliente+"'"
-
-            # if tableid == 'letturagasolio' and fieldid == 'recordidinformazionigasolio_':
-            #     recordid_stabile=formValues['recordidstabile_']
-            #     if recordid_stabile:
-            #         additional_conditions = " AND recordidstabile_ = '"+recordid_stabile+"'"
-            # Generic context filtering
-            #TODO pitservice. metto questa condizione temporaneaa perchè su queste tabelle mi da problemi ma penso perchè artigiano e contatti hanno collegamento diretto a stabile che non dovrebbero avere avendo poi introdotto contattostabile e artigianostabile
-            if linkedmaster_tableid != 'artigiano' and linkedmaster_tableid != 'contatti':
-                if formValues and linkedmaster_tableid:
-                    try:
-                        # Get all valid fields for the target table to avoid errors
-                        fields_query = f"SELECT fieldid FROM sys_field WHERE tableid='{linkedmaster_tableid}'"
-                        rows = HelpderDB.sql_query(fields_query)
-                        valid_fields = {row['fieldid'] for row in rows}
-
-                        # Filter formValues for potential matches
-                        for key, value in formValues.items():
-                            if key.endswith('_') and value:
-                                if key in valid_fields:
-                                    additional_conditions += f" AND {key} = '{value}'"
-                    except Exception as e:
-                        print(f"Error in generic context filtering: {e}")
-
-
-            if recordid:
-                sql = f"""
-                    SELECT recordid_ as recordid, {kyefieldlink} as name 
-                    FROM user_{linkedmaster_tableid} 
-                    WHERE recordid_ = '{recordid}' 
-                    AND deleted_='N' 
-                    {additional_conditions}
-                    LIMIT 1
-                """
-            elif searchTerm:
-                sql=f"SELECT recordid_ as recordid, {kyefieldlink} as name FROM user_{linkedmaster_tableid} where {kyefieldlink} like '%{searchTerm}%' {additional_conditions} AND deleted_='N' ORDER BY recordid_ DESC LIMIT 20"
-            else:
-                sql=f"SELECT recordid_ as recordid, {kyefieldlink} as name FROM user_{linkedmaster_tableid} where deleted_='N' {additional_conditions} ORDER BY recordid_ desc LIMIT 20 "
-
-            query_result=HelpderDB.sql_query(sql)
-            # Name != None ?
-            items=query_result
-            # Filtra gli elementi in base al searchTerm
-            #filtered_items = [item for item in items if searchTerm in item['name'].lower()]
-
-            return JsonResponse(items, safe=False)
-        except json.JSONDecodeError:
-            return JsonResponse({'error': 'Invalid JSON'}, status=400)
-    else:
+    if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    search_term = data.get('searchTerm', '').lower()
+    recordid = data.get('recordid')
+    linkedmaster_tableid = data.get('linkedmaster_tableid')
+    tableid = data.get('tableid')
+    fieldid = data.get('fieldid')
+    form_values = data.get('formValues')
+
+    keyfieldlink = HelpderDB.sql_query_value(
+        f"SELECT keyfieldlink FROM sys_field WHERE tableid='{tableid}' AND fieldid='{fieldid}'",
+        'keyfieldlink'
+    )
+
+    additional_conditions = ''
+    active_filters = []
+
+    EXCLUDED_TABLES = {}
+    if linkedmaster_tableid not in EXCLUDED_TABLES and form_values and linkedmaster_tableid:
+        try:
+            valid_fields = {
+                row['fieldid'] for row in HelpderDB.sql_query(
+                    f"SELECT fieldid FROM sys_field WHERE tableid='{linkedmaster_tableid}' AND keyfieldlink IS NOT NULL"
+                )
+            }
+
+            for key, value in form_values.items():
+                if not (key.endswith('_') and value):
+                    continue
+
+                converted_value = value
+                field_desc_rows = HelpderDB.sql_query(
+                    f"SELECT description FROM sys_field WHERE tableid='{tableid}' AND fieldid='{key}'"
+                )
+                field_desc = (field_desc_rows[0].get('description') or key) if field_desc_rows else key
+
+                if key.startswith('recordid'):
+                    f_info = HelpderDB.sql_query(
+                        f"SELECT keyfieldlink, tablelink FROM sys_field WHERE tableid='{tableid}' AND fieldid='{key}'"
+                    )
+                    if f_info:
+                        k_link = f_info[0].get('keyfieldlink')
+                        t_link = f_info[0].get('tablelink')
+                        if k_link and t_link:
+                            cv_res = HelpderDB.sql_query(
+                                f"SELECT {k_link} FROM user_{t_link} WHERE recordid_='{value}'"
+                            )
+                            if cv_res:
+                                converted_value = cv_res[0].get(k_link) or value
+
+                if key in valid_fields:
+                    additional_conditions += f" AND {key} = '{value}'"
+                    active_filters.append({"field": field_desc, "value": value, "convertedvalue": converted_value})
+
+                elif key.startswith('recordid') and key.endswith('_'):
+                    other_table = key[8:-1]
+                    reverse_field = f"recordid{linkedmaster_tableid}_"
+                    field_exists = HelpderDB.sql_query(
+                        f"SELECT fieldid FROM sys_field WHERE tableid='{other_table}' AND fieldid='{reverse_field}'"
+                    )
+                    if field_exists:
+                        foreign_rows = HelpderDB.sql_query(
+                            f"SELECT {reverse_field} FROM user_{other_table} WHERE recordid_ = '{value}'"
+                        )
+                        if foreign_rows:
+                            foreign_val = foreign_rows[0].get(reverse_field)
+                            if foreign_val and foreign_val != 'None':
+                                additional_conditions += f" AND recordid_ = '{foreign_val}'"
+                                active_filters.append({"field": field_desc, "value": value, "convertedvalue": converted_value})
+
+        except Exception as e:
+            print(f"Error in generic context filtering: {e}")
+
+    if recordid:
+        sql = f"""
+            SELECT recordid_ as recordid, {keyfieldlink} as name
+            FROM user_{linkedmaster_tableid}
+            WHERE recordid_ = '{recordid}'
+            AND deleted_='N'
+            {additional_conditions}
+            LIMIT 1
+        """
+    elif search_term:
+        sql = f"""
+            SELECT recordid_ as recordid, {keyfieldlink} as name
+            FROM user_{linkedmaster_tableid}
+            WHERE {keyfieldlink} LIKE '%{search_term}%'
+            {additional_conditions}
+            AND deleted_='N'
+            ORDER BY recordid_ DESC
+            LIMIT 20
+        """
+    else:
+        sql = f"""
+            SELECT recordid_ as recordid, {keyfieldlink} as name
+            FROM user_{linkedmaster_tableid}
+            WHERE deleted_='N'
+            {additional_conditions}
+            ORDER BY recordid_ DESC
+            LIMIT 20
+        """
+
+    items = HelpderDB.sql_query(sql)
+    return JsonResponse({"items": items, "active_filters": active_filters}, safe=False)
 
 
 
@@ -5704,14 +5663,25 @@ def get_dashboard_blocks(request):
                     cid = str(block.get('chartid', ''))
                     info = chart_info.get(cid, {})
                     sys_name = info.get('name', 'N/A')
+                    sys_name = info.get('name', 'N/A')
+                    sys_desc = ""
 
-                    description = sys_name
+                    name = sys_name
+                    description = sys_desc
+                    
                     if is_wegolf:
+                        user_chart_row = info.get('user_chart_row')
+                        if user_chart_row:
+                            sys_desc = user_chart_row.get('description', '')
+                            description = sys_desc
+                        
                         try:
-                            description = WegolfHelper.resolve_localized_chart_title(sys_name, info.get('user_chart_row'), user_language)
+                            name = WegolfHelper.resolve_localized_chart_field(sys_name, user_chart_row, user_language, field="title")
+                            description = WegolfHelper.resolve_localized_chart_field(sys_desc, user_chart_row, user_language, field="description")
                         except Exception:
                             pass
 
+                    block['name'] = name
                     block['description'] = description
                     context['block_list'].append(block)
 
@@ -5743,6 +5713,8 @@ def get_dashboard_blocks(request):
                     block['gsh'] = data['gsh']
                     block['viewid'] = results['viewid']
                     block['widgetid'] = results['widgetid']
+                    block['status'] = results.get('status')
+                    
                     # if they are null set default values
                     if block['gsw'] == None or block['gsw'] == '':
                         block['gsw'] = 3

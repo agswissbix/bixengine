@@ -181,11 +181,11 @@
         Materiale Fornito / Consegnato
     </div>
 
-    <div style="float:left;width:60%; text-align: center">
-        <p class="border-bottom">Descrizione completa</p>
+    <div style="float:left;width:20%; text-align: left">
+        <p class="border-bottom">Prodotto</p>
     </div>
-    <div style="float:left;width:20%; text-align: center">
-        <p class="border-bottom">Quantità prevista</p>
+    <div style="float:left;width:60%; text-align: left">
+        <p class="border-bottom">Descrizione completa</p>
     </div>
 
     <div style="float:left;width:20%; text-align: center">
@@ -194,13 +194,12 @@
 
     {% for timesheetline in timesheetlines %}
 
-        <div style="float:left;width:60%; text-align: center">
-            <p class=""> {{ timesheetline.note }}</p>
+        <div style="float:left;width:20%; text-align: left">
+            <p class=""> {{ timesheetline.product }}</p>
         </div>
-        <div style="float:left;width:20%; text-align: center">
-            <p class="">{{ timesheetline.expectedquantity }}</p>
+        <div style="float:left;width:60%; text-align: left">
+            <p class=""> {{ timesheetline.description }}</p>
         </div>
-
         <div style="float:left;width:20%; text-align: center">
             <p class=""> {{ timesheetline.actualquantity }}</p>
         </div>
@@ -230,10 +229,11 @@
 
     <div style="float:left;width:50%;">
         <b>Luogo e Data</b>
+        <p>{{ city }} | {{ date }}</p>
     </div>
     <div style="float:left;width:50%; position: relative;">
         <b>Firma e Timbro</b>
-            <img src="{{ signatureUrl }}" height="50px" width="100px" style=" margin-bottom: -60px; margin-left: -110px">
+        <img src="{{ signatureUrl }}" height="50px" width="100px" style=" margin-bottom: -60px; margin-left: -110px">
     </div>
 
     <div style="clear:both; margin-top: 40px"></div>

@@ -11,6 +11,59 @@ from django.db import transaction
 
 bixdata_server = os.environ.get('BIXDATA_SERVER')
 
+def cast_value(value, fieldtype):
+    if value in ('', 'null', None, []):
+        return None
+
+    if isinstance(value, list):
+        if fieldtype == "multiselect":
+            return ','.join(map(str, value)) if value else None
+        return ','.join(map(str, value))
+    
+    FIELDTYPES = {
+        "Parola": "VARCHAR(255)",
+        "Seriale": "VARCHAR(255)",
+        "Data": "DATE",
+        "Ora": "TIME",
+        "Numero": "FLOAT",
+        "lookup": "VARCHAR(255)",
+        "multiselect": "VARCHAR(255)",
+        "Utente": "VARCHAR(255)",
+        "Memo": "TEXT",
+        "html": "LONGTEXT",
+        "Markdown": "LONGTEXT",
+        "SimpleMarkdown": "LONGTEXT",
+        "linked": "VARCHAR(255)"
+    }
+    sql_column_type = FIELDTYPES.get(fieldtype, "VARCHAR(255)").lower()
+
+    try:
+        if sql_column_type in ('int', 'integer'):
+            return int(value)
+
+        if sql_column_type in ('decimal', 'float', 'double'):
+            return float(str(value).replace(',', '.'))
+
+        if sql_column_type == 'boolean':
+            return 1 if str(value).lower() in ('1','true','yes','on') else 0
+
+        if sql_column_type == 'date':
+            from dateutil import parser
+            return parser.parse(str(value)).strftime('%Y-%m-%d')
+
+        if sql_column_type == 'time':
+            from dateutil import parser
+            return parser.parse(str(value)).strftime('%H:%M')
+
+        if sql_column_type == 'datetime':
+            from dateutil import parser
+            return parser.parse(str(value)).strftime('%Y-%m-%d %H:%M')
+
+        return str(value).strip()
+
+    except Exception:
+        return None
+
 class UserRecord:
 
     context=""
@@ -405,6 +458,10 @@ class UserRecord:
         return next_recordid, next_id, next_order
 
     def save(self):
+        errors = self._normalize_and_validate_values()
+        if errors:
+            print(f"Validation errors during save for {self.tableid}: {errors}")
+
         try:
             with transaction.atomic():
 
@@ -470,7 +527,77 @@ class UserRecord:
             print(f"Errore salvataggio record {self.tableid} ({self.recordid}): {e}")
             return False
         
+    def _normalize_and_validate_values(self):
+        errors = {}
 
+        # Recupera tutti i fieldtype in una query unica
+        field_ids = tuple(self.values.keys())
+        if not field_ids:
+            return errors
+
+        placeholders = ",".join(["%s"] * len(field_ids))
+
+        sql = f"""
+            SELECT fieldid, fieldtypewebid
+            FROM sys_field
+            WHERE tableid = %s
+            AND fieldid IN ({placeholders})
+        """
+
+        results = HelpderDB.sql_query(sql, (self.tableid, *field_ids))
+        field_types = {row["fieldid"]: row["fieldtypewebid"] for row in results}
+
+        for fieldid, raw_value in list(self.values.items()):
+            # skip protetti di sistema
+            if fieldid in ('id', 'recordid_', 'creatorid_', 'creation_', 'lastupdaterid_', 'lastupdate_', 'totpages_', 'firstpagefilename_', 'recordstatus_', 'deleted_', 'linkedorder_'):
+                continue
+
+            fieldtype = field_types.get(fieldid)
+            if not fieldtype:
+                del self.values[fieldid]
+                continue
+
+            normalized = cast_value(raw_value, fieldtype)
+
+            if normalized is None and raw_value not in ('', None, []):
+                errors[fieldid] = f"Valore non valido: {raw_value}"
+                del self.values[fieldid]
+                continue
+
+            # --- Validazione Utente ---
+            if fieldtype == 'Utente' and normalized:
+                exists = HelpderDB.sql_query_value(
+                    "SELECT 1 FROM sys_user WHERE id = %s",
+                    '1',
+                    (normalized,)
+                )
+                if not exists:
+                    normalized = None
+
+            # --- Validazione Data ---
+            if fieldtype == 'Data' and normalized:
+                try:
+                    from dateutil import parser
+                    dt_obj = parser.parse(str(normalized))
+                    normalized = dt_obj.strftime('%Y-%m-%d')
+                except Exception:
+                    normalized = None
+
+            # Validazione FK
+            if fieldid.endswith('_') and normalized:
+                fk_table = fieldid.removeprefix("recordid").rsplit('_', 1)[0]
+                sql = f"""
+                    SELECT 1 FROM user_{fk_table}
+                    WHERE recordid_ = %s
+                    LIMIT 1
+                """
+                exists = HelpderDB.sql_query_value(sql, '1', (normalized,))
+                if not exists:
+                    normalized = None
+
+            self.values[fieldid] = normalized
+
+        return errors
 
     def get_linked_tables(self, typepreference='keylabel', step_id=None):
         """

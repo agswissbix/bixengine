@@ -36,6 +36,8 @@ from types import SimpleNamespace
 from commonapp.models import SysUser
 from PIL import Image
 from customapp_swissbix.utils.browser_manager import BrowserManager
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 
 logger = logging.getLogger(__name__)
 
@@ -1813,12 +1815,12 @@ def save_signature(request):
         row['signatureUrl'] = to_base64(firma_path.resolve())
 
 
-        timesheetlines = HelpderDB.sql_query(
-            f"SELECT * FROM user_timesheetline WHERE recordidtimesheet_='{recordid}'"
-        )
+        condition_list = [f"recordidtimesheet_='{recordid}'"]
+        timesheetlines = UserTable('timesheetline').get_records(conditions_list=condition_list)
         for line in timesheetlines:
-            line['note'] = line.get('note') or ''
-            line['expectedquantity'] = line.get('expectedquantity') or ''
+            product = UserRecord('product', line.get('recordidproduct_'))
+            line['product'] = product.values.get('name') or ''
+            line['description'] = line.get('description') or ''
             line['actualquantity'] = line.get('actualquantity') or ''
         row['timesheetlines'] = timesheetlines
 
@@ -1925,13 +1927,14 @@ def save_email_timesheet(request):
         timesheet = UserRecord("timesheet", recordid_timesheet)
 
         # INFO PRINCIPALI
-        user_id = timesheet.values.get("user")                    # chi ha svolto il lavoro
-        creator_id = timesheet.values.get("creatorid_")          # chi ha creato il record
+        company_id = timesheet.values.get("recordidcompany_")
         company_name = timesheet.fields["recordidcompany_"]["convertedvalue"]
 
         # DESTINATARIO EMAIL
         # esempio: email al responsabile (creator)
-        recipient = SysUser.objects.filter(id=creator_id).values_list("email", flat=True).first()
+        recipient = UserRecord('company', company_id).values['email']
+        if not recipient:
+            return JsonResponse({"status": "error", "messagecustom": "L'azienda non ha un email associata."}, status=400)
 
         # SUBJECT
         subject = f"Nuovo timesheet registrato per {company_name}"
@@ -2293,12 +2296,18 @@ def get_lenovo_intake_context(request):
             if 'lookupitems' in f and f['fieldtypewebid'] == 'multiselect':
                 accessories_lookup = f['lookupitems']
 
+        users_qs = SysUser.objects.filter(disabled='N').values('id', 'firstname', 'lastname')
+        users_lookup = [{'userid': str(u['id']), 'firstname': u['firstname'], 'lastname': u['lastname']} for u in users_qs]
+        logged_in_userid = Helper.get_userid(request) if request.user.is_authenticated else None
+
         return JsonResponse({
             'success': True,
             'field_settings': field_settings,
             'lookups': {
-                'accessories': accessories_lookup
-            }
+                'accessories': accessories_lookup,
+                'users': users_lookup
+            },
+            'logged_in_userid': str(logged_in_userid) if logged_in_userid else ""
         })
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
@@ -2312,8 +2321,8 @@ def get_lenovo_ticket(request):
         data = json.loads(request.body)
         ticket_id = data.get('ticket_id')
         
-        if not ticket_id:
-            return JsonResponse({'success': False, 'error': 'Ticket ID missing'}, status=400)
+        if not ticket_id or str(ticket_id).lower() in ('null', 'none', 'undefined', ''):
+            return JsonResponse({'success': False, 'error': 'Ticket ID missing or invalid'}, status=400)
             
         rec = UserRecord('ticket_lenovo', ticket_id)
         if not rec.recordid:
@@ -2344,10 +2353,11 @@ def get_lenovo_ticket(request):
             'direct_repair_limit': rec.values.get('direct_repair_limit'),
             'auth_formatting': rec.values.get('auth_formatting'),
             'accessories': rec.values.get('accessories'),
+            'technician': rec.values.get('technician'),
         }
         
         # Check for signature file (Fixed Path)
-        sig_path = f"lenovo_intake/{ticket_id}/signature.png"
+        sig_path = f"ticket_lenovo/{ticket_id}/signature.png"
         if default_storage.exists(sig_path):
             ticket_data['signatureUrl'] = sig_path
         else:
@@ -2364,20 +2374,11 @@ def save_lenovo_ticket(request):
         return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
         
     try:
-        recordid = request.POST.get('recordid')
+        recordid = request.POST.get('recordid', None)
         fields_raw = request.POST.get('fields', '{}')
         
         # Trasforma la stringa JSON in un dizionario Python
         fields = json.loads(fields_raw)
-        
-        if recordid:
-            rec = UserRecord('ticket_lenovo', recordid)
-        else:
-            rec = UserRecord('ticket_lenovo')
-            rec.values['reception_date'] = datetime.date.today().strftime('%Y-%m-%d')
-            # Status default is Draft, but we accept override from fields
-            if 'status' not in fields:
-                rec.values['status'] = 'Draft'
             
         # Mappatura dei campi
         allowed_fields = [
@@ -2385,23 +2386,22 @@ def save_lenovo_ticket(request):
             'problem_description', 'status', 'recordidcompany_',
             'address', 'place', 'brand', 'model', 'username', 'password',
             'warranty', 'warranty_type',
-            'auth_factory_reset', 'request_quote', 'direct_repair', 'direct_repair_limit', 'auth_formatting', 'accessories'
+            'auth_factory_reset', 'request_quote', 'direct_repair', 'direct_repair_limit', 'auth_formatting', 'accessories',
+            'technician'
         ]
 
-        fields_cleaned = {}
+        rec = UserRecord('ticket_lenovo', recordid)
+
+        if not recordid:
+            rec.values['reception_date'] = datetime.date.today().strftime('%Y-%m-%d')
+            if 'status' not in fields:
+                rec.values['status'] = 'Draft'
 
         for key in allowed_fields:
             if key in fields:
-                fields_cleaned[key] = fields[key]
+                rec.values[key] = fields[key]
 
-        from commonapp import views
-        views._save_record_data(
-            'ticket_lenovo',
-            recordid,
-            fields_cleaned,
-            None,
-            1
-        )
+        rec.save()
                         
         return JsonResponse({'success': True, 'recordid': rec.recordid})
         
@@ -2429,7 +2429,7 @@ def upload_lenovo_photo(request):
             
         # 1. Save file
         fname, ext = os.path.splitext(file_obj.name)
-        storage_path = f"lenovo_intake/{ticket_id}/product_photo{ext}"
+        storage_path = f"ticket_lenovo/{ticket_id}/product_photo{ext}"
         final_path = default_storage.save(storage_path, file_obj)
         
         # 2. Update Ticket 'product_photo'
@@ -2453,6 +2453,7 @@ def upload_lenovo_attachment(request):
         ticket_id = request.POST.get('ticket_id')
         file_obj = request.FILES.get('file')
         note = request.POST.get('note', '')
+        attachment_type = request.POST.get('attachment_type', 'pre-intervento')
         
         if not ticket_id or not file_obj:
             return JsonResponse({'success': False, 'error': 'Missing ticket_id or file'}, status=400)
@@ -2466,7 +2467,7 @@ def upload_lenovo_attachment(request):
         # 2. Create user_attachment record
         att = UserRecord('attachment')
         att.values['recordidticket_lenovo_'] = ticket_id
-        att.values['type'] = 'Allegato generico'
+        att.values['type'] = attachment_type
         att.values['file'] = final_path
         att.values['filename'] = clean_name
         att.values['note'] = note
@@ -2480,6 +2481,7 @@ def upload_lenovo_attachment(request):
                 'url': final_path,
                 'filename': clean_name,
                 'note': note,
+                'type': attachment_type,
                 'date': att.values['date']
             }
         })
@@ -2499,7 +2501,7 @@ def get_lenovo_attachments(request):
              return JsonResponse({'success': False, 'error': 'Missing ticket_id'})
 
         query = """
-            SELECT recordid_, filename, file, note, date 
+            SELECT recordid_, filename, file, note, date, type 
             FROM user_attachment 
             WHERE recordidticket_lenovo_ = %s 
             AND deleted_ = 'N'
@@ -2516,7 +2518,8 @@ def get_lenovo_attachments(request):
                     'filename': row[1],
                     'url': row[2],
                     'note': row[3],
-                    'date': row[4].strftime('%Y-%m-%d') if row[4] else ''
+                    'date': row[4].strftime('%Y-%m-%d') if row[4] else '',
+                    'type': row[5]
                 })
                 
         return JsonResponse({'success': True, 'attachments': attachments})
@@ -2598,14 +2601,14 @@ def generate_lenovo_pdf(recordid, signature_path=None):
              row['signatureUrl'] = image_to_base64(signature_path)
         else:
              # Check for fixed signature file
-             sig_rel_path = f"lenovo_intake/{recordid}/signature.png"
+             sig_rel_path = f"ticket_lenovo/{recordid}/signature.png"
              if default_storage.exists(sig_rel_path):
                  abs_sig_path = os.path.join(settings.UPLOADS_ROOT, sig_rel_path)
                  row['signatureUrl'] = image_to_base64(abs_sig_path)
 
         # Product Photo & Conditions
         if row.get('product_photo'):
-            # Path is relative 'lenovo_intake/...'
+            # Path is relative 'ticket_lenovo/...'
             # Need absolute path
             abs_photo_path = os.path.join(settings.UPLOADS_ROOT, row['product_photo'])
             row['product_photo_b64'] = image_to_base64(abs_photo_path)
@@ -2666,12 +2669,9 @@ def save_lenovo_signature(request):
             _, img_base64 = img_base64.split(',', 1)
         img_data = base64.b64decode(img_base64)
         
-        from django.core.files.base import ContentFile
-        from django.core.files.storage import default_storage
-        
         # Fixed filename for signature (one per ticket)
         filename = "signature.png"
-        storage_path = f"lenovo_intake/{recordid}/{filename}"
+        storage_path = f"ticket_lenovo/{recordid}/{filename}"
         
         # Overwrite if exists
         if default_storage.exists(storage_path):
@@ -2700,6 +2700,7 @@ def print_lenovo_ticket(request):
             FROM user_attachment 
             WHERE recordidticket_lenovo_ = %s 
             AND type = 'Ricevuta Firmata'
+            AND deleted_ = 'N'
             ORDER BY recordid_ DESC LIMIT 1
         """
         row = HelpderDB.sql_query_row(query, [recordid])
