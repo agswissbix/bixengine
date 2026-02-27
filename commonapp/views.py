@@ -3332,7 +3332,7 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None, userid=1)
 
             # --- Validazione FK ---
             if fieldid.endswith('_') and normalized_value:
-                fk_table = fieldid.replace('_', '').replace('recordid', '')
+                fk_table = fieldid.removeprefix("recordid").rsplit('_', 1)[0]
                 sql = f"""
                     SELECT 1
                     FROM user_{fk_table}
@@ -3508,6 +3508,47 @@ def duplicate_record(request):
         fields=fields_copy,
         files=files_to_copy
     )
+
+    # 5️⃣ Duplicazione delle righe collegate (linked tables)
+    linked_tables = source_record.get_linked_tables()
+
+    for table_info in linked_tables:
+        linked_table_id = table_info.get("tableid")
+        if not linked_table_id:
+            continue
+            
+        linked_records = source_record.get_linkedrecords_dict(linked_table_id)
+
+        for old_record_data in linked_records:
+            child_fields_copy = {
+                k: v for k, v in old_record_data.items()
+                if k not in excluded_fields
+            }
+            child_fields_copy["id"] = None
+
+            # Aggiorna il riferimento (foreign key) al nuovo record padre creato
+            link_field_name = f"recordid{tableid}_"
+            child_fields_copy[link_field_name] = new_record.recordid
+
+            # Copia eventuali file fisici per le righe collegate (simile al padre)
+            child_files_to_copy = {}
+            for fieldid, value in old_record_data.items():
+                if isinstance(value, str) and '/' in value:
+                    try:
+                        old_path = default_storage.path(value)
+                        if os.path.exists(old_path):
+                            _, ext = os.path.splitext(old_path)
+                            with open(old_path, 'rb') as f:
+                                child_files_to_copy[fieldid] = ContentFile(f.read(), name=f"{fieldid}{ext}")
+                    except Exception as e:
+                        print(f"Errore copia file collegato {fieldid}: {e}")
+
+            _save_record_data(
+                tableid=linked_table_id,
+                recordid='',
+                fields=child_fields_copy,
+                files=child_files_to_copy
+            )
 
     return JsonResponse({
         'success': True,
