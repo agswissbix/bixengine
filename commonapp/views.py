@@ -5623,14 +5623,15 @@ def get_dashboard_blocks(request):
                 #     dashboard_id=dashboard_id
                 # )
                 category_field = ", uc.category_block" if str(active_server).lower() == 'wegolf' else ""
+                check_status = "AND (uc.status IS NULL OR uc.status <> 'Riservato')" if not request.user.is_staff and str(active_server).lower() == 'wegolf' else ""
                 sql = """
                     SELECT sdb.*, uc.status as status{category_field}
                     FROM sys_dashboard_block sdb
                     LEFT JOIN user_chart uc ON uc.report_id = sdb.chartid
                     WHERE sdb.dashboardid = {dashboard_id}
-                    AND (uc.status IS NULL OR uc.status <> 'Riservato' OR sdb.userid = {userid})
+                    {check_status}
                     ORDER BY sdb.id DESC
-                """.format(category_field=category_field, dashboard_id=dashboard_id, userid=bixid)
+                """.format(category_field=category_field, dashboard_id=dashboard_id, userid=bixid, check_status=check_status)
                 all_blocks = dbh.sql_query(sql)
 
                 chart_ids = [str(b['chartid']) for b in all_blocks if b.get('chartid')]
