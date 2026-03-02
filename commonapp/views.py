@@ -64,6 +64,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 
+import math
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -7105,6 +7106,47 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
                 detailed_data = [{'error': str(e)}]
 
     context = _build_chart_context_base(chart_id, chart_record, labels, final_datasets1, final_datasets2 or None)
+    
+    # --- LOGICA CALCOLO SCALA OVERLAPPED BAR CHART ---
+    if chart_record.get('layout') == 'overlappedbarchart' and final_datasets1 and len(final_datasets1) >= 2:
+        try:
+            A = final_datasets1[0].get('data', [])
+            B = final_datasets1[1].get('data', [])
+            if A and B and len(A) == len(B):
+                max_A = max([float(x) for x in A if x is not None] or [0])
+                max_B_real = max([float(x) for x in B if x is not None] or [0])
+                
+                # 1. Calcoliamo il dominio di A con il margine del 5% e arrotondiamo al 100 successivo
+                # Ad esempio, se max_A = 120 -> 120 * 1.05 = 126 -> math.ceil(126/100)*100 = 200
+                raw_A_domain = max_A * 1.05 if max_A > 0 else 1
+                max_A_domain = math.ceil(raw_A_domain / 100.0) * 100
+                if max_A_domain == 0:
+                    max_A_domain = 100
+                
+                # 2. Ricalcoliamo i ratio usando il NUOVO dominio arrotondato di A
+                ratios = []
+                for i in range(len(A)):
+                    a_val = float(A[i]) if A[i] is not None else 0
+                    b_val = float(B[i]) if B[i] is not None else 0
+                    if a_val != 0:
+                        ratios.append((b_val * max_A_domain) / a_val)
+                
+                # 3. Traviamo il massimo per B, aggiungiamo un minuscolo margine aggiuntivo di sicurezza
+                raw_B_new = (max(ratios) * 1.01) if ratios else (max_B_real * 1.05)
+                
+                # 4. Arrotondiamo ANCHE B verso l'alto al 100 successivo. 
+                # (Arrotondare verso l'alto la scala diminuisce visivamente la barra, mantenendola sempre < della esterna!)
+                max_B_domain = math.ceil(raw_B_new / 100.0) * 100
+                if max_B_domain == 0:
+                    max_B_domain = 100
+                    
+                context['yAxisDomains'] = {
+                    'left': [0, int(max_A_domain)],
+                    'right': [0, int(max_B_domain)]
+                }
+        except Exception as e:
+            print(f"Error calculating overlappingbarchart domain: {e}")
+
     context['sql_debug'] = query
     if detailed_query:
         context['sql_debug_details'] = detailed_query
