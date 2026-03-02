@@ -271,7 +271,6 @@ class Helper:
             for mapping in field_mappings:
                 tech_field = mapping["tech_field"]
                 display_label = mapping["display_label"]
-                original_label = mapping["original_label"]
                 
                 value = row.get(tech_field)
 
@@ -281,7 +280,7 @@ class Helper:
                         wrong_values[year] = {}
                     
                     # Usiamo la label localizzata come chiave per l'errore
-                    wrong_values[year][original_label] = value
+                    wrong_values[year][display_label] = value
 
         # 4. Risultato finale
         complete = len(missing_years) == 0 and len(wrong_values) == 0

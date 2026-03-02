@@ -5956,14 +5956,24 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
                 dynamic_conditions.append(f"user_{from_table}.recordidgolfclub_='{user_club}'")
         else:
             try:
-                active_server = Helper.get_activeserver(request).get('value')
-            except Exception:
-                active_server = Helper.get_cliente_id()
+                translations_table = UserTable("translations")
+                condition_list = [
+                    f"tableid='{chart_config['from_table']}'"
+                ]
 
-            if str(active_server).lower() == 'wegolf':
-                localized_labels = WegolfHelper.get_localized_labels_fields_chart(chart_config, request=request)
+                condition_list.append(f"type='Label'")
+
+                translations = translations_table.get_records(
+                    conditions_list=condition_list,
+                    limit=1000
+                )
+            except Exception as e:
+                print("Unable to get translations")
 
             labels = Helper.get_labels_fields_chart(chart_config)
+            localized_labels = []
+            for label in labels:
+                localized_labels.append(WegolfHelper.get_cached_translation(translations, label, userid, translation_type="Label"))
 
             completeness_checks = [Helper.check_mydata_completeness(club, selected_years, labels, localized_labels) for club in selected_clubs]
             complete_pairs = list(zip(selected_clubs, completeness_checks))
