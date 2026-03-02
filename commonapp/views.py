@@ -5816,22 +5816,7 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
         if is_wegolf:
             user_language = WegolfHelper.get_user_language(userid)
             user_chart = HelpderDB.sql_query_row(f"SELECT * FROM user_chart WHERE report_id='{chart_id}'")
-            if user_chart:
-                title_field = 'title'
-                if user_language == 'it':
-                    title_field = 'title_it'
-                elif user_language == 'fr':
-                    title_field = 'title_fr'
-                elif user_language == 'de':
-                    title_field = 'title_de'
-                
-                localized_title = user_chart.get(title_field)
-                # Fallback to English 'title' if the specific language title is empty or missing
-                if not localized_title:
-                    localized_title = user_chart.get('title')
-                
-                if localized_title:
-                    chart_name = localized_title
+            chart_name = WegolfHelper.resolve_localized_chart_field(chart_name, user_chart, user_language)
 
     except Exception as e:
         print(f"Error getting localized title: {str(e)}")
