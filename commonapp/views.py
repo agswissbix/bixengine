@@ -6033,25 +6033,7 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
         if not from_table:
             return {'error': 'Missing from_table in chart config'}
 
-        # Per ogni placeholder <colonna>
-        for col in placeholders:
-
-            dynamic_column = col.strip()
-
-            dynamic_value = HelpderDB.sql_query_value(
-                f"""
-                    SELECT {dynamic_column}
-                    FROM user_{from_table}
-                    WHERE {where_clause}
-                    ORDER BY anno DESC
-                    LIMIT 1
-                """,
-                dynamic_column
-            )
-
-            # Sostituisci SOLO questo placeholder
-            if dynamic_value is not None:
-                chart_name = chart_name.replace(f"<{col}>", str(dynamic_value))
+        chart_name = Helper.replace_placeholders(chart_name, from_table, where_clause)
 
     # ----------------------------------------------------------
     # 7) Output finale
@@ -6081,11 +6063,6 @@ def json_date_handler(obj):
     
     # Se non è una data, solleva l'errore standard
     raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
-
-
-from django.db import connection
-# Assuming HelpderDB is a custom helper you have.
-# from . import HelpderDB 
 
 def get_chart(request, sql, id, name, layout, fields):
     """
@@ -7199,6 +7176,10 @@ def get_dynamic_chart_data(request, chart_id, query_conditions='1=1', viewMode=N
                 if alias:
                     label = WegolfHelper.get_translation("metrica_annuale", alias, userid=userid)
                     if label:
+                        where_clause = query_conditions if query_conditions else "1=1"
+                        from_table = config.get("from_table")
+                        if from_table:
+                            label = Helper.replace_placeholders(label, from_table, where_clause)
                         dataset['label'] = label
 
     chart_type = config.get('chart_type', 'aggregate')
@@ -7527,6 +7508,13 @@ def get_form_fields(request):
             field_label = WegolfHelper.get_cached_translation(translations, field.get("fieldid"), userid)
             if not field_label:
                 field_label = field.get("description")
+
+            where_clause = f"recordidgolfclub_='{recordidgolfclub}' AND anno='{str(year)}'"
+            
+            group_name = Helper.replace_placeholders(group_name, tableid, where_clause)
+            if sub_group_name:
+                sub_group_name = Helper.replace_placeholders(sub_group_name, tableid, where_clause)
+            field_label = Helper.replace_placeholders(field_label, tableid, where_clause)
 
             field_type = field.get("explanation")
 

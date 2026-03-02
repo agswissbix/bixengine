@@ -793,3 +793,37 @@ class Helper:
                 rec.save()
 
         return actions_to_trigger
+
+    @classmethod
+    def replace_placeholders(cls, text: str, from_table: str, where_clause: str = "1=1") -> str:
+        """
+        Cerca tutti i placeholder nel formato <col> all'interno di 'text'.
+        Per ogni placeholder trovato, esegue una query sulla tabella specificata
+        per estrarre l'ultimo valore disponibile e lo sostituisce nella stringa.
+        """
+        if not text:
+            return text
+
+        placeholders = re.findall(r"<([^>]+)>", text)
+        if not placeholders:
+            return text
+
+        for col in placeholders:
+            dynamic_column = col.strip()
+
+            dynamic_value = HelpderDB.sql_query_value(
+                f"""
+                    SELECT {dynamic_column}
+                    FROM user_{from_table}
+                    WHERE {where_clause}
+                    ORDER BY anno DESC
+                    LIMIT 1
+                """,
+                dynamic_column
+            )
+
+            # Sostituisci SOLO questo placeholder
+            if dynamic_value is not None:
+                text = text.replace(f"<{col}>", str(dynamic_value))
+                
+        return text
