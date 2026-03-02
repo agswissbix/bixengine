@@ -5815,7 +5815,22 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
         if is_wegolf:
             user_language = WegolfHelper.get_user_language(userid)
             user_chart = HelpderDB.sql_query_row(f"SELECT * FROM user_chart WHERE report_id='{chart_id}'")
-            chart_name = WegolfHelper.resolve_localized_chart_title(chart_name, user_chart, user_language)
+            if user_chart:
+                title_field = 'title'
+                if user_language == 'it':
+                    title_field = 'title_it'
+                elif user_language == 'fr':
+                    title_field = 'title_fr'
+                elif user_language == 'de':
+                    title_field = 'title_de'
+                
+                localized_title = user_chart.get(title_field)
+                # Fallback to English 'title' if the specific language title is empty or missing
+                if not localized_title:
+                    localized_title = user_chart.get('title')
+                
+                if localized_title:
+                    chart_name = localized_title
 
     except Exception as e:
         print(f"Error getting localized title: {str(e)}")
@@ -5873,20 +5888,9 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
         if not selected_years or selected_years == []:
             selected_years = ['None']
 
-        year_list = "', '".join(selected_years)
-        dynamic_conditions.append(f"user_{from_table}.anno IN ('{year_list}')")
-
-        if block_category != "benchmark":
-            # Non benchmark → club dell’utente
-            if user_club:
-                dynamic_conditions.append(f"user_{from_table}.recordidgolfclub_='{user_club}'")
-
-        else:
-            # benchmark → usa clubs selezionati
+        # 1. Risolvi prima i club per benchmark se mancano
+        if block_category == "benchmark":
             if not selected_clubs or selected_clubs == []:
-                # Se non ci sono club li prendo tutti
-                
-                # Se nationalAvg, includo anche i dati anonimi
                 where_anonimi = "(g.dati_anonimi = 'false' OR g.dati_anonimi IS NULL)"
                 if dashboard_category == 'nationalAvg':
                     where_anonimi = "1=1"
@@ -5910,6 +5914,46 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
             if user_club and user_club in selected_clubs:
                 user_club_has_data = True
 
+
+        # 2. LOGICA PER OTTENERE L'ANNO PIU RECENTE (per value e pivot charts)
+        is_single_value_chart = False
+        chart_type = chart_config.get('chart_type', 'aggregate')
+        if (chart_layout or '').lower() == 'value' or chart_type == 'record_pivot':
+            is_single_value_chart = True
+
+        if is_single_value_chart and selected_years != ['None']:
+            year_list_str = "', '".join(selected_years)
+            max_y_conds = [f"anno IN ('{year_list_str}')", "deleted_='N'"]
+            if query_conditions:
+                max_y_conds.append(query_conditions)
+            
+            if block_category != "benchmark":
+                if user_club:
+                    max_y_conds.append(f"recordidgolfclub_='{user_club}'")
+            else:
+                if selected_clubs:
+                    club_list_str = "', '".join(selected_clubs)
+                    max_y_conds.append(f"recordidgolfclub_ IN ('{club_list_str}')")
+                    
+            cond_str = " AND ".join(max_y_conds)
+            try:
+                max_anno = HelpderDB.sql_query_value(f"SELECT MAX(anno) as m FROM user_{from_table} WHERE {cond_str}", 'm')
+                if max_anno:
+                    selected_years = [str(max_anno)]
+                    chart_name = f"{chart_name} {max_anno}"
+            except Exception as e:
+                print(f"Error finding max year: {e}")
+
+        # 3. Ora accoda l'anno a dynamic_conditions
+        year_list = "', '".join(selected_years)
+        dynamic_conditions.append(f"user_{from_table}.anno IN ('{year_list}')")
+
+        # 4. Accoda il club a dynamic_conditions e verifica completezza
+        if block_category != "benchmark":
+            # Non benchmark → club dell’utente
+            if user_club:
+                dynamic_conditions.append(f"user_{from_table}.recordidgolfclub_='{user_club}'")
+        else:
             try:
                 active_server = Helper.get_activeserver(request).get('value')
             except Exception:
@@ -6949,6 +6993,9 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
         final_datasets1 = _resolve(config.get('datasets'))
         final_datasets2 = _resolve(config.get('datasets2'))
         
+        if final_datasets2 and len(final_datasets2) > 0 and 'label' in final_datasets2[0]:
+            final_datasets2[0]['label'] = f"{final_datasets2[0]['label']} AVG"
+        
         # --- CALCOLO MEDIA TOTALE (SINGOLO) ---
         if show_total_average and str(active_server).lower() == 'wegolf' and priority_id and dashboard_category == 'benchmark':
             from collections import defaultdict
@@ -7145,7 +7192,7 @@ def get_dynamic_chart_data(request, chart_id, query_conditions='1=1', viewMode=N
     userid = Helper.get_userid(request)
 
     if active_server == "wegolf":
-        ds_keys = ['datasets', 'datasets2']
+        ds_keys = ['datasets', 'datasets2', 'pivot_fields']
 
         for key in ds_keys:
             dataset_list = config.get(key, [])
