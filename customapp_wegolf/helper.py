@@ -185,6 +185,38 @@ class Helper:
         
         except Exception as e:
             return fieldid
+            
+    @classmethod
+    def get_identificator(cls, translated_text, tableid, userid=None, code=None, translation_type="Label"):
+        language_code = cls.DEFAULT_LANG
+
+        if code:
+            language_code = code
+        elif userid:
+            language_code = cls.get_user_language(userid)
+        
+        lang_data = cls.get_cached_languages_data()
+        language_field = lang_data["code_to_field"].get(language_code, lang_data["code_to_field"][cls.DEFAULT_LANG])
+
+        try:
+            translations_table = UserTable('translations')
+            escaped_text = translated_text.replace("'", "''")
+            condition_list = [
+                f"`type`='{translation_type}'",
+                f"tableid='{tableid}'",
+                f"`{language_field}`='{escaped_text}'",
+            ]
+
+            translation = translations_table.get_records(conditions_list=condition_list)
+
+            if not translation:
+                return translated_text
+            
+            identifier = translation[0].get('identifier')
+            return identifier if identifier else translated_text
+        
+        except Exception as e:
+            return translated_text
         
     @classmethod
     def get_cached_translation(cls, translations, fieldid, userid=None, code=None, translation_type="Field"):

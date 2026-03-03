@@ -7453,9 +7453,10 @@ def save_form_data(request):
             record_dataprogress=UserRecord('golfdataprogress')
             record_dataprogress.values['recordidgolfclub_']=recordidgolfclub
             record_dataprogress.values['anno']=year
-        
+
         for section_key, section_data in completion_stats_sections.items():
-            chiave_modificata = section_key.lower().replace(" ", "").replace("-", "")
+            identificator = WegolfHelper.get_identificator(section_key, 'metrica_annuale', userid=userid, translation_type='Label')
+            chiave_modificata = identificator.lower().replace(" ", "").replace("-", "")
             record_dataprogress.values[f"prog_{chiave_modificata}"]=section_data
         record_dataprogress.save()
 
