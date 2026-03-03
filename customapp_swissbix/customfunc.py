@@ -189,6 +189,33 @@ def save_record_fields(tableid,recordid, old_record=""):
 
         notification_record.save()
 
+def delete_record(tableid, recordid):    
+    # ---TIMESHEET---
+    if tableid == 'timesheet':
+        timesheet = UserRecord('timesheet', recordid)
+        if timesheet.values.get('recordidproject_'):
+            save_record_fields(tableid='project', recordid=timesheet.values.get('recordidproject_'))
+        if timesheet.values.get('recordidservicecontract_'):
+            save_record_fields(tableid='servicecontract', recordid=timesheet.values.get('recordidservicecontract_'))
+
+    # ---DEALLINE---
+    elif tableid == 'dealline':
+        dealline = UserRecord('dealline', recordid)
+        if dealline.values.get('recordiddeal_'):
+            save_record_fields(tableid='deal', recordid=dealline.values.get('recordiddeal_'))
+
+    # ---PROJECT---
+    elif tableid == 'project':
+        project = UserRecord('project', recordid)
+        save_record_fields(tableid='project', recordid=recordid)
+
+    # ---ASSENZE---
+    elif tableid == 'assenze':
+        assenze = UserRecord('assenze', recordid)
+        if assenze.values.get('recordiddipendente_'):
+            save_record_fields(tableid='dipendente', recordid=assenze.values.get('recordiddipendente_'))
+
+
 
 def card_task_pianificaperoggi(recordid):
     print("card_task_pianificaperoggi")

@@ -529,7 +529,8 @@ def delete_record(request):
         sql = f"UPDATE user_{tableid} SET deleted_='Y' WHERE recordid_={recordid}"
         HelpderDB.sql_execute(sql)  # usa i parametri per evitare SQL injection
 
-        custom_delete_record(tableid, recordid) 
+        custom_delete_record(tableid, recordid)
+        custom_function_delete_record(tableid, recordid)
         return JsonResponse({"success": True, "detail": "Record eliminato con successo"})
     
     except json.JSONDecodeError:
@@ -537,6 +538,9 @@ def delete_record(request):
     
     except Exception as e:
         return JsonResponse({"success": False, "detail": f"Errore interno: {str(e)}"}, status=500)
+
+def custom_function_delete_record(tableid,recordid):
+    return call_custom_function("delete_record", tableid, recordid)
 
 def custom_delete_record(tableid,recordid):
     print("Function: custom_delete_record")
