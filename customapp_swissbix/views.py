@@ -2392,17 +2392,29 @@ def save_lenovo_ticket(request):
 
         rec = UserRecord('ticket_lenovo', recordid)
 
+        old_status = rec.values.get('status')
+
+        if old_status != 'Draft':
+            del fields['status']
+
         if not recordid:
             rec.values['reception_date'] = datetime.date.today().strftime('%Y-%m-%d')
             if 'status' not in fields:
-                rec.values['status'] = 'Draft'
+                rec.values['status'] = 'Presa in consegna'
 
         for key in allowed_fields:
             if key in fields:
                 rec.values[key] = fields[key]
+                
+        new_status = rec.values.get('status')
 
         rec.save()
-                        
+        
+        if str(new_status).lower() == 'presa in consegna' and str(old_status).lower() != 'presa in consegna':
+            from customapp_swissbix.services.custom_save.lenovo_ticket_services import LenovoTicketService
+            LenovoTicketService.send_status_update_email(rec.recordid)
+
+        # _send_email_lenovo(rec.recordid)      
         return JsonResponse({'success': True, 'recordid': rec.recordid})
         
     except json.JSONDecodeError:
@@ -2681,6 +2693,10 @@ def save_lenovo_signature(request):
         
         # Generate PDF (will use the saved signature file)
         att_id = generate_lenovo_pdf(recordid)
+
+        rec = UserRecord('ticket_lenovo', recordid)
+        rec.values['status'] = 'Ritirato'
+        rec.save()
         
         return JsonResponse({'success': True, 'attachment_id': att_id})
 
