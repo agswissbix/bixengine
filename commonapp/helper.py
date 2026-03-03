@@ -823,7 +823,8 @@ class Helper:
             )
 
             # Sostituisci SOLO questo placeholder
-            if dynamic_value is not None:
-                text = text.replace(f"<{col}>", str(dynamic_value))
+            if dynamic_value is None:
+                dynamic_value = " "
+            text = text.replace(f"<{col}>", str(dynamic_value))
                 
         return text
