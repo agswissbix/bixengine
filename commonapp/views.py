@@ -7122,7 +7122,7 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
                 
                 # 1. Calcoliamo il dominio di A con il margine del 5% e arrotondiamo al 100 successivo
                 # Ad esempio, se max_A = 120 -> 120 * 1.05 = 126 -> math.ceil(126/100)*100 = 200
-                raw_A_domain = max_A * 1.05 if max_A > 0 else 1
+                raw_A_domain = max_A * 1.1 if max_A > 0 else 1
                 max_A_domain = math.ceil(raw_A_domain / 100.0) * 100
                 if max_A_domain == 0:
                     max_A_domain = 100
@@ -7136,7 +7136,7 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
                         ratios.append((b_val * max_A_domain) / a_val)
                 
                 # 3. Traviamo il massimo per B, aggiungiamo un minuscolo margine aggiuntivo di sicurezza
-                raw_B_new = (max(ratios) * 1.01) if ratios else (max_B_real * 1.05)
+                raw_B_new = (max(ratios) * 1.2) if ratios else (max_B_real * 1.2)
                 
                 # 4. Arrotondiamo ANCHE B verso l'alto al 100 successivo. 
                 # (Arrotondare verso l'alto la scala diminuisce visivamente la barra, mantenendola sempre < della esterna!)
