@@ -501,7 +501,7 @@ class Helper:
 
         return True
 
-    
+    # TODO: da spostare in custom_swissbix
     def compute_dealline_fields(fields, UserRecord):
         """
         Calcola i campi price, expectedcost, expectedmargin per una riga dealline.
