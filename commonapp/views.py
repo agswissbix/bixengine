@@ -5623,73 +5623,9 @@ def get_dashboard_blocks(request):
                 )
                 datas = dbh.sql_query(sql)
 
-                # all_blocks = SysDashboardBlock.objects.all()
                 # sql = "SELECT * FROM sys_dashboard_block WHERE dashboardid = {dashboard_id} ORDER BY id desc".format(
                 #     dashboard_id=dashboard_id
                 # )
-                category_field = ", uc.category_block" if str(active_server).lower() == 'wegolf' else ""
-                check_status = "AND (uc.status IS NULL OR uc.status <> 'Riservato')" if not request.user.is_staff and str(active_server).lower() == 'wegolf' else ""
-                sql = """
-                    SELECT sdb.*, uc.status as status{category_field}
-                    FROM sys_dashboard_block sdb
-                    LEFT JOIN user_chart uc ON uc.report_id = sdb.chartid
-                    WHERE sdb.dashboardid = {dashboard_id}
-                    {check_status}
-                    ORDER BY sdb.id DESC
-                """.format(category_field=category_field, dashboard_id=dashboard_id, userid=bixid, check_status=check_status)
-                all_blocks = dbh.sql_query(sql)
-
-                chart_ids = [str(b['chartid']) for b in all_blocks if b.get('chartid')]
-                chart_info = {}
-                is_wegolf = str(active_server).lower() == 'wegolf'
-                user_language = 'en'
-
-                if chart_ids:
-                    ids_str = ",".join([f"'{cid}'" for cid in chart_ids])
-                    
-                    sc_query = f"SELECT id, name, config FROM sys_chart WHERE id IN ({ids_str})"
-                    sys_charts = dbh.sql_query(sc_query)
-                    for sc in sys_charts:
-                        chart_info[str(sc['id'])] = {'name': sc['name'], 'config': sc.get('config')}
-                    
-                    if is_wegolf:
-                        try:
-                            user_language = WegolfHelper.get_user_language(bixid)
-                        except Exception:
-                            pass
-                        
-                        uc_query = f"SELECT * FROM user_chart WHERE report_id IN ({ids_str})"
-                        user_charts = dbh.sql_query(uc_query)
-                        for uc in user_charts:
-                            cid = str(uc.get('report_id', ''))
-                            if cid in chart_info:
-                                chart_info[cid]['user_chart_row'] = uc
-
-                for block in all_blocks:
-                    cid = str(block.get('chartid', ''))
-                    info = chart_info.get(cid, {})
-                    sys_name = info.get('name', 'N/A')
-                    sys_name = info.get('name', 'N/A')
-                    sys_desc = ""
-
-                    name = sys_name
-                    description = sys_desc
-                    
-                    if is_wegolf:
-                        user_chart_row = info.get('user_chart_row')
-                        if user_chart_row:
-                            sys_desc = user_chart_row.get('description', '')
-                            description = sys_desc
-                        
-                        try:
-                            name = WegolfHelper.resolve_localized_chart_field(sys_name, user_chart_row, user_language, field="title")
-                            description = WegolfHelper.resolve_localized_chart_field(sys_desc, user_chart_row, user_language, field="description")
-                        except Exception:
-                            pass
-
-                    block['name'] = name
-                    block['description'] = description
-                    context['block_list'].append(block)
 
                 for data in datas:
                     dashboard_block_id = data['dashboard_block_id']
@@ -5772,6 +5708,94 @@ def get_dashboard_blocks(request):
 
     return JsonResponse(context, safe=False)
 
+
+@login_required(login_url='/login/')
+def get_dashboard_charts(request):
+    request_data = json.loads(request.body)
+    dashboard_id = request_data.get('dashboardid')
+    
+    if not dashboard_id:
+        return JsonResponse({'error': 'dashboardid is required'}, status=400)
+
+    try:
+        active_server = Helper.get_activeserver(request).get('value')
+    except Exception:
+        active_server = Helper.get_cliente_id()
+
+    dbh = HelpderDB()
+    context = {}
+    context['block_list'] = []
+
+    bixid = Helper.get_userid(request)
+    if bixid is None:
+        return JsonResponse({'error': 'User not found'}, status=404)
+
+    if request.method == 'POST':
+        with connection.cursor() as cursor:
+            category_field = ", uc.category_block" if str(active_server).lower() == 'wegolf' else ""
+            check_status = "AND (uc.status IS NULL OR uc.status <> 'Riservato')" if not request.user.is_staff and str(active_server).lower() == 'wegolf' else ""
+            sql = """
+                SELECT sdb.*, uc.status as status{category_field}
+                FROM sys_dashboard_block sdb
+                LEFT JOIN user_chart uc ON uc.report_id = sdb.chartid
+                WHERE sdb.dashboardid = {dashboard_id}
+                {check_status}
+                ORDER BY sdb.id DESC
+            """.format(category_field=category_field, dashboard_id=dashboard_id, userid=bixid, check_status=check_status)
+            all_blocks = dbh.sql_query(sql)
+
+            chart_ids = [str(b['chartid']) for b in all_blocks if b.get('chartid')]
+            chart_info = {}
+            is_wegolf = str(active_server).lower() == 'wegolf'
+            user_language = 'en'
+
+            if chart_ids:
+                ids_str = ",".join([f"'{cid}'" for cid in chart_ids])
+                
+                sc_query = f"SELECT id, name, config FROM sys_chart WHERE id IN ({ids_str})"
+                sys_charts = dbh.sql_query(sc_query)
+                for sc in sys_charts:
+                    chart_info[str(sc['id'])] = {'name': sc['name'], 'config': sc.get('config')}
+                
+                if is_wegolf:
+                    try:
+                        user_language = WegolfHelper.get_user_language(bixid)
+                    except Exception:
+                        pass
+                    
+                    uc_query = f"SELECT * FROM user_chart WHERE report_id IN ({ids_str})"
+                    user_charts = dbh.sql_query(uc_query)
+                    for uc in user_charts:
+                        cid = str(uc.get('report_id', ''))
+                        if cid in chart_info:
+                            chart_info[cid]['user_chart_row'] = uc
+
+            for block in all_blocks:
+                cid = str(block.get('chartid', ''))
+                info = chart_info.get(cid, {})
+                sys_name = info.get('name', 'N/A')
+                sys_desc = ""
+
+                name = sys_name
+                description = sys_desc
+                
+                if is_wegolf:
+                    user_chart_row = info.get('user_chart_row')
+                    if user_chart_row:
+                        sys_desc = user_chart_row.get('description', '')
+                        description = sys_desc
+                    
+                    try:
+                        name = WegolfHelper.resolve_localized_chart_field(sys_name, user_chart_row, user_language, field="title")
+                        description = WegolfHelper.resolve_localized_chart_field(sys_desc, user_chart_row, user_language, field="description")
+                    except Exception:
+                        pass
+
+                block['name'] = name
+                block['description'] = description
+                context['block_list'].append(block)
+
+    return JsonResponse(context, safe=False)
 
 @login_required(login_url='/login/')
 def get_chart_data(request):

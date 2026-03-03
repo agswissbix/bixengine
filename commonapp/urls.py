@@ -58,6 +58,7 @@ urlpatterns = [
     path('script_test/', script_test, name='script_test'),
     path('update_user_profile_pic/', update_user_profile_pic, name='update_user_profile_pic'),
     path('get_dashboard_blocks/', get_dashboard_blocks, name='get_dashboard_blocks'),
+    path('get_dashboard_charts/', get_dashboard_charts, name='get_dashboard_charts'),
     path('save_dashboard_disposition/', save_dashboard_disposition, name='save_dashboard_disposition'),
     path('add_dashboard_block/', add_dashboard_block, name='add_dashboard_block'),
     path('save_form_data/', save_form_data, name='save_form_data'),
