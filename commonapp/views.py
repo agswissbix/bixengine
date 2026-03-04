@@ -475,6 +475,11 @@ def reset_password_with_token(request):
         if user is not None and default_token_generator.check_token(user, token):
             user.set_password(new_password)
             user.save()
+            if Helper.get_cliente_id() == 'wegolf':
+                sys_user = SysUser.objects.filter(bixid=user.pk).first()
+                if sys_user and sys_user.disabled == 'Y':
+                    sys_user.disabled = 'N'
+                    sys_user.save()
             return JsonResponse({'message': 'Password reimpostata con successo'})
         else:
             return JsonResponse({'error': 'Il link di ripristino non è valido o è scaduto'}, status=400)
