@@ -114,6 +114,7 @@ urlpatterns = [
     path('settings_table_newstep/', settings_table_newstep, name='settings_table_newstep'),
     path('settings_table_steps_save/', settings_table_steps_save, name='settings_table_steps_save'),
     path('settings_table_fields_delete_field/', settings_table_fields_delete_field, name='settings_table_fields_delete_field'),
+    path('settings_table_fields_change_to_lookup/', settings_table_fields_change_to_lookup, name='settings_table_fields_change_to_lookup'),
     path('delete_table/', delete_table, name='delete_table'),
     path('check_csv_compatibility/', check_csv_compatibility, name='check_csv_compatibility'),
     path('import_csv_data/', import_csv_data, name='import_csv_data'),

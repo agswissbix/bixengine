@@ -625,6 +625,45 @@ def settings_table_fields_delete_field(request):
 
 
 @superuser_required
+def settings_table_fields_change_to_lookup(request):
+    data = json.loads(request.body)
+    tableid = data.get("tableid")
+    field_id = data.get("fieldid")
+    userid = data.get("userid")
+
+    if userid != 1:
+        return JsonResponse({"success": False, "error": "L'utente deve essere l'utente di default"}, status=400)
+
+    if not tableid or not field_id:
+        return JsonResponse({"success": False, "error": "Dati mancanti"}, status=400)
+
+    field = SysField.objects.filter(tableid=tableid, id=field_id).first()
+    if not field:
+        return JsonResponse({"success": False, "error": "Campo non trovato"}, status=404)
+
+    if field.fieldtypewebid in ["lookup", "multiselect"]:
+        return JsonResponse({"success": False, "error": "Campo già di tipo lookup o multiselect"}, status=400)
+
+    # Change type
+    field.fieldtypewebid = "lookup"
+    lookuptableid = f"{field.fieldid}_{tableid}"
+    field.lookuptableid = lookuptableid
+    field.save()
+
+    # Create lookuptable if not exists
+    if not SysLookupTable.objects.filter(tableid=lookuptableid).exists():
+        SysLookupTable.objects.create(
+            description=field.fieldid,
+            tableid=lookuptableid,
+            itemtype="Carattere",
+            codelen=255,
+            desclen=255
+        )
+
+    return JsonResponse({"success": True})
+
+
+@superuser_required
 def get_all_tables(request):
     tables = list(SysTable.objects.all().values('id', 'description').order_by('description'))
     return JsonResponse({"tables": tables})
