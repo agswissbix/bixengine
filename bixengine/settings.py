@@ -91,6 +91,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'commonapp.utils.middleware.ImpersonateMiddleware',
     'commonapp.utils.middleware.PerformanceLoggingMiddleware',
     # 'django_user_agents.middleware.UserAgentMiddleware',  # Scommenta se lo usi ancora
 ]

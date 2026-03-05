@@ -182,11 +182,20 @@ def logout_view(request):
 @login_required_api  
 def user_info(request):
     print("Function: user_info")   
-    data = json.loads(request.body) 
+    data = json.loads(request.body) if request.body else {}
     page = data.get("page", "default")
     if request.user.is_authenticated:
+        is_impersonating = hasattr(request, 'impersonator') and request.impersonator is not None
+        impersonator_username = request.impersonator.username if is_impersonating else None
+        
         custom_response = call_custom_function("get_user_info", request, page)
         if custom_response is not None:
+            # Inject impersonation info into custom response if it's a JsonResponse
+            if isinstance(custom_response, JsonResponse):
+                content = json.loads(custom_response.content)
+                content["is_impersonating"] = is_impersonating
+                content["impersonator_username"] = impersonator_username
+                return JsonResponse(content)
             return custom_response
         else:
             return JsonResponse({
@@ -195,11 +204,57 @@ def user_info(request):
                 "name": '',
                 "role": 'admin' if request.user.is_superuser else 'user',
                 "chat": '',
-                "telefono": ''
+                "telefono": '',
+                "is_impersonating": is_impersonating,
+                "impersonator_username": impersonator_username
             })
     else:
         return JsonResponse({"isAuthenticated": False}, status=401)
         
+
+@require_POST
+@login_required_api
+def start_impersonate(request):
+    try:
+        data = json.loads(request.body)
+        target_user_id = data.get('target_user_id')
+
+        # Controllo che l'utente che fa la richiesta sia un admin o superuser
+        # Se volete potete vincolarlo al ruolo specifico usato nel vostro DB
+        if not request.user.is_superuser: # Potresti usare un controllo sul ruolo SysUser o simile
+            return JsonResponse({'success': False, 'detail': 'Forbiden. Must be superuser.'}, status=403)
+
+        if not target_user_id:
+            return JsonResponse({'success': False, 'detail': 'Missing target_user_id'}, status=400)
+
+        sys_user = SysUser.objects.filter(id=target_user_id).first()
+        if not sys_user:
+            return JsonResponse({'success': False, 'detail': 'Target user not found'}, status=404)
+        target_user = User.objects.filter(id=sys_user.bixid).first()
+        if not target_user:
+            return JsonResponse({'success': False, 'detail': 'Target user not found'}, status=404)
+
+        if target_user.is_superuser:
+            return JsonResponse({'success': False, 'detail': 'Cannot impersonate another admin'}, status=403)
+
+        request.session['impersonated_user_id'] = target_user.id
+        request.session.modified = True
+        return JsonResponse({'success': True, 'detail': 'Impersonation started'})
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'detail': str(e)}, status=500)
+
+@require_POST
+@login_required_api
+def stop_impersonate(request):
+    try:
+        if 'impersonated_user_id' in request.session:
+            del request.session['impersonated_user_id']
+            request.session.modified = True
+        return JsonResponse({'success': True, 'detail': 'Impersonation stopped'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'detail': str(e)}, status=500)
+
 
 @login_required_api
 def get_user_id(request):
