@@ -7765,6 +7765,124 @@ def save_user_settings_api(request):
         print(f"Errore nel salvataggio delle impostazioni utente: {e}")
         return JsonResponse({"success": False, "error": str(e)}, status=500)
 
+@transaction.atomic
+def get_user_profile_api(request):
+    try:
+        data = json.loads(request.body)
+        userid = data.get('userid')
+        if not userid:
+            return JsonResponse({"success": False, "error": "UserID mancante"}, status=400)
+    except (json.JSONDecodeError, KeyError):
+        return JsonResponse({"success": False, "error": "Dati di richiesta non validi"}, status=400)
+
+    try:
+        sys_user = SysUser.objects.filter(id=userid).first()
+        if not sys_user:
+            return JsonResponse({"success": False, "error": "Utente non trovato nel sistema"}, status=404)
+
+        bixid_value = sys_user.bixid if sys_user.bixid else userid
+        auth_user = User.objects.filter(Q(id=bixid_value) | Q(username=sys_user.username)).first()
+
+        profile_data = {
+            "userid": sys_user.id,
+            "username": sys_user.username or "",
+            "firstname": sys_user.firstname or "",
+            "lastname": sys_user.lastname or "",
+            "email": sys_user.email or "",
+            "description": sys_user.description or "",
+            "is_superuser": bool(auth_user.is_superuser) if auth_user else (sys_user.superuser == 'S'),
+            "is_staff": bool(auth_user.is_staff) if auth_user else False,
+            "is_active": bool(auth_user.is_active) if auth_user else (sys_user.disabled != 'S')
+        }
+
+        # Sync Auth User data specifically if auth_user exists
+        if auth_user:
+            profile_data["username"] = auth_user.username
+            profile_data["firstname"] = auth_user.first_name
+            profile_data["lastname"] = auth_user.last_name
+            profile_data["email"] = auth_user.email
+
+        return JsonResponse({"success": True, "data": profile_data})
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
+
+@transaction.atomic
+def save_user_profile_api(request):
+    if request.method != 'POST':
+        return JsonResponse({"success": False, "error": "Metodo non supportato"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        userid = data.get('userid')
+        if not userid:
+            return JsonResponse({"success": False, "error": "UserID mancante"}, status=400)
+    except (json.JSONDecodeError, KeyError):
+        return JsonResponse({"success": False, "error": "Dati di richiesta non validi"}, status=400)
+
+    try:
+        sys_user = SysUser.objects.filter(id=userid).first()
+        if not sys_user:
+            return JsonResponse({"success": False, "error": "Utente non trovato nel sistema"}, status=404)
+
+        bixid_value = sys_user.bixid if sys_user.bixid else userid
+        auth_user = User.objects.filter(Q(id=bixid_value) | Q(username=sys_user.username)).first()
+
+        new_username = data.get('username')
+        new_email = data.get('email')
+
+        # Check for unique username in Django User model (if username changed)
+        if auth_user and new_username and new_username != auth_user.username:
+            if User.objects.filter(username=new_username).exists():
+                return JsonResponse({"success": False, "error": "Username già in uso in User."}, status=400)
+        
+        # Check in SysUser
+        if new_username and new_username != sys_user.username:
+            if SysUser.objects.filter(username=new_username).exclude(id=userid).exists():
+                return JsonResponse({"success": False, "error": "Username già in uso in SysUser."}, status=400)
+
+        # Update SysUser
+        sys_user.username = new_username if new_username is not None else sys_user.username
+        sys_user.firstname = data.get('firstname', sys_user.firstname)
+        sys_user.lastname = data.get('lastname', sys_user.lastname)
+        sys_user.email = new_email if new_email is not None else sys_user.email
+        sys_user.description = data.get('description', sys_user.description)
+        
+        is_superuser = data.get('is_superuser')
+        if is_superuser is not None:
+            sys_user.superuser = 'S' if str(is_superuser).lower() in ['true', '1'] else 'N'
+            
+        is_active = data.get('is_active')
+        if is_active is not None:
+            sys_user.disabled = 'N' if str(is_active).lower() in ['true', '1'] else 'S'
+            
+        sys_user.save()
+
+        # Update Auth User
+        if auth_user:
+            auth_user.username = sys_user.username
+            auth_user.first_name = sys_user.firstname
+            auth_user.last_name = sys_user.lastname
+            auth_user.email = sys_user.email
+            
+            if is_superuser is not None:
+                auth_user.is_superuser = sys_user.superuser == 'S'
+                
+            is_staff = data.get('is_staff')
+            if is_staff is not None:
+                auth_user.is_staff = str(is_staff).lower() in ['true', '1']
+                
+            if is_active is not None:
+                auth_user.is_active = sys_user.disabled == 'N'
+                
+            auth_user.save()
+
+        return JsonResponse({"success": True, "message": "Profilo aggiornato con successo."})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
+
+
 def get_user_settings_api(request):
     """
     API per ottenere le impostazioni di un utente specifico.
