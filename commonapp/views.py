@@ -3882,9 +3882,12 @@ def save_record_fields(request):
 
         # Delete old blocks
         for dashboard_id, view_id in to_delete:
-            SysDashboardBlock.objects.filter(
+            blocks_to_delete = SysDashboardBlock.objects.filter(
                 chartid=chart_obj, dashboardid_id=dashboard_id, viewid_id=view_id
-            ).delete()
+            )
+            for block in blocks_to_delete:
+                SysUserDashboardBlock.objects.filter(dashboard_block=block).delete()
+            blocks_to_delete.delete()
 
         # Create new blocks
         for dashboard_id, view_id in to_create:
