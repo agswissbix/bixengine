@@ -3586,35 +3586,6 @@ def save_record_fields(request):
         # Call save_newuser
         result = save_newuser(request)
 
-    # TODO CUSTOM --- DASHBOARD --- WEGOLF
-    if tableid == 'golfclub':
-        golfclub_record = UserRecord("golfclub", recordid)
-        userid = golfclub_record.values.get('utente', None)
-
-        default_userid = 22
-
-        default_dashboards = SysUserDashboardBlock.objects.filter(
-            userid_id=default_userid
-        ).values_list('dashboardid', flat=True).distinct()
-
-        for dashboard_id in default_dashboards:
-
-            # Verifico se l'utente ha già blocchi per questa dashboard
-            user_has_blocks = SysUserDashboardBlock.objects.filter(
-                userid_id=userid,
-                dashboardid_id=dashboard_id
-            ).exists()
-
-            if not user_has_blocks:
-                blocks_to_clone = SysUserDashboardBlock.objects.filter(
-                    userid_id=default_userid,
-                    dashboardid_id=dashboard_id
-                )
-
-                for block in blocks_to_clone:
-                    block.pk = None              # nuovo record
-                    block.userid_id = userid     # assegno all'utente corretto
-                    block.save()
 
     #CUSTOM ---CHART---
     if tableid == 'chart':
@@ -7843,10 +7814,10 @@ def save_newuser(request):
             # Inserisce in sys_user
             cur.execute(
                 """
-                INSERT INTO sys_user (id, firstname, lastname, username, disabled, superuser, bixid)
-                VALUES (%s, %s, %s, %s, 'N', 'N', %s)
+                INSERT INTO sys_user (id, firstname, lastname, username, email, disabled, superuser, bixid)
+                VALUES (%s, %s, %s, %s, %s, 'N', 'N', %s)
                 """,
-                [userid, firstname, lastname, username, bixid],
+                [userid, firstname, lastname, username, email, bixid],
             )
 
             # Inserisce il profilo commonapp_userprofile con UPSERT

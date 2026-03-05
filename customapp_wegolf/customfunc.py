@@ -44,6 +44,36 @@ def save_record_fields(tableid,recordid, old_record=""):
 
         notification_record.save()
 
+    # DEFAULT DASHBOARD FOR NEW USER
+    if tableid == 'golfclub':
+        golfclub_record = UserRecord("golfclub", recordid)
+        userid = golfclub_record.values.get('utente', None)
+
+        default_userid = 22
+
+        default_dashboards = SysUserDashboardBlock.objects.filter(
+            userid_id=default_userid
+        ).values_list('dashboardid', flat=True).distinct()
+
+        for dashboard_id in default_dashboards:
+
+            # Verifico se l'utente ha già blocchi per questa dashboard
+            user_has_blocks = SysUserDashboardBlock.objects.filter(
+                userid_id=userid,
+                dashboardid_id=dashboard_id
+            ).exists()
+
+            if not user_has_blocks:
+                blocks_to_clone = SysUserDashboardBlock.objects.filter(
+                    userid_id=default_userid,
+                    dashboardid_id=dashboard_id
+                )
+
+                for block in blocks_to_clone:
+                    block.pk = None              # nuovo record
+                    block.userid_id = userid     # assegno all'utente corretto
+                    block.save()
+
 
 
 def change_password(request):
@@ -60,6 +90,8 @@ def change_password(request):
 
 def new_user(userid):
     sys_user = SysUser.objects.filter(id=userid).first()
+    if sys_user.email:
+        _send_email_reset_password(sys_user)
     if not sys_user:
         return JsonResponse({"success": False, "detail": "User not found"})
     if sys_user.disabled == 'Y':
@@ -79,3 +111,49 @@ def get_user_info(request, page):
         "disabled": True if user.disabled == 'Y' else False
     })
     
+
+def _send_email_reset_password(sys_user: SysUser):
+    from commonapp.utils.email_sender import EmailSender
+
+    try:
+        if not sys_user or not sys_user.email:
+            return
+
+        recipient = sys_user.email
+        subject = "Creazione account WeGolf - Imposta la tua password"
+        
+        # Puoi impostare l'URL della piattaforma qui, o prenderlo dalle variabili di ambiente
+        link_web = "https://" + env.str("BIXCUSTOM_DOMAIN")+ ":" + env.str("BIXCUSTOM_NGINX_PORT") + "/forgot-password"
+
+        mailbody = f"""
+        <p style="margin:0 0 6px 0;">Ciao {sys_user.firstname},</p>
+
+        <p style="margin:0 0 10px 0;">
+            Il tuo account è stato creato con successo. Clicca sul link sottostante per reimpostare la tua password, siccome per ora ne è stata impostata una di default.
+        </p>
+
+        <p style="margin:16px 0 0 0;">
+            Modifica la tua password tramite il seguente link:
+            <br>
+            <a href="{link_web}">{link_web}</a>
+        </p>
+
+        <p style="margin:10px 0 0 0;">Cordiali saluti,</p>
+        <p style="margin:0;">Il team</p>
+        """
+
+        email_data = {
+            "to": recipient,
+            "subject": subject,
+            "text": mailbody,
+            "cc": "",
+            "bcc": "",
+            "attachment_relativepath": "",
+            "attachment_name": ""
+        }
+
+        EmailSender.save_email("user", sys_user.pk, email_data)
+
+    except Exception as e:
+        print(f"Error in _send_email_reset_password: {e}")
+
