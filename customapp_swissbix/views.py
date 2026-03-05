@@ -2397,10 +2397,11 @@ def save_lenovo_ticket(request):
         if old_status != 'Draft':
             del fields['status']
 
+        lookup_item = SysLookupTableItem.objects.filter(lookuptableid='status_ticket_lenovo').order_by('itemorder').first()
         if not recordid:
             rec.values['reception_date'] = datetime.date.today().strftime('%Y-%m-%d')
             if 'status' not in fields:
-                rec.values['status'] = 'Presa in consegna'
+                rec.values['status'] = lookup_item.itemvalue
 
         for key in allowed_fields:
             if key in fields:
@@ -2410,7 +2411,7 @@ def save_lenovo_ticket(request):
 
         rec.save()
         
-        if str(new_status).lower() == 'presa in consegna' and str(old_status).lower() != 'presa in consegna':
+        if str(new_status).lower() == str(lookup_item.itemvalue).lower() and str(old_status).lower() != str(lookup_item.itemvalue).lower():
             from customapp_swissbix.services.custom_save.lenovo_ticket_services import LenovoTicketService
             LenovoTicketService.send_status_update_email(rec.recordid)
 

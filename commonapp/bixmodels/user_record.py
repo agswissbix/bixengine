@@ -861,8 +861,8 @@ class UserRecord:
 
             if not Helper.isempty(field['lookuptableid']):
                 fieldtype='Categoria' 
-                items=HelpderDB.sql_query(f"SELECT * FROM sys_lookup_table_item WHERE lookuptableid='{field['lookuptableid']}'")
-                insert_field['lookupitems']=items
+                items = SysLookupTableItem.objects.filter(lookuptableid=field['lookuptableid']).order_by('itemorder').values()
+                insert_field['lookupitems']=list(items)
                 if field['fieldtypewebid'] == 'multiselect':
                     insert_field['fieldtypewebid']='multiselect'
                     fieldtype='multiselect'
