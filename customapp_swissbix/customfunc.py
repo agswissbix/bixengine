@@ -546,13 +546,18 @@ def swissbix_create_timesheet_from_timetracking(request):
         timetracking_list = []
         processed_count = 0
 
+        sanitized_service = None
+
         for timetracking in timetrackings:
             azienda = timetracking.fields.get('recordidcompany_', {}).get('value', azienda)
             date = timetracking.fields.get('date', {}).get('value', date)
             desc_val = timetracking.fields.get('description', {}).get('value', '')
-                
+            service_val = timetracking.fields.get('service', {}).get('value', '')
             worktime_val = timetracking.fields.get('worktime', {}).get('value', 0)
             pausetime_val = timetracking.fields.get('pausetime', {}).get('value', 0)
+
+            if service_val:
+                sanitized_service = service_val
 
             sanitized_pausetime = float(pausetime_val) if pausetime_val is not None else 0.0
             sanitized_worktime = float(worktime_val) if worktime_val is not None else 0.0
@@ -595,6 +600,7 @@ def swissbix_create_timesheet_from_timetracking(request):
         new_timesheet['description'] = summary or description
         new_timesheet['worktime'] = worktime
         new_timesheet['worktime_decimal'] = worktime_decimal
+        new_timesheet['service'] = sanitized_service
 
         return JsonResponse({
             'status': 'success', 
