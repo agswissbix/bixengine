@@ -2316,6 +2316,43 @@ def get_lenovo_intake_context(request):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
+import requests
+
+@csrf_exempt
+def get_lenovo_device_info(request):
+    """
+    Proxy to Lenovo's pcsupport API to fetch device data bypassing frontend CORS.
+    """
+    try:
+        # data = json.loads(request.body)
+        product_id = request.POST.get('product_id')
+        if not product_id:
+            return JsonResponse({'success': False, 'error': 'product_id needed'}, status=400)
+
+        s = requests.Session()
+        # Request home first to get possible required cookies (though it works for some just with POST, safer to do this)
+        s.get("https://pcsupport.lenovo.com/ch/it", timeout=5)
+
+        res = s.post(
+            "https://pcsupport.lenovo.com/ch/it/api/v4/upsell/redport/getIbaseInfo",
+            json={
+                "serialNumber": product_id,
+                "country": "ch",
+                "language": "it"
+            },
+            headers={
+                "Content-Type": "application/json",
+                "x-requested-with": "XMLHttpRequest"
+            },
+            timeout=10
+        )
+        if res.status_code == 200:
+            return JsonResponse({'success': True, 'data': res.json()})
+        else:
+            return JsonResponse({'success': False, 'error': 'Lenovo API failed'}, status=502)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
 @csrf_exempt
 def get_lenovo_ticket(request):
     """
@@ -2408,7 +2445,7 @@ def save_lenovo_ticket(request):
         if not recordid:
             rec.values['reception_date'] = datetime.date.today().strftime('%Y-%m-%d')
             if 'status' not in fields:
-                rec.values['status'] = lookup_item.itemvalue
+                rec.values['status'] = lookup_item.itemcode
 
         for key in allowed_fields:
             if key in fields:
