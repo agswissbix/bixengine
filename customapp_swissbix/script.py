@@ -3251,7 +3251,7 @@ def get_bixhub_initial_data(request):
                 "icon": params_dict.get('icon', 'squares'), 
                 "logo": params_dict.get('logo', None),
                 "description": params_dict.get('description', ''),
-                "params": params_dict 
+                "params": params_dict
             }
 
             if fn.get('tableid_id') and fn['tableid_id'].lower() == "ticket_lenovo" and params_dict.get('linkable') is True:
@@ -3352,6 +3352,7 @@ def get_bixhub_initial_data(request):
                     "status": tk.get('status') or "Bozza",
                     "date": str(tk.get('reception_date'))[:10] if tk.get('reception_date') else "",
                     "problem_description": tk.get('problem_description') or "",
+                    "serial": tk.get('serial') or "",
                 })
 
         data = {

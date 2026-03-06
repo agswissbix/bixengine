@@ -2296,6 +2296,9 @@ def get_lenovo_intake_context(request):
             if 'lookupitems' in f and f['fieldtypewebid'] == 'multiselect':
                 accessories_lookup = f['lookupitems']
 
+            if 'lookupitems' in f and f['fieldid'] == 'pick_up':
+                pick_up_lookup = f['lookupitems']
+
         users_qs = SysUser.objects.filter(disabled='N').values('id', 'firstname', 'lastname')
         users_lookup = [{'userid': str(u['id']), 'firstname': u['firstname'], 'lastname': u['lastname']} for u in users_qs]
         logged_in_userid = Helper.get_userid(request) if request.user.is_authenticated else None
@@ -2304,7 +2307,8 @@ def get_lenovo_intake_context(request):
             'success': True,
             'field_settings': field_settings,
             'lookups': {
-                'accessories': accessories_lookup,
+                'accessories': accessories_lookup if 'accessories_lookup' in locals() else [],
+                'pick_up': pick_up_lookup if 'pick_up_lookup' in locals() else [],
                 'users': users_lookup
             },
             'logged_in_userid': str(logged_in_userid) if logged_in_userid else ""
@@ -2334,6 +2338,8 @@ def get_lenovo_ticket(request):
             'name': rec.values.get('name'),
             'surname': rec.values.get('surname'),
             'company_name': rec.values.get('company_name'),
+            'email': rec.values.get('email'),
+            'phone': rec.values.get('phone'),
             'serial': rec.values.get('serial'),
             'product_photo': rec.values.get('product_photo'),
             'problem_description': rec.values.get('problem_description'),
@@ -2354,6 +2360,7 @@ def get_lenovo_ticket(request):
             'auth_formatting': rec.values.get('auth_formatting'),
             'accessories': rec.values.get('accessories'),
             'technician': rec.values.get('technician'),
+            'pick_up': rec.values.get('pick_up'),
         }
         
         # Check for signature file (Fixed Path)
@@ -2387,7 +2394,7 @@ def save_lenovo_ticket(request):
             'address', 'place', 'brand', 'model', 'username', 'password',
             'warranty', 'warranty_type',
             'auth_factory_reset', 'request_quote', 'direct_repair', 'direct_repair_limit', 'auth_formatting', 'accessories',
-            'technician'
+            'technician', 'pick_up'
         ]
 
         rec = UserRecord('ticket_lenovo', recordid)
@@ -2411,7 +2418,7 @@ def save_lenovo_ticket(request):
 
         rec.save()
         
-        if str(new_status).lower() == str(lookup_item.itemvalue).lower() and str(old_status).lower() != str(lookup_item.itemvalue).lower():
+        if str(new_status).lower() == str(lookup_item.itemcode).lower() and str(old_status).lower() != str(lookup_item.itemcode).lower():
             from customapp_swissbix.services.custom_save.lenovo_ticket_services import LenovoTicketService
             LenovoTicketService.send_status_update_email(rec.recordid)
 
