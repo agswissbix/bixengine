@@ -2374,7 +2374,8 @@ def get_lenovo_ticket(request):
             'recordid': rec.recordid,
             'name': rec.values.get('name'),
             'surname': rec.values.get('surname'),
-            'company_name': rec.values.get('company_name'),
+            'recordidcompany_': rec.values.get('recordidcompany_'),
+            'company_name': rec.fields.get('recordidcompany_')['convertedvalue'] if rec.fields.get('recordidcompany_')['convertedvalue'] else rec.values.get('company_name'),
             'email': rec.values.get('email'),
             'phone': rec.values.get('phone'),
             'serial': rec.values.get('serial'),
@@ -2406,6 +2407,23 @@ def get_lenovo_ticket(request):
             ticket_data['signatureUrl'] = sig_path
         else:
             ticket_data['signatureUrl'] = ""
+            
+        # Fetch Warranty History
+        warranties = HelpderDB.sql_query("SELECT * FROM user_warranty WHERE recordidticket_lenovo_ = %s ORDER BY start_date DESC", [ticket_id])
+        
+        warranty_history = []
+        for w in warranties:
+            warranty_history.append({
+                'name': w.get('name', ''),
+                'type': w.get('type', ''),
+                'level': w.get('level', ''),
+                'deliveryTypeName': w.get('delivery', ''),
+                'startDate': str(w.get('start_date', ''))[:10] if w.get('start_date') else '',
+                'endDate': str(w.get('end_date', ''))[:10] if w.get('end_date') else '',
+                'description': w.get('description', ''),
+                'remainingDays': w.get('remaining_days', 0),
+            })
+        ticket_data['warrantyHistory'] = warranty_history
         
         return JsonResponse({'success': True, 'ticket': ticket_data})
         
@@ -2455,6 +2473,28 @@ def save_lenovo_ticket(request):
 
         rec.save()
         
+        warranty_history_raw = request.POST.get('warrantyHistory', '[]')
+        try:
+            warranty_history = json.loads(warranty_history_raw)
+        except json.JSONDecodeError:
+            warranty_history = []
+            
+        if warranty_history:
+            from commonapp.bixmodels.helper_db import HelpderDB
+            HelpderDB.sql_execute_safe("DELETE FROM user_warranty WHERE recordidticket_lenovo_ = %s", [rec.recordid])
+            for w in warranty_history:
+                w_rec = UserRecord('warranty')
+                w_rec.values['recordidticket_lenovo_'] = rec.recordid
+                w_rec.values['name'] = w.get('name', '')
+                w_rec.values['type'] = w.get('type', '')
+                w_rec.values['level'] = w.get('level', '')
+                w_rec.values['delivery'] = w.get('deliveryTypeName', '')
+                w_rec.values['start_date'] = w.get('startDate', '')
+                w_rec.values['end_date'] = w.get('endDate', '')
+                w_rec.values['description'] = w.get('description', '')
+                w_rec.values['remaining_days'] = w.get('remainingDays', 0)
+                w_rec.save()
+
         if str(new_status).lower() == str(lookup_item.itemcode).lower() and str(old_status).lower() != str(lookup_item.itemcode).lower():
             from customapp_swissbix.services.custom_save.lenovo_ticket_services import LenovoTicketService
             LenovoTicketService.send_status_update_email(rec.recordid)
