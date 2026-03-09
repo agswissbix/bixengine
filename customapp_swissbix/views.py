@@ -118,7 +118,6 @@ def process_save_activemind_data(data):
         record = UserRecord('dealline', recordid_dealline)
         record.values['deleted_'] = 'Y'
         record.save()
-        delete_record('dealline', record.recordid)
 
     # -------------------------------------------------
     # SECTION 1 — Prodotto principale
@@ -967,7 +966,7 @@ def get_products_activemind(request):
             "description": description,
             "category": subcategory,
             "icon": matched_icon,
-            "unitPrice": float(price or 0),
+            "unitPrice": float(price or 0) *12 if frequency == "Annuale" else float(price or 0),
             "unitCost": float(cost or 0),
             "monthlyPrice": float(price) if price else None,
             "yearlyPrice": float(price) * 12 if price else None,
