@@ -29,7 +29,7 @@ import qrcode
 import subprocess
 import shutil
 from docxtpl import DocxTemplate, RichText
-from customapp_swissbix.customfunc import save_record_fields
+from customapp_swissbix.customfunc import save_record_fields, delete_record
 from xhtml2pdf import pisa
 from playwright.sync_api import sync_playwright
 from types import SimpleNamespace
@@ -118,6 +118,7 @@ def process_save_activemind_data(data):
         record = UserRecord('dealline', recordid_dealline)
         record.values['deleted_'] = 'Y'
         record.save()
+        delete_record('dealline', record.recordid)
 
     # -------------------------------------------------
     # SECTION 1 — Prodotto principale
@@ -437,6 +438,7 @@ def build_offer_data(recordid_deal, fe_data=None):
             if billing == "monthly":
                 monthly_total += total
             elif billing == "annual" or billing == "yearly":
+                monthly_total += total /12
                 yearly_total += total
 
     selected_frequency_label = None
@@ -451,7 +453,7 @@ def build_offer_data(recordid_deal, fe_data=None):
     discount_rate = 0.10 if contract_constraint == 36 else 0.05 if contract_constraint == 24 else 0.0
     
     monthly_total_discounted = monthly_total * (1 - discount_rate)
-    yearly_total_discounted = yearly_total * (1 - discount_rate)
+    yearly_total_discounted = monthly_total_discounted * 12
 
     grand_total = (monthly_total_discounted * 12) + yearly_total_discounted + total_monte_ore + total_tiers
 
@@ -481,7 +483,6 @@ def build_offer_data(recordid_deal, fe_data=None):
         "contract_constraint": contract_constraint,
         "discount_pct": int(discount_rate * 100),
         "discount_amount_monthly": monthly_total - monthly_total_discounted,
-        "discount_amount_yearly": yearly_total - yearly_total_discounted,
     }
 
     offer_data["totals_raw"] = raw_totals
@@ -581,11 +582,11 @@ def print_pdf_activemind(request):
         # 0) Salva dati prima di stampare
         save_data = data.get('data', {})
         save_data['recordIdTrattativa'] = recordid_deal
-        # try:
-        #     process_save_activemind_data(save_data)
-        # except Exception as e:
-        #     logger.error(f"Errore nel salvataggio prima della stampa: {str(e)}")
-        #     return JsonResponse({'error': f'Errore nel salvataggio preliminare: {str(e)}'}, status=500)
+        try:
+            process_save_activemind_data(save_data)
+        except Exception as e:
+            logger.error(f"Errore nel salvataggio prima della stampa: {str(e)}")
+            return JsonResponse({'error': f'Errore nel salvataggio preliminare: {str(e)}'}, status=500)
 
         # 1) ricostruzione offerta
         offer_data = build_offer_data(recordid_deal, save_data)
@@ -911,6 +912,18 @@ def get_products_activemind(request):
     unitprice_map = {row[0]: row[3] for row in deal_rows}
     discount_map = {row[0]: row[4] for row in deal_rows}
 
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT contractual_obligation, discount
+            FROM user_dealline
+            WHERE recordiddeal_ = %s
+              AND deleted_ = 'N'
+            LIMIT 1
+        """, [recordid_deal])
+        contract_row = cursor.fetchone()
+        contract_constraint = contract_row[0] if contract_row and contract_row[0] else 12
+        contract_discount = contract_row[1] if contract_row and contract_row[1] else 0
+
     excluded_subcategories = {
         'services',
         'services_maintenance',
@@ -939,6 +952,8 @@ def get_products_activemind(request):
         unitprice = unitprice_map.get(recordid_, "")
         discount = discount_map.get(recordid_, "")
         if unitprice:
+            if frequency == "Annuale":
+                unitprice = unitprice / 12
             price = unitprice / (1 - (discount / 100))
 
         matched_icon = next(
@@ -964,10 +979,11 @@ def get_products_activemind(request):
         categories_dict[subcategory]["services"].append(service)
 
     # 4️⃣ Output finale
-    return JsonResponse(
-        {"servicesCategory": list(categories_dict.values())},
-        safe=False
-    )
+    return JsonResponse({
+        "servicesCategory": list(categories_dict.values()),
+        "contractConstraint": contract_constraint,
+        "discount": contract_discount
+    })
 
 
 
