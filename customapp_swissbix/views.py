@@ -899,7 +899,7 @@ def get_products_activemind(request):
 
         # 2️⃣ Quantità dalla trattativa
         cursor.execute("""
-            SELECT recordidproduct_, quantity, frequency
+            SELECT recordidproduct_, quantity, frequency, unitprice, discount
             FROM user_dealline
             WHERE recordiddeal_ = %s
               AND deleted_ = 'N'
@@ -908,6 +908,8 @@ def get_products_activemind(request):
 
     quantity_map = {row[0]: row[1] for row in deal_rows}
     frequency_map = {row[0]: row[2] for row in deal_rows}
+    unitprice_map = {row[0]: row[3] for row in deal_rows}
+    discount_map = {row[0]: row[4] for row in deal_rows}
 
     excluded_subcategories = {
         'services',
@@ -934,6 +936,10 @@ def get_products_activemind(request):
         features = parse_features(note)
         quantity = quantity_map.get(recordid_, 0)
         frequency = frequency_map.get(recordid_, "")
+        unitprice = unitprice_map.get(recordid_, "")
+        discount = discount_map.get(recordid_, "")
+        if unitprice:
+            price = unitprice / (1 - (discount / 100))
 
         matched_icon = next(
             (icon for key, icon in icon_map.items() if key.lower() in name.lower()),
@@ -949,7 +955,7 @@ def get_products_activemind(request):
             "unitPrice": float(price or 0),
             "unitCost": float(cost or 0),
             "monthlyPrice": float(price) if price else None,
-            "yearlyPrice": float(price) * 10.5 if price else None,
+            "yearlyPrice": float(price) * 12 if price else None,
             "features": features,
             "quantity": quantity,
             "billingType": "yearly" if frequency == "Annuale" else "monthly",
