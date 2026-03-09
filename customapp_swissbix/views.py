@@ -75,7 +75,7 @@ def process_save_activemind_data(data):
     # -------------------------------------------------
     # Helper Functions
     # -------------------------------------------------
-    def fetch_existing_dealline(recordid_deal, subcategory, name=None):
+    def fetch_existing_dealline(recordid_deal, subcategory, recordidproduct=None):
         query = """
             SELECT dl.recordid_
             FROM user_dealline dl
@@ -89,9 +89,9 @@ def process_save_activemind_data(data):
         """
         params = [recordid_deal, subcategory]
 
-        if name is not None:
-            query += " AND dl.name = %s"
-            params.append(name)
+        if recordidproduct is not None:
+            query += " AND dl.recordidproduct_ = %s"
+            params.append(recordidproduct)
 
         query += " LIMIT 1"
 
@@ -111,7 +111,7 @@ def process_save_activemind_data(data):
         computed = Helper.compute_dealline_fields(record.values, UserRecord)
         record.values.update(computed)
         record.save()
-        save_record_fields('dealline', record.recordid)
+        # save_record_fields('dealline', record.recordid)
         return record.recordid
 
     def remove_dealline(recordid_dealline):
@@ -147,6 +147,20 @@ def process_save_activemind_data(data):
         remove_dealline(fetch_existing_dealline(recordid_deal, "system_assurance"))
 
     # -------------------------------------------------
+    # Estrarre constraint / calcolare sconto
+    # -------------------------------------------------
+    client_info = data.get('clientInfo', {})
+    contract_constraint = int(client_info.get('contractConstraint', 12))
+    
+    discount_percentage = 0
+    if contract_constraint == 24:
+        discount_percentage = 5
+    elif contract_constraint == 36:
+        discount_percentage = 10
+        
+    discount_rate = discount_percentage / 100.0
+
+    # -------------------------------------------------
     # SECTION 2 — Prodotti multipli
     # -------------------------------------------------
     for product_key, product_data in data.get('section2Products', {}).items():
@@ -160,21 +174,25 @@ def process_save_activemind_data(data):
         billing_type = product_data.get('billingType', 'monthly')
         name = product.values.get('name')
 
-        existing_id = fetch_existing_dealline(recordid_deal, product.values.get('subcategory', ''), name)
+        existing_id = fetch_existing_dealline(recordid_deal, product.values.get('subcategory', ''), product.recordid)
 
         if existing_id and quantity <= 0:
             remove_dealline(existing_id)
             continue
+
+        unitprice_discounted = unit_price * (1 - discount_rate)
 
         save_dealline({
             'recordid_': existing_id,
             'recordiddeal_': recordid_deal,
             'recordidproduct_': product.values.get('recordid_'),
             'name': name,
-            'unitprice': unit_price,
+            'unitprice': unitprice_discounted,
             'unitexpectedcost': unit_cost,
             'quantity': quantity,
-            'frequency': 'Annuale' if billing_type == 'yearly' else 'Mensile'
+            'frequency': 'Annuale' if billing_type == 'yearly' else 'Mensile',
+            'contractual_obligation': contract_constraint,
+            'discount': discount_percentage
         })
 
     # -------------------------------------------------
@@ -200,13 +218,8 @@ def process_save_activemind_data(data):
             if qty <= 0:
                 continue
 
-            name_parts.append(f"{title}: qta. {qty}")
+            name_parts.append(f"{title}: qta. {qty} - price: {unit_price}")
             service_total = qty * unit_price
-
-            # Sconto speciale solo per clientPC
-            if key == "clientPC" and qty > 1:
-                discount = 1 - (qty - 1) / 100
-                service_total *= discount
 
             total_price += service_total
             total_cost += qty * unit_cost
@@ -230,17 +243,21 @@ def process_save_activemind_data(data):
 
         # Check esistenza dealline
         existing_id = fetch_existing_dealline(recordid_deal, "services_maintenance")
+        
+        unitprice_discounted = total_price * (1 - discount_rate)
 
         save_dealline({
             'recordid_': existing_id,
             'recordiddeal_': recordid_deal,
             'recordidproduct_': product_id,
             'name': name_str,
-            'unitprice': total_price,
+            'unitprice': unitprice_discounted,
             'unitexpectedcost': total_cost,
             'quantity': 1,
             'intervention_frequency': frequency,
-            'frequency': 'Mensile'
+            'frequency': 'Mensile',
+            'contractual_obligation': contract_constraint,
+            'discount': discount_percentage
         })
 
     else:
@@ -284,8 +301,11 @@ def save_activemind(request):
     try:
         request_body = json.loads(request.body or "{}")
         data = request_body.get('data', {})
+        recordid_deal = data.get('recordIdTrattativa')
         
         process_save_activemind_data(data)
+
+        save_record_fields('deal', recordid_deal)
 
         return JsonResponse({'success': True, 'message': 'Dati ricevuti e processati con successo.'}, status=200)
 
@@ -426,7 +446,14 @@ def build_offer_data(recordid_deal, fe_data=None):
             break
 
     monthly_total += total_services
-    grand_total = total_services + total_products + total_monte_ore
+    
+    contract_constraint = fe_data.get("clientInfo", {}).get("contractConstraint", 12) if fe_data else 12
+    discount_rate = 0.10 if contract_constraint == 36 else 0.05 if contract_constraint == 24 else 0.0
+    
+    monthly_total_discounted = monthly_total * (1 - discount_rate)
+    yearly_total_discounted = yearly_total * (1 - discount_rate)
+
+    grand_total = (monthly_total_discounted * 12) + yearly_total_discounted + total_monte_ore + total_tiers
 
     from babel.numbers import format_decimal
     def fmt_ch(val):
@@ -439,19 +466,29 @@ def build_offer_data(recordid_deal, fe_data=None):
         "services": total_services,
         "products": total_products,
         "monthly": monthly_total,
+        "monthly_discounted": monthly_total_discounted,
         "monthly_annual": monthly_total * 12,
+        "monthly_annual_discounted": monthly_total_discounted * 12,
         "quarterly": quarterly_total,
         "quarterly_annual": quarterly_total * 4,
         "biannual": biannual_total,
         "biannual_annual": biannual_total * 2,
         "yearly": yearly_total,
+        "yearly_discounted": yearly_total_discounted,
         "frequencies": total_frequencies,
         "monte_ore": total_monte_ore,
         "grand_total": grand_total,
+        "contract_constraint": contract_constraint,
+        "discount_pct": int(discount_rate * 100),
+        "discount_amount_monthly": monthly_total - monthly_total_discounted,
+        "discount_amount_yearly": yearly_total - yearly_total_discounted,
     }
 
     offer_data["totals_raw"] = raw_totals
-    offer_data["totals"] = {k: fmt_ch(v) for k, v in raw_totals.items()}
+    offer_data["totals"] = {k: fmt_ch(v) if isinstance(v, (int, float)) else v for k, v in raw_totals.items()}
+
+    # Aggiungi info sulla pianificazione se presente
+    offer_data["pianificazione_label"] = selected_frequency_label
 
     return offer_data
 
@@ -544,11 +581,11 @@ def print_pdf_activemind(request):
         # 0) Salva dati prima di stampare
         save_data = data.get('data', {})
         save_data['recordIdTrattativa'] = recordid_deal
-        try:
-            process_save_activemind_data(save_data)
-        except Exception as e:
-            logger.error(f"Errore nel salvataggio prima della stampa: {str(e)}")
-            return JsonResponse({'error': f'Errore nel salvataggio preliminare: {str(e)}'}, status=500)
+        # try:
+        #     process_save_activemind_data(save_data)
+        # except Exception as e:
+        #     logger.error(f"Errore nel salvataggio prima della stampa: {str(e)}")
+        #     return JsonResponse({'error': f'Errore nel salvataggio preliminare: {str(e)}'}, status=500)
 
         # 1) ricostruzione offerta
         offer_data = build_offer_data(recordid_deal, save_data)
@@ -721,6 +758,20 @@ def get_system_assurance_activemind(request):
 
     return JsonResponse({"tiers": tiers})
 
+# Helper per le features (prodotti & servizi): 
+# se c'è "|", splitta esplicitamente le colonne.
+# Altrimenti, splitta per virgola e divide a metà la lista in due colonne.
+def parse_features(note_str):
+    if not note_str: return []
+    
+    if "|" in note_str:
+        return [[f.strip() for f in col.split(",") if f.strip()] for col in note_str.split("|")]
+    else:
+        items = [f.strip() for f in note_str.split(",") if f.strip()]
+        if not items: return []
+        mid = (len(items) + 1) // 2
+        return [items[:mid], items[mid:]]
+
 def get_services_activemind(request):
     """
     Restituisce i servizi ActiveMind:
@@ -762,11 +813,12 @@ def get_services_activemind(request):
                 "total": 0,
                 "selected": False,
                 "icon": "Server",
-                "features": [f.strip() for f in note.split(",")] if note else []
+                "features": parse_features(note)
             }
 
         # 2️⃣ Recupero quantità dalla dealline (Manutenzione servizi)
         quantities_map = {}
+        custom_prices = {}
 
         with connection.cursor() as cursor:
             cursor.execute("""
@@ -788,21 +840,20 @@ def get_services_activemind(request):
             for entry in raw.split(","):
                 if ": qta." not in entry:
                     continue
-                name, qty = entry.split(": qta.", 1)
+                name, qty_and_price = entry.split(": qta.", 1)
+                qty, price = qty_and_price.split("- price: ", 1)
                 quantities_map[name.strip().lower()] = int(qty.strip())
+                if price:
+                    custom_prices[name.strip().lower()] = float(price.strip())
 
         # 3️⃣ Calcolo quantità, totale e selected
         for key, s in services_dict.items():
             qty = quantities_map.get(key, 0)
-            unit_price = s["unitPrice"]
+            unit_price = custom_prices.get(key, s["unitPrice"])
 
             total = qty * unit_price
 
-            # Sconto speciale clientPC
-            if s["id"] == "clientPC" and qty > 1:
-                discount = 1 - (qty - 1) / 100
-                total *= discount
-
+            s["unitPrice"] = unit_price
             s["quantity"] = qty
             s["total"] = round(total, 2)
             s["selected"] = qty > 0
@@ -867,6 +918,7 @@ def get_products_activemind(request):
     }
 
     # 3️⃣ Costruzione dinamica categorie + servizi
+
     for recordid_, name, description, note, price, cost, subcategory in db_products:
         if not subcategory or subcategory in excluded_subcategories:
             continue
@@ -879,7 +931,7 @@ def get_products_activemind(request):
                 "services": []
             }
 
-        features = [f.strip() for f in note.split(",")] if note else []
+        features = parse_features(note)
         quantity = quantity_map.get(recordid_, 0)
         frequency = frequency_map.get(recordid_, "")
 

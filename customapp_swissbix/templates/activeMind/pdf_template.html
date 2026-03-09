@@ -198,8 +198,13 @@
         font-size: 11pt;
       }
 
+      .pricing-table thead {
+        display: table-header-group;
+      }
+
       tr {
         page-break-inside: avoid;
+        break-inside: avoid;
       }
 
       .pricing-table th,
@@ -219,7 +224,8 @@
         font-weight: bold;
       }
 
-      .total-section {
+      .total-section-title, .section-title {
+        page-break-after: avoid;
       }
 
       .total-section-title {
@@ -333,6 +339,7 @@
         padding: 0;
         background-color: #f0f0f0;
         border-bottom: 2px solid #555 !important;
+        height: 1px; /* Trucco CSS: permette al contenuto interno di definire l'altezza */
       }
 
       .vertical-header-content {
@@ -855,6 +862,18 @@
     {% if offer_data.services or offer_data.products %}
     <div class="page total-section page-break">
       <h1 class="total-section-title">Definizione Economica</h1>
+
+      {% if offer_data.frequencies %}
+      {% for freq in offer_data.frequencies %}
+      {% if freq.selected %}
+      <div style="background-color: #f8f8f8; border-left: 4px solid #dc2626; padding: 10px; margin-bottom: 20px;">
+        <span style="font-weight: bold; text-transform: uppercase; color: #555; font-size: 10pt;">Frequenza Interventi:</span>
+        <span style="font-size: 12pt; margin-left: 10px;"><strong>{{ freq.label }}</strong> (Programmato anticipatamente)</span>
+      </div>  
+      {% endif %}
+      {% endfor %}
+      {% endif %}
+
       <table class="pricing-table">
         <tr style="border-bottom: 2px solid #555">
           <th></th>
@@ -883,12 +902,52 @@
         </tr>
         {% endfor %}
         <tr style="border-bottom: 2px solid #555; border: 0px 0px 2px 0px; background-color: #ffffff;">
-          <th style="border-bottom: 2px solid #555 !important; height: 30px; background-color: #ffffff; border-right: 0px; border-left: 0px;"></th>
-          <th style="background-color: #ffffff; border-right: 0px; border-left: 0px;"></th>
-          <th style="background-color: #ffffff; border-right: 0px; border-left: 0px;"></th>
-          <th style="background-color: #ffffff; border-right: 0px; border-left: 0px;"></th>
-          <th style="background-color: #ffffff; border-right: 0px; border-left: 0px;"></th>
+          <th
+            style="
+              height: 15px;
+              background-color: #ffffff;
+              border-right: 0px;
+              border-left: 0px;
+              border-top: 2px solid #555 !important;
+              border-bottom: 2px solid #555 !important;
+            "
+            colspan="5"
+          ></th>
         </tr>
+
+        <!-- {% if offer_data.frequencies %}
+        <tr style="border-bottom: 2px solid #555 !important">
+          <td class="vertical-header">
+            <div class="vertical-header-content" style="font-size: 8pt">
+              PIANIFICAZIONE
+            </div>
+          </td>
+          {% for freq in offer_data.frequencies %} {% if freq.selected %}
+          <td colspan="4">
+            Pianificazione Intervento: <strong>{{ freq.label }}</strong>
+          </td>
+          {% endif %} {% endfor %}
+        </tr>
+        <tr
+          style="
+            border-bottom: 2px solid #555;
+            border: 0px 0px 2px 0px;
+            background-color: #ffffff;
+          "
+        >
+          <th
+            style="
+              height: 15px;
+              background-color: #ffffff;
+              border-right: 0px;
+              border-left: 0px;
+              border-top: 2px solid #555 !important;
+              border-bottom: 2px solid #555 !important;
+            "
+            colspan="5"
+          ></th>
+        </tr>
+        {% endif %}  -->
         {% for product in context_summary_products %}
         <tr {% if forloop.last %}style="border-bottom: 2px solid #555 !important"{% endif %}>
           {% if forloop.first %}
@@ -932,22 +991,75 @@
         </tr>
         {% endfor %} 
         {% if offer_data.totals_raw.monthly > 0 %}
-        <tr style="background-color: #dc2626; color: white; font-weight: bold">
-          <td colspan="4">TOTALE MENSILE (ricorrente)</td>
+        <tr style="background-color: #f0f0f0; font-weight: bold; border-bottom: 2px solid #555 !important">
+          <td colspan="4">TOTALE MENSILE (ricorrente base)</td>
           <td class="price">
             CHF {{ offer_data.totals.monthly }}.-
-            <br />
+            <!-- <br />
             <span style="font-weight: normal; font-size: 10pt">
               CHF {{ offer_data.totals.monthly_annual }}.- /anno
-            </span>
+            </span> -->
           </td>
         </tr>
         {% endif %} {% if offer_data.totals_raw.yearly > 0 %}
-        <tr style="background-color: #dc2626; color: white; font-weight: bold">
-          <td colspan="4">TOTALE ANNUALE (ricorrente)</td>
+        <tr style="background-color: #f0f0f0; font-weight: bold; border-bottom: 2px solid #555 !important">
+          <td colspan="4">TOTALE ANNUALE (ricorrente base)</td>
           <td class="price">CHF {{ offer_data.totals.yearly }}.-</td>
         </tr>
         {% endif %}
+
+        <!-- <tr style="background-color: #ffffff">
+          <th
+            style="
+              height: 15px;
+              background-color: #ffffff;
+              border-right: 0px;
+              border-left: 0px;
+              border-top: 2px solid #555 !important;
+              border-bottom: 2px solid #555 !important;
+            "
+            colspan="5"
+          ></th>
+        </tr> -->
+
+        <tr>
+          <td colspan="4">
+            Sconto Fedeltà 
+            {% if offer_data.totals_raw.discount_pct > 0 %}
+            <strong>{{ offer_data.totals_raw.discount_pct }}%</strong>
+            {% endif %}
+            (Vincolo <strong>{{ offer_data.totals_raw.contract_constraint }}</strong> mesi):
+          </td>
+          <td class="price" style="color: #dc2626;">- CHF {{ offer_data.totals_raw.discount_amount_monthly|floatformat:0 }}.-</td>
+        </tr>
+
+        {% if offer_data.totals_raw.monthly > 0 %}
+        <tr
+          style="
+            background-color: #dc2626;
+            color: white;
+            font-weight: bold;
+          "
+        >
+          <td colspan="4">TOTALE MENSILE EFFETTIVO</td>
+          <td class="price">
+            CHF {{ offer_data.totals.monthly_discounted }}.-
+          </td>
+        </tr>
+        {% endif %} {% if offer_data.totals_raw.yearly > 0 %}
+        <tr
+          style="
+            background-color: #dc2626;
+            color: white;
+            font-weight: bold;
+          "
+        >
+          <td colspan="4">TOTALE ANNUALE EFFETTIVO</td>
+          <td class="price">CHF {{ offer_data.totals.yearly_discounted }}.-</td>
+        </tr>
+        {% endif %}
+
+        
 
         <!-- <tr style="background-color: #dc2626; color: white; font-weight: bold">
           <td colspan="4">TOTALE COMPLESSIVO</td>
