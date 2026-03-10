@@ -1649,6 +1649,10 @@ def generate_timesheet_pdf(recordid, signature_path=None):
         row = rows[0]
         for k in row: row[k] = row[k] or ''
 
+        # get nr. deal
+        nr_deal = HelpderDB.sql_query_value(f"SELECT iddeal FROM user_project WHERE recordid_=%s", 'iddeal', {rows[0]['recordidproject_']})
+        row['nr_deal'] = nr_deal
+
         import pathlib
         firma_path = None
         if signature_path:
