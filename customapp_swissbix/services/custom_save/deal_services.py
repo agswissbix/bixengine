@@ -55,10 +55,9 @@ class DealService:
 
     @staticmethod
     def _evaluate_fixedprice(deal_record: UserRecord, dealline_records: list, recordid: str):
+        fixedprice_product = '00000000000000000000000000000180'
+        found_dl = next((d for d in dealline_records if d.get('recordidproduct_') == fixedprice_product and d.get('deleted_') == 'N'), None)
         if deal_record.values.get('fixedprice') == 'Si':
-            fixedprice_product = '00000000000000000000000000000180'
-            found_dl = next((d for d in dealline_records if d.get('recordidproduct_') == fixedprice_product and d.get('deleted_') == 'N'), None)
-            
             if found_dl:
                 if (found_dl.get('price') or 0) <= 0:
                     dl_rec = UserRecord('dealline', found_dl['recordid_'])
@@ -71,6 +70,11 @@ class DealService:
                 dl_rec.values['name'] = 'Installazione e configurazione a progetto'
                 dl_rec.values['price'] = 10000
                 dl_rec.values['quantity'] = 1
+                dl_rec.save()
+        else:
+            if found_dl:
+                dl_rec = UserRecord('dealline', found_dl['recordid_'])
+                dl_rec.values['deleted_'] = 'Y'
                 dl_rec.save()
 
     @staticmethod
@@ -190,9 +194,8 @@ class DealService:
         deal_price = deal_record.values.get('amount') or 0
         deal_expectedcost = deal_record.values.get('expectedcost') or 0
         
-        if len(dealline_records) > 0: 
-            deal_price = totals['deal_price_sum']
-            deal_expectedcost = totals['deal_expectedcost_sum']
+        deal_price = totals['deal_price_sum']
+        deal_expectedcost = totals['deal_expectedcost_sum']
             
         deal_expectedmargin = deal_price - deal_expectedcost
         
