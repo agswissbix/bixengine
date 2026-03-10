@@ -841,10 +841,12 @@ def get_services_activemind(request):
                 if ": qta." not in entry:
                     continue
                 name, qty_and_price = entry.split(": qta.", 1)
-                qty, price = qty_and_price.split("- price: ", 1)
-                quantities_map[name.strip().lower()] = int(qty.strip())
-                if price:
+                if "- price: " in qty_and_price:
+                    qty, price = qty_and_price.split("- price: ", 1)
                     custom_prices[name.strip().lower()] = float(price.strip())
+                else:
+                    qty = qty_and_price
+                quantities_map[name.strip().lower()] = int(qty.strip())
 
         # 3️⃣ Calcolo quantità, totale e selected
         for key, s in services_dict.items():
@@ -953,7 +955,10 @@ def get_products_activemind(request):
         if unitprice:
             if frequency == "Annuale":
                 unitprice = unitprice / 12
-            price = unitprice / (1 - (discount / 100))
+            if discount:
+                price = unitprice / (1 - (discount / 100))
+            else:
+                price = unitprice
 
         matched_icon = next(
             (icon for key, icon in icon_map.items() if key.lower() in name.lower()),
