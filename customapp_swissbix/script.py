@@ -1,3 +1,4 @@
+from customapp_swissbix.customfunc import save_record_fields
 from datetime import date, datetime
 import hashlib
 import hmac
@@ -2613,6 +2614,7 @@ def get_timesheet_initial_data(request):
                     'tempoTrasferta': safe_time(raw_ts.get('traveltime')),
                     'noteInterne': raw_ts.get('internalnotes', ''),
                     'notaRifiuto': raw_ts.get('decline_note', ''),
+                    'printTravel': raw_ts.get('print_travel', ''),
                     'azienda': azienda_obj,
                     'progetto': progetto_obj,
                     'ticket': ticket_obj,
@@ -2735,6 +2737,11 @@ def save_timesheet(request):
         traveltime = data.get('tempo_trasferta', '00:00')
         timesheet_record.values['worktime'] = worktime
         timesheet_record.values['traveltime'] = traveltime
+
+        # TODO usare funzone save globale
+        # timesheet_record.save()
+        # new_timesheet_id = timesheet_record.recordid
+        # save_record_fields('timesheet', new_timesheet_id)
 
         # --- 2. LOGICA DI BUSINESS E CALCOLI ---
         company_record = UserRecord('company', timesheet_record.values['recordidcompany_'])
