@@ -861,7 +861,7 @@ class UserRecord:
 
             if not Helper.isempty(field['lookuptableid']):
                 fieldtype='Categoria' 
-                items = SysLookupTableItem.objects.filter(lookuptableid=field['lookuptableid']).order_by('itemorder').values()
+                items = SysLookupTableItem.objects.filter(lookuptableid=field['lookuptableid']).order_by(F('itemorder').asc(nulls_last=True), 'itemcode').values()
                 insert_field['lookupitems']=list(items)
                 if field['fieldtypewebid'] == 'multiselect':
                     insert_field['fieldtypewebid']='multiselect'

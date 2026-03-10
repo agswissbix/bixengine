@@ -4,7 +4,7 @@ from django.utils import timezone
 from django.db import connection
 
 
-DISABLE_SCRIPT = False
+DISABLE_SCRIPT = True
 
 INCLUDE_FIELDS = { "commonapp.UserDeadline"}
 INDIFFERENT_FIELDS = {"commonapp.UserJobStatus","commonapp.UserSchedulerLog","commonapp.UserMonitoring","commonapp.UserEmail","commonapp.UserChart", "commonapp.UserSystemLog","commonapp.UserEvents", "commonapp.UserUserLog" }
