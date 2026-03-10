@@ -16,6 +16,9 @@
 
       @page {
         size: A4;
+        margin: 1.5cm;
+      }
+      @page :first {
         margin: 0;
       }
 
@@ -27,7 +30,7 @@
 
       body {
         font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
-        font-size: 11pt;
+        font-size: 12pt;
         line-height: 1.2;
         color: #333;
       }
@@ -37,6 +40,8 @@
         position: relative;
         width: 210mm;
         height: 297mm;
+        margin: 0;
+        padding: 0;
         overflow: hidden;
         page-break-after: always;
       }
@@ -88,9 +93,7 @@
       /* ==================== PAGINE NORMALI ==================== */
       .page {
         position: relative;
-        width: 210mm;
-        min-height: 297mm;
-        padding: 1.5cm;
+        width: 100%;
         box-sizing: border-box;
       }
 
@@ -198,8 +201,13 @@
         font-size: 11pt;
       }
 
-      tr {
+      .pricing-table thead {
+        display: table-header-group;
+      }
+
+      tr, tbody {
         page-break-inside: avoid;
+        break-inside: avoid;
       }
 
       .pricing-table th,
@@ -219,7 +227,8 @@
         font-weight: bold;
       }
 
-      .total-section {
+      .total-section-title, .section-title {
+        page-break-after: avoid;
       }
 
       .total-section-title {
@@ -241,7 +250,6 @@
 
       .signature-section {
         margin-top: 30px;
-        padding: 0 1.5cm;
       }
 
       .signature-section p {
@@ -260,13 +268,12 @@
         border-bottom: 1px solid #333;
         padding-bottom: 50px;
         margin-left: 400px;
-        font-size: 13pt;
+        font-size: 12pt;
       }
 
       .conditions {
         font-size: 11pt;
         line-height: 1.5;
-        padding: 1.5cm;
       }
 
       .conditions h4 {
@@ -333,6 +340,7 @@
         padding: 0;
         background-color: #f0f0f0;
         border-bottom: 2px solid #555 !important;
+        height: 1px; /* Trucco CSS: permette al contenuto interno di definire l'altezza */
       }
 
       .vertical-header-content {
@@ -490,7 +498,7 @@
               </td>
               <td style="text-align: center">1</td>
               <td class="price">
-                CHF {{ tier.price|default:"0.00"|floatformat:0 }}.-
+                CHF {{ tier.price|default:"0.00"|floatformat:0 }}.--
               </td>
             </tr>
             {% endif %} {% endfor %}
@@ -601,23 +609,29 @@
             <th>Costo totale</th>
           </tr>
           <tr>
-            <td>CHF {{ product.unitPrice|default:"0.00"|floatformat:0 }}.-</td>
+            <td>CHF {{ product.unitPrice|default:"0.00"|floatformat:0 }}.--</td>
             <td style="text-align: center">
               {{ product.quantity|floatformat:0 }}
             </td>
             <td class="price">
-              CHF {{ product.total|default:"0.00"|floatformat:0 }}.-
+              CHF {{ product.total|default:"0.00"|floatformat:0 }}.--
             </td>
           </tr>
         </table>
 
         {% if product.features %}
         <div class="service-details">
-          <ul class="columns-2">
-            {% for feature in product.features %}
-            <li>{{ feature }}</li>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px;">
+            {% for col in product.features %}
+            <div>
+              <ul style="margin: 0; padding-left: 25px; list-style-type: square;">
+                {% for feature in col %}
+                <li>{{ feature }}</li>
+                {% endfor %}
+              </ul>
+            </div>
             {% endfor %}
-          </ul>
+          </div>
         </div>
         {% endif %}
       </div>
@@ -717,21 +731,27 @@
             <th>Costo totale</th>
           </tr>
           <tr>
-            <td>CHF {{ service.unitPrice|default:"0.00"|floatformat:0 }}.-</td>
+            <td>CHF {{ service.unitPrice|default:"0.00"|floatformat:0 }}.--</td>
             <td style="text-align: center">{{ service.quantity }}</td>
             <td class="price">
-              CHF {{ service.total|default:"0.00"|floatformat:0 }}.-
+              CHF {{ service.total|default:"0.00"|floatformat:0 }}.--
             </td>
           </tr>
         </table>
 
         {% if service.features %}
         <div class="service-details">
-          <ul class="columns-2">
-            {% for feature in service.features %}
-            <li>{{ feature }}</li>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px;">
+            {% for col in service.features %}
+            <div>
+              <ul style="margin: 0; padding-left: 25px; list-style-type: square;">
+                {% for feature in col %}
+                <li>{{ feature }}</li>
+                {% endfor %}
+              </ul>
+            </div>
             {% endfor %}
-          </ul>
+          </div>
         </div>
         {% endif %}
       </div>
@@ -751,7 +771,7 @@
           <h3><strong>Pianificazione intervento</strong></h3>
           <p><strong>{{ freq.label }}</strong> programmato anticipatamente</p>
           <!-- <p style="text-align: right; font-weight: bold">
-            CHF {{freq.price|floatformat:0}}.-
+             {{freq.price|floatformat:0}}.--
           </p> -->
           <br />
           <h3><strong>Intervento in loco programmato</strong></h3>
@@ -822,7 +842,7 @@
             <tr>
               <td>{{ option.label }}</td>
               <td class="price">
-                CHF {{ option.price|default:"0.00"|floatformat:0 }}.-
+                CHF {{ option.price|default:"0.00"|floatformat:0 }}.--
               </td>
             </tr>
           </table>
@@ -855,104 +875,196 @@
     {% if offer_data.services or offer_data.products %}
     <div class="page total-section page-break">
       <h1 class="total-section-title">Definizione Economica</h1>
+
+      {% if offer_data.frequencies %}
+      {% for freq in offer_data.frequencies %}
+      {% if freq.selected %}
+      <div style="background-color: #f8f8f8; border-left: 4px solid #dc2626; padding: 10px; margin-bottom: 20px;">
+        <span style="font-weight: bold; text-transform: uppercase; color: #555; font-size: 10pt;">Frequenza Interventi:</span>
+        <span style="font-size: 12pt; margin-left: 10px;"><strong>{{ freq.label }}</strong> (Programmato anticipatamente)</span>
+      </div>  
+      {% endif %}
+      {% endfor %}
+      {% endif %}
+
       <table class="pricing-table">
-        <tr style="border-bottom: 2px solid #555">
-          <th></th>
-          <th>Descrizione</th>
-          <th>Qta.</th>
-          <th>Prezzo unitario</th>
-          <th>Prezzo totale</th>
-        </tr>
-
-
-        {% for monte in context_summary_monte_ore %}
-        <tr {% if forloop.last %}style="border-bottom: 2px solid #555 !important"{% endif %}>
-          {% if forloop.first %}
-          <td rowspan="{{ context_summary_monte_ore|length }}" class="vertical-header">
-            <div class="vertical-header-content">MONTE ORE</div>
-          </td>
-          {% endif %}
-          <td>{{ monte.label }}</td>
-          <td style="text-align: center">1</td>
-          <td class="price">
-            CHF {{ monte.price|default:"0.00"|floatformat:0 }}.-
-          </td>
-          <td class="price">
-            CHF {{ monte.price|default:"0.00"|floatformat:0 }}.-
-          </td>
-        </tr>
-        {% endfor %}
-        <tr style="border-bottom: 2px solid #555; border: 0px 0px 2px 0px; background-color: #ffffff;">
-          <th style="border-bottom: 2px solid #555 !important; height: 30px; background-color: #ffffff; border-right: 0px; border-left: 0px;"></th>
-          <th style="background-color: #ffffff; border-right: 0px; border-left: 0px;"></th>
-          <th style="background-color: #ffffff; border-right: 0px; border-left: 0px;"></th>
-          <th style="background-color: #ffffff; border-right: 0px; border-left: 0px;"></th>
-          <th style="background-color: #ffffff; border-right: 0px; border-left: 0px;"></th>
-        </tr>
-        {% for product in context_summary_products %}
-        <tr {% if forloop.last %}style="border-bottom: 2px solid #555 !important"{% endif %}>
-          {% if forloop.first %}
-          <td rowspan="{{ context_summary_products|length }}" class="vertical-header">
-            <div class="vertical-header-content">PRODOTTI</div>
-          </td>
-          {% endif %}
-          <td>
-            {{ product.title }} {% if product.billingType == 'yearly' %}
-            <span style="font-size: 9pt; color: #555">(Fatt. Annuale)</span>
-            {% else %}
-            <span style="font-size: 9pt; color: #555">(Fatt. Mensile)</span>
+        <thead>
+          <tr style="border-bottom: 2px solid #555">
+            <th></th>
+            <th>Descrizione</th>
+            <th>Qta.</th>
+            <th style="max-width: 80px; white-space: normal; line-height: 1.2;">Prezzo unitario</th>
+            <th>Prezzo totale</th>
+          </tr>
+        </thead>
+        <tbody style="page-break-inside: avoid;">
+          {% for product in context_summary_products %}
+          <tr {% if forloop.last %}style="border-bottom: 2px solid #555 !important"{% endif %}>
+            {% if forloop.first %}
+            <td rowspan="{{ context_summary_products|length }}" class="vertical-header">
+              <div class="vertical-header-content">PRODOTTI</div>
+            </td>
             {% endif %}
-          </td>
-          <td style="text-align: center">
-            {{ product.quantity|floatformat:0 }}
-          </td>
-          <td class="price">
-            CHF {{ product.unitPrice|default:"0.00"|floatformat:0 }}.-
-          </td>
-          <td class="price">
-            CHF {{ product.total|default:"0.00"|floatformat:0 }}.-
-          </td>
-        </tr>
-        {% endfor %}
-        {% for service in context_summary_services %} 
-        <tr {% if forloop.last %}style="border-bottom: 2px solid #555 !important"{% endif %}>
-          {% if forloop.first %}
-          <td rowspan="{{ context_summary_services|length }}" class="vertical-header">
-            <div class="vertical-header-content">SERVIZI</div>
-          </td>
-          {% endif %}
-          <td>{{ service.title }}</td>
-          <td style="text-align: center">{{ service.quantity }}</td>
-          <td class="price">
-            CHF {{ service.unitPrice|default:"0.00"|floatformat:0 }}.-
-          </td>
-          <td class="price">
-            CHF {{ service.total|default:"0.00"|floatformat:0 }}.-
-          </td>
-        </tr>
-        {% endfor %} 
-        {% if offer_data.totals_raw.monthly > 0 %}
-        <tr style="background-color: #dc2626; color: white; font-weight: bold">
-          <td colspan="4">TOTALE MENSILE (ricorrente)</td>
-          <td class="price">
-            CHF {{ offer_data.totals.monthly }}.-
-            <br />
-            <span style="font-weight: normal; font-size: 10pt">
-              CHF {{ offer_data.totals.monthly_annual }}.- /anno
-            </span>
-          </td>
-        </tr>
-        {% endif %} {% if offer_data.totals_raw.yearly > 0 %}
-        <tr style="background-color: #dc2626; color: white; font-weight: bold">
-          <td colspan="4">TOTALE ANNUALE (ricorrente)</td>
-          <td class="price">CHF {{ offer_data.totals.yearly }}.-</td>
-        </tr>
-        {% endif %}
+            <td>
+              {{ product.title }} {% if product.billingType == 'yearly' %}
+              <span style="font-size: 9pt; color: #555">(Fatt. Annuale)</span>
+              {% else %}
+              <span style="font-size: 9pt; color: #555">(Fatt. Mensile)</span>
+              {% endif %}
+            </td>
+            <td style="text-align: center">
+              {{ product.quantity|floatformat:0 }}
+            </td>
+            <td class="price">
+              CHF {{ product.unitPrice|default:"0.00"|floatformat:0 }}.--
+            </td>
+            <td class="price">
+              CHF {{ product.total|default:"0.00"|floatformat:0 }}.--
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tbody style="page-break-inside: avoid;">
+          {% for service in context_summary_services %} 
+          <tr {% if forloop.last %}style="border-bottom: 2px solid #555 !important"{% endif %}>
+            {% if forloop.first %}
+            <td rowspan="{{ context_summary_services|length }}" class="vertical-header">
+              <div class="vertical-header-content">SERVIZI</div>
+            </td>
+            {% endif %}
+            <td>{{ service.title }}</td>
+            <td style="text-align: center">{{ service.quantity }}</td>
+            <td class="price">
+              CHF {{ service.unitPrice|default:"0.00"|floatformat:0 }}.--
+            </td>
+            <td class="price">
+              CHF {{ service.total|default:"0.00"|floatformat:0 }}.--
+            </td>
+          </tr>
+          {% endfor %} 
+          {% if offer_data.totals_raw.monthly > 0 %}
+          <tr style="background-color: #f0f0f0; font-weight: bold;">
+            <td colspan="4">Valore Mensile</td>
+            <td class="price">
+              CHF {{ offer_data.totals.monthly }}.--
+              <!-- <br />
+              <span style="font-weight: normal; font-size: 10pt">
+                 {{ offer_data.totals.monthly_annual }}.-- /anno
+              </span> -->
+            </td>
+          </tr>
+          {% endif %} 
+          <!-- {% if offer_data.totals_raw.yearly > 0 %}
+          <tr style="background-color: #f0f0f0; font-weight: bold; border-bottom: 2px solid #555 !important">
+            <td colspan="4">TOTALE ANNUALE (ricorrente base)</td>
+            <td class="price"> {{ offer_data.totals.yearly }}.--</td>
+          </tr>
+          {% endif %} -->
+        </tbody>
 
-        <!-- <tr style="background-color: #dc2626; color: white; font-weight: bold">
-          <td colspan="4">TOTALE COMPLESSIVO</td>
-          <td class="price">CHF {{ offer_data.totals.grand_total }}.-</td>
+        <!-- <tr style="background-color: #ffffff">
+          <th
+            style="
+              height: 15px;
+              background-color: #ffffff;
+              border-right: 0px;
+              border-left: 0px;
+              border-top: 2px solid #555 !important;
+              border-bottom: 2px solid #555 !important;
+            "
+            colspan="5"
+          ></th>
         </tr> -->
+
+        <tbody style="page-break-inside: avoid;">
+          <tr>
+            <td colspan="4">
+              Sconto Fedeltà 
+              {% if offer_data.totals_raw.discount_pct > 0 %}
+              <strong>{{ offer_data.totals_raw.discount_pct }}%</strong>
+              {% endif %}
+              (Vincolo <strong>{{ offer_data.totals_raw.contract_constraint }}</strong> mesi):
+            </td>
+            <td class="price" style="color: #dc2626;">- CHF {{ offer_data.totals_raw.discount_amount_monthly|floatformat:0 }}.--</td>
+          </tr>
+
+          {% if offer_data.totals_raw.monthly > 0 %}
+          <tr
+            style="
+              background-color: #dc2626;
+              color: white;
+              font-weight: bold;
+            "
+          >
+            <td colspan="4">TOTALE MENSILE EFFETTIVO (PRODOTTI E SERVIZI)</td>
+            <td class="price">
+              CHF {{ offer_data.totals.monthly_discounted }}.--
+              <br />
+              <span style="font-weight: normal; font-size: 10pt">
+                CHF {{ offer_data.totals.yearly_discounted }}.-- /anno
+              </span>
+            </td>
+          </tr>
+          {% endif %} 
+          <!-- {% if offer_data.totals_raw.yearly > 0 %}
+          <tr
+            style="
+              background-color: #dc2626;
+              color: white;
+              font-weight: bold;
+            "
+          >
+            <td colspan="4">TOTALE ANNUALE EFFETTIVO</td>
+            <td class="price"> {{ offer_data.totals.yearly_discounted }}.--</td>
+          </tr>
+          {% endif %} -->
+
+          
+
+          <!-- <tr style="background-color: #dc2626; color: white; font-weight: bold">
+            <td colspan="4">TOTALE COMPLESSIVO</td>
+            <td class="price"> {{ offer_data.totals.grand_total }}.--</td>
+          </tr> -->
+
+          <tr style="border-bottom: 2px solid #555; border: 0px 0px 2px 0px; background-color: #ffffff;">
+            <td
+              style="
+                height: 15px;
+                background-color: #ffffff;
+                border-right: 0px;
+                border-left: 0px;
+                border-bottom: 2px solid #555 !important;
+              "
+              colspan="5"
+            ></td>
+          </tr>
+        </tbody>
+        
+        <tbody style="page-break-inside: avoid;">
+          {% for monte in context_summary_monte_ore %}
+          <tr>
+            {% if forloop.first %}
+            <td rowspan="{{ context_summary_monte_ore|length }}" class="vertical-header" style="border-bottom: 0px !important">
+              <div class="vertical-header-content">MONTE ORE</div>
+            </td>
+            {% endif %}
+            <td>{{ monte.label }}</td>
+            <td style="text-align: center">1</td>
+            <td class="price">
+              CHF {{ monte.price|default:"0.00"|floatformat:0 }}.--
+            </td>
+            <td class="price">
+              CHF {{ monte.price|default:"0.00"|floatformat:0 }}.--
+            </td>
+          </tr>
+          <tr style="background-color: #dc2626; color: white; font-weight: bold;">
+            <td colspan="4">TOTALE MONTE ORE (Una Tantum)</td>
+            <td class="price">
+              CHF {{ monte.price|default:"0.00"|floatformat:0 }}.--
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
       </table>
     </div>
     {% endif %}
@@ -1052,7 +1164,7 @@
         </li>
       </ul>
     </div>
-    <div class="conditions">
+    <div class="conditions page-break">
       <p><strong>PROTEZIONE DEI DATI E RISERVATEZZA</strong></p>
       <ul>
         <li>

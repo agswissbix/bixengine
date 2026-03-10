@@ -29,7 +29,7 @@ import qrcode
 import subprocess
 import shutil
 from docxtpl import DocxTemplate, RichText
-from customapp_swissbix.customfunc import save_record_fields
+from customapp_swissbix.customfunc import save_record_fields, delete_record
 from xhtml2pdf import pisa
 from playwright.sync_api import sync_playwright
 from types import SimpleNamespace
@@ -75,7 +75,7 @@ def process_save_activemind_data(data):
     # -------------------------------------------------
     # Helper Functions
     # -------------------------------------------------
-    def fetch_existing_dealline(recordid_deal, subcategory, name=None):
+    def fetch_existing_dealline(recordid_deal, subcategory, recordidproduct=None):
         query = """
             SELECT dl.recordid_
             FROM user_dealline dl
@@ -89,9 +89,9 @@ def process_save_activemind_data(data):
         """
         params = [recordid_deal, subcategory]
 
-        if name is not None:
-            query += " AND dl.name = %s"
-            params.append(name)
+        if recordidproduct is not None:
+            query += " AND dl.recordidproduct_ = %s"
+            params.append(recordidproduct)
 
         query += " LIMIT 1"
 
@@ -111,7 +111,7 @@ def process_save_activemind_data(data):
         computed = Helper.compute_dealline_fields(record.values, UserRecord)
         record.values.update(computed)
         record.save()
-        save_record_fields('dealline', record.recordid)
+        # save_record_fields('dealline', record.recordid)
         return record.recordid
 
     def remove_dealline(recordid_dealline):
@@ -147,6 +147,20 @@ def process_save_activemind_data(data):
         remove_dealline(fetch_existing_dealline(recordid_deal, "system_assurance"))
 
     # -------------------------------------------------
+    # Estrarre constraint / calcolare sconto
+    # -------------------------------------------------
+    client_info = data.get('clientInfo', {})
+    contract_constraint = int(client_info.get('contractConstraint', 12))
+    
+    discount_percentage = 0
+    if contract_constraint == 24:
+        discount_percentage = 5
+    elif contract_constraint == 36:
+        discount_percentage = 10
+        
+    discount_rate = discount_percentage / 100.0
+
+    # -------------------------------------------------
     # SECTION 2 — Prodotti multipli
     # -------------------------------------------------
     for product_key, product_data in data.get('section2Products', {}).items():
@@ -160,21 +174,25 @@ def process_save_activemind_data(data):
         billing_type = product_data.get('billingType', 'monthly')
         name = product.values.get('name')
 
-        existing_id = fetch_existing_dealline(recordid_deal, product.values.get('subcategory', ''), name)
+        existing_id = fetch_existing_dealline(recordid_deal, product.values.get('subcategory', ''), product.recordid)
 
         if existing_id and quantity <= 0:
             remove_dealline(existing_id)
             continue
+
+        unitprice_discounted = unit_price * (1 - discount_rate)
 
         save_dealline({
             'recordid_': existing_id,
             'recordiddeal_': recordid_deal,
             'recordidproduct_': product.values.get('recordid_'),
             'name': name,
-            'unitprice': unit_price,
+            'unitprice': unitprice_discounted,
             'unitexpectedcost': unit_cost,
             'quantity': quantity,
-            'frequency': 'Annuale' if billing_type == 'yearly' else 'Mensile'
+            'frequency': 'Annuale' if billing_type == 'yearly' else 'Mensile',
+            'contractual_obligation': contract_constraint,
+            'discount': discount_percentage
         })
 
     # -------------------------------------------------
@@ -200,13 +218,8 @@ def process_save_activemind_data(data):
             if qty <= 0:
                 continue
 
-            name_parts.append(f"{title}: qta. {qty}")
+            name_parts.append(f"{title}: qta. {qty} - price: {unit_price}")
             service_total = qty * unit_price
-
-            # Sconto speciale solo per clientPC
-            if key == "clientPC" and qty > 1:
-                discount = 1 - (qty - 1) / 100
-                service_total *= discount
 
             total_price += service_total
             total_cost += qty * unit_cost
@@ -230,17 +243,21 @@ def process_save_activemind_data(data):
 
         # Check esistenza dealline
         existing_id = fetch_existing_dealline(recordid_deal, "services_maintenance")
+        
+        unitprice_discounted = total_price * (1 - discount_rate)
 
         save_dealline({
             'recordid_': existing_id,
             'recordiddeal_': recordid_deal,
             'recordidproduct_': product_id,
             'name': name_str,
-            'unitprice': total_price,
+            'unitprice': unitprice_discounted,
             'unitexpectedcost': total_cost,
             'quantity': 1,
             'intervention_frequency': frequency,
-            'frequency': 'Mensile'
+            'frequency': 'Mensile',
+            'contractual_obligation': contract_constraint,
+            'discount': discount_percentage
         })
 
     else:
@@ -284,8 +301,11 @@ def save_activemind(request):
     try:
         request_body = json.loads(request.body or "{}")
         data = request_body.get('data', {})
+        recordid_deal = data.get('recordIdTrattativa')
         
         process_save_activemind_data(data)
+
+        save_record_fields('deal', recordid_deal)
 
         return JsonResponse({'success': True, 'message': 'Dati ricevuti e processati con successo.'}, status=200)
 
@@ -417,6 +437,7 @@ def build_offer_data(recordid_deal, fe_data=None):
             if billing == "monthly":
                 monthly_total += total
             elif billing == "annual" or billing == "yearly":
+                monthly_total += total /12
                 yearly_total += total
 
     selected_frequency_label = None
@@ -426,7 +447,14 @@ def build_offer_data(recordid_deal, fe_data=None):
             break
 
     monthly_total += total_services
-    grand_total = total_services + total_products + total_monte_ore
+    
+    contract_constraint = fe_data.get("clientInfo", {}).get("contractConstraint", 12) if fe_data else 12
+    discount_rate = 0.10 if contract_constraint == 36 else 0.05 if contract_constraint == 24 else 0.0
+    
+    monthly_total_discounted = monthly_total * (1 - discount_rate)
+    yearly_total_discounted = monthly_total_discounted * 12
+
+    grand_total = (monthly_total_discounted * 12) + yearly_total_discounted + total_monte_ore + total_tiers
 
     from babel.numbers import format_decimal
     def fmt_ch(val):
@@ -439,19 +467,28 @@ def build_offer_data(recordid_deal, fe_data=None):
         "services": total_services,
         "products": total_products,
         "monthly": monthly_total,
+        "monthly_discounted": monthly_total_discounted,
         "monthly_annual": monthly_total * 12,
+        "monthly_annual_discounted": monthly_total_discounted * 12,
         "quarterly": quarterly_total,
         "quarterly_annual": quarterly_total * 4,
         "biannual": biannual_total,
         "biannual_annual": biannual_total * 2,
         "yearly": yearly_total,
+        "yearly_discounted": yearly_total_discounted,
         "frequencies": total_frequencies,
         "monte_ore": total_monte_ore,
         "grand_total": grand_total,
+        "contract_constraint": contract_constraint,
+        "discount_pct": int(discount_rate * 100),
+        "discount_amount_monthly": monthly_total - monthly_total_discounted,
     }
 
     offer_data["totals_raw"] = raw_totals
-    offer_data["totals"] = {k: fmt_ch(v) for k, v in raw_totals.items()}
+    offer_data["totals"] = {k: fmt_ch(v) if isinstance(v, (int, float)) else v for k, v in raw_totals.items()}
+
+    # Aggiungi info sulla pianificazione se presente
+    offer_data["pianificazione_label"] = selected_frequency_label
 
     return offer_data
 
@@ -721,6 +758,20 @@ def get_system_assurance_activemind(request):
 
     return JsonResponse({"tiers": tiers})
 
+# Helper per le features (prodotti & servizi): 
+# se c'è "|", splitta esplicitamente le colonne.
+# Altrimenti, splitta per virgola e divide a metà la lista in due colonne.
+def parse_features(note_str):
+    if not note_str: return []
+    
+    if "|" in note_str:
+        return [[f.strip() for f in col.split(",") if f.strip()] for col in note_str.split("|")]
+    else:
+        items = [f.strip() for f in note_str.split(",") if f.strip()]
+        if not items: return []
+        mid = (len(items) + 1) // 2
+        return [items[:mid], items[mid:]]
+
 def get_services_activemind(request):
     """
     Restituisce i servizi ActiveMind:
@@ -762,11 +813,12 @@ def get_services_activemind(request):
                 "total": 0,
                 "selected": False,
                 "icon": "Server",
-                "features": [f.strip() for f in note.split(",")] if note else []
+                "features": parse_features(note)
             }
 
         # 2️⃣ Recupero quantità dalla dealline (Manutenzione servizi)
         quantities_map = {}
+        custom_prices = {}
 
         with connection.cursor() as cursor:
             cursor.execute("""
@@ -788,21 +840,20 @@ def get_services_activemind(request):
             for entry in raw.split(","):
                 if ": qta." not in entry:
                     continue
-                name, qty = entry.split(": qta.", 1)
+                name, qty_and_price = entry.split(": qta.", 1)
+                qty, price = qty_and_price.split("- price: ", 1)
                 quantities_map[name.strip().lower()] = int(qty.strip())
+                if price:
+                    custom_prices[name.strip().lower()] = float(price.strip())
 
         # 3️⃣ Calcolo quantità, totale e selected
         for key, s in services_dict.items():
             qty = quantities_map.get(key, 0)
-            unit_price = s["unitPrice"]
+            unit_price = custom_prices.get(key, s["unitPrice"])
 
             total = qty * unit_price
 
-            # Sconto speciale clientPC
-            if s["id"] == "clientPC" and qty > 1:
-                discount = 1 - (qty - 1) / 100
-                total *= discount
-
+            s["unitPrice"] = unit_price
             s["quantity"] = qty
             s["total"] = round(total, 2)
             s["selected"] = qty > 0
@@ -848,7 +899,7 @@ def get_products_activemind(request):
 
         # 2️⃣ Quantità dalla trattativa
         cursor.execute("""
-            SELECT recordidproduct_, quantity, frequency
+            SELECT recordidproduct_, quantity, frequency, unitprice, discount
             FROM user_dealline
             WHERE recordiddeal_ = %s
               AND deleted_ = 'N'
@@ -857,6 +908,20 @@ def get_products_activemind(request):
 
     quantity_map = {row[0]: row[1] for row in deal_rows}
     frequency_map = {row[0]: row[2] for row in deal_rows}
+    unitprice_map = {row[0]: row[3] for row in deal_rows}
+    discount_map = {row[0]: row[4] for row in deal_rows}
+
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT contractual_obligation, discount
+            FROM user_dealline
+            WHERE recordiddeal_ = %s
+              AND deleted_ = 'N'
+            LIMIT 1
+        """, [recordid_deal])
+        contract_row = cursor.fetchone()
+        contract_constraint = contract_row[0] if contract_row and contract_row[0] else 12
+        contract_discount = contract_row[1] if contract_row and contract_row[1] else 0
 
     excluded_subcategories = {
         'services',
@@ -867,6 +932,7 @@ def get_products_activemind(request):
     }
 
     # 3️⃣ Costruzione dinamica categorie + servizi
+
     for recordid_, name, description, note, price, cost, subcategory in db_products:
         if not subcategory or subcategory in excluded_subcategories:
             continue
@@ -879,9 +945,15 @@ def get_products_activemind(request):
                 "services": []
             }
 
-        features = [f.strip() for f in note.split(",")] if note else []
+        features = parse_features(note)
         quantity = quantity_map.get(recordid_, 0)
         frequency = frequency_map.get(recordid_, "")
+        unitprice = unitprice_map.get(recordid_, "")
+        discount = discount_map.get(recordid_, "")
+        if unitprice:
+            if frequency == "Annuale":
+                unitprice = unitprice / 12
+            price = unitprice / (1 - (discount / 100))
 
         matched_icon = next(
             (icon for key, icon in icon_map.items() if key.lower() in name.lower()),
@@ -894,10 +966,10 @@ def get_products_activemind(request):
             "description": description,
             "category": subcategory,
             "icon": matched_icon,
-            "unitPrice": float(price or 0),
+            "unitPrice": float(price or 0) *12 if frequency == "Annuale" else float(price or 0),
             "unitCost": float(cost or 0),
             "monthlyPrice": float(price) if price else None,
-            "yearlyPrice": float(price) * 10.5 if price else None,
+            "yearlyPrice": float(price) * 12 if price else None,
             "features": features,
             "quantity": quantity,
             "billingType": "yearly" if frequency == "Annuale" else "monthly",
@@ -906,10 +978,11 @@ def get_products_activemind(request):
         categories_dict[subcategory]["services"].append(service)
 
     # 4️⃣ Output finale
-    return JsonResponse(
-        {"servicesCategory": list(categories_dict.values())},
-        safe=False
-    )
+    return JsonResponse({
+        "servicesCategory": list(categories_dict.values()),
+        "contractConstraint": contract_constraint,
+        "discount": contract_discount
+    })
 
 
 
@@ -1575,6 +1648,10 @@ def generate_timesheet_pdf(recordid, signature_path=None):
 
         row = rows[0]
         for k in row: row[k] = row[k] or ''
+
+        # get nr. deal
+        nr_deal = HelpderDB.sql_query_value(f"SELECT iddeal FROM user_project WHERE recordid_=%s", 'iddeal', {rows[0]['recordidproject_']})
+        row['nr_deal'] = nr_deal
 
         import pathlib
         firma_path = None
@@ -2296,6 +2373,9 @@ def get_lenovo_intake_context(request):
             if 'lookupitems' in f and f['fieldtypewebid'] == 'multiselect':
                 accessories_lookup = f['lookupitems']
 
+            if 'lookupitems' in f and f['fieldid'] == 'pick_up':
+                pick_up_lookup = f['lookupitems']
+
         users_qs = SysUser.objects.filter(disabled='N').values('id', 'firstname', 'lastname')
         users_lookup = [{'userid': str(u['id']), 'firstname': u['firstname'], 'lastname': u['lastname']} for u in users_qs]
         logged_in_userid = Helper.get_userid(request) if request.user.is_authenticated else None
@@ -2304,11 +2384,49 @@ def get_lenovo_intake_context(request):
             'success': True,
             'field_settings': field_settings,
             'lookups': {
-                'accessories': accessories_lookup,
+                'accessories': accessories_lookup if 'accessories_lookup' in locals() else [],
+                'pick_up': pick_up_lookup if 'pick_up_lookup' in locals() else [],
                 'users': users_lookup
             },
             'logged_in_userid': str(logged_in_userid) if logged_in_userid else ""
         })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+import requests
+
+@csrf_exempt
+def get_lenovo_device_info(request):
+    """
+    Proxy to Lenovo's pcsupport API to fetch device data bypassing frontend CORS.
+    """
+    try:
+        # data = json.loads(request.body)
+        product_id = request.POST.get('product_id')
+        if not product_id:
+            return JsonResponse({'success': False, 'error': 'product_id needed'}, status=400)
+
+        s = requests.Session()
+        # Request home first to get possible required cookies (though it works for some just with POST, safer to do this)
+        s.get("https://pcsupport.lenovo.com/ch/it", timeout=5)
+
+        res = s.post(
+            "https://pcsupport.lenovo.com/ch/it/api/v4/upsell/redport/getIbaseInfo",
+            json={
+                "serialNumber": product_id,
+                "country": "ch",
+                "language": "it"
+            },
+            headers={
+                "Content-Type": "application/json",
+                "x-requested-with": "XMLHttpRequest"
+            },
+            timeout=10
+        )
+        if res.status_code == 200:
+            return JsonResponse({'success': True, 'data': res.json()})
+        else:
+            return JsonResponse({'success': False, 'error': 'Lenovo API failed'}, status=502)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
@@ -2333,7 +2451,10 @@ def get_lenovo_ticket(request):
             'recordid': rec.recordid,
             'name': rec.values.get('name'),
             'surname': rec.values.get('surname'),
-            'company_name': rec.values.get('company_name'),
+            'recordidcompany_': rec.values.get('recordidcompany_'),
+            'company_name': rec.fields.get('recordidcompany_')['convertedvalue'] if rec.fields.get('recordidcompany_')['convertedvalue'] else rec.values.get('company_name'),
+            'email': rec.values.get('email'),
+            'phone': rec.values.get('phone'),
             'serial': rec.values.get('serial'),
             'product_photo': rec.values.get('product_photo'),
             'problem_description': rec.values.get('problem_description'),
@@ -2354,6 +2475,7 @@ def get_lenovo_ticket(request):
             'auth_formatting': rec.values.get('auth_formatting'),
             'accessories': rec.values.get('accessories'),
             'technician': rec.values.get('technician'),
+            'pick_up': rec.values.get('pick_up'),
         }
         
         # Check for signature file (Fixed Path)
@@ -2362,6 +2484,23 @@ def get_lenovo_ticket(request):
             ticket_data['signatureUrl'] = sig_path
         else:
             ticket_data['signatureUrl'] = ""
+            
+        # Fetch Warranty History
+        warranties = HelpderDB.sql_query("SELECT * FROM user_warranty WHERE recordidticket_lenovo_ = %s ORDER BY start_date DESC", [ticket_id])
+        
+        warranty_history = []
+        for w in warranties:
+            warranty_history.append({
+                'name': w.get('name', ''),
+                'type': w.get('type', ''),
+                'level': w.get('level', ''),
+                'deliveryTypeName': w.get('delivery', ''),
+                'startDate': str(w.get('start_date', ''))[:10] if w.get('start_date') else '',
+                'endDate': str(w.get('end_date', ''))[:10] if w.get('end_date') else '',
+                'description': w.get('description', ''),
+                'remainingDays': w.get('remaining_days', 0),
+            })
+        ticket_data['warrantyHistory'] = warranty_history
         
         return JsonResponse({'success': True, 'ticket': ticket_data})
         
@@ -2387,7 +2526,7 @@ def save_lenovo_ticket(request):
             'address', 'place', 'brand', 'model', 'username', 'password',
             'warranty', 'warranty_type',
             'auth_factory_reset', 'request_quote', 'direct_repair', 'direct_repair_limit', 'auth_formatting', 'accessories',
-            'technician'
+            'technician', 'pick_up'
         ]
 
         rec = UserRecord('ticket_lenovo', recordid)
@@ -2401,7 +2540,7 @@ def save_lenovo_ticket(request):
         if not recordid:
             rec.values['reception_date'] = datetime.date.today().strftime('%Y-%m-%d')
             if 'status' not in fields:
-                rec.values['status'] = lookup_item.itemvalue
+                rec.values['status'] = lookup_item.itemcode
 
         for key in allowed_fields:
             if key in fields:
@@ -2411,7 +2550,29 @@ def save_lenovo_ticket(request):
 
         rec.save()
         
-        if str(new_status).lower() == str(lookup_item.itemvalue).lower() and str(old_status).lower() != str(lookup_item.itemvalue).lower():
+        warranty_history_raw = request.POST.get('warrantyHistory', '[]')
+        try:
+            warranty_history = json.loads(warranty_history_raw)
+        except json.JSONDecodeError:
+            warranty_history = []
+            
+        if warranty_history:
+            from commonapp.bixmodels.helper_db import HelpderDB
+            HelpderDB.sql_execute_safe("DELETE FROM user_warranty WHERE recordidticket_lenovo_ = %s", [rec.recordid])
+            for w in warranty_history:
+                w_rec = UserRecord('warranty')
+                w_rec.values['recordidticket_lenovo_'] = rec.recordid
+                w_rec.values['name'] = w.get('name', '')
+                w_rec.values['type'] = w.get('type', '')
+                w_rec.values['level'] = w.get('level', '')
+                w_rec.values['delivery'] = w.get('deliveryTypeName', '')
+                w_rec.values['start_date'] = w.get('startDate', '')
+                w_rec.values['end_date'] = w.get('endDate', '')
+                w_rec.values['description'] = w.get('description', '')
+                w_rec.values['remaining_days'] = w.get('remainingDays', 0)
+                w_rec.save()
+
+        if str(new_status).lower() == str(lookup_item.itemcode).lower() and str(old_status).lower() != str(lookup_item.itemcode).lower():
             from customapp_swissbix.services.custom_save.lenovo_ticket_services import LenovoTicketService
             LenovoTicketService.send_status_update_email(rec.recordid)
 
