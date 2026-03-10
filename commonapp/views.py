@@ -4926,7 +4926,7 @@ def get_table_active_tab(request):
           next((i for i in query_result if i['userid'] == 1), None))
 
     if not target:
-        table_tabs = ['Tabella', 'TabellaRaggruppata','Kanban', 'Pivot', 'Calendario', 'MatrixCalendar' , 'Planner' , 'Gallery']
+        table_tabs = ['Tabella']
     else:
         table_tabs=target['value']
         table_tabs=table_tabs.split(',')
@@ -4941,6 +4941,15 @@ def get_table_active_tab(request):
 
     if active_tab not in table_tabs:
         active_tab=table_tabs[0]
+
+    for k in range(len(table_tabs)):
+        if 'custom' == table_tabs[k].lower():
+            sql=f"SELECT * FROM sys_user_table_settings WHERE tableid='{tableid}' AND settingid='table_custom_tab_name'"
+            query_result=HelpderDB.sql_query_row(sql)
+            if query_result:
+                table_tabs[k]=query_result['value']
+                if active_tab.lower() == 'custom':
+                    active_tab = table_tabs[k]
 
     response = {
         "tableTabs": table_tabs,

@@ -152,17 +152,20 @@ class TableSettings:
                 {'name': 'Kanban', 'selected': True},
                 {'name': 'Pivot', 'selected': True},
                 {'name': 'Calendario', 'selected': True},
-                {'name': 'MatrixCalendar', 'selected': True},
-                {'name': 'Planner', 'selected': True},
                 {'name': 'Gallery', 'selected': True},
                 {'name': 'TabellaRaggruppata', 'selected': True},
+                {'name': 'Custom', 'selected': False},
             ],
             'value': 'Tabella'
         },
         'table_active_tab': {
             'type': 'select',
-            'options': ['Tabella', 'Kanban', 'Pivot', 'Calendario','MatrixCalendar', 'Planner' , 'Gallery', 'TabellaRaggruppata'],
+            'options': ['Tabella', 'Kanban', 'Pivot', 'Calendario','MatrixCalendar', 'Planner' , 'Gallery', 'TabellaRaggruppata', 'Custom'],
             'value': 'Tabella'
+        },
+        "table_custom_tab_name": {
+            "type": "parola",
+            "value": "Custom"
         },
         'table_planner_resource_field': {
             'type': 'select',
