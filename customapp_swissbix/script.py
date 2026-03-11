@@ -749,7 +749,6 @@ def update_deals():
         return {
             "updated_count": updated_deal_counter,
             "message": f"Sincronizzazione completata: {updated_deal_counter} trattative",
-            
         }, {
             "details": "\n".join(result_log)
         }

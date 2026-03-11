@@ -1,4 +1,5 @@
 import datetime
+import json
 import traceback
 import requests
 from django.utils import timezone
@@ -75,7 +76,7 @@ def on_task_success(task):
             "date": (task.stopped if task.stopped else timezone.now()).isoformat(),
             "function": str(task.func),
             "client": str(cliente_id),
-            "output": str(task.result),
+            "output": json.dumps(task.result, ensure_ascii=False),
         }
 
         # Calcola hash univoco per verifica di integrità
@@ -124,7 +125,7 @@ def create_scheduler_log(task):
     try:
         # Prepara i dati da inserire
         function_name = task.func
-        output = str(task.result) if task.result is not None else "Nessun output"
+        output = json.dumps(task.result, ensure_ascii=False) if task.result is not None else "Nessun output"
         lastupdate_date = task.stopped if task.stopped else timezone.now()
         lastupdate_date += datetime.timedelta(hours=2)
         
@@ -151,7 +152,7 @@ def create_monitoring(schedule, task):
     try:
         # Prepara i dati da inserire
         function_name = task.func
-        output = str(task.result) if task.result is not None else "Nessun output"
+        output = json.dumps(task.result, ensure_ascii=False) if task.result is not None else "Nessun output"
         lastupdate_date = task.stopped if task.stopped else timezone.now()
         lastupdate_date += datetime.timedelta(hours=2)
 
