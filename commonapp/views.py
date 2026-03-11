@@ -3416,6 +3416,16 @@ def duplicate_record(request):
     if not source_record.recordid:
         return JsonResponse({'error': 'Record not found'}, status=404)
 
+    # check permissions
+    userid = Helper.get_userid(request)
+
+    tablesettings = TableSettings(tableid, userid)
+    can_duplicate_settings = tablesettings.get_specific_settings('duplicate')['duplicate']
+    can_duplicate_with_linked_settings = tablesettings.get_specific_settings('duplicate_with_linked')['duplicate_with_linked']
+
+    if not tablesettings.has_permission_for_record(can_duplicate_settings):
+        return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
+
     excluded_fields = {
         'recordid_', 'creatorid_', 'creation_', 'lastupdaterid_', 'lastupdate_',
         'totpages_', 'firstpagefilename_', 'recordstatus_', 'deleted_',
@@ -3453,46 +3463,52 @@ def duplicate_record(request):
         files=files_to_copy
     )
 
+    # custom_save_record_fields() ? c'è bisogno ?
+
     # 5️⃣ Duplicazione delle righe collegate (linked tables)
-    linked_tables = source_record.get_linked_tables()
+    can_duplicate_with_linked = can_duplicate_with_linked_settings.get('value', [])
+    if isinstance(can_duplicate_with_linked, str):
+        can_duplicate_with_linked = [x.strip() for x in can_duplicate_with_linked.split(',')] if can_duplicate_with_linked else []
 
-    for table_info in linked_tables:
-        linked_table_id = table_info.get("tableid")
-        if not linked_table_id:
-            continue
-            
-        linked_records = source_record.get_linkedrecords_dict(linked_table_id)
+    if can_duplicate_with_linked:
+        linked_tables = source_record.get_linked_tables()
+        for table_info in linked_tables:
+            linked_table_id = table_info.get("tableid")
+            if not linked_table_id or linked_table_id not in can_duplicate_with_linked:
+                continue
+                
+            linked_records = source_record.get_linkedrecords_dict(linked_table_id)
 
-        for old_record_data in linked_records:
-            child_fields_copy = {
-                k: v for k, v in old_record_data.items()
-                if k not in excluded_fields
-            }
-            child_fields_copy["id"] = None
+            for old_record_data in linked_records:
+                child_fields_copy = {
+                    k: v for k, v in old_record_data.items()
+                    if k not in excluded_fields
+                }
+                child_fields_copy["id"] = None
 
-            # Aggiorna il riferimento (foreign key) al nuovo record padre creato
-            link_field_name = f"recordid{tableid}_"
-            child_fields_copy[link_field_name] = new_record.recordid
+                # Aggiorna il riferimento (foreign key) al nuovo record padre creato
+                link_field_name = f"recordid{tableid}_"
+                child_fields_copy[link_field_name] = new_record.recordid
 
-            # Copia eventuali file fisici per le righe collegate (simile al padre)
-            child_files_to_copy = {}
-            for fieldid, value in old_record_data.items():
-                if isinstance(value, str) and '/' in value:
-                    try:
-                        old_path = default_storage.path(value)
-                        if os.path.exists(old_path):
-                            _, ext = os.path.splitext(old_path)
-                            with open(old_path, 'rb') as f:
-                                child_files_to_copy[fieldid] = ContentFile(f.read(), name=f"{fieldid}{ext}")
-                    except Exception as e:
-                        print(f"Errore copia file collegato {fieldid}: {e}")
+                # Copia eventuali file fisici per le righe collegate (simile al padre)
+                child_files_to_copy = {}
+                for fieldid, value in old_record_data.items():
+                    if isinstance(value, str) and '/' in value:
+                        try:
+                            old_path = default_storage.path(value)
+                            if os.path.exists(old_path):
+                                _, ext = os.path.splitext(old_path)
+                                with open(old_path, 'rb') as f:
+                                    child_files_to_copy[fieldid] = ContentFile(f.read(), name=f"{fieldid}{ext}")
+                        except Exception as e:
+                            print(f"Errore copia file collegato {fieldid}: {e}")
 
-            _save_record_data(
-                tableid=linked_table_id,
-                recordid='',
-                fields=child_fields_copy,
-                files=child_files_to_copy
-            )
+                _save_record_data(
+                    tableid=linked_table_id,
+                    recordid='',
+                    fields=child_fields_copy,
+                    files=child_files_to_copy
+                )
 
     return JsonResponse({
         'success': True,
