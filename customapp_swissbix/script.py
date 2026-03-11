@@ -2115,8 +2115,7 @@ def get_timetracking(request):
             companies.append(company_data)
 
         # Servizi
-        services_sql = "SELECT itemcode, itemdesc FROM sys_lookup_table_item WHERE lookuptableid='service_timetracking' ORDER BY itemorder"
-        services_data = HelpderDB.sql_query(services_sql)
+        services_data = SysLookupTableItem.objects.filter(lookuptableid='service_timetracking').order_by(F('itemorder').asc(nulls_last=True), 'itemcode').values('itemcode', 'itemdesc')
         services = []
         for s in services_data:
             services.append({

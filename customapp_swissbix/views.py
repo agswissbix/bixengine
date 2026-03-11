@@ -2541,7 +2541,7 @@ def save_lenovo_ticket(request):
         if old_status != 'Draft':
             del fields['status']
 
-        lookup_item = SysLookupTableItem.objects.filter(lookuptableid='status_ticket_lenovo').order_by('itemorder').first()
+        lookup_item = SysLookupTableItem.objects.filter(lookuptableid='status_ticket_lenovo').order_by(F('itemorder').asc(nulls_last=True), 'itemcode').first()
         if not recordid:
             rec.values['reception_date'] = datetime.date.today().strftime('%Y-%m-%d')
             if 'status' not in fields:
