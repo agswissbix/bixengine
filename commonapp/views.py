@@ -19,6 +19,7 @@ from django.contrib.auth.decorators import login_required
 from functools import wraps
 
 import pytz
+from django_q.tasks import async_task
 from rest_framework.response import Response
 from rest_framework import status
 
@@ -3974,7 +3975,19 @@ def save_record_fields(request):
 
 
 def custom_save_record_fields(tableid, recordid, params):
-    return call_custom_function("save_record_fields", tableid, recordid, old_record=params)
+    if hasattr(params, 'values'):
+        old_values_dict = params.values.copy()
+    else:
+        old_values_dict = params
+
+    # return call_custom_function("save_record_fields", tableid, recordid, old_values=old_values_dict)
+    return async_task(
+        call_custom_function, 
+        "save_record_fields", 
+        tableid, 
+        recordid, 
+        old_values=old_values_dict
+    )
 
 def get_table_views(request):
     data = json.loads(request.body)

@@ -29,12 +29,12 @@ from commonapp.utils.email_sender import *
 env = environ.Env()
 environ.Env.read_env()
 
-def save_record_fields(tableid,recordid, old_record=""):
+def save_record_fields(tableid,recordid, old_values=""):
 
     # ---TASK---
     if tableid == 'task':
         from customapp_swissbix.services.custom_save.task_services import TaskService
-        records_to_save = TaskService.process_task(recordid, old_record)
+        records_to_save = TaskService.process_task(recordid, old_values)
         for rel_tableid, rel_recordid in records_to_save:
             save_record_fields(tableid=rel_tableid, recordid=rel_recordid)
 
