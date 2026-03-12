@@ -5057,24 +5057,36 @@ def get_table_active_tab(request):
     query_result=HelpderDB.sql_query_row(sql)
 
     if not query_result:
-        active_tab = ''
+        active_tab_id = ''
     else:
-        active_tab=query_result['value']
+        active_tab_id = query_result['value']
 
-    if active_tab not in table_tabs:
-        active_tab=table_tabs[0]
+    if active_tab_id not in table_tabs:
+        active_tab_id = table_tabs[0]
 
+    active_tab = {"id": active_tab_id, "name": active_tab_id}
+
+    formatted_tabs = []
+    
     for k in range(len(table_tabs)):
-        if 'custom' == table_tabs[k].lower():
+        tab_id = table_tabs[k]
+        tab_name = table_tabs[k]
+        
+        if 'custom' == tab_id.lower():
             sql=f"SELECT * FROM sys_user_table_settings WHERE tableid='{tableid}' AND settingid='table_custom_tab_name'"
             query_result=HelpderDB.sql_query_row(sql)
             if query_result:
-                table_tabs[k]=query_result['value']
-                if active_tab.lower() == 'custom':
-                    active_tab = table_tabs[k]
+                tab_name=query_result['value']
+                if active_tab['id'].lower() == 'custom':
+                    active_tab['name'] = tab_name
+        
+        formatted_tabs.append({
+            "id": tab_id,
+            "name": tab_name
+        })
 
     response = {
-        "tableTabs": table_tabs,
+        "tableTabs": formatted_tabs,
         "activeTab": active_tab
     }
     return JsonResponse(response)
