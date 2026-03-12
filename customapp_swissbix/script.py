@@ -1312,12 +1312,12 @@ def sync_table(tableid):
     print("sync_tables")
 
     if not tableid:
-            return JsonResponse({"error": "Missing parameter"}, status=500)
+            return "Missing parameter"
     try:
         table = HelpderDB.sql_query_row(f"SELECT * FROM sys_table WHERE sync_table IS NOT NULL AND id = '{tableid}'")
 
         if not table:
-            return JsonResponse({"error": "Table not found"}, status=500)
+            return "Table not found"
 
         print("Starting sync of table: " + table['sync_table'])
         columns = HelpderDB.sql_query(f"SELECT * FROM sys_field WHERE tableid='{table['id']}' AND sync_fieldid IS NOT NULL AND sync_fieldid != ''")
@@ -1325,7 +1325,7 @@ def sync_table(tableid):
         sync_fieldid_origin = table['sync_field']
         founded_fieldid = [c for c in columns if c.get('sync_fieldid') == sync_fieldid_origin]
         if not founded_fieldid:
-            return JsonResponse({"error": "Missing sync_fieldid"}, status=500)
+            return "Missing sync_fieldid"
         sync_fieldid_target = founded_fieldid[0]['fieldid']
 
         query = f"SELECT * from {table['sync_table']}"
@@ -1387,9 +1387,9 @@ def sync_table(tableid):
         print("Sync completed of table: " + table['sync_table'])
 
         print("Syncronization completed")
-        return {"message": "Sync completed for " + table['sync_table']}
+        return "Sync completed for " + table['sync_table']
     except requests.RequestException as e:  
-        return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
+        return "Failed to fetch external data" + str(e)
     
 @task_monitor(data_type="sync")
 def sync_bixdata_salesorders():
@@ -3304,7 +3304,7 @@ def get_bixhub_initial_data(request):
             condition_list_closed.append("(description IS NOT NULL AND description != '' AND worktime IS NOT NULL AND worktime != '')")
             
             ts_closed_records = UserTable('timesheet').get_records(
-                conditions_list=condition_list_closed, 
+                conditions_list=condition_list_cflosed, 
                 limit=5, 
                 orderby="date desc"
             )
@@ -3495,3 +3495,90 @@ def get_widget_employee(request):
         })
     except Exception as e:
         return JsonResponse({"error": f"Errore nel prendere i dati iniziali: {str(e)}"}, status=500)
+
+
+
+
+@task_monitor(data_type="update")
+@safe_schedule_task(stop_on_error=True)
+def sync_adiuto_assenze():
+    result_message = ''
+    result_log = []
+    sql="DELETE FROM user_adiuto_assenze"
+    HelpderDB.sql_execute(sql)
+
+    # Aggiornamento dello stato dal server di Adiuto
+    driver = "SQL Server"
+    server = os.environ.get('ADIUTO_DB_SERVER')
+    database = os.environ.get('ADIUTO_DB_NAME')
+    username =  os.environ.get('ADIUTO_DB_USER')
+    password =  os.environ.get('ADIUTO_DB_PASSWORD')
+    
+    connection_string = f'DRIVER={driver};SERVER={server};DATABASE={database};UID={username};PWD={password}'
+
+    try:
+        cnxn = pyodbc.connect(connection_string)
+        cursor = cnxn.cursor()
+        stmt = cursor.execute(f"SELECT * FROM VA1034 WHERE FENA=-1")
+        rows = stmt.fetchall()
+        rows_counter=len(rows)
+        print(f"Fetched Rows: {rows_counter}")
+        result_log.append(f"Fetched Rows: {rows_counter}")
+
+        for row in rows:
+            print(f"Richiesta: {row.F1075} - {row.F1049}")
+            result_log.append(f"Richiesta: {row.F1075} - {row.F1049}")
+            record = UserRecord("adiuto_assenze")
+            record.values['richiestoda_f1075'] = row.F1075
+            record.values['datainizio_f1049'] = row.F1049
+            record.values['datafine_f1050'] = row.F1050
+            record.values['giorni_f1051'] = row.F1051
+            record.values['ore_f1079'] = row.F1079
+            record.values['tipoassenza_f1031'] = row.F1031
+            record.values['note_f1002'] = row.F1002
+            record.values['sync_id'] = f"{row.F1075}-{row.F1049}-{row.F1050}"
+            record.save()
+
+
+    except Exception as e:
+        result_message = f"Errore durante la sincronizzazione: {str(e)}"
+        result_log.append(result_message)
+        print(result_message)
+        raise Exception(result_message)
+
+    finally:
+        cnxn.close()
+
+        return {
+            "rows_counter": rows_counter,
+            "message": f"Sincronizzazione completata: {rows_counter} righe",
+            
+        }, {
+            "details": "\n".join(result_log)
+        }
+
+@task_monitor(data_type="sync")
+@safe_schedule_task(stop_on_error=True)
+def sync_bixdata_assenze():
+    result_log = []
+    try:
+        print("sync_bixdata_assenze")
+        sync_output = sync_table('assenze')
+        result_log.append("sync_bixdata_assenze")
+        #aggiornamento company in salesorder
+        sql="UPDATE user_assenze JOIN user_dipendente ON user_assenze.adiuto_user=user_dipendente.adiuto_user SET user_assenze.recordiddipendente_=user_dipendente.recordid_"
+        HelpderDB.sql_execute(sql)
+    except Exception as e:
+        result_message = f"Errore durante la sincronizzazione: {str(e)}"
+        result_log.append(result_message)
+        print(result_message)
+        raise Exception(result_message)
+
+    finally:
+
+        return {
+            "message": f"Sincronizzazione completata",
+            
+        }, {
+            "details": "\n".join(result_log)
+        }

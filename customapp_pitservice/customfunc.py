@@ -262,3 +262,37 @@ def calculate_dependent_fields(request):
     recordid=data.get('recordid')
     tableid=data.get('tableid')
     return JsonResponse({'status': 'success', 'updated_fields': updated_fields})
+
+
+def aggiorna_lista_acqua(request):
+    # Extract any needed data from the request, if relevant
+    # mese = request.POST.get('mese')
+    # Ottieni la data attuale
+    # Imposta la localizzazione in italiano
+    post_data = json.loads(request.body)
+    year=  date.today().year 
+
+    sql=f"""
+            SELECT  *
+            FROM user_stabile
+            WHERE acqua='Si' AND deleted_ = 'N'
+            AND recordid_ NOT IN (
+                SELECT recordidstabile_
+                FROM user_acqua
+                WHERE annoriferimento = '{year}' 
+                AND deleted_ = 'N'
+            );
+
+
+    """
+    stabili=HelpderDB.sql_query(sql)
+    counter=0
+    for stabile in stabili:
+        record_acqua=UserRecord('acqua')
+        record_acqua.values['recordidstabile_']=stabile['recordid_']
+        record_acqua.values['recordidcliente_']=stabile['recordidcliente_']
+        record_acqua.values['annoriferimento']=year
+        record_acqua.save()
+        counter=counter+1
+        print(counter)
+    return JsonResponse({'status': 'success', 'stabili acqua aggiunti': counter})

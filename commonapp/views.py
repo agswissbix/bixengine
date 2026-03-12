@@ -4250,7 +4250,7 @@ Cordiali saluti
         stabile_recordid=recordid
         stabile_record=UserRecord('stabile',stabile_recordid)
         #TODO pitservice sistemare dinamico TODO GASOLI
-        meseLettura='2026-01'
+        meseLettura='2026-03'
         anno, mese = meseLettura.split('-')
 
         sql=f"SELECT * FROM user_contattostabile WHERE deleted_='N' AND recordidstabile_='{stabile_recordid}'"
@@ -4322,7 +4322,7 @@ def stampa_gasoli(request):
         recordid_stabile = data.get('recordid')
         #meseLettura=data.get('date')
         #TODO pitservice sistemare dinamico TODO GASOLI
-        meseLettura="2026 01-Gennaio"
+        meseLettura="2026 03-Marzo"
         anno, mese = meseLettura.split(' ')
     script_dir = os.path.dirname(os.path.abspath(__file__))
     wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
