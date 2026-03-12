@@ -2026,11 +2026,21 @@ def save_email_timesheet(request):
         subject = f"Nuovo timesheet registrato per {company_name}"
 
         # DATI PER IL CORPO EMAIL
-        descrizione = timesheet.values.get("description", "")
-        data_lavoro = timesheet.values.get("date", "")
-        worktime = timesheet.values.get("worktime", "")
-        traveltime = timesheet.values.get("traveltime", "")
-        totalprice = timesheet.values.get("totalprice", "")
+        descrizione = timesheet.values.get("description", "Nessuna descrizione")
+        data_lavoro = timesheet.values.get("date")
+
+        if isinstance(data_lavoro, datetime.date):
+            data_lavoro = data_lavoro.strftime("%d.%m.%Y")
+        elif isinstance(data_lavoro, str):
+            try:
+                data_lavoro = datetime.datetime.strptime(data_lavoro, "%Y-%m-%d").strftime("%d.%m.%Y")
+            except ValueError:
+                data_lavoro = "Data non valida"
+        else:
+            data_lavoro = "Nessuna data"
+        worktime = timesheet.values.get("worktime", "Nessun tempo di lavoro")
+        traveltime = timesheet.values.get("traveltime", "Nessun tempo di viaggio")
+        totalprice = timesheet.values.get("totalprice", "Nessun prezzo totale")
 
         # PROGETTO
         project = timesheet.fields["recordidproject_"]["convertedvalue"] \
@@ -2047,20 +2057,24 @@ def save_email_timesheet(request):
         #               CORPO EMAIL HTML
         # ----------------------------------------------------
         mailbody = f"""
-        <p style="margin:0 0 6px 0;">Ciao,</p>
+        <p style="margin:0 0 6px 0;">Gentile cliente,</p>
 
         <p style="margin:0 0 10px 0;">
-            È stato registrato un nuovo timesheet. Ecco i dettagli:
+            desideriamo informarla che l'intervento effettuato è stato registrato nel nostro sistema.
+            Come già visionato e confermato da lei al termine dell'intervento, di seguito trova il riepilogo
+            delle attività svolte. In allegato è disponibile il PDF firmato con tutti i dettagli.
         </p>
 
         <table style="border-collapse:collapse; width:100%; font-size:14px;">
-            <tr><td style="padding:4px 0; font-weight:bold;">Utente:</td><td>{worker_name}</td></tr>
+            <tr><td style="padding:4px 0; font-weight:bold;">Tecnico:</td><td>{worker_name}</td></tr>
             <tr><td style="padding:4px 0; font-weight:bold;">Data:</td><td>{data_lavoro}</td></tr>
             <tr><td style="padding:4px 0; font-weight:bold;">Descrizione:</td><td>{descrizione}</td></tr>
-            <tr><td style="padding:4px 0; font-weight:bold;">Tempo lavoro:</td><td>{worktime}</td></tr>
-            <tr><td style="padding:4px 0; font-weight:bold;">Tempo viaggio:</td><td>{traveltime}</td></tr>
-            <tr><td style="padding:4px 0; font-weight:bold;">Prezzo totale:</td><td>{totalprice}</td></tr>
+            <tr><td style="padding:4px 0; font-weight:bold;">Tempo di lavoro:</td><td>{worktime}</td></tr>
+            <tr><td style="padding:4px 0; font-weight:bold;">Tempo della trasferta:</td><td>{traveltime}</td></tr>
         """
+
+        if totalprice:
+            mailbody += f"<tr><td style=\"padding:4px 0; font-weight:bold;\">Prezzo totale:</td><td>{totalprice}</td></tr>"
 
         if project:
             mailbody += f"""
@@ -2069,18 +2083,14 @@ def save_email_timesheet(request):
 
         if task:
             mailbody += f"""
-            <tr><td style="padding:4px 0; font-weight:bold;">Task associato:</td><td>{task}</td></tr>
+            <tr><td style="padding:4px 0; font-weight:bold;">Attività:</td><td>{task}</td></tr>
             """
 
         mailbody += "</table>"
 
-        # link piattaforma
-        link_web = "https://bixportal.dc.swissbix.ch/home"
-
         mailbody += f"""
         <p style="margin:16px 0 0 0;">
-            Puoi vedere maggiori informazioni accedendo alla piattaforma:
-            <a href="{link_web}">{link_web}</a>
+            Per qualsiasi informazione o chiarimento rimaniamo volentieri a disposizione.
         </p>
 
         <p style="margin:0;">Cordiali saluti,</p>
