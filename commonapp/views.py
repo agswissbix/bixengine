@@ -19,6 +19,7 @@ from django.contrib.auth.decorators import login_required
 from functools import wraps
 
 import pytz
+from django_q.tasks import async_task
 from rest_framework.response import Response
 from rest_framework import status
 
@@ -3415,6 +3416,16 @@ def duplicate_record(request):
     if not source_record.recordid:
         return JsonResponse({'error': 'Record not found'}, status=404)
 
+    # check permissions
+    userid = Helper.get_userid(request)
+
+    tablesettings = TableSettings(tableid, userid)
+    can_duplicate_settings = tablesettings.get_specific_settings('duplicate')['duplicate']
+    can_duplicate_with_linked_settings = tablesettings.get_specific_settings('duplicate_with_linked')['duplicate_with_linked']
+
+    if not tablesettings.has_permission_for_record(can_duplicate_settings):
+        return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
+
     excluded_fields = {
         'recordid_', 'creatorid_', 'creation_', 'lastupdaterid_', 'lastupdate_',
         'totpages_', 'firstpagefilename_', 'recordstatus_', 'deleted_',
@@ -3452,46 +3463,52 @@ def duplicate_record(request):
         files=files_to_copy
     )
 
+    # custom_save_record_fields() ? c'è bisogno ?
+
     # 5️⃣ Duplicazione delle righe collegate (linked tables)
-    linked_tables = source_record.get_linked_tables()
+    can_duplicate_with_linked = can_duplicate_with_linked_settings.get('value', [])
+    if isinstance(can_duplicate_with_linked, str):
+        can_duplicate_with_linked = [x.strip() for x in can_duplicate_with_linked.split(',')] if can_duplicate_with_linked else []
 
-    for table_info in linked_tables:
-        linked_table_id = table_info.get("tableid")
-        if not linked_table_id:
-            continue
-            
-        linked_records = source_record.get_linkedrecords_dict(linked_table_id)
+    if can_duplicate_with_linked:
+        linked_tables = source_record.get_linked_tables()
+        for table_info in linked_tables:
+            linked_table_id = table_info.get("tableid")
+            if not linked_table_id or linked_table_id not in can_duplicate_with_linked:
+                continue
+                
+            linked_records = source_record.get_linkedrecords_dict(linked_table_id)
 
-        for old_record_data in linked_records:
-            child_fields_copy = {
-                k: v for k, v in old_record_data.items()
-                if k not in excluded_fields
-            }
-            child_fields_copy["id"] = None
+            for old_record_data in linked_records:
+                child_fields_copy = {
+                    k: v for k, v in old_record_data.items()
+                    if k not in excluded_fields
+                }
+                child_fields_copy["id"] = None
 
-            # Aggiorna il riferimento (foreign key) al nuovo record padre creato
-            link_field_name = f"recordid{tableid}_"
-            child_fields_copy[link_field_name] = new_record.recordid
+                # Aggiorna il riferimento (foreign key) al nuovo record padre creato
+                link_field_name = f"recordid{tableid}_"
+                child_fields_copy[link_field_name] = new_record.recordid
 
-            # Copia eventuali file fisici per le righe collegate (simile al padre)
-            child_files_to_copy = {}
-            for fieldid, value in old_record_data.items():
-                if isinstance(value, str) and '/' in value:
-                    try:
-                        old_path = default_storage.path(value)
-                        if os.path.exists(old_path):
-                            _, ext = os.path.splitext(old_path)
-                            with open(old_path, 'rb') as f:
-                                child_files_to_copy[fieldid] = ContentFile(f.read(), name=f"{fieldid}{ext}")
-                    except Exception as e:
-                        print(f"Errore copia file collegato {fieldid}: {e}")
+                # Copia eventuali file fisici per le righe collegate (simile al padre)
+                child_files_to_copy = {}
+                for fieldid, value in old_record_data.items():
+                    if isinstance(value, str) and '/' in value:
+                        try:
+                            old_path = default_storage.path(value)
+                            if os.path.exists(old_path):
+                                _, ext = os.path.splitext(old_path)
+                                with open(old_path, 'rb') as f:
+                                    child_files_to_copy[fieldid] = ContentFile(f.read(), name=f"{fieldid}{ext}")
+                        except Exception as e:
+                            print(f"Errore copia file collegato {fieldid}: {e}")
 
-            _save_record_data(
-                tableid=linked_table_id,
-                recordid='',
-                fields=child_fields_copy,
-                files=child_files_to_copy
-            )
+                _save_record_data(
+                    tableid=linked_table_id,
+                    recordid='',
+                    fields=child_fields_copy,
+                    files=child_files_to_copy
+                )
 
     return JsonResponse({
         'success': True,
@@ -3974,7 +3991,19 @@ def save_record_fields(request):
 
 
 def custom_save_record_fields(tableid, recordid, params):
-    return call_custom_function("save_record_fields", tableid, recordid, old_record=params)
+    if hasattr(params, 'values'):
+        old_values_dict = params.values.copy()
+    else:
+        old_values_dict = params
+
+    # return call_custom_function("save_record_fields", tableid, recordid, old_values=old_values_dict)
+    return async_task(
+        call_custom_function, 
+        "save_record_fields", 
+        tableid, 
+        recordid, 
+        old_values=old_values_dict
+    )
 
 def get_table_views(request):
     data = json.loads(request.body)
@@ -3987,10 +4016,103 @@ def get_table_views(request):
 
     views=[ ]
     for table_view in table_views:
-        views.append({'id':table_view['id'],'name':table_view['name']})
+        views.append({
+            'id': table_view['id'],
+            'name': table_view['name'],
+            'userid': table_view.get('userid', 1)
+        })
     response={ "views": views, "defaultViewId": table_default_viewid}
 
     return JsonResponse(response)
+
+@csrf_exempt
+@login_required_api
+def save_table_view(request):
+    try:
+        data = json.loads(request.body)
+        tableid = data.get("tableid")
+        view_name = data.get("view_name")
+        filters = data.get("filters", [])
+        userid = Helper.get_userid(request)
+
+        if not tableid or not view_name:
+            return JsonResponse({"success": False, "detail": "Dati mancanti"})
+
+        # Controllare se c'è già una view con questo nome creata dall'utente admin (1)
+        existing_admin_view = HelpderDB.sql_query(f"SELECT id FROM sys_view WHERE tableid='{tableid}' AND name='{view_name}' AND userid=1")
+        if existing_admin_view and str(userid) != '1':
+            return JsonResponse({"success": False, "detail": "Esiste già una vista di sistema con questo nome. Scegli un altro nome."})
+
+        # Costruisce la query SQL dai filtri passati dal frontend
+        conditions_list = []
+        table = UserTable(tableid, userid)
+        # Sfruttiamo build_condition in modo simile a come è in user_table.py
+        for filter_item in filters:
+            field_id = filter_item.get('fieldid')
+            filter_type = filter_item.get('type')
+            filter_value = filter_item.get('value')
+            filter_condition = filter_item.get('conditions', [])
+
+            if not field_id or filter_value is None:
+                continue
+
+            if field_id.startswith('_'):
+                field_id = field_id[1:] + "_"
+
+            # Se l'utente admin (1) sta salvando una vista e filtra per sé stesso, 
+            # rendiamo la vista generica inserendo la keyword '$userid$'
+            if str(userid) == '1' and filter_type == 'Utente' and str(filter_value) == '["1"]':
+                filter_value = '$userid$'
+
+            if filter_value == "NULL_VALUE":
+                sql_condition = f"({field_id} IS NULL OR {field_id} = '')"
+            else:
+                sql_condition = table.build_condition(filter_type, field_id, filter_value, filter_condition)
+
+            if sql_condition:
+                conditions_list.append(sql_condition)
+
+        query_conditions = " AND ".join(conditions_list)
+        # Escape stringa per SQL
+        query_conditions = query_conditions.replace("'", "''")
+
+        # Verifica se esiste già una view dell'utente corrente con lo stesso nome
+        existing_user_view = HelpderDB.sql_query(f"SELECT id FROM sys_view WHERE tableid='{tableid}' AND name='{view_name}' AND userid={userid}")
+        
+        if existing_user_view:
+            view_id = existing_user_view[0]['id']
+            HelpderDB.sql_execute(f"UPDATE sys_view SET query_conditions='{query_conditions}' WHERE id={view_id}")
+        else:
+            HelpderDB.sql_execute(f"INSERT INTO sys_view (name, userid, tableid, query_conditions) VALUES ('{view_name}', {userid}, '{tableid}', '{query_conditions}')")
+
+        return JsonResponse({"success": True})
+    except Exception as e:
+        return JsonResponse({"success": False, "detail": str(e)})
+
+@csrf_exempt
+@login_required_api
+def delete_table_view(request):
+    try:
+        data = json.loads(request.body)
+        view_id = data.get("view_id")
+        userid = Helper.get_userid(request)
+
+        if not view_id:
+            return JsonResponse({"success": False, "detail": "Dati mancanti"})
+
+        # Check view ownership
+        view_info = HelpderDB.sql_query(f"SELECT userid FROM sys_view WHERE id={view_id}")
+        if not view_info:
+            return JsonResponse({"success": False, "detail": "Vista non trovata"})
+        
+        view_userid = view_info[0]['userid']
+        if str(view_userid) != str(userid) and not request.user.is_superuser:
+            return JsonResponse({"success": False, "detail": "Non sei autorizzato a eliminare questa vista."})
+
+        HelpderDB.sql_execute(f"DELETE FROM sys_view WHERE id={view_id}")
+        return JsonResponse({"success": True})
+    except Exception as e:
+        return JsonResponse({"success": False, "detail": str(e)})
 
 
 def get_record_badge(request):

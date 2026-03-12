@@ -63,6 +63,11 @@ class TableSettings:
             'options': ['true', 'false'],
             'value': 'true'
         },
+        'duplicate': {
+            'type': 'select',
+            'options': ['true', 'false'],
+            'value': 'true'
+        },
         'add_linked': {
             'type': 'select',
             'options': ['true', 'false'],
@@ -72,6 +77,11 @@ class TableSettings:
             'type': 'select',
             'options': ['true', 'false'],
             'value': 'true'
+        },
+        'duplicate_with_linked': {
+            'type': 'multiselect',
+            'options': [],
+            'value': ''
         },
         'deadline_actions': {
             'type': 'parola',
@@ -427,13 +437,14 @@ class TableSettings:
         self.userid = userid
         self.settings = self.get_settings()
 
-    def get_settings(self):
+    def get_settings(self, with_option=False):
         # Copia profonda delle impostazioni
         settings_copy = {key: value.copy() for key, value in self.settings.items()}
 
-        self._populate_field_options(settings_copy)
-
-        self._populate_workspace_options(settings_copy)
+        if with_option:
+            self._populate_field_options(settings_copy)
+            self._populate_workspace_options(settings_copy)
+            self._populate_linked_table_options(settings_copy)
 
         user_settings_qs = SysUserTableSettings.objects.filter(
             tableid=self.tableid,
@@ -466,6 +477,21 @@ class TableSettings:
         self._apply_user_settings(settings_copy, merged_settings)
 
         return settings_copy
+
+    def _populate_linked_table_options(self, settings_copy):
+        """Popola le opzioni delle tabelle collegate per il setting duplicate_with_linked."""
+        from commonapp.bixmodels.user_record import UserRecord
+        user_record = UserRecord(self.tableid, userid=self.userid)
+        linked_tables = user_record.get_linked_tables()
+        if not linked_tables:
+            settings_copy['duplicate_with_linked']['options'] = []
+            return
+
+        options = [
+            {'name': str(table['tableid']), 'label': str(table['description']), 'selected': False}
+            for table in linked_tables
+        ]
+        settings_copy['duplicate_with_linked']['options'] = options
 
     def _populate_workspace_options(self, settings_copy):
         """Popola le opzioni del workspace nei settings."""
@@ -679,6 +705,9 @@ class TableSettings:
 
         if any("workspace_options" in v for v in base_settings.values()):
             self._populate_workspace_options(base_settings)
+            
+        if "duplicate_with_linked" in base_settings:
+            self._populate_linked_table_options(base_settings)
 
         # Carica SOLO gli user settings necessari (non tutti!)
         user_settings = SysUserTableSettings.objects.filter(

@@ -23,12 +23,16 @@ class TaskService:
         # 🔹 1) CREA EVENTO
         records_to_save.extend(TaskService._create_event(task, assigned_to))
 
-        # Se non c'è il vecchio record e non è una stringa vuota passata di default
-        if not getattr(old_record, 'values', None):
+        if isinstance(old_record, dict):
+            old_values = old_record
+        else:
+            old_values = getattr(old_record, 'values', None)
+
+        if not old_values:
             return records_to_save
         
         # 🔹 2) Check e invio email
-        TaskService._handle_notifications(task, old_record, creator_id, assigned_to, status, recordid)
+        TaskService._handle_notifications(task, old_values, creator_id, assigned_to, status, recordid)
 
         return records_to_save
 
@@ -41,10 +45,10 @@ class TaskService:
         return []
 
     @staticmethod
-    def _handle_notifications(task: UserRecord, old_record, creator_id, assigned_to, status, recordid):
+    def _handle_notifications(task: UserRecord, old_values, creator_id, assigned_to, status, recordid):
         # 🔹 2) Controlla se è cambiato l’assegnatario o solo lo status
-        old_user = old_record.values.get('user')
-        old_status = old_record.values.get('status')
+        old_user = old_values.get('user')
+        old_status = old_values.get('status')
 
         # === CASO A: nuovo task assegnato ===
         is_new_assignment = assigned_to != old_user

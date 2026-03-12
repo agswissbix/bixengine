@@ -142,7 +142,7 @@ def settings_table_settings(request):
         userid = Helper.get_userid(request)
 
     tablesettings_obj = TableSettings(tableid=tableid, userid=userid)
-    tablesettings = tablesettings_obj.get_settings()
+    tablesettings = tablesettings_obj.get_settings(with_option=True)
 
     return JsonResponse({"tablesettings": tablesettings})
 
@@ -663,7 +663,6 @@ def settings_table_fields_change_to_lookup(request):
     return JsonResponse({"success": True})
 
 
-@superuser_required
 def get_all_tables(request):
     tables = list(SysTable.objects.all().values('id', 'description').order_by('description'))
     return JsonResponse({"tables": tables})

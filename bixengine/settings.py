@@ -230,7 +230,7 @@ Q_CLUSTER = {
     'retry': 1000, # The number of seconds a broker will wait for a cluster to finish a task, before it’s presented again.
     'timeout': 900, # The number of seconds a worker is allowed to spend on a task before it’s terminated.
     'queue_limit': 50, # This does not limit the amount of tasks that can be queued on the broker
-    'bulk': 5, # Sets the number of messages each cluster tries to get from the broker per call
+    'bulk': 1, # Sets the number of messages each cluster tries to get from the broker per call
     'orm': 'default',
     'catch_up': False, # The default behavior for schedules that didn’t run while a cluster was down, is to play catch up and execute all the missed time slots until things are back on schedule.
     'HOOKS': ['bixscheduler.hooks.on_task_success'],
