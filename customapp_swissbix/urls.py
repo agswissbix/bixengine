@@ -39,6 +39,7 @@ urlpatterns = [
     path('sync_graph_calendar/', sync_graph_calendar, name='sync_graph_calendar'),
     path('sync_tables/', sync_tables, name='sync_tables'),
     path('save_email_timesheet/', save_email_timesheet, name='save_email_timesheet'),
+    path('get_timesheet_emails/', get_timesheet_emails, name='get_timesheet_emails'),
     path('print_timesheet/', print_timesheet, name='print_timesheet'),
     path('save_signature/', save_signature, name='save_signature'),
     path('get_project_templates/', get_project_templates, name='get_project_templates'),

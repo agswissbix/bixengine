@@ -2013,10 +2013,14 @@ def save_email_timesheet(request):
         company_name = timesheet.fields["recordidcompany_"]["convertedvalue"]
 
         # DESTINATARIO EMAIL
-        # esempio: email al responsabile (creator)
-        recipient = UserRecord('company', company_id).values['email']
+        recipient = data.get("recipient")
+
         if not recipient:
-            return JsonResponse({"status": "error", "messagecustom": "L'azienda non ha un email associata."}, status=400)
+            # DESTINATARIO EMAIL
+            # esempio: email al responsabile (creator)
+            recipient = UserRecord('company', company_id).values['email']
+            if not recipient:
+                return JsonResponse({"status": "error", "messagecustom": "L'azienda non ha un email associata."}, status=400)
 
         # SUBJECT
         subject = f"Nuovo timesheet registrato per {company_name}"
@@ -2087,14 +2091,33 @@ def save_email_timesheet(request):
         # Dati email da salvare
 
         # --- Gestione allegato ---
+        file_rel_path = ""
+        
         if recordid_attachment:
             try:
                 attach_record = UserRecord("attachment", recordid_attachment)
                 file_rel_path = attach_record.values.get("file", "")
-
-
             except Exception as ex:
-                print("Errore nel recupero allegato:", ex)
+                print("Errore nel recupero allegato tramite ID:", ex)
+        else:
+            # Fallback: find the latest Signature attachment for this timesheet
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT file
+                    FROM user_attachment
+                    WHERE recordidtimesheet_ = %s
+                      AND type = 'Signature'
+                      AND deleted_ = 'N'
+                    ORDER BY creation_ DESC
+                    LIMIT 1
+                """, [recordid_timesheet])
+                row = cursor.fetchone()
+                if row and row[0]:
+                    file_rel_path = row[0]
+                    
+        if not file_rel_path:
+            print("Errore nel recupero allegato:", ex)
+            return JsonResponse({"error": "Nessun allegato di firma trovato per questo timesheet."}, status=400)
 
         email_data = {
             "to": recipient,
@@ -2112,6 +2135,61 @@ def save_email_timesheet(request):
 
     except Exception as e:
         print("Error in save_email_timesheet:", e)
+        return JsonResponse({"error": str(e)}, status=500)
+
+def get_timesheet_emails(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "Invalid method"}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        recordid_timesheet = data.get("recordid")
+        
+        if not recordid_timesheet:
+            return JsonResponse({"error": "Missing recordid"}, status=400)
+            
+        timesheet = UserRecord("timesheet", recordid_timesheet)
+        company_id = timesheet.values.get("recordidcompany_")
+        
+        emails = []
+        
+        if company_id:
+            company = UserRecord("company", company_id)
+            company_email = company.values.get("email")
+            if company_email:
+                emails.append({
+                    "email": company_email,
+                    "name": company.values.get("companyname", ""),
+                    "type": "Azienda",
+                    "role": ""
+                })
+                
+            # fetch contacts
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT name, surname, email, role 
+                    FROM user_contact 
+                    WHERE recordidcompany_ = %s AND deleted_ = 'N' AND email IS NOT NULL AND email != ''
+                """, [company_id])
+                contacts = cursor.fetchall()
+                
+                for contact in contacts:
+                    name, surname, email, role = contact
+                    full_name = f"{name or ''} {surname or ''}".strip()
+                    if email:
+                        # Avoid duplicates
+                        if not any(e["email"] == email for e in emails):
+                            emails.append({
+                                "email": email,
+                                "name": full_name,
+                                "role": role or "",
+                                "type": "Contatto"
+                            })
+                        
+        return JsonResponse({"success": True, "emails": emails})
+        
+    except Exception as e:
+        print("Error in get_timesheet_emails:", e)
         return JsonResponse({"error": str(e)}, status=500)
 def print_servicecontract(request):
     from customapp_swissbix.script import print_servicecontract
