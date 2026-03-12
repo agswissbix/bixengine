@@ -713,7 +713,8 @@ class UserTable:
         sql=f"""
             SELECT *
             FROM sys_view
-            WHERE tableid = '{self.tableid}'
+            WHERE tableid = '{self.tableid}' AND (userid = 1 OR userid = {self.userid})
+            ORDER BY name
             """
         views=HelpderDB.sql_query(sql)
         return views

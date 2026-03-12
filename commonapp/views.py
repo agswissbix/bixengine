@@ -4016,10 +4016,103 @@ def get_table_views(request):
 
     views=[ ]
     for table_view in table_views:
-        views.append({'id':table_view['id'],'name':table_view['name']})
+        views.append({
+            'id': table_view['id'],
+            'name': table_view['name'],
+            'userid': table_view.get('userid', 1)
+        })
     response={ "views": views, "defaultViewId": table_default_viewid}
 
     return JsonResponse(response)
+
+@csrf_exempt
+@login_required_api
+def save_table_view(request):
+    try:
+        data = json.loads(request.body)
+        tableid = data.get("tableid")
+        view_name = data.get("view_name")
+        filters = data.get("filters", [])
+        userid = Helper.get_userid(request)
+
+        if not tableid or not view_name:
+            return JsonResponse({"success": False, "detail": "Dati mancanti"})
+
+        # Controllare se c'è già una view con questo nome creata dall'utente admin (1)
+        existing_admin_view = HelpderDB.sql_query(f"SELECT id FROM sys_view WHERE tableid='{tableid}' AND name='{view_name}' AND userid=1")
+        if existing_admin_view and str(userid) != '1':
+            return JsonResponse({"success": False, "detail": "Esiste già una vista di sistema con questo nome. Scegli un altro nome."})
+
+        # Costruisce la query SQL dai filtri passati dal frontend
+        conditions_list = []
+        table = UserTable(tableid, userid)
+        # Sfruttiamo build_condition in modo simile a come è in user_table.py
+        for filter_item in filters:
+            field_id = filter_item.get('fieldid')
+            filter_type = filter_item.get('type')
+            filter_value = filter_item.get('value')
+            filter_condition = filter_item.get('conditions', [])
+
+            if not field_id or filter_value is None:
+                continue
+
+            if field_id.startswith('_'):
+                field_id = field_id[1:] + "_"
+
+            # Se l'utente admin (1) sta salvando una vista e filtra per sé stesso, 
+            # rendiamo la vista generica inserendo la keyword '$userid$'
+            if str(userid) == '1' and filter_type == 'Utente' and str(filter_value) == '["1"]':
+                filter_value = '$userid$'
+
+            if filter_value == "NULL_VALUE":
+                sql_condition = f"({field_id} IS NULL OR {field_id} = '')"
+            else:
+                sql_condition = table.build_condition(filter_type, field_id, filter_value, filter_condition)
+
+            if sql_condition:
+                conditions_list.append(sql_condition)
+
+        query_conditions = " AND ".join(conditions_list)
+        # Escape stringa per SQL
+        query_conditions = query_conditions.replace("'", "''")
+
+        # Verifica se esiste già una view dell'utente corrente con lo stesso nome
+        existing_user_view = HelpderDB.sql_query(f"SELECT id FROM sys_view WHERE tableid='{tableid}' AND name='{view_name}' AND userid={userid}")
+        
+        if existing_user_view:
+            view_id = existing_user_view[0]['id']
+            HelpderDB.sql_execute(f"UPDATE sys_view SET query_conditions='{query_conditions}' WHERE id={view_id}")
+        else:
+            HelpderDB.sql_execute(f"INSERT INTO sys_view (name, userid, tableid, query_conditions) VALUES ('{view_name}', {userid}, '{tableid}', '{query_conditions}')")
+
+        return JsonResponse({"success": True})
+    except Exception as e:
+        return JsonResponse({"success": False, "detail": str(e)})
+
+@csrf_exempt
+@login_required_api
+def delete_table_view(request):
+    try:
+        data = json.loads(request.body)
+        view_id = data.get("view_id")
+        userid = Helper.get_userid(request)
+
+        if not view_id:
+            return JsonResponse({"success": False, "detail": "Dati mancanti"})
+
+        # Check view ownership
+        view_info = HelpderDB.sql_query(f"SELECT userid FROM sys_view WHERE id={view_id}")
+        if not view_info:
+            return JsonResponse({"success": False, "detail": "Vista non trovata"})
+        
+        view_userid = view_info[0]['userid']
+        if str(view_userid) != str(userid) and not request.user.is_superuser:
+            return JsonResponse({"success": False, "detail": "Non sei autorizzato a eliminare questa vista."})
+
+        HelpderDB.sql_execute(f"DELETE FROM sys_view WHERE id={view_id}")
+        return JsonResponse({"success": True})
+    except Exception as e:
+        return JsonResponse({"success": False, "detail": str(e)})
 
 
 def get_record_badge(request):

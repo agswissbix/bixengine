@@ -663,7 +663,6 @@ def settings_table_fields_change_to_lookup(request):
     return JsonResponse({"success": True})
 
 
-@superuser_required
 def get_all_tables(request):
     tables = list(SysTable.objects.all().values('id', 'description').order_by('description'))
     return JsonResponse({"tables": tables})
