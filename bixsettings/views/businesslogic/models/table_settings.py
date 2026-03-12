@@ -437,15 +437,14 @@ class TableSettings:
         self.userid = userid
         self.settings = self.get_settings()
 
-    def get_settings(self):
+    def get_settings(self, with_option=False):
         # Copia profonda delle impostazioni
         settings_copy = {key: value.copy() for key, value in self.settings.items()}
 
-        self._populate_field_options(settings_copy)
-
-        self._populate_workspace_options(settings_copy)
-        
-        self._populate_linked_table_options(settings_copy)
+        if with_option:
+            self._populate_field_options(settings_copy)
+            self._populate_workspace_options(settings_copy)
+            self._populate_linked_table_options(settings_copy)
 
         user_settings_qs = SysUserTableSettings.objects.filter(
             tableid=self.tableid,

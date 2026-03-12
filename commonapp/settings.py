@@ -142,7 +142,7 @@ def settings_table_settings(request):
         userid = Helper.get_userid(request)
 
     tablesettings_obj = TableSettings(tableid=tableid, userid=userid)
-    tablesettings = tablesettings_obj.get_settings()
+    tablesettings = tablesettings_obj.get_settings(with_option=True)
 
     return JsonResponse({"tablesettings": tablesettings})
 
