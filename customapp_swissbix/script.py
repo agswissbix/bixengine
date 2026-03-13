@@ -3302,7 +3302,7 @@ def get_bixhub_initial_data(request):
             condition_list_closed.append("(description IS NOT NULL AND description != '' AND worktime IS NOT NULL AND worktime != '')")
             
             ts_closed_records = UserTable('timesheet').get_records(
-                conditions_list=condition_list_cflosed, 
+                conditions_list=condition_list_closed, 
                 limit=5, 
                 orderby="date desc"
             )

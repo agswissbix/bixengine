@@ -10,3 +10,4 @@ staticfiles/*
 uploads/*
 uploads_backup/*
 venv/
+.venv/
