@@ -3996,14 +3996,14 @@ def custom_save_record_fields(tableid, recordid, params):
     else:
         old_values_dict = params
 
-    # return call_custom_function("save_record_fields", tableid, recordid, old_values=old_values_dict)
-    return async_task(
-        call_custom_function, 
-        "save_record_fields", 
-        tableid, 
-        recordid, 
-        old_values=old_values_dict
-    )
+    return call_custom_function("save_record_fields", tableid, recordid, old_values_dict)
+    # return async_task(
+    #     call_custom_function, 
+    #     "save_record_fields", 
+    #     tableid, 
+    #     recordid, 
+    #     old_values_dict
+    # )
 
 def get_table_views(request):
     data = json.loads(request.body)
