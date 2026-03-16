@@ -774,25 +774,33 @@ class Helper:
                 actions_raw = rec.values.get('actions', '')
                 if actions_raw is None:
                     actions_raw = ''
-                actions = [a.strip() for a in actions_raw.split(',') if a.strip()]
+                actions = [a.strip() for a in actions_raw.split(';') if a.strip()]
 
                 for action_str in actions:
-                    match_obj = re.match(r"(\w+)(?:\((.*)\))?", action_str)
+                    match_obj = re.match(r"(\w+)(?:\((.*?)\))?(?:\[(.*?)\])?", action_str)
                     if not match_obj:
                         continue
 
                     action_name = match_obj.group(1)
-                    action_params = match_obj.group(2)
+                    action_params_raw = match_obj.group(2)
+                    condition_code = match_obj.group(3)
+
+                    action_params = []
+                    if action_params_raw:
+                        # Dividiamo la stringa alla virgola e rimuoviamo gli spazi intorno a ogni elemento
+                        action_params = [p.strip() for p in action_params_raw.split(',')]
                     
                     actions_to_trigger.append({
                         'action_name': action_name,
                         'action_params': action_params,
                         'recordid': recordid,
-                        'deadline_date': deadline_date
+                        'deadline_date': deadline_date,
+                        'condition_code': condition_code
                     })
 
-                rec.values['notification_sent'] = 'Si'
-                rec.save()
+                if len(actions_to_trigger) > 0:
+                    rec.values['notification_sent'] = 'Si'
+                    rec.save()
 
         return actions_to_trigger
 

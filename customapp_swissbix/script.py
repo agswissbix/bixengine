@@ -35,6 +35,8 @@ from xhtml2pdf import pisa
 from django.template.loader import get_template
 from customapp_swissbix.views import link_callback
 
+from customapp_swissbix.helper import HelperSwissbix
+
 def task_monitor(data_type):
     """
     Decoratore che trasforma l'output di una funzione nel template standard.
@@ -72,8 +74,8 @@ def task_monitor(data_type):
         return wrapper
     return decorator
 
-
 @task_monitor(data_type="no_output")
+@safe_schedule_task(stop_on_error=True)
 @csrf_exempt
 def check_deadlines(request):
     """
@@ -85,23 +87,33 @@ def check_deadlines(request):
         action_params = action['action_params']
         recordid = action['recordid']
         deadline_date = action['deadline_date']
+        condition_code = action['condition_code']
+
+        if condition_code:
+            if not HelperSwissbix.evaluate_condition_string(condition_code, action):
+                print(f"Azione {action_name} saltata: logica '{condition_code}' non soddisfatta.")
+                continue
 
         match action_name:
             case "email":
-                send_email_deadline(recordid, action_params)
+                send_email_deadline(recordid, action_params[0] if action_params else None)
             case "notification":
                 pass
             case "custom_sb_create_task":
                 deadline = UserRecord('deadline', recordid)
                 deadline_user = deadline.values.get("assigned_to")
+
+                if not deadline_user:
+                    deadline_user = action_params[0] if action_params else None
+
                 # Chiama la funzione interna _save_record_data
                 views._save_record_data(
                     tableid='task', 
                     fields={
-                        'creator': '50', 
+                        'creator': '1',
                         'description': 'Task automatico da scadenza', 
                         'duedate': deadline_date.strftime('%Y-%m-%d') if deadline_date else None,
-                        'user': deadline_user if deadline_user else '50'
+                        'user': deadline_user if deadline_user else None
                     }, 
                     userid=1
                 )
