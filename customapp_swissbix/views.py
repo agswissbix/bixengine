@@ -2022,8 +2022,6 @@ def save_email_timesheet(request):
             if not recipient:
                 return JsonResponse({"status": "error", "messagecustom": "L'azienda non ha un email associata."}, status=400)
 
-        # SUBJECT
-        subject = f"Nuovo timesheet registrato per {company_name}"
 
         # DATI PER IL CORPO EMAIL
         descrizione = timesheet.values.get("description", "Nessuna descrizione")
@@ -2038,8 +2036,13 @@ def save_email_timesheet(request):
                 data_lavoro = "Data non valida"
         else:
             data_lavoro = "Nessuna data"
+        
         worktime = timesheet.values.get("worktime", "Nessun tempo di lavoro")
-        traveltime = timesheet.values.get("traveltime", "Nessun tempo di viaggio")
+        if not worktime:
+            worktime = "Nessun tempo di lavoro"
+        traveltime = timesheet.values.get("traveltime", "Nessun tempo di trasferta")
+        if not traveltime:
+            traveltime = "Nessun tempo di trasferta"
         totalprice = timesheet.values.get("totalprice", "Nessun prezzo totale")
 
         # PROGETTO
@@ -2053,16 +2056,17 @@ def save_email_timesheet(request):
         # UTENTE CHE HA FATTO IL LAVORO
         worker_name = timesheet.fields["user"]["convertedvalue"]
 
+        # SUBJECT
+        subject = f"{company_name}: Rapporto di lavoro {recordid_timesheet.lstrip('0')} del {data_lavoro}"
+
         # ----------------------------------------------------
         #               CORPO EMAIL HTML
         # ----------------------------------------------------
         mailbody = f"""
-        <p style="margin:0 0 6px 0;">Gentile cliente,</p>
-
         <p style="margin:0 0 10px 0;">
-            desideriamo informarla che l'intervento effettuato è stato registrato nel nostro sistema.
-            Come già visionato e confermato da lei al termine dell'intervento, di seguito trova il riepilogo
-            delle attività svolte. In allegato è disponibile il PDF firmato con tutti i dettagli.
+            La ringraziamo per la fiducia e le trasmettiamo una copia del rapporto di lavoro eseguito in PDF.
+            <br/>
+            I dettagli principali dell’intervento sono i seguenti:
         </p>
 
         <table style="border-collapse:collapse; width:100%; font-size:14px;">
@@ -2090,11 +2094,13 @@ def save_email_timesheet(request):
 
         mailbody += f"""
         <p style="margin:16px 0 0 0;">
-            Per qualsiasi informazione o chiarimento rimaniamo volentieri a disposizione.
+            Per qualsiasi informazione o chiarimento in merito al lavoro svolto, rimaniamo volentieri a disposizione scrivendo a <a href="mailto:backoffice@swissbix.ch">backoffice@swissbix.ch</a>.
+            <br/>
+            Per richieste di carattere tecnico potete contattarci ad <a href="mailto:helpdesk@swissbix.ch">helpdesk@swissbix.ch</a>.
         </p>
 
         <p style="margin:0;">Cordiali saluti,</p>
-        <p style="margin:0;">Il team</p>
+        <p style="margin:0;">Swissbix SA</p>
         """
 
 
