@@ -51,6 +51,13 @@ def save_record_fields(tableid,recordid, old_values=""):
         event_record = assenza_record.save_record_for_event()
 
         save_record_fields('events', event_record.recordid)
+    
+    
+    # ---ACCREDITO FERIE---
+    elif tableid == 'accredito_ferie':
+        accredito_ferie = UserRecord('accredito_ferie', recordid)
+        if accredito_ferie.values.get('recordiddipendente_'):
+            save_record_fields(tableid='dipendente', recordid=accredito_ferie.values.get('recordiddipendente_'))
 
     # ---TIMESHEET---
     if tableid == 'timesheet':
@@ -154,7 +161,7 @@ def save_record_fields(tableid,recordid, old_values=""):
     # ---DIPENDENTE---
     if tableid == 'dipendente':
         dipendente_record = UserRecord('dipendente', recordid)
-
+        print(f"dipendente_record: {dipendente_record.values}")
         #calcolo saldo vacanze
         saldovacanze_iniziale= Helper.safe_float(dipendente_record.values['saldovacanze_iniziale'])
         saldovacanze=saldovacanze_iniziale
@@ -165,8 +172,14 @@ def save_record_fields(tableid,recordid, old_values=""):
                 giorni_assenza= Helper.safe_float(assenza.get('giorni'))
                 saldovacanze=saldovacanze-giorni_assenza
 
+        accrediti_dict_list=dipendente_record.get_linkedrecords_dict('accredito_ferie')
+        for accredito in accrediti_dict_list:
+            giorni_accredito= Helper.safe_float(accredito.get('giorni'))
+            saldovacanze=saldovacanze+giorni_accredito
+
         dipendente_record.values['saldovacanze'] = saldovacanze
         dipendente_record.save()
+        print(f"Save record dipendente eseguita")
 
     # ---EVENT---
     if tableid == 'events':
@@ -215,6 +228,11 @@ def delete_record(tableid, recordid):
         if assenze.values.get('recordiddipendente_'):
             save_record_fields(tableid='dipendente', recordid=assenze.values.get('recordiddipendente_'))
 
+    # ---ACCREDITO FERIE---
+    elif tableid == 'accredito_ferie':
+        accredito_ferie = UserRecord('accredito_ferie', recordid)
+        if accredito_ferie.values.get('recordiddipendente_'):
+            save_record_fields(tableid='dipendente', recordid=accredito_ferie.values.get('recordiddipendente_'))
 
 
 def card_task_pianificaperoggi(recordid):

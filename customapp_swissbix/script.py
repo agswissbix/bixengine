@@ -3563,9 +3563,46 @@ def sync_bixdata_assenze():
         print("sync_bixdata_assenze")
         sync_output = sync_table('assenze')
         result_log.append("sync_bixdata_assenze")
-        #aggiornamento company in salesorder
+
+        #aggiornamento dipendente
         sql="UPDATE user_assenze JOIN user_dipendente ON user_assenze.adiuto_user=user_dipendente.adiuto_user SET user_assenze.recordiddipendente_=user_dipendente.recordid_"
         HelpderDB.sql_execute(sql)
+        
+
+        #aggiornamento tipo assenza
+        sql="UPDATE user_assenze as a SET a.tipo_assenza='Vacanze' WHERE a.tipo_assenza='01.Vacanza'"
+        HelpderDB.sql_execute(sql)
+        sql="UPDATE user_assenze as a SET a.tipo_assenza='Visita medica' WHERE a.tipo_assenza='02.Visita medica'"
+        HelpderDB.sql_execute(sql)
+
+        #aggiornamento ore
+        sql="""
+        UPDATE user_assenze AS ba 
+        JOIN user_adiuto_assenze AS aa ON ba.sync_id = aa.sync_id 
+        SET 
+            -- Aggiorna ba.ore solo se c'è un valore valido, altrimenti lo lascia com'è
+            ba.ore = IF(
+                aa.ore_f1079 IS NULL OR TRIM(aa.ore_f1079) = '', 
+                ba.ore, 
+                aa.ore_f1079 + 0
+            ),
+            
+            -- Aggiorna ba.giorni sommandolo solo se c'è un valore valido, altrimenti lo lascia com'è
+            ba.giorni = IF(
+                aa.ore_f1079 IS NULL OR TRIM(aa.ore_f1079) = '', 
+                ba.giorni, 
+                IFNULL(ba.giorni, 0) + ((aa.ore_f1079 + 0) / 8)
+            );
+        """
+        HelpderDB.sql_execute(sql)
+
+        dipendenti_records=UserTable('dipendente').get_records(conditions_list=["deleted_='N'"])
+        for dipendente in dipendenti_records:
+            recordid_dipendente=dipendente.get('recordid_')
+            save_record_fields('dipendente', recordid_dipendente)
+            
+        
+
     except Exception as e:
         result_message = f"Errore durante la sincronizzazione: {str(e)}"
         result_log.append(result_message)

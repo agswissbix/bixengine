@@ -393,10 +393,12 @@ class Helper:
 
     @classmethod
     def safe_float(cls,value):
+        if value is None:
+            return 0.0
         try:
             return float(value)
         except (TypeError, ValueError):
-            return None
+            return 0.0
         
 
     @classmethod
