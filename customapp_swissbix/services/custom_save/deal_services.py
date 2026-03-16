@@ -59,7 +59,7 @@ class DealService:
         found_dl = next((d for d in dealline_records if d.get('recordidproduct_') == fixedprice_product and d.get('deleted_') == 'N'), None)
         if deal_record.values.get('fixedprice') == 'Si':
             if found_dl:
-                if (found_dl.get('price') or 0) <= 0:
+                if (found_dl.get('price') or 0) < 0:
                     dl_rec = UserRecord('dealline', found_dl['recordid_'])
                     dl_rec.values['price'] = 10000
                     dl_rec.save()
