@@ -2029,6 +2029,7 @@ def get_records_matrixcalendar(request):
     tableid = data.get("tableid")
     viewid = data.get("view")
     searchTerm = data.get("searchTerm")
+    filtersList = data.get("filtersList")
     master_tableid = data.get("masterTableid")
     master_recordid = data.get("masterRecordid")
 
@@ -2047,6 +2048,7 @@ def get_records_matrixcalendar(request):
     record_objects = table.get_table_records_obj(
         viewid=viewid,
         searchTerm=searchTerm,
+        filters_list=filtersList,
         conditions_list=[],
         master_tableid=master_tableid,
         master_recordid=master_recordid,
@@ -2123,7 +2125,9 @@ def get_records_matrixcalendar(request):
             'start': Helper.to_iso_datetime(start_date, start_time),
             'end': Helper.to_iso_datetime(end_date, end_time),
             'color': get_color_for_title(event_color),
+            'event_color': event_color,
             'recordid': str(record_id),
+            'tableid': tableid,
         }
 
         if event_data['start'] and event_data['end']:
@@ -2298,6 +2302,8 @@ def matrixcalendar_save_record(request):
 
         record.userid = record.values['user']
         event = record.save_record_for_event()
+        if not event:
+            return JsonResponse({"success": False, "detail": "Errore nel salvataggio dell'evento"}, status=500)
 
         custom_save_record_fields('events', event.recordid, old_record)
 
