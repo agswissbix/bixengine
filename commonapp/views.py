@@ -2114,8 +2114,8 @@ def get_records_matrixcalendar(request):
         event_color = record.fields[color_field]['convertedvalue']
         start_date = record.fields[date_from_field]['convertedvalue'] if date_from_field else None
         end_date = record.fields[date_to_field]['convertedvalue'] if date_to_field else start_date
-        start_time = record.fields[time_from_field]['convertedvalue'] if time_from_field else datetime.time(8,0).strftime('%H:%M:%S')
-        end_time = record.fields[time_to_field]['convertedvalue'] if time_to_field else datetime.time(12,0).strftime('%H:%M:%S')
+        start_time = record.fields[time_from_field]['convertedvalue'] if time_from_field else None
+        end_time = record.fields[time_to_field]['convertedvalue'] if time_to_field else None
 
         event_data = {
             'id': str(event_id),
