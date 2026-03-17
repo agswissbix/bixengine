@@ -778,6 +778,8 @@ def get_services_activemind(request):
     - Tutti i dati provengono dal DB (user_product)
     - Quantità recuperate dalla dealline (Manutenzione servizi)
     - Se il servizio non è nella dealline → quantity = 0
+    - isBwbix=True → restituisce solo prodotti con subcategory 'services_bwbix'
+    - isBwbix=False (default) → restituisce prodotti con subcategory 'services'
     """
     try:
         data = json.loads(request.body)
@@ -785,18 +787,27 @@ def get_services_activemind(request):
         if not recordid_deal:
             return JsonResponse({"error": "Missing dealid"}, status=400)
 
+        is_bwbix = data.get("isBwbix", False)
+
         # 1️⃣ Recupero TUTTI i servizi ActiveMind dal DB
         services_dict = {}
+
+        if is_bwbix:
+            subcategories = ['services_bwbix']
+        else:
+            subcategories = ['services', 'services_bwbix']
+
+        placeholders = ','.join(['%s'] * len(subcategories))
 
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT recordid_, name,description, price, cost, note
                 FROM user_product
                 WHERE category = 'ActiveMind'
-                  AND subcategory = 'services'
+                  AND subcategory IN ({placeholders})
                   AND deleted_ = 'N'
                 ORDER BY name
-            """)
+            """.format(placeholders=placeholders), subcategories)
             db_products = cursor.fetchall()
 
         for recordid_product, name,description, price, cost, note in db_products:
@@ -925,18 +936,19 @@ def get_products_activemind(request):
         contract_constraint = contract_row[0] if contract_row and contract_row[0] else 12
         contract_discount = contract_row[1] if contract_row and contract_row[1] else 0
 
-    excluded_subcategories = {
-        'services',
-        'services_maintenance',
-        'system_assurance',
-        'conditions',
-        'monte_ore'
+    included_subcategories = {
+        'data_security',
+        'mobile_security',
+        'infrastructure',
+        'sophos',
+        'microsoft',
+        'firewall',
     }
 
     # 3️⃣ Costruzione dinamica categorie + servizi
 
     for recordid_, name, description, note, price, cost, subcategory in db_products:
-        if not subcategory or subcategory in excluded_subcategories:
+        if subcategory not in included_subcategories:
             continue
 
         # creo la categoria se non esiste
@@ -1051,17 +1063,25 @@ def get_conditions_activemind(request):
 def get_monte_ore_activemind(request):
     data = json.loads(request.body)
     recordid_deal = data.get('dealid')
+    is_bwbix = data.get('isBwbix', False)
 
     if not recordid_deal:
         return JsonResponse({'error': 'Missing dealid'}, status=400)
+
+    if is_bwbix:
+        subcategories = ['monte_ore_bwbix']
+    else:
+        subcategories = ['monte_ore', 'monte_ore_bwbix']
+
+    placeholders = ','.join(['%s'] * len(subcategories))
 
     with connection.cursor() as cursor:
         cursor.execute("""
             SELECT recordid_, name, description, price, cost, note
             FROM user_product
-            WHERE category LIKE 'ActiveMind' AND subcategory LIKE 'monte_ore' AND deleted_ = 'N'
+            WHERE category LIKE 'ActiveMind' AND subcategory IN ({placeholders}) AND deleted_ = 'N'
             ORDER BY price ASC
-        """)
+        """.format(placeholders=placeholders), subcategories)
         products = cursor.fetchall()
         
         # Check for selected hour option in deal (if stored somewhere, e.g. in dealline like conditions)
