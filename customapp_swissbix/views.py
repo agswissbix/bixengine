@@ -264,6 +264,28 @@ def process_save_activemind_data(data):
         remove_dealline(fetch_existing_dealline(recordid_deal, "services_maintenance"))
 
     # -------------------------------------------------
+    # SECTION Assistance BwBix
+    # -------------------------------------------------
+    sectionAssistanceBwbix = data.get('sectionAssistanceBwbix', {})
+    if sectionAssistanceBwbix:
+        product_id = sectionAssistanceBwbix.get('selectedOption')
+        name_str = sectionAssistanceBwbix.get('label')
+        existing_id = fetch_existing_dealline(recordid_deal, 'assistance_bwbix')
+        if not product_id or product_id == '':
+            if existing_id:
+                remove_dealline(existing_id)
+        else:
+            save_dealline({
+                'recordid_': existing_id,
+                'recordiddeal_': recordid_deal,
+                'recordidproduct_': product_id,
+                'name': name_str,
+                'unitprice': sectionAssistanceBwbix.get('price', 0),
+                'unitexpectedcost': sectionAssistanceBwbix.get('cost', 0),
+                'quantity': 1,
+            })
+
+    # -------------------------------------------------
     # SECTION 4 — Monte Ore
     # -------------------------------------------------
     
@@ -276,11 +298,12 @@ def process_save_activemind_data(data):
     name_str = sectionHours.get('label')
 
     existing_id = fetch_existing_dealline(recordid_deal, 'monte_ore')
+    existing_id_bwbix = fetch_existing_dealline(recordid_deal, 'monte_ore_bwbix')
 
-    if not product_id or product_id == '':
-        if existing_id:
-            remove_dealline(existing_id)
-        return True
+    if existing_id:
+        remove_dealline(existing_id)
+    if existing_id_bwbix:
+        remove_dealline(existing_id_bwbix)
 
     save_dealline({
         'recordid_': existing_id,
@@ -394,6 +417,22 @@ def build_offer_data(recordid_deal, fe_data=None):
         offer_data["monte_ore"] = []
 
     # -----------------------------
+    # 5.5. SECTION Assistance BwBix
+    # -----------------------------
+    if fe_data and fe_data.get("sectionAssistanceBwbix", {}).get("selectedOption"):
+        req_assistance_bwbix = type('Req', (object,), {"body": json.dumps({"dealid": recordid_deal})})
+        assistance_bwbix_resp = get_assistance_bwbix_activemind(req_assistance_bwbix)
+        assistance_bwbix_list = json.loads(assistance_bwbix_resp.content)["options"]
+        for m in assistance_bwbix_list:
+            if m.get("selected"):
+                offer_data["assistance_bwbix"] = assistance_bwbix_list
+                break
+        if not offer_data.get("assistance_bwbix"):
+            offer_data["assistance_bwbix"] = []
+    else:
+        offer_data["assistance_bwbix"] = []
+
+    # -----------------------------
     # 7. SERVICE & ASSETS (Pass-through)
     # -----------------------------
     req_service_asset = type('Req', (object,), {"body": json.dumps({"dealid": recordid_deal})})
@@ -424,6 +463,12 @@ def build_offer_data(recordid_deal, fe_data=None):
         if m.get("selected"):
             total_monte_ore += float(m.get("price", 0.0))
 
+    assistance_bwbix_list = offer_data.get("assistance_bwbix", [])
+    total_assistance_bwbix = 0.0
+    for m in assistance_bwbix_list:
+        if m.get("selected"):
+            total_assistance_bwbix += float(m.get("price", 0.0))
+
     monthly_total = 0.0
     quarterly_total = 0.0
     biannual_total = 0.0
@@ -447,6 +492,7 @@ def build_offer_data(recordid_deal, fe_data=None):
             break
 
     monthly_total += total_services
+    monthly_total += total_assistance_bwbix
     
     contract_constraint = fe_data.get("clientInfo", {}).get("contractConstraint", 12) if fe_data else 12
     discount_rate = 0.10 if contract_constraint == 36 else 0.05 if contract_constraint == 24 else 0.0
@@ -478,6 +524,7 @@ def build_offer_data(recordid_deal, fe_data=None):
         "yearly_discounted": yearly_total_discounted,
         "frequencies": total_frequencies,
         "monte_ore": total_monte_ore,
+        "assistance_bwbix": total_assistance_bwbix,
         "grand_total": grand_total,
         "contract_constraint": contract_constraint,
         "discount_pct": int(discount_rate * 100),
@@ -554,6 +601,8 @@ def print_pdf_activemind(request):
         digital_signature_b64 = data.get('signature', None)
         nameSignature = data.get('nameSignature', '')
 
+        is_bwbix = data.get('isBwbix', False)
+
         signature_url = None
         if digital_signature_b64:
             # Se è già un data URL, lo usiamo direttamente
@@ -574,6 +623,8 @@ def print_pdf_activemind(request):
         from django.conf import settings
         static_img_path = os.path.join(settings.BASE_DIR, "customapp_swissbix/static/images")
         img_cover = to_base64(os.path.join(static_img_path, "cover.png"))
+        if is_bwbix:
+            img_cover = to_base64(os.path.join(static_img_path, "cover_bwbix.jpg"))
         img_systemassurance = to_base64(os.path.join(static_img_path, "systemassurance.png"))
         img_prodotti = to_base64(os.path.join(static_img_path, "prodotti_beall.jpg"))
         img_servizi = to_base64(os.path.join(static_img_path, "servizi.jpg"))
@@ -628,6 +679,7 @@ def print_pdf_activemind(request):
             "context_summary_products": summary_products,
             "context_summary_services": summary_services,
             "context_summary_monte_ore": summary_monte_ore,
+            "context_summary_assistance_bwbix": [m for m in offer_data.get("assistance_bwbix", []) if m.get("selected")],
             "context_service_assets": offer_data.get("service_assets", []),
             # flat per tabella riepilogo finale (se ti serve)
             "section2_products": product_objs,
@@ -639,6 +691,7 @@ def print_pdf_activemind(request):
             "img_prodotti": img_prodotti,
             "img_servizi": img_servizi,
             "nameSignature": nameSignature,
+            "is_bwbix": is_bwbix,
         }
 
         # 5) render + pdf
@@ -1120,6 +1173,64 @@ def get_monte_ore_activemind(request):
 
     return JsonResponse({"options": options_list}, safe=False)
 
+
+def get_assistance_bwbix_activemind(request):
+    data = json.loads(request.body)
+    recordid_deal = data.get('dealid')
+
+    if not recordid_deal:
+        return JsonResponse({'error': 'Missing dealid'}, status=400)
+
+    subcategories = ['assistance_bwbix']
+    placeholders = ','.join(['%s'] * len(subcategories))
+
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT recordid_, name, description, price, cost, note
+            FROM user_product
+            WHERE category LIKE 'ActiveMind' AND subcategory IN ({placeholders}) AND deleted_ = 'N'
+            ORDER BY price ASC
+        """.format(placeholders=placeholders), subcategories)
+        products = cursor.fetchall()
+        
+        cursor.execute("""
+            SELECT recordidproduct_, unitprice
+            FROM user_dealline
+            WHERE recordiddeal_ = %s
+            AND deleted_ = 'N'
+        """, [recordid_deal])
+        selected_rows = cursor.fetchall()
+        selected_dict = {str(row[0]): float(row[1]) for row in selected_rows if row[1] is not None}
+        selected_ids = {row[0] for row in selected_rows}
+
+    options_list = []
+    for recordid_product, name, description, price, cost, note in products:
+        clean_name = name.replace("AM - ", "").strip()
+        
+        hours_val = 0
+        if note:
+             match_hours = re.search(r'- \s*:\s*(\d+)', note)
+             if match_hours:
+                 hours_val = int(match_hours.group(1))
+
+        opt_price = selected_dict.get(str(recordid_product), float(price) if price else 0.0)
+
+        options_list.append({
+            "id": str(recordid_product),
+            "label": clean_name,
+            "description": description or "",
+            "price": opt_price,
+            "cost": float(cost) if cost else 0.0,
+            "selected": recordid_product in selected_ids,
+            "icon": "Clock",
+            "hours": hours_val,
+        })
+
+    has_selected = any(opt["selected"] for opt in options_list)
+    if not has_selected and options_list:
+        options_list[0]["selected"] = True
+
+    return JsonResponse({"options": options_list}, safe=False)
 
 def get_service_and_asset_activemind(request):
     data = json.loads(request.body)

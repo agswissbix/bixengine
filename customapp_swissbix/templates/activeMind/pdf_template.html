@@ -5,7 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="{{ request.scheme }}://{{ request.get_host }}/" />
-    <title>ActiveMind - Servizi di Supporto Sistemistico</title>
+    <title>{% if is_bwbix %}BwBix{% else %}ActiveMind{% endif %} - Servizi di Supporto Sistemistico</title>
     <style>
       /* ==================== RESET PER PLAYWRIGHT ==================== */
       * {
@@ -65,8 +65,9 @@
         position: relative;
         z-index: 1;
         padding-top: 200px;
-        margin-left: 55%;
-        padding-right: 25px;
+        margin-left: 50%;
+        width: 50%;
+        text-align: center;
       }
 
       .cover-title {
@@ -76,7 +77,7 @@
       }
 
       .cover-client {
-        margin-top: 40px;
+        margin-top: 80px;
         font-size: 13pt;
       }
 
@@ -87,7 +88,7 @@
       }
 
       .cover-logo span {
-        color: #dc2626;
+        color: var(--primary-color);
       }
 
       /* ==================== PAGINE NORMALI ==================== */
@@ -126,7 +127,7 @@
       }
 
       .document-title {
-        color: #dc2626;
+        color: var(--primary-color);
         font-size: 24pt;
         font-weight: bold;
         margin: 30px 0 30px 0;
@@ -145,7 +146,7 @@
       }
 
       .section-title {
-        background-color: #dc2626;
+        background-color: var(--primary-color);
         color: white;
         padding: 10px 15px;
         font-weight: bold;
@@ -160,7 +161,7 @@
 
       .service-header {
         font-weight: bold;
-        color: #dc2626;
+        color: var(--primary-color);
         margin-bottom: 15px;
         margin-top: 15px;
         font-size: 14pt;
@@ -169,7 +170,7 @@
       .service-details h3 {
         color: #333333;
         font-size: 12pt;
-        border-bottom: 2px solid #dc2626;
+        border-bottom: 2px solid var(--primary-color);
         padding-bottom: 5px;
         margin-top: 15px;
         margin-bottom: 12px;
@@ -232,19 +233,19 @@
       }
 
       .total-section-title {
-        color: #dc2626;
+        color: var(--primary-color);
         margin-bottom: 20px;
         font-size: 16pt;
         background-color: #f8f8f8;
-        border: 2px solid #dc2626;
+        border: 2px solid var(--primary-color);
         padding: 12px;
       }
 
       .grand-total {
         font-size: 16pt;
         font-weight: bold;
-        color: #dc2626;
-        border-top: 2px solid #dc2626;
+        color: var(--primary-color);
+        border-top: 2px solid var(--primary-color);
         padding-top: 12px;
       }
 
@@ -277,7 +278,7 @@
       }
 
       .conditions h4 {
-        color: #dc2626;
+        color: var(--primary-color);
         margin-bottom: 15px;
         font-size: 16pt;
       }
@@ -352,7 +353,7 @@
       }
     </style>
   </head>
-  <body>
+  <body style="--primary-color: {% if is_bwbix %}#26afdc{% else %}#dc2626{% endif %};">
     <!-- ==================== COPERTINA ==================== -->
     <div class="cover-page">
       <!-- Immagine di sfondo a tutta pagina -->
@@ -362,13 +363,20 @@
 
       <!-- Contenuto della copertina -->
       <div class="cover-content">
-        <div class="cover-title">
-          Intervento sistemistico programmato
-          <span style="color: #dc2626">ActiveMind</span>
+        {% if is_bwbix %}
+        <div class="cover-title" style="height: 250px">
         </div>
+        {% else %}
+        <div class="cover-title">
+          Intervento sistemistico
+          <br/>
+          programmato
+          <span style="color: var(--primary-color)">ActiveMind</span>
+        </div>
+        {% endif %}
         <div class="cover-client">
-          <strong>{{ client_info.nome }}</strong><br /><br /><br />
-          {{ client_info.indirizzo }}<br /><br /><br /><br /><br /><br /><br /><br />
+          <strong>{{ client_info.nome }}</strong><br/><br/>
+          {{ client_info.indirizzo }}<br/><br/>
           Massagno, {{ date }}
         </div>
       </div>
@@ -529,7 +537,7 @@
     {% if section2_products_pages %}
     <!-- Pagina introduttiva dedicata -->
     <div class="page page-break">
-      <div class="section-title">Sezione 2.0 - Prodotti Ricorrenti</div>
+      <div class="section-title">Sezione 2.0 - Soluzioni Ricorrenti</div>
 
       <div style="width: 100%; text-align: center; margin-top: 20px">
         <img
@@ -573,8 +581,8 @@
         style="margin-top: 30px; border-top: 1px solid #999; padding-top: 15px"
       >
         <p style="font-style: italic; color: #444">
-          Le pagine seguenti elencano i
-          <strong>prodotti ricorrenti</strong> suddivisi per categoria.<br />
+          Le pagine seguenti elencano le
+          <strong>soluzioni ricorrenti</strong> suddivise per categoria.<br />
           (Elenco da pagina {% if offer_data.tiers %}4{% else %}3{% endif %} a
           pagina {% if offer_data.tiers %}{{ section2_products_pages|length|add:3 }}{% else %}{{ section2_products_pages|length|add:2 }}{% endif %} )
         </p>
@@ -646,7 +654,7 @@
     <!-- Pagina introduttiva dedicata -->
     <div class="page page-break">
       <div class="section-title">
-        Sezione 2.1 - Servizi inclusi in ActiveMind
+        Sezione 2.1 - Servizi inclusi in {% if is_bwbix %}BwBix{% else %}ActiveMind{% endif %}
       </div>
 
       <div style="width: 100%; text-align: center; margin-top: 20px">
@@ -689,7 +697,7 @@
       >
         <p style="font-style: italic; color: #444">
           Le pagine seguenti presentano in dettaglio i
-          <strong>servizi inclusi nel programma ActiveMind</strong>.<br />
+          <strong>servizi inclusi nel programma {% if is_bwbix %}BwBix{% else %}ActiveMind{% endif %}</strong>.<br />
           (Elenco da pagina 
           {% with has_tiers=offer_data.tiers products_count=section2_products_pages|length services_count=section2_services_pages|length %}
             {% if section2_products_pages %}
@@ -718,7 +726,7 @@
           class="section-subtitle"
           style="font-weight: bold; margin-bottom: 15px"
         >
-          Elenco Servizi ActiveMind {% for freq in offer_data.frequencies %} {% if freq.selected %}- Programmazione {{ freq.label }}{% endif %} {% endfor %}
+          Elenco Servizi {% if is_bwbix %}BwBix{% else %}ActiveMind{% endif %} {% for freq in offer_data.frequencies %} {% if freq.selected %}- Programmazione {{ freq.label }}{% endif %} {% endfor %}
         </h3>
       </div>
       {% endif %} {% for service in page %}
@@ -765,7 +773,7 @@
     <div class="page section page-break">
       <div class="section-title">Sezione 3.0 - Pianificazione Interventi</div>
       <div class="service-item">
-        <div class="service-header">Condizioni incluse in ActiveMind:</div>
+        <div class="service-header">Condizioni incluse in {% if is_bwbix %}BwBix{% else %}ActiveMind{% endif %}:</div>
         <div class="service-details">
           {% for freq in offer_data.frequencies %} {% if freq.selected %}
           <h3><strong>Pianificazione intervento</strong></h3>
@@ -879,7 +887,7 @@
       {% if offer_data.frequencies %}
       {% for freq in offer_data.frequencies %}
       {% if freq.selected %}
-      <div style="background-color: #f8f8f8; border-left: 4px solid #dc2626; padding: 10px; margin-bottom: 20px;">
+      <div style="background-color: #f8f8f8; border-left: 4px solid var(--primary-color); padding: 10px; margin-bottom: 20px;">
         <span style="font-weight: bold; text-transform: uppercase; color: #555; font-size: 10pt;">Frequenza Interventi:</span>
         <span style="font-size: 12pt; margin-left: 10px;"><strong>{{ freq.label }}</strong> (Programmato anticipatamente)</span>
       </div>  
@@ -893,7 +901,7 @@
             <th></th>
             <th>Descrizione</th>
             <th>Qta.</th>
-            <th style="max-width: 80px; white-space: normal; line-height: 1.2;">Prezzo unitario</th>
+            <th style="max-width: 100px; white-space: normal; line-height: 1.2;">Prezzo unitario</th>
             <th>Prezzo totale</th>
           </tr>
         </thead>
@@ -902,7 +910,7 @@
           <tr {% if forloop.last %}style="border-bottom: 2px solid #555 !important"{% endif %}>
             {% if forloop.first %}
             <td rowspan="{{ context_summary_products|length }}" class="vertical-header">
-              <div class="vertical-header-content">PRODOTTI</div>
+              <div class="vertical-header-content">SOLUZIONI</div>
             </td>
             {% endif %}
             <td>
@@ -942,6 +950,27 @@
             </td>
           </tr>
           {% endfor %} 
+        </tbody>
+        <tbody style="page-break-inside: avoid;">
+          {% for assistance in context_summary_assistance_bwbix %} 
+          <tr {% if forloop.last %}style="border-bottom: 2px solid #555 !important"{% endif %}>
+            {% if forloop.first %}
+            <td rowspan="{{ context_summary_assistance_bwbix|length }}" class="vertical-header">
+              <div class="vertical-header-content" style="white-space: break-spaces;">ASSISTENZA</div>
+            </td>
+            {% endif %}
+            <td>{{ assistance.label }}</td>
+            <td style="text-align: center">1</td>
+            <td class="price">
+              CHF {{ assistance.price|default:"0.00"|floatformat:0 }}.--
+            </td>
+            <td class="price">
+              CHF {{ assistance.price|default:"0.00"|floatformat:0 }}.--
+            </td>
+          </tr>
+          {% endfor %} 
+        </tbody>
+        <tbody style="page-break-inside: avoid;">
           {% if offer_data.totals_raw.monthly > 0 %}
           <tr style="background-color: #f0f0f0; font-weight: bold;">
             <td colspan="4">Valore Mensile</td>
@@ -985,18 +1014,18 @@
               {% endif %}
               (Vincolo <strong>{{ offer_data.totals_raw.contract_constraint }}</strong> mesi):
             </td>
-            <td class="price" style="color: #dc2626;">- CHF {{ offer_data.totals_raw.discount_amount_monthly|floatformat:0 }}.--</td>
+            <td class="price" style="color: var(--primary-color);">- CHF {{ offer_data.totals_raw.discount_amount_monthly|floatformat:0 }}.--</td>
           </tr>
 
           {% if offer_data.totals_raw.monthly > 0 %}
           <tr
             style="
-              background-color: #dc2626;
+              background-color: var(--primary-color);
               color: white;
               font-weight: bold;
             "
           >
-            <td colspan="4">TOTALE MENSILE EFFETTIVO (PRODOTTI E SERVIZI)</td>
+            <td colspan="4">TOTALE MENSILE EFFETTIVO (SOLUZIONI E SERVIZI)</td>
             <td class="price">
               CHF {{ offer_data.totals.monthly_discounted }}.--
               <br />
@@ -1009,7 +1038,7 @@
           <!-- {% if offer_data.totals_raw.yearly > 0 %}
           <tr
             style="
-              background-color: #dc2626;
+              background-color: var(--primary-color);
               color: white;
               font-weight: bold;
             "
@@ -1021,7 +1050,7 @@
 
           
 
-          <!-- <tr style="background-color: #dc2626; color: white; font-weight: bold">
+          <!-- <tr style="background-color: var(--primary-color); color: white; font-weight: bold">
             <td colspan="4">TOTALE COMPLESSIVO</td>
             <td class="price"> {{ offer_data.totals.grand_total }}.--</td>
           </tr> -->
@@ -1057,7 +1086,7 @@
               CHF {{ monte.price|default:"0.00"|floatformat:0 }}.--
             </td>
           </tr>
-          <tr style="background-color: #dc2626; color: white; font-weight: bold;">
+          <tr style="background-color: var(--primary-color); color: white; font-weight: bold;">
             <td colspan="4">TOTALE MONTE ORE (Una Tantum)</td>
             <td class="price">
               CHF {{ monte.price|default:"0.00"|floatformat:0 }}.--
