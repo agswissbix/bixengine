@@ -289,60 +289,91 @@ def get_examplepost(request):
 
 @login_required_api  
 def get_sidebarmenu_items(request):
+    """
+    Recupera gli elementi del menu laterale, inclusi workspace, 
+    tabelle preferite e item aggiuntivi basati sul server attivo.
+    """
     print("Function: get_sidebarmenu_items")
-    tables= SysTable.get_user_tables(1)
-    workspaces_tables=dict()
-    userid =Helper.get_userid(request)
-    for table in tables:
-        workspace = table["workspace"]
-
-        
-        if workspace not in workspaces_tables:
-            workspace_record = SysTableWorkspace.objects.filter(name=table['workspace']).first()
-            workspaces_tables[workspace] = {}
-            workspaces_tables[workspace]["id"]=table['workspace']
-            workspaces_tables[workspace]["title"]=table['workspace']
-            workspaces_tables[workspace]["icon"]=workspace_record.icon if workspace_record else 'Home'
-            workspaces_tables[workspace]["order"]=table['workspace_order']
-        subitem={}
-        subitem['id']=table['id']
-        subitem['title']=table['description']
-        subitem['href']="#"
-        subitem['order']=table['table_order']
-        if "subItems" not in workspaces_tables[workspace]:
-            workspaces_tables[workspace]['subItems']=[]
-        workspaces_tables[workspace]["subItems"].append(subitem)
-
-    favorite_tables = HelpderDB.sql_query(f"SELECT * FROM sys_user_favorite_tables WHERE sys_user_id = {userid}")
-
-    username =Helper.get_username(request)
-    other_items=[]
-    active_server=Helper.get_activeserver(request)['value']
-    if active_server == 'belotti':
-        other_items.append({
-                        "id": "LIFESTYLE",
-                        "description": "INSERIMENTO RICHIESTA ACQUISTI"
-                    })
-        #gruppo=HelpderDB.sql_query_value(f"SELECT gruppo FROM user_sync_adiuto_utenti WHERE utentebixdata='{username}'","gruppo")
-        #if gruppo:
-         #   formularigruppo=HelpderDB.sql_query(f"SELECT formulari FROM user_sync_adiuto_formularigruppo WHERE gruppo='{gruppo}'")
-          #  if formularigruppo:
-           #     formulari=formularigruppo[0]['formulari']
-            #    lista_formulari_list = formulari.split(",")
-             #   for formulario in lista_formulari_list:
-              #      other_items.append({
-               #         "id": formulario,
-                #        "description": formulario
-                 #   })
-
+    
+    # 1. Recupero dati base e inizializzazione
+    tables = SysTable.get_user_tables(1)
+    workspaces_tables = {}
     userid = Helper.get_userid(request)
-    response = {
+    username = Helper.get_username(request)
+    
+    # 2. Gestione Tabelle Preferite
+    favorite_query = "SELECT tableid FROM sys_user_favorite_tables WHERE sys_user_id = %s"
+    favorite_tables = HelpderDB.sql_query(favorite_query, [userid])
+    
+    # Set per ricerca rapida O(1) invece di liste O(n)
+    favorite_ids = {table["tableid"] for table in favorite_tables}
+    favorite_tables_list = []
+
+    # 3. Elaborazione Tabelle e Workspace
+    for table in tables:
+        workspace_name = table["workspace"]
+        table_id = table["id"]
+
+        # Aggiunta ai preferiti se presente
+        if table_id in favorite_ids:
+            favorite_tables_list.append({
+                "id": table_id,
+                "tableid": table_id,
+                "title": table["description"],
+            })
+
+        # Inizializzazione Workspace se nuovo
+        if workspace_name not in workspaces_tables:
+            workspace_record = SysTableWorkspace.objects.filter(name=workspace_name).first()
+            
+            workspaces_tables[workspace_name] = {
+                "id": workspace_name,
+                "title": workspace_name,
+                "icon": workspace_record.icon if workspace_record else 'Home',
+                "order": table['workspace_order'],
+                "subItems": []
+            }
+
+        # Aggiunta della tabella come sub-item del workspace
+        workspaces_tables[workspace_name]["subItems"].append({
+            "id": table_id,
+            "title": table['description'],
+            "href": "#",
+            "order": table['table_order']
+        })
+
+    # 4. Gestione Active Server ed elementi extra
+    other_items = []
+    active_server_data = Helper.get_activeserver(request)
+    
+    if active_server_data.get('value') == 'belotti':
+        other_items.append({
+            "id": "LIFESTYLE",
+            "description": "INSERIMENTO RICHIESTA ACQUISTI"
+        })
+        
+        # CODICE COMMENTATO ORIGINALE
+        # gruppo = HelpderDB.sql_query_value(f"SELECT gruppo FROM user_sync_adiuto_utenti WHERE utentebixdata='{username}'","gruppo")
+        # if gruppo:
+        #     formularigruppo = HelpderDB.sql_query(f"SELECT formulari FROM user_sync_adiuto_formularigruppo WHERE gruppo='{gruppo}'")
+        #     if formularigruppo:
+        #         formulari = formularigruppo[0]['formulari']
+        #         lista_formulari_list = formulari.split(",")
+        #         for formulario in lista_formulari_list:
+        #             other_items.append({
+        #                 "id": formulario,
+        #                 "description": formulario
+        #             })
+
+    # 5. Risposta
+    response_data = {
         "menuItems": workspaces_tables,
         "otherItems": other_items,
-        "favoriteTables": favorite_tables,
+        "favoriteTables": favorite_tables_list,
         "userid": userid
     }
-    return JsonResponse(response, safe=False)
+    
+    return JsonResponse(response_data, safe=False)
 
 
 
