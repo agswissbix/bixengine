@@ -241,13 +241,14 @@ class UserRecord:
             date_to_field = tablesettings.get('table_planner_date_to_field').get('value')
             time_from_field = tablesettings.get('table_planner_time_from_field').get('value')
             time_to_field = tablesettings.get('table_planner_time_to_field').get('value')
+            duration_field = tablesettings.get('table_planner_duration_field').get('value')
 
             from_date = self.values[date_from_field] if date_from_field else None
             if from_date:
                 start_str = self.values.get(time_from_field)
                 end_str = self.values.get(time_to_field)
                 to_date = self.values.get(date_to_field) or from_date
-                duration = self.values.get('duration')
+                duration = self.values.get(duration_field)
 
                 # Default se non presenti
                 if not start_str and not end_str:

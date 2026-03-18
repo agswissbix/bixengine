@@ -212,6 +212,11 @@ class TableSettings:
             'options': [],
             'value': ''
         },
+        'table_planner_duration_field': {
+            'type': 'select',
+            'options': [],
+            'value': ''
+        },
         'table_planner_default_view': {
             'type': 'select',
             'options': ['day', 'week', 'month'],
@@ -538,7 +543,8 @@ class TableSettings:
                 'default_orderby',
                 'table_planner_title_field',
                 'table_planner_color_field',
-                'table_planner_resource_field'
+                'table_planner_resource_field',
+                'table_planner_duration_field'
             ],
             'date_fields': [
                 'table_planner_date_from_field',

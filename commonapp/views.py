@@ -2121,6 +2121,7 @@ def get_records_matrixcalendar(request):
     date_to_field = tablesettings.get('table_planner_date_to_field').get('value')
     time_from_field = tablesettings.get('table_planner_time_from_field').get('value')
     time_to_field = tablesettings.get('table_planner_time_to_field').get('value')
+    duration_field = tablesettings.get('table_planner_duration_field').get('value')
 
     if not date_from_field:
         return JsonResponse({"error": "Non è stato configurato alcun campo di tipo data."}, status=400)
@@ -2147,6 +2148,7 @@ def get_records_matrixcalendar(request):
         end_date = record.fields[date_to_field]['convertedvalue'] if date_to_field else start_date
         start_time = record.fields[time_from_field]['convertedvalue'] if time_from_field else None
         end_time = record.fields[time_to_field]['convertedvalue'] if time_to_field else None
+        duration = record.fields[duration_field]['convertedvalue'] if duration_field else None
 
         event_data = {
             'id': str(event_id),
@@ -2159,6 +2161,7 @@ def get_records_matrixcalendar(request):
             'event_color': event_color,
             'recordid': str(record_id),
             'tableid': tableid,
+            'duration': duration,
         }
 
         if event_data['start'] and event_data['end']:
@@ -2293,6 +2296,7 @@ def matrixcalendar_save_record(request):
     date_to_field = tablesettings.get('table_planner_date_to_field', {}).get('value')
     time_from_field = tablesettings.get('table_planner_time_from_field', {}).get('value')
     time_to_field = tablesettings.get('table_planner_time_to_field', {}).get('value')
+    duration_field = tablesettings.get('table_planner_duration_field', {}).get('value')
 
     # --- Validazione campi obbligatori configurati ---
     if not resource_field or not date_from_field:
