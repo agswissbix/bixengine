@@ -4110,6 +4110,9 @@ def save_table_view(request):
             else:
                 sql_condition = table.build_condition(filter_type, field_id, filter_value, filter_condition)
 
+            if filter_type == 'Data' and 'Oggi' in filter_condition:
+                sql_condition = f"{field_id} = current_date"
+
             if sql_condition:
                 conditions_list.append(sql_condition)
 
