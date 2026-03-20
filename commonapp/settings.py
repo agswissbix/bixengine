@@ -405,10 +405,12 @@ FIELDTYPES = {
 
 @superuser_required
 def settings_table_fields_new_field(request):
-    data = json.loads(request.body)
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"success": False, "error": "JSON non valido"}, status=400)
 
     tableid = data.get("tableid")
-    userid = data.get("userid")
     fieldid = data.get("fieldid")
     fielddescription = data.get("fielddescription")
     fieldtype = data.get("fieldtype")
@@ -417,138 +419,114 @@ def settings_table_fields_new_field(request):
     linked_table_fields = data.get("linkedtablefields", [])
     label = data.get("label", "Dati")
 
-    if not all([tableid, fielddescription, fieldtype]) and (not fieldid or not is_linked):
-        return JsonResponse({"success": False, "error": "Dati mancanti o non validi"}, status=400)
+    if not all([tableid, fielddescription, fieldtype]):
+        return JsonResponse({"success": False, "error": "Dati mancanti"}, status=400)
 
-    # Evita duplicati
-    if SysField.objects.filter(tableid=tableid, fieldid=fieldid).first() is not None:
-        return JsonResponse({"success": False, "error": "Campo già esistente"}, status=400)
-    
     if fieldtype not in FIELDTYPES:
         return JsonResponse({"success": False, "error": "Tipo di campo non valido"}, status=400)
 
-    tableid_obj = SysTable.objects.filter(id=tableid).first()
-
-    # Caso base
-
-    sql_column_type = FIELDTYPES.get(fieldtype, "VARCHAR(255)")
     user_table_name = f"user_{tableid}"
+    sql_column_type = FIELDTYPES.get(fieldtype, "VARCHAR(255)")
+    
+    # Prepariamo le variabili per i nomi delle colonne
+    new_field_obj = None
+    cols_to_add = []
+
     if not is_linked:
-        new_field = SysField.objects.create(
-            tableid=tableid_obj.id,
-            fieldid=fieldid,
-            description=fielddescription,
-            fieldtypewebid=fieldtype,
-            label=label,
-            length=255,
-        )
-        alter_sql = f'ALTER TABLE {user_table_name} ADD COLUMN {fieldid} {sql_column_type} NULL'
+        cols_to_add = [fieldid]
+    else:
+        # Logica nomi per campi linked
+        cols_to_add = [f"recordid{linked_table}_", f"_recordid{linked_table}"]
 
-        try:
-            with connection.cursor() as cursor:
-                cursor.execute(alter_sql)
-        except Exception as e:
-            transaction.set_rollback(True)
-            print(f"Errore SQL durante l'aggiunta della colonna: {e}")
-            return JsonResponse({"success": False, "error": f"Errore SQL: {e}"}, status=500)
+    # --- 1. ESECUZIONE SQL (Fuori dalla transazione Django) ---
+    try:
+        with connection.cursor() as cursor:
+            for col in cols_to_add:
+                # Verifica minima se la colonna esiste già per evitare crash SQL
+                cursor.execute(f"""
+                    SELECT COUNT(*) FROM information_schema.columns 
+                    WHERE table_name = %s AND column_name = %s
+                """, [user_table_name, col])
+                
+                if cursor.fetchone()[0] == 0:
+                    cursor.execute(f"ALTER TABLE {user_table_name} ADD COLUMN {col} {sql_column_type} NULL")
+    except Exception as e:
+        return JsonResponse({"success": False, "error": f"Errore Database (DDL): {str(e)}"}, status=500)
 
-    # Se è un campo Categoria → crea lookup table e relative opzioni
-    if fieldtype == "lookup" or fieldtype == "multiselect":
-        lookuptableid = f"{fieldid}_{tableid}"
-        new_field.lookuptableid = lookuptableid
-        new_field.save()
-        lookup_table = SysLookupTable.objects.create(
-            description=fieldid,
-            tableid=lookuptableid,
-            itemtype="Carattere",
-            codelen=255,
-            desclen=255
-        )
-
-        values = data.get("valuesArray", [])
-        items = [
-            SysLookupTableItem(
-                lookuptableid=lookuptableid,
-                itemcode=v["description"],
-                itemdesc=v["description"]
-            )
-            for v in values if v.get("description")
-        ]
-        if items:
-            SysLookupTableItem.objects.bulk_create(items)
-
-    # Se è un Checkbox → crea lookup Si/No
-    elif fieldtype == "Checkbox":
-        lookuptableid = f"{fieldid}_{tableid}"
-        SysLookupTable.objects.create(
-            description=fieldid,
-            tableid=lookuptableid,
-            itemtype="Carattere",
-            codelen=255,
-            desclen=255
-        )
-        SysLookupTableItem.objects.bulk_create([
-            SysLookupTableItem(lookuptableid=lookuptableid, itemcode="Si", itemdesc="Si"),
-            SysLookupTableItem(lookuptableid=lookuptableid, itemcode="No", itemdesc="No"),
-        ])
-    elif is_linked and linked_table and linked_table_fields:
-        linkedtableid = linked_table
-
-        # Costruisce i nomi delle nuove colonne
-        newcolumn = f"recordid{linkedtableid}_"
-        newcolumn2 = f"_recordid{linkedtableid}"
-
-        # Costruisce l'identificativo del campo collegato nella tabella opposta
-        fieldid2 = f"recordid{tableid}_"
-
-        # Costruisce la stringa con i campi collegati
-        fields = linked_table_fields
-        keyfieldlink = ",".join([str(field) for field in fields])
-        keyfieldlink = SysField.objects.filter(id__in=keyfieldlink.split(",")).values_list('fieldid', flat=True)
-
-        # Aggiunge la colonna nella tabella utente principale
-        alter_sql_1 = f"ALTER TABLE {user_table_name} ADD COLUMN {newcolumn} {sql_column_type} NULL"
-
-        # Aggiunge anche la seconda colonna di collegamento
-        alter_sql_2 = f"ALTER TABLE {user_table_name} ADD COLUMN {newcolumn2} {sql_column_type} NULL"
-
-        try:
-            with connection.cursor() as cursor:
-                cursor.execute(alter_sql_1)
-                cursor.execute(alter_sql_2)
-                cursor.execute(
-                    f"INSERT INTO sys_table_link (tableid, tablelinkid) VALUES ('{linkedtableid}', '{tableid}')"
+    # --- 2. OPERAZIONI DJANGO (Dentro transazione atomica) ---
+    try:
+        with transaction.atomic():
+            if not is_linked:
+                # Caso Base / Lookup / Checkbox
+                new_field_obj = SysField.objects.create(
+                    tableid=tableid,
+                    fieldid=fieldid,
+                    description=fielddescription,
+                    fieldtypewebid=fieldtype,
+                    label=label,
+                    length=255,
                 )
-        except Exception as e:
-            transaction.set_rollback(True)
-            print(f"Errore SQL durante la creazione delle colonne Linked: {e}")
-            return JsonResponse({"success": False, "error": f"Errore SQL: {e}"}, status=500)
 
-        # Crea il campo collegato nella tabella principale
-        SysField.objects.create(
-            tableid=tableid,
-            fieldid=newcolumn,
-            description=fielddescription,
-            fieldtypewebid=fieldtype,
-            length=255,
-            label=label,
-            keyfieldlink=keyfieldlink,
-            tablelink=linkedtableid,
-        ) 
+                if fieldtype in ["lookup", "multiselect", "Checkbox"]:
+                    lookuptableid = f"{fieldid}_{tableid}"
+                    new_field_obj.lookuptableid = lookuptableid
+                    new_field_obj.save()
 
-        # Crea anche la seconda colonna di riferimento nel sistema dei campi
-        SysField.objects.create(
-            tableid=tableid,
-            fieldid=newcolumn2,
-            description=fielddescription,
-            fieldtypewebid=fieldtype,
-            length=255,
-            label=label,
-            keyfieldlink=keyfieldlink,
-            tablelink=linkedtableid,
-        )
+                    SysLookupTable.objects.create(
+                        description=fielddescription,
+                        tableid=lookuptableid,
+                        itemtype="Carattere", codelen=255, desclen=255
+                    )
 
-    return JsonResponse({"success": True})
+                    if fieldtype == "Checkbox":
+                        items = [
+                            SysLookupTableItem(lookuptableid=lookuptableid, itemcode="Si", itemdesc="Si"),
+                            SysLookupTableItem(lookuptableid=lookuptableid, itemcode="No", itemdesc="No"),
+                        ]
+                    else:
+                        values = data.get("valuesArray", [])
+                        items = [
+                            SysLookupTableItem(lookuptableid=lookuptableid, itemcode=v["description"], itemdesc=v["description"])
+                            for v in values if v.get("description")
+                        ]
+                    if items:
+                        SysLookupTableItem.objects.bulk_create(items)
+
+            else:
+                # Caso Linked
+                keyfieldlink_ids = linked_table_fields if isinstance(linked_table_fields, list) else str(linked_table_fields).split(",")
+                keyfieldlink_names = ",".join(SysField.objects.filter(id__in=keyfieldlink_ids).values_list('fieldid', flat=True))
+
+                # Registra il link tra tabelle
+                # Usiamo update_or_create per evitare duplicati nella tabella di sistema
+                with connection.cursor() as cursor:
+                    cursor.execute("INSERT IGNORE INTO sys_table_link (tableid, tablelinkid) VALUES (%s, %s)", [linked_table, tableid])
+
+                # Crea i due campi di sistema
+                new_field_obj = SysField.objects.create(
+                    tableid=tableid,
+                    fieldid=cols_to_add[0], # recordidLINKED_
+                    description=fielddescription,
+                    fieldtypewebid=fieldtype,
+                    length=255, label=label,
+                    keyfieldlink=keyfieldlink_names,
+                    tablelink=linked_table,
+                )
+
+                SysField.objects.create(
+                    tableid=tableid,
+                    fieldid=cols_to_add[1], # _recordidLINKED
+                    description=fielddescription,
+                    fieldtypewebid=fieldtype,
+                    length=255, label=label,
+                    keyfieldlink=keyfieldlink_names,
+                    tablelink=linked_table,
+                )
+
+    except Exception as e:
+        return JsonResponse({"success": False, "error": f"Errore salvataggio Metadati: {str(e)}"}, status=500)
+
+    return JsonResponse({"success": True, "new_field": new_field_obj.id if new_field_obj else None})
 
 @superuser_required
 def settings_table_fields_delete_field(request):
