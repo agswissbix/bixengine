@@ -312,7 +312,7 @@ def settings_table_fields_settings_fields_save(request):
     # --- Gestione Lookup Items ---
     new_items = [item for item in items if item.get("status") == "new"]
     deleted_items = [item for item in items if item.get("status") == "deleted"]
-    changed_items = [item for item in items if item.get("status") == "changed"]
+    existing_items = [item for item in items if item.get("status") not in ["new", "deleted"]]
 
     if deleted_items:
         SysLookupTableItem.objects.filter(
@@ -320,20 +320,27 @@ def settings_table_fields_settings_fields_save(request):
             itemcode__in=[item["itemcode"] for item in deleted_items if item.get("itemcode")]
         ).delete()
 
-    for item in changed_items:
-        SysLookupTableItem.objects.filter(
-            lookuptableid=lookuptableid,
-            itemcode=item.get("itemcode")
-        ).update(
-            itemcode=item.get("itemdesc", ""), 
-            itemdesc=item.get("itemdesc", "")
-        )
+    for item in existing_items:
+        update_data = {}
+        if item.get("status") == "changed":
+            update_data["itemcode"] = item.get("itemdesc", "")
+            update_data["itemdesc"] = item.get("itemdesc", "")
+            
+        if item.get("itemorder") is not None:
+            update_data["itemorder"] = item.get("itemorder")
+            
+        if update_data:
+            SysLookupTableItem.objects.filter(
+                lookuptableid=lookuptableid,
+                itemcode=item.get("itemcode")
+            ).update(**update_data)
 
     new_lookup_items = [
         SysLookupTableItem(
             lookuptableid=lookuptableid,
             itemcode=item.get("itemcode") or item.get('itemdesc') or f"new_{i}",
-            itemdesc=item.get("itemdesc", "")
+            itemdesc=item.get("itemdesc", ""),
+            itemorder=item.get("itemorder")
         )
         for i, item in enumerate(new_items)
     ]
