@@ -107,6 +107,7 @@ def settings_table_fields(request):
             master_tableid=master_table_id
         ).first()
 
+        field['source'] = 'user' if (user_field_conf and str(userid) != '1') else 'default'
         
         if not user_field_conf:
             user_field_conf = SysUserFieldOrder.objects.filter(
@@ -116,6 +117,10 @@ def settings_table_fields(request):
                 typepreference=typepreference,
                 master_tableid=master_table_id
             ).first()
+            field['source'] = 'default'
+
+        if not user_field_conf:
+            field['source'] = 'hardcoded'
 
         field['order'] = user_field_conf.fieldorder if user_field_conf else None
 
@@ -321,8 +326,40 @@ def settings_table_tablefields_save(request):
         user_table_order.fieldorder = order_value
         user_table_order.save()
 
+    return JsonResponse({"success": True})
+
+
+@superuser_required
+def settings_table_fields_order_reset(request):
+    data = json.loads(request.body)
+    tableid = data.get('tableid')
+    userid = data.get('userid')
+    typepreference = data.get('typepreference')
+
+    if not userid:
+        return JsonResponse({'success': False, 'error': 'User not found'})
+
+    SysUserFieldOrder.objects.filter(
+        tableid_id=tableid,
+        userid_id=userid,
+        typepreference=typepreference
+    ).delete()
+
     return JsonResponse({'success': True})
 
+@superuser_required
+def settings_table_usertables_order_reset(request):
+    data = json.loads(request.body)
+    userid = data.get('userid')
+
+    if not userid:
+        return JsonResponse({'success': False, 'error': 'User not found'})
+
+    SysUserTableOrder.objects.filter(
+        userid_id=userid,
+    ).delete()
+
+    return JsonResponse({'success': True})
 
 @superuser_required
 @transaction.atomic

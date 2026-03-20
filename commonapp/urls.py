@@ -126,6 +126,8 @@ urlpatterns = [
     path('delete_table/', delete_table, name='delete_table'),
     path('settings_table_settings_reset/', settings_table_settings_reset, name='settings_table_settings_reset'),
     path('settings_table_fields_settings_reset/', settings_table_fields_settings_reset, name='settings_table_fields_settings_reset'),
+    path('settings_table_fields_order_reset/', settings_table_fields_order_reset, name='settings_table_fields_order_reset'),
+    path('settings_table_usertables_order_reset/', settings_table_usertables_order_reset, name='settings_table_usertables_order_reset'),
     
     
     # ------------------  WeGolf views ---------------------------------

@@ -95,11 +95,18 @@ class SettingsBusinessLogic:
             else:
                 fallback_tables = []
 
-            # Pulizia dei campi extra
+            # Pulizia dei campi extra e assegnazione source
             for t in valid_tables:
                 t.pop('user_order_id', None)
+                t['source'] = 'user' if str(userid) != '1' else 'default'
+
             for t in fallback_tables:
                 t.pop('fb_order_id', None)
+                t['source'] = 'default'
+                
+            for t in valid_tables + fallback_tables:
+                if t['order'] is None:
+                    t['source'] = 'hardcoded'
 
             # Merge user + fallback e ordinamento finale
             all_tables = valid_tables + fallback_tables
