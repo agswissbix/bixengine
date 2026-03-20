@@ -146,6 +146,49 @@ def settings_table_settings(request):
 
     return JsonResponse({"tablesettings": tablesettings})
 
+@superuser_required
+def settings_table_settings_reset(request):
+    data = json.loads(request.body)
+    tableid = data.get('tableid')
+    userid = data.get('userid')
+    settingid = data.get('settingid')
+
+    if not userid:
+        return JsonResponse({'success': False, 'error': 'User not found'})
+
+    SysUserTableSettings.objects.filter(
+        tableid_id=tableid,
+        userid_id=userid,
+        settingid=settingid
+    ).delete()
+
+    return JsonResponse({'success': True})
+
+
+@superuser_required
+def settings_table_fields_settings_reset(request):
+    data = json.loads(request.body)
+    tableid = data.get('tableid')
+    userid = data.get('userid')
+    field_record_id = data.get('fieldid')
+    settingid = data.get('settingid')
+
+    if not userid:
+        return JsonResponse({'success': False, 'error': 'User not found'})
+
+    field_record = SysField.objects.filter(tableid=tableid, id=field_record_id).first()
+    if not field_record:
+        return JsonResponse({'success': False, 'error': 'Field not found'})
+
+    SysUserFieldSettings.objects.filter(
+        tableid=tableid,
+        userid_id=userid,
+        fieldid=field_record.fieldid,
+        settingid=settingid
+    ).delete()
+
+    return JsonResponse({'success': True})
+
 
 @superuser_required
 def settings_table_fields_settings_save(request):

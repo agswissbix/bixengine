@@ -94,6 +94,8 @@ urlpatterns = [
     path('fieldsupdate/', fieldsupdate, name='fieldsupdate'),
     path('get_categories_dashboard/', get_categories_dashboard, name='get_categories_dashboard'),
 
+    path('check_csv_compatibility/', check_csv_compatibility, name='check_csv_compatibility'),
+    path('import_csv_data/', import_csv_data, name='import_csv_data'),
     
     path('print_deal/', print_deal, name='print_deal'),
     
@@ -122,8 +124,8 @@ urlpatterns = [
     path('settings_table_fields_delete_field/', settings_table_fields_delete_field, name='settings_table_fields_delete_field'),
     path('settings_table_fields_change_to_lookup/', settings_table_fields_change_to_lookup, name='settings_table_fields_change_to_lookup'),
     path('delete_table/', delete_table, name='delete_table'),
-    path('check_csv_compatibility/', check_csv_compatibility, name='check_csv_compatibility'),
-    path('import_csv_data/', import_csv_data, name='import_csv_data'),
+    path('settings_table_settings_reset/', settings_table_settings_reset, name='settings_table_settings_reset'),
+    path('settings_table_fields_settings_reset/', settings_table_fields_settings_reset, name='settings_table_fields_settings_reset'),
     
     
     # ------------------  WeGolf views ---------------------------------

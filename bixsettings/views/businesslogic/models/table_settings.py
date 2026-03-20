@@ -451,6 +451,11 @@ class TableSettings:
             self._populate_workspace_options(settings_copy)
             self._populate_linked_table_options(settings_copy)
 
+        # Initialize base source and original_default
+        for key, value in settings_copy.items():
+            value['source'] = 'hardcoded'
+            value['original_default'] = value.get('value')
+
         user_settings_qs = SysUserTableSettings.objects.filter(
             tableid=self.tableid,
             userid=self.userid
@@ -474,10 +479,19 @@ class TableSettings:
         # Merge: user → admin
         merged_settings = []
         for settingid in set(admin_settings) | set(user_settings):
-            if settingid in user_settings:
-                merged_settings.append(user_settings[settingid])
+            if settingid in user_settings and str(self.userid) != '1':
+                s = user_settings[settingid]
+                s['source'] = 'user'
+                merged_settings.append(s)
+            elif settingid in admin_settings:
+                s = admin_settings[settingid]
+                s['source'] = 'default'
+                merged_settings.append(s)
             else:
-                merged_settings.append(admin_settings[settingid])
+                # Fallback per userid=1
+                s = user_settings[settingid]
+                s['source'] = 'default'
+                merged_settings.append(s)
 
         self._apply_user_settings(settings_copy, merged_settings)
 
@@ -579,6 +593,9 @@ class TableSettings:
                 continue
 
             setting_info = settings_copy[setting_id]
+
+            if 'source' in row:
+                setting_info['source'] = row['source']
 
             if setting_info['type'] == 'multiselect':
                 selected_values = row['value'].split(',') if row['value'] else []

@@ -86,6 +86,11 @@ class FieldSettings:
     def get_settings(self):
         settings_copy = {key: value.copy() for key, value in self.settings.items()}
 
+        # Initialize base source and original_default
+        for key, value in settings_copy.items():
+            value['source'] = 'hardcoded'
+            value['original_default'] = value.get('value')
+
         # Settings utente
         user_qs = SysUserFieldSettings.objects.filter(
             tableid=self.tableid,
@@ -107,10 +112,18 @@ class FieldSettings:
         # Merge: user → admin
         merged_settings = []
         for settingid in set(admin_settings) | set(user_settings):
-            if settingid in user_settings:
-                merged_settings.append(user_settings[settingid])
+            if settingid in user_settings and str(self.userid) != '1':
+                s = user_settings[settingid]
+                s['source'] = 'user'
+                merged_settings.append(s)
+            elif settingid in admin_settings:
+                s = admin_settings[settingid]
+                s['source'] = 'default'
+                merged_settings.append(s)
             else:
-                merged_settings.append(admin_settings[settingid])
+                s = user_settings[settingid]
+                s['source'] = 'default'
+                merged_settings.append(s)
 
         # Applica i valori recuperati alle impostazioni di base
         for setting in merged_settings:
@@ -120,6 +133,9 @@ class FieldSettings:
                 continue
             setting_info = settings_copy[setting_id]
             setting_info['value'] = value
+
+            if 'source' in setting:
+                setting_info['source'] = setting['source']
 
             conditions = setting.get('conditions')
             if conditions:
