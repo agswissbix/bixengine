@@ -8,7 +8,7 @@ from bixsettings.views.businesslogic.models.field_settings import *
 from bixsettings.views.helpers.helperdb import *
 from django.db import transaction
 from django.db.models.functions import Coalesce
-from django.db.models import F, OuterRef, Subquery, IntegerField, Case, When, Value
+from django.db.models import F, OuterRef, Subquery, IntegerField, Case, When, Value, Max
 from django.utils import timezone
 from commonapp.helper import *
 from commonapp.decorators.is_superuser import superuser_required
@@ -419,12 +419,16 @@ def settings_table_fields_new_field(request):
     linked_table_fields = data.get("linkedtablefields", [])
     label = data.get("label", "Dati")
 
+    userid = 1
+    # userid = Helper.get_userid(request)
+
     if not all([tableid, fielddescription, fieldtype]):
         return JsonResponse({"success": False, "error": "Dati mancanti"}, status=400)
 
     if fieldtype not in FIELDTYPES:
         return JsonResponse({"success": False, "error": "Tipo di campo non valido"}, status=400)
 
+    tableid_obj = SysTable.objects.filter(id=tableid).first()
     user_table_name = f"user_{tableid}"
     sql_column_type = FIELDTYPES.get(fieldtype, "VARCHAR(255)")
     
@@ -521,6 +525,28 @@ def settings_table_fields_new_field(request):
                     length=255, label=label,
                     keyfieldlink=keyfieldlink_names,
                     tablelink=linked_table,
+                )
+
+            preferences = ['search_results_fields', 'insert_fields']
+
+            for pref in preferences:
+                # 1. Trova il valore massimo di fieldorder per questa specifica preferenza
+                max_order = SysUserFieldOrder.objects.filter(
+                    userid_id=userid, 
+                    tableid=tableid_obj, 
+                    typepreference=pref
+                ).aggregate(Max('fieldorder'))['fieldorder__max']
+
+                # 2. Se max_order è None (nessun record), partiamo da 0, altrimenti max + 1
+                new_order = (max_order + 1) if max_order is not None else 0
+
+                # 3. Crea il nuovo record
+                SysUserFieldOrder.objects.create(
+                    userid_id=userid,
+                    tableid=tableid_obj,
+                    fieldid=new_field_obj,
+                    fieldorder=new_order,
+                    typepreference=pref
                 )
 
     except Exception as e:
@@ -890,7 +916,7 @@ def save_new_table(request):
 
 
         # Imposta l'ordine dei campi per l'utente (ORM)
-        preferences = ['search_results_fields', 'insert_fields', 'search_fields']
+        preferences = ['search_results_fields', 'insert_fields']
         for pref in preferences:
             SysUserFieldOrder.objects.create(
                 userid=user,
