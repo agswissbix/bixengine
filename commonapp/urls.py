@@ -128,6 +128,7 @@ urlpatterns = [
     path('settings_table_fields_settings_reset/', settings_table_fields_settings_reset, name='settings_table_fields_settings_reset'),
     path('settings_table_fields_order_reset/', settings_table_fields_order_reset, name='settings_table_fields_order_reset'),
     path('settings_table_usertables_order_reset/', settings_table_usertables_order_reset, name='settings_table_usertables_order_reset'),
+    path('settings_user_customizations_summary/', settings_user_customizations_summary, name='settings_user_customizations_summary'),
     
     
     # ------------------  WeGolf views ---------------------------------

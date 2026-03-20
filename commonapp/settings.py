@@ -362,6 +362,49 @@ def settings_table_usertables_order_reset(request):
     return JsonResponse({'success': True})
 
 @superuser_required
+def settings_user_customizations_summary(request):
+    data = json.loads(request.body)
+    userid = data.get('userid')
+    if not userid:
+        return JsonResponse({"error": "No userid"}, status=400)
+
+    try:
+        user = SysUser.objects.get(id=userid)
+    except SysUser.DoesNotExist:
+        return JsonResponse({"error": "User not found"}, status=404)
+
+    customizations = {}
+
+    def add_customization(group, category, text):
+        if group not in customizations:
+            customizations[group] = {}
+        if category not in customizations[group]:
+            customizations[group][category] = []
+        customizations[group][category].append(text)
+
+    # Table settings
+    table_settings = SysUserTableSettings.objects.filter(userid=user)
+    for ts in table_settings:
+        table_name = ts.tableid.id if hasattr(ts.tableid, 'id') else ts.tableid
+        add_customization(table_name, "Table Settings", ts.settingid)
+
+    # Field settings
+    field_settings = SysUserFieldSettings.objects.filter(userid=user)
+    for fs in field_settings:
+        add_customization(fs.tableid, "Field Settings", f"{fs.fieldid} - {fs.settingid}")
+
+    # Field Order Insert (and other type preferences)
+    field_orders = SysUserFieldOrder.objects.filter(userid=user).values('tableid_id', 'typepreference').distinct()
+    for fo in field_orders:
+        add_customization(fo['tableid_id'], "Order Fields", f"{fo['typepreference']}: Personalizzato")
+
+    # Table Order
+    if SysUserTableOrder.objects.filter(userid=user).exists():
+        add_customization("Sistema", "Impostazioni Globali", "Ordine Tabelle: Personalizzato")
+
+    return JsonResponse({"customizations": customizations})
+
+@superuser_required
 @transaction.atomic
 def settings_table_fields_settings_fields_save(request):
     data = json.loads(request.body)
