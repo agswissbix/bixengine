@@ -525,6 +525,7 @@ FIELDTYPES = {
     "Numero": "FLOAT",
     "lookup": "VARCHAR(255)",
     "multiselect": "VARCHAR(255)",
+    "Checkbox": "VARCHAR(10)",
     "Utente": "VARCHAR(255)",
     "Memo": "TEXT",
     "html": "LONGTEXT",
