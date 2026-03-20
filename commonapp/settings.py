@@ -552,76 +552,86 @@ def settings_table_fields_new_field(request):
 
 @superuser_required
 def settings_table_fields_delete_field(request):
-    data = json.loads(request.body)
-
-    tableid = data.get("tableid")
-    field_id = data.get("fieldid")
-    userid = data.get("userid")
-
-    if userid != 1:
-        return JsonResponse({"success": False, "error": "L'utente deve essere l'utente di default"}, status=400)
-
-    if not tableid or not field_id:
-        return JsonResponse({"success": False, "error": "Dati mancanti"}, status=400)
-
-    field = SysField.objects.filter(tableid=tableid, id=field_id).first()
-    if not field:
-        return JsonResponse({"success": False, "error": "Campo non trovato"}, status=404)
-
-    user_table_name = f"user_{tableid}"
-    fieldid = field.fieldid
-    # --------------------------
-    # 1. Rimozione colonna SQL
-    # --------------------------
     try:
-        with connection.cursor() as cursor:
-            cursor.execute(f"ALTER TABLE {user_table_name} DROP COLUMN {fieldid}")
+        data = json.loads(request.body)
+
+        tableid = data.get("tableid")
+        field_id = data.get("fieldid")
+        userid = data.get("userid")
+
+        if userid != 1:
+            return JsonResponse({"success": False, "error": "L'utente deve essere l'utente di default"}, status=400)
+
+        if not tableid or not field_id:
+            return JsonResponse({"success": False, "error": "Dati mancanti"}, status=400)
+
+        field = SysField.objects.filter(tableid=tableid, id=field_id).first()
+        if not field:
+            return JsonResponse({"success": False, "error": "Campo non trovato"}, status=404)
+
+        user_table_name = f"user_{tableid}"
+        fieldid = field.fieldid
+        # --------------------------
+        # 1. Rimozione colonna SQL
+        # --------------------------
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(f"ALTER TABLE {user_table_name} DROP COLUMN {fieldid}")
+        except Exception as e:
+            print("Errore DROP COLUMN:", e)
+            # Non blocchiamo: la colonna potrebbe non esistere
+
+        # --------------------------
+        # 2. Se è un campo lookup → elimina lookup table e valori
+        # --------------------------
+        if field.fieldtypewebid in ["lookup", "multiselect", "Checkbox"]:
+            if field.lookuptableid:
+                SysLookupTableItem.objects.filter(lookuptableid=field.lookuptableid).delete()
+                SysLookupTable.objects.filter(tableid=field.lookuptableid).delete()
+
+        # --------------------------
+        # 3. Se è un campo collegato → eliminare TUTTE le cose derivate
+        # --------------------------
+        if field.tablelink or fieldid.startswith('_'):
+            linked_table = field.tablelink
+            linked_table_name = f"user_{linked_table}"
+
+            # nomi colonne che avevi creato
+            col1 = f"recordid{linked_table}_"
+            col2 = f"_recordid{linked_table}"
+
+            # elimina le colonne nella tabella originale
+            for col in [col1, col2]:
+                try:
+                    with connection.cursor() as cursor:
+                        cursor.execute(f"ALTER TABLE {user_table_name} DROP COLUMN {col}")
+                except Exception:
+                    pass
+
+            field_id_col2 = SysField.objects.filter(tableid=tableid, fieldid=col2).first()
+
+            # elimina il campo corrispondente nella tabella collegata
+            SysUserFieldOrder.objects.filter(tableid=tableid, fieldid=field.id).delete()
+            SysUserFieldOrder.objects.filter(tableid=tableid, fieldid=field_id_col2.id).delete()
+
+            SysField.objects.filter(tableid=tableid, fieldid=col1).delete()
+            SysField.objects.filter(tableid=tableid, fieldid=col2).delete()
+
+
+            # elimina il link tra tabelle
+            SysTableLink.objects.filter(tableid_id=linked_table, tablelinkid_id=tableid).delete()
+
+            SysUserOrder.objects.filter(tableid=linked_table, fieldid=tableid, typepreference='keylabel').delete()
+
+        # --------------------------
+        # 4. Cancella il SysField principale
+        # --------------------------
+        SysUserFieldOrder.objects.filter(tableid=tableid, fieldid=field_id).delete()
+        field.delete()
+
+        return JsonResponse({"success": True})
     except Exception as e:
-        print("Errore DROP COLUMN:", e)
-        # Non blocchiamo: la colonna potrebbe non esistere
-
-    # --------------------------
-    # 2. Se è un campo lookup → elimina lookup table e valori
-    # --------------------------
-    if field.fieldtypewebid in ["lookup", "multiselect", "Checkbox"]:
-        if field.lookuptableid:
-            SysLookupTableItem.objects.filter(lookuptableid=field.lookuptableid).delete()
-            SysLookupTable.objects.filter(tableid=field.lookuptableid).delete()
-
-    # --------------------------
-    # 3. Se è un campo collegato → eliminare TUTTE le cose derivate
-    # --------------------------
-    if field.tablelink or fieldid.startswith('_'):
-        linked_table = field.tablelink
-        linked_table_name = f"user_{linked_table}"
-
-        # nomi colonne che avevi creato
-        col1 = f"recordid{linked_table}_"
-        col2 = f"_recordid{linked_table}"
-
-        # elimina le colonne nella tabella originale
-        for col in [col1, col2]:
-            try:
-                with connection.cursor() as cursor:
-                    cursor.execute(f"ALTER TABLE {user_table_name} DROP COLUMN {col}")
-            except Exception:
-                pass
-
-        # elimina il campo corrispondente nella tabella collegata
-        SysField.objects.filter(tableid=tableid, fieldid=col1).delete()
-
-        # elimina il link tra tabelle
-        SysTableLink.objects.filter(tableid_id=linked_table, tablelinkid_id=tableid).delete()
-
-        SysUserOrder.objects.filter(tableid=linked_table, fieldid=tableid, typepreference='keylabel').delete()
-
-    # --------------------------
-    # 4. Cancella il SysField principale
-    # --------------------------
-    SysUserFieldOrder.objects.filter(tableid=tableid, fieldid=field_id).delete()
-    field.delete()
-
-    return JsonResponse({"success": True})
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
 
 
 @superuser_required
