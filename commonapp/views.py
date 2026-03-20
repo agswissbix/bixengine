@@ -8940,6 +8940,41 @@ def get_job_status(request):
     except requests.RequestException as e:
         return JsonResponse({"error": "Failed to fetch external data", "details": str(e)}, status=500)
     
+@csrf_exempt
+@login_required_api
+def get_job_status_summary_api(request):
+    try:
+        if request.method != 'POST':
+            return JsonResponse({'error': 'Method not allowed'}, status=405)
+            
+        client_id = Helper.get_cliente_id()
+        if not client_id:
+            return JsonResponse({'error': 'Client ID not found for active server'}, status=400)
+            
+        # Fetches from DB
+        sql = """
+            SELECT
+                recordid_,
+                title,
+                description,
+                status,
+                creationdate,
+                closedate,
+                type,
+                duration,
+                context
+            FROM user_job_status 
+            WHERE clientid = %s
+            ORDER BY creationdate DESC
+        """
+        records = HelpderDB.sql_query(sql, [client_id])
+        return JsonResponse({'success': True, 'data': records})
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'error': str(e)}, status=500)
+    
 def encrypt_data(fernet_instance, plaintext):
     """Cifra una stringa con Fernet. Gestisce None e altri tipi."""
     
