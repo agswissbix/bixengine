@@ -61,10 +61,11 @@ class UserTable:
     }
 
     NUMBER_CONDITIONS = {
+        "Valore esatto": lambda self, field, r: f"{field} = '{r['min']}'",
         "Tra": lambda self, field, r: f"({field} BETWEEN {r['min']} AND {r['max']})",
         "Maggiore di": lambda self, field, r: f"{field} > {r['min']}",
         "Minore di": lambda self, field, r: f"{field} < {r['max']}",
-        "Diverso da": lambda self, field, r: f"{field} <> {r['min']}",
+        "Diverso da": lambda self, field, r: f"{field} NOT BETWEEN {r['min']} AND {r['max']}" if r['max'] else f"{field} <> {r['min']}",
     }
 
     # ============================
@@ -202,8 +203,8 @@ class UserTable:
 
             # --- TIPO Data con set dict {"from","to"} ---
             if filter_type == "Data" and isinstance(val_i, dict):
-                from_d = val_i.get("from", "").strip()
-                to_d = val_i.get("to", "").strip()
+                from_d = val_i.get("from", "").strip() if val_i.get("from") else ""
+                to_d = val_i.get("to", "").strip() if val_i.get("to") else ""
 
                 if cond_i == "Valore esatto":
                     if from_d and to_d:
