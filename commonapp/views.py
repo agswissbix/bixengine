@@ -4924,14 +4924,27 @@ def export_excel(request):
             searchTerm = data.get('searchTerm')
             viewid = data.get('view')
             filters = data.get('filters', {})
+            mastertableid = data.get('mastertableid', '')
+            masterrecordid = data.get('masterrecordid', '')
+            order=data.get("order", {"fieldid": "recordid_", "direction": "desc"})
+            order_fieldid= order.get("fieldid", "recordid_")
+            order_direction= order.get("direction", "desc")
         
             table = UserTable(tableid)
             if viewid == '':
                 viewid=table.get_default_viewid()
 
+            if not order_fieldid:
+                if viewid == 'linked':
+                    order_fieldid = 'linkedorder_'
+                else:
+                    order_fieldid = 'recordid_'
+            if not order_direction:
+                order_direction = 'desc'
+
             records: List[UserRecord]
             conditions_list=list()
-            records=table.get_table_records_obj(viewid=viewid,searchTerm=searchTerm, conditions_list=conditions_list, filters_list=filters, limit=10000)
+            records=table.get_table_records_obj(viewid=viewid,searchTerm=searchTerm, conditions_list=conditions_list, filters_list=filters, master_tableid=mastertableid, master_recordid=masterrecordid, orderby=f"{order_fieldid} {order_direction}", limit=10000)
             counter=table.get_total_records_count()
             table_columns=table.get_results_columns()
             rows=[]
