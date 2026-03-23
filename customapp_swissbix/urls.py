@@ -51,11 +51,11 @@ urlpatterns = [
     
     path('sync_contacts/', sync_contacts, name='sync_contacts'),
     
-    path('get_monitoring/', get_monitoring, name='get_monitoring'),
+    # TEMPORARY
     path('sync_job_status/', sync_job_status, name='sync_job_status'),
-
     path('get_timesheets_to_invoice/', get_timesheets_to_invoice, name='get_timesheets_to_invoice'),
     path('upload_timesheet_in_bexio/', upload_timesheet_in_bexio, name='upload_timesheet_in_bexio'),
+    
     path('get_timetracking/', get_timetracking, name='get_timetracking'),
     path('save_timetracking/', save_timetracking, name='save_timetracking'),
     path('resume_timetracking/', resume_timetracking, name='resume_timetracking'),
