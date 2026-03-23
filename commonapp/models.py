@@ -1017,6 +1017,7 @@ class UserJobStatus(BaseUserTable):
     status = models.CharField(max_length=255, null=True, blank=True)
     creationdate = models.DateField(null=True, blank=True)
     closedate = models.DateField(null=True, blank=True)
+    deploydate = models.DateField(null=True, blank=True)
     technote = models.TextField(null=True, blank=True)
     context = models.CharField(max_length=255, null=True, blank=True)
     title = models.CharField(max_length=255, null=True, blank=True)

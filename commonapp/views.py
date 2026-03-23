@@ -8959,6 +8959,15 @@ def get_job_status_summary_api(request):
     try:
         if request.method != 'POST':
             return JsonResponse({'error': 'Method not allowed'}, status=405)
+        
+        data = json.loads(request.body)
+        deploydate = data.get('deploydate')
+
+        if not deploydate:
+            deploydate = datetime.now().strftime('%Y-%m-%d')
+        
+        dt_obj = parser.parse(str(deploydate))
+        deploydate = dt_obj.strftime('%Y-%m-%d')
             
         client_id = Helper.get_cliente_id()
         if not client_id:
@@ -8973,14 +8982,16 @@ def get_job_status_summary_api(request):
                 status,
                 creationdate,
                 closedate,
+                deploydate,
                 type,
                 duration,
                 context
             FROM user_job_status 
             WHERE clientid = %s
+            AND deploydate >= %s
             ORDER BY creationdate DESC
         """
-        records = HelpderDB.sql_query(sql, [client_id])
+        records = HelpderDB.sql_query(sql, [client_id, deploydate])
         return JsonResponse({'success': True, 'data': records})
         
     except Exception as e:

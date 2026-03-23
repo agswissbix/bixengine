@@ -6,8 +6,8 @@ from django.db import connection
 
 DISABLE_SCRIPT = True
 
-INCLUDE_FIELDS = { "commonapp.UserDeadline"}
-INDIFFERENT_FIELDS = {"commonapp.UserJobStatus","commonapp.UserSchedulerLog","commonapp.UserMonitoring","commonapp.UserEmail","commonapp.UserChart", "commonapp.UserSystemLog","commonapp.UserEvents", "commonapp.UserUserLog" }
+INCLUDE_FIELDS = { "commonapp.UserJobStatus"}
+INDIFFERENT_FIELDS = {"commonapp.UserDeadline","commonapp.UserSchedulerLog","commonapp.UserMonitoring","commonapp.UserEmail","commonapp.UserChart", "commonapp.UserSystemLog","commonapp.UserEvents", "commonapp.UserUserLog" }
 
 
 FIELD_TYPE_MAPPING = {
@@ -60,6 +60,7 @@ FIELD_TYPE_MAPPING = {
         "status" : "lookup",
         "creationdate" : "Data",
         "closedate" : "Data",
+        "deploydate" : "Data",
         "technote" : "html",
         "context" : "Parola",
         "title" : "Parola",
