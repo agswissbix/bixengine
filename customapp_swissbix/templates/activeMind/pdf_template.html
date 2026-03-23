@@ -1,4 +1,5 @@
 {% load static %}
+{% load swissbix_filters %}
 <!doctype html>
 <html lang="it">
   <head>
@@ -506,7 +507,7 @@
               </td>
               <td style="text-align: center">1</td>
               <td class="price">
-                CHF {{ tier.price|default:"0.00"|floatformat:0 }}.--
+                CHF {{ tier.price|format_price }}
               </td>
             </tr>
             {% endif %} {% endfor %}
@@ -617,12 +618,12 @@
             <th>Costo totale</th>
           </tr>
           <tr>
-            <td>CHF {{ product.unitPrice|default:"0.00"|floatformat:0 }}.--</td>
+            <td>CHF {{ product.unitPrice|format_price }}</td>
             <td style="text-align: center">
               {{ product.quantity|floatformat:0 }}
             </td>
             <td class="price">
-              CHF {{ product.total|default:"0.00"|floatformat:0 }}.--
+              CHF {{ product.total|format_price }}
             </td>
           </tr>
         </table>
@@ -739,10 +740,10 @@
             <th>Costo totale</th>
           </tr>
           <tr>
-            <td>CHF {{ service.unitPrice|default:"0.00"|floatformat:0 }}.--</td>
+            <td>CHF {{ service.unitPrice|format_price }}</td>
             <td style="text-align: center">{{ service.quantity }}</td>
             <td class="price">
-              CHF {{ service.total|default:"0.00"|floatformat:0 }}.--
+              CHF {{ service.total|format_price }}
             </td>
           </tr>
         </table>
@@ -779,7 +780,7 @@
           <h3><strong>Pianificazione intervento</strong></h3>
           <p><strong>{{ freq.label }}</strong> programmato anticipatamente</p>
           <!-- <p style="text-align: right; font-weight: bold">
-             {{freq.price|floatformat:0}}.--
+             {{freq.price|floatformat:2}}.--
           </p> -->
           <br />
           <h3><strong>Intervento in loco programmato</strong></h3>
@@ -850,7 +851,7 @@
             <tr>
               <td>{{ option.label }}</td>
               <td class="price">
-                CHF {{ option.price|default:"0.00"|floatformat:0 }}.--
+                CHF {{ option.price|format_price }}
               </td>
             </tr>
           </table>
@@ -924,10 +925,10 @@
               {{ product.quantity|floatformat:0 }}
             </td>
             <td class="price">
-              CHF {{ product.unitPrice|default:"0.00"|floatformat:0 }}.--
+              CHF {{ product.unitPrice|format_price }}
             </td>
             <td class="price">
-              CHF {{ product.total|default:"0.00"|floatformat:0 }}.--
+              CHF {{ product.total|format_price }}
             </td>
           </tr>
           {% endfor %}
@@ -943,10 +944,10 @@
             <td>{{ service.title }}</td>
             <td style="text-align: center">{{ service.quantity }}</td>
             <td class="price">
-              CHF {{ service.unitPrice|default:"0.00"|floatformat:0 }}.--
+              CHF {{ service.unitPrice|format_price }}
             </td>
             <td class="price">
-              CHF {{ service.total|default:"0.00"|floatformat:0 }}.--
+              CHF {{ service.total|format_price }}
             </td>
           </tr>
           {% endfor %} 
@@ -962,10 +963,10 @@
             <td>{{ assistance.label }}</td>
             <td style="text-align: center">1</td>
             <td class="price">
-              CHF {{ assistance.price|default:"0.00"|floatformat:0 }}.--
+              CHF {{ assistance.price|format_price }}
             </td>
             <td class="price">
-              CHF {{ assistance.price|default:"0.00"|floatformat:0 }}.--
+              CHF {{ assistance.price|format_price }}
             </td>
           </tr>
           {% endfor %} 
@@ -975,10 +976,10 @@
           <tr style="background-color: #f0f0f0; font-weight: bold;">
             <td colspan="4">Valore Mensile</td>
             <td class="price">
-              CHF {{ offer_data.totals.monthly }}.--
+              CHF {{ offer_data.totals.monthly|format_price }}
               <!-- <br />
               <span style="font-weight: normal; font-size: 10pt">
-                 {{ offer_data.totals.monthly_annual }}.-- /anno
+                 {{ offer_data.totals.monthly_annual|format_price }} /anno
               </span> -->
             </td>
           </tr>
@@ -986,7 +987,7 @@
           <!-- {% if offer_data.totals_raw.yearly > 0 %}
           <tr style="background-color: #f0f0f0; font-weight: bold; border-bottom: 2px solid #555 !important">
             <td colspan="4">TOTALE ANNUALE (ricorrente base)</td>
-            <td class="price"> {{ offer_data.totals.yearly }}.--</td>
+            <td class="price"> {{ offer_data.totals.yearly|format_price }}</td>
           </tr>
           {% endif %} -->
         </tbody>
@@ -1014,7 +1015,7 @@
               {% endif %}
               (Vincolo <strong>{{ offer_data.totals_raw.contract_constraint }}</strong> mesi):
             </td>
-            <td class="price" style="color: var(--primary-color);">- CHF {{ offer_data.totals_raw.discount_amount_monthly|floatformat:0 }}.--</td>
+            <td class="price" style="color: var(--primary-color);">- CHF {{ offer_data.totals_raw.discount_amount_monthly|format_price }}</td>
           </tr>
 
           {% if offer_data.totals_raw.monthly > 0 %}
@@ -1027,10 +1028,10 @@
           >
             <td colspan="4">TOTALE MENSILE EFFETTIVO (SOLUZIONI E SERVIZI)</td>
             <td class="price">
-              CHF {{ offer_data.totals.monthly_discounted }}.--
+              CHF {{ offer_data.totals.monthly_discounted|format_price }}
               <br />
               <span style="font-weight: normal; font-size: 10pt">
-                CHF {{ offer_data.totals.yearly_discounted }}.-- /anno
+                CHF {{ offer_data.totals.yearly_discounted|format_price }} /anno
               </span>
             </td>
           </tr>
@@ -1044,7 +1045,7 @@
             "
           >
             <td colspan="4">TOTALE ANNUALE EFFETTIVO</td>
-            <td class="price"> {{ offer_data.totals.yearly_discounted }}.--</td>
+            <td class="price"> {{ offer_data.totals.yearly_discounted|format_price }}</td>
           </tr>
           {% endif %} -->
 
@@ -1052,7 +1053,7 @@
 
           <!-- <tr style="background-color: var(--primary-color); color: white; font-weight: bold">
             <td colspan="4">TOTALE COMPLESSIVO</td>
-            <td class="price"> {{ offer_data.totals.grand_total }}.--</td>
+            <td class="price"> {{ offer_data.totals.grand_total|format_price }}</td>
           </tr> -->
 
           <tr style="border-bottom: 2px solid #555; border: 0px 0px 2px 0px; background-color: #ffffff;">
@@ -1080,16 +1081,16 @@
             <td>{{ monte.label }}</td>
             <td style="text-align: center">1</td>
             <td class="price">
-              CHF {{ monte.price|default:"0.00"|floatformat:0 }}.--
+              CHF {{ monte.price|format_price }}
             </td>
             <td class="price">
-              CHF {{ monte.price|default:"0.00"|floatformat:0 }}.--
+              CHF {{ monte.price|format_price }}
             </td>
           </tr>
           <tr style="background-color: var(--primary-color); color: white; font-weight: bold;">
             <td colspan="4">TOTALE MONTE ORE (Una Tantum)</td>
             <td class="price">
-              CHF {{ monte.price|default:"0.00"|floatformat:0 }}.--
+              CHF {{ monte.price|format_price }}
             </td>
           </tr>
           {% endfor %}

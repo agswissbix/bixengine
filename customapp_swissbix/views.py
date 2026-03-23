@@ -502,12 +502,6 @@ def build_offer_data(recordid_deal, fe_data=None):
 
     grand_total = (monthly_total_discounted * 12) + yearly_total_discounted + total_monte_ore + total_tiers
 
-    from babel.numbers import format_decimal
-    def fmt_ch(val):
-        if val is None:
-            return "0"
-        return format_decimal(val, format='#,##0', locale='de_CH')
-
     raw_totals = {
         "tiers": total_tiers,
         "services": total_services,
@@ -532,7 +526,7 @@ def build_offer_data(recordid_deal, fe_data=None):
     }
 
     offer_data["totals_raw"] = raw_totals
-    offer_data["totals"] = {k: fmt_ch(v) if isinstance(v, (int, float)) else v for k, v in raw_totals.items()}
+    offer_data["totals"] = {k: v if isinstance(v, (int, float)) else v for k, v in raw_totals.items()}
 
     # Aggiungi info sulla pianificazione se presente
     offer_data["pianificazione_label"] = selected_frequency_label
