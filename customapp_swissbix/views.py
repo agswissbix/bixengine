@@ -2338,13 +2338,167 @@ def get_timesheet_emails(request):
     except Exception as e:
         print("Error in get_timesheet_emails:", e)
         return JsonResponse({"error": str(e)}, status=500)
+
+
 def print_servicecontract(request):
-    from customapp_swissbix.script import print_servicecontract
-    return print_servicecontract(request)
+    print("print_servicecontract")
+
+    try:
+        recordid_servicecontract = None
+        if request.method == 'POST':
+            try:
+                data = json.loads(request.body)
+                recordid_servicecontract = data.get('recordid')
+            except:
+                pass
+        elif request.method == 'GET':
+            recordid_servicecontract = request.GET.get('recordid')
+
+        if not recordid_servicecontract:
+            return JsonResponse({'error': 'Missing recordid'}, status=400)
+        
+        servicecontract = UserRecord('servicecontract', recordid_servicecontract)
+        
+        if not servicecontract:
+            return JsonResponse({'error': 'Record not found'}, status=404)
+        
+        company_id = servicecontract.values.get('recordidcompany_', '')
+        company = UserRecord('company', company_id)
+
+        companyname = "N/A"
+        address = "N/A"
+        cap = ""
+        city = "N/A"
+        
+        if company:
+            companyname = company.values.get('companyname', 'N/A')
+            address = company.values.get('address', 'N/A')
+            cap = company.values.get('cap', '')
+            city = company.values.get('city', 'N/A')
+
+        date_start = servicecontract.values.get('startdate', 'N/A')
+        contracthours = servicecontract.values.get('contracthours', 0)
+        invoiceno = servicecontract.values.get('invoiceno', 'N/A')
+        previousresidual = servicecontract.values.get('previousresidual', 0)
+        excludetravel = servicecontract.values.get('excludetravel', 'No')
+
+        timesheets_dict = servicecontract.get_linkedrecords_dict('timesheet')
+
+        timesheets_updated = []
+        total_used_hours = 0.0 
+
+        for timesheet in timesheets_dict:
+            work_time = float(timesheet.get('worktime_decimal', 0) or 0)
+            travel_time = float(timesheet.get('traveltime_decimal', 0) or 0)
+            invoice_opt = timesheet.get('invoiceoption', '')
+
+            if invoice_opt not in ['Under Warranty', 'Commercial support']:
+                total_used_hours += work_time
+
+            firstname = ''
+            lastname = ''
+            user_id = timesheet.get('user', '')
+            if user_id:
+                user_rec = SysUser.objects.get(id=user_id)
+                if user_rec:
+                    firstname = user_rec.firstname
+                    lastname = user_rec.lastname
+
+            ticket_subject = ''
+            ticket_id = timesheet.get('recordidticketbixdata_', '')
+            if ticket_id:
+                ticket_record = UserRecord('ticket', ticket_id)
+                if ticket_record:
+                    ticket_subject = ticket_record.values.get('subject', '')
+
+            tms = {
+                'date': timesheet.get('date'), 
+                'firstname': firstname or "",
+                'lastname': lastname or "",
+                'worktime_decimal': work_time, 
+                'invoiceoption': invoice_opt,
+                'traveltime_decimal': travel_time if travel_time > 0 else None, 
+                'ticket_subject': ticket_subject,
+                'description': timesheet.get('description', '')
+            }
+
+            timesheets_updated.append(tms)
+
+        try:
+            timesheets_updated.sort(key=lambda x: x['date'] if x['date'] else datetime.date.min)
+        except Exception as e:
+            print(f"Errore ordinamento date: {e}")
+
+        
+
+        residualhours = servicecontract.values.get('residualhours', 'N/A')
+        
+        context = {
+            'companyname': companyname,
+            'address': address,
+            'city': f"{cap} {city}".strip(),
+            'date': date_start,
+            'contracthours': contracthours,
+            'invoiceno': invoiceno,
+            'previousresidual': previousresidual,
+            'excludetravel': excludetravel,
+            'timesheets': timesheets_updated,
+            'residualhours': residualhours, 
+        }
+
+        template = get_template('servicecontract.html')
+        html = template.render(context)
+        
+        response = HttpResponse(content_type="application/pdf")
+        response["Content-Disposition"] = 'inline; filename="service_contract.pdf"'
+        
+        pisa_status = pisa.CreatePDF(html, dest=response, link_callback=link_callback)
+        
+        if pisa_status.err:
+            return HttpResponse("Errore durante la creazione del PDF", status=500)
+            
+        return response
+
+    except Exception as e:
+        logger.error(f"Errore nella generazione PDF: {str(e)}")
+        return JsonResponse({'error': f'Errore nella generazione del PDF: {str(e)}'}, status=500)
 
 def renew_servicecontract(request):
-    from customapp_swissbix.script import renew_servicecontract
-    return renew_servicecontract(request)
+    try:
+        data = json.loads(request.body)
+        old_recordid = data.get('recordid')
+        old_record = UserRecord('servicecontract', old_recordid)
+
+        old_record.values['status'] = 'Complete'
+        old_record.save()
+
+        contracthours = data.get('contracthours')
+
+        new_record = UserRecord('servicecontract')
+
+        new_record.values['recordidcompany_'] = old_record.values['recordidcompany_']
+        new_record.values['subject'] = old_record.values['subject']
+        new_record.values['service'] = old_record.values['service']
+        new_record.values['type'] = old_record.values['type']
+        new_record.values['excludetravel'] = old_record.values['excludetravel']
+        new_record.values['note'] = old_record.values['note']
+
+        new_record.values['previousinvoiceno'] = old_record.values['invoiceno']
+        new_record.values['previousresidual'] = old_record.values['residualhours']
+        new_record.values['contracthours'] = float(contracthours) if str(contracthours).replace('.','',1).isdigit() else 0.0
+        new_record.values['residualhours'] = float(contracthours) if str(contracthours).replace('.','',1).isdigit() else 0.0 + old_record.values['residualhours']
+        new_record.values['invoiceno'] = f"F-{data.get('invoiceno')}"
+        new_record.values['startdate'] = data.get('startdate')
+        new_record.values['status'] = 'In Progress'
+        new_record.values['progress'] = 0
+        new_record.values['recordidcompany_'] = old_record.values['recordidcompany_']
+
+        new_record.save()
+
+        return HttpResponse(f"Nuovo rinnovo effettuato")
+    except Exception as e:
+        logger.error(f"Errore nel rinnovo: {str(e)}")
+        return JsonResponse({'error': f'Errore nel rinnovo: {str(e)}'}, status=500)
 
 def sync_contacts(request):
     from customapp_swissbix.script import sync_contacts
