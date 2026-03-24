@@ -12,21 +12,10 @@ class ProjectService:
         expectedhours = project_record.values.get('expectedhours')
         usedhours = 0
         residualhours = 0
-        fixedpricehours = 0
-        servicecontracthours = 0
-        bankhours = 0
-        invoicedhours = 0
         
         timesheet_records_list = project_record.get_linkedrecords_dict('timesheet')
         for timesheet_record_dict in timesheet_records_list:
             usedhours = usedhours + (timesheet_record_dict.get('totaltime_decimal') or 0)
-            invoicestatus = timesheet_record_dict.get('invoicestatus')
-            if invoicestatus == 'Fixed Price Project':
-                fixedpricehours = fixedpricehours + (timesheet_record_dict.get('totaltime_decimal') or 0)
-            if invoicestatus == 'Service Contract: Monte Ore':
-                bankhours = bankhours + (timesheet_record_dict.get('totaltime_decimal') or 0)
-            if invoicestatus == 'Invoiced':
-                invoicedhours = invoicedhours + (timesheet_record_dict.get('totaltime_decimal') or 0)
                 
         if expectedhours:
             residualhours = expectedhours - usedhours
@@ -45,15 +34,6 @@ class ProjectService:
 
             #aggiornamento deal
             if not Helper.isempty(deal_record.recordid):
-                deal_record.values['usedhours'] = usedhours
-                deal_record.values['fixedpricehours'] = fixedpricehours
-                deal_record.values['servicecontracthours'] = servicecontracthours
-                deal_record.values['bankhours'] = bankhours
-                deal_record.values['invoicedhours'] = invoicedhours
-                deal_record.values['residualhours'] = residualhours
-                deal_record.values['projectcompleted'] = completed
-                deal_record.save()
-                
                 return [('deal', deal_record.recordid)]
         
         return []

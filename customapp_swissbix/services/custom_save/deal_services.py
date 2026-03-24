@@ -34,6 +34,9 @@ class DealService:
 
         # Recupero ID progetto legato se esiste
         project_recordid = DealService._get_project_id(recordid)
+        
+        # 4.5 Processa timesheets del progetto
+        DealService._process_project_timesheets(deal_record, project_recordid)
 
         # 5. Iterazione Dealline records e calcolo aggregati
         totals = DealService._process_deallines(deal_record, dealline_records, project_recordid)
@@ -105,6 +108,47 @@ class DealService:
     def _get_project_id(recordid: str) -> str:
         deal_project_record_dict = HelpderDB.sql_query_row(f"select * from user_project where recordiddeal_={recordid}")
         return deal_project_record_dict.get('recordid_') if deal_project_record_dict else ''
+
+    @staticmethod
+    def _process_project_timesheets(deal_record: UserRecord, project_recordid: str):
+        usedhours = 0
+        fixedpricehours = 0
+        servicecontracthours = 0
+        bankhours = 0
+        invoicedhours = 0
+        invoicedprice = 0
+        residualhours = 0
+        
+        if project_recordid:
+            project_record = UserRecord('project', project_recordid)
+            expectedhours = project_record.values.get('expectedhours')
+            timesheet_records_list = project_record.get_linkedrecords_dict('timesheet')
+            
+            for ts_dict in timesheet_records_list:
+                invoicestatus = ts_dict.get('invoicestatus')
+                hours = ts_dict.get('totaltime_decimal') or 0
+                price = ts_dict.get('totalprice') or 0
+                
+                usedhours += hours
+                
+                if invoicestatus == 'Fixed Price Project':
+                    fixedpricehours += hours
+                elif invoicestatus == 'Service Contract: Monte Ore':
+                    bankhours += hours
+                elif invoicestatus == 'Invoiced':
+                    invoicedhours += hours
+                    invoicedprice += price
+                    
+            if expectedhours:
+                residualhours = expectedhours - usedhours
+                    
+        deal_record.values['usedhours'] = usedhours
+        deal_record.values['fixedpricehours'] = fixedpricehours
+        deal_record.values['servicecontracthours'] = servicecontracthours
+        deal_record.values['bankhours'] = bankhours
+        deal_record.values['invoicedhours'] = invoicedhours
+        deal_record.values['invoicedprice'] = invoicedprice
+        deal_record.values['residualhours'] = residualhours
 
     @staticmethod
     def _process_deallines(deal_record: UserRecord, dealline_records: list, project_recordid: str) -> dict:
