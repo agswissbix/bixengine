@@ -1,6 +1,7 @@
 from commonapp.bixmodels.user_record import UserRecord
 from commonapp.bixmodels.user_table import UserTable
 from commonapp.helper import Helper
+from datetime import *
 
 class TimesheetService:
     @staticmethod
@@ -12,15 +13,15 @@ class TimesheetService:
         Ritorna una lista di tuple (tableid, recordid) di record collegati
         da salvare a cascata.
         """
-        timesheet_record = UserRecord('timesheet', recordid)
+        timesheet_record = UserRecord('timesheet', recordid, load_fields=False)
         servicecontract_table = UserTable(tableid='servicecontract')
         
-        company_record = UserRecord('company', timesheet_record.values['recordidcompany_'])
-        project_record = UserRecord('project', timesheet_record.values['recordidproject_'])
-        ticket_record = UserRecord('ticket', timesheet_record.values['recordidticket_'])
+        company_record = UserRecord('company', timesheet_record.values['recordidcompany_'], load_fields=False)
+        project_record = UserRecord('project', timesheet_record.values['recordidproject_'], load_fields=False)
+        ticket_record = UserRecord('ticket', timesheet_record.values['recordidticket_'], load_fields=False)
         
         servicecontract_record_id = timesheet_record.values['recordidservicecontract_']
-        servicecontract_record = UserRecord('servicecontract', servicecontract_record_id) if not Helper.isempty(servicecontract_record_id) else None
+        servicecontract_record = UserRecord('servicecontract', servicecontract_record_id, load_fields=False) if not Helper.isempty(servicecontract_record_id) else None
         
         if Helper.isempty(timesheet_record.values.get('invoicestatus')):
             timesheet_record.values['invoicestatus'] = ''
@@ -197,7 +198,7 @@ class TimesheetService:
             )
 
         if flat_service_contract:
-            servicecontract_record = UserRecord('servicecontract', flat_service_contract[0]['recordid_'])
+            servicecontract_record = UserRecord('servicecontract', flat_service_contract[0]['recordid_'], load_fields=False)
             timesheet_record.values['recordidservicecontract_'] = servicecontract_record.recordid
             timesheet_record.values['invoicestatus'] = 'Service Contract: ' + servicecontract_record.values.get('type', '')
             timesheet_record.values['productivity'] = 'Ricavo indiretto'
@@ -231,7 +232,7 @@ class TimesheetService:
             )
             if service_contracts:
                 timesheet_record.values['recordidservicecontract_'] = service_contracts[0]['recordid_']
-                servicecontract_record = UserRecord('servicecontract', service_contracts[0]['recordid_'])
+                servicecontract_record = UserRecord('servicecontract', service_contracts[0]['recordid_'], load_fields=False)
                 
                 if invoicestatus == 'To Process':
                     timesheet_record.values['invoicestatus'] = 'Service Contract: Monte Ore Remoto PBX'
@@ -261,7 +262,7 @@ class TimesheetService:
             )
             if service_contracts:
                 timesheet_record.values['recordidservicecontract_'] = service_contracts[0]['recordid_']
-                servicecontract_record = UserRecord('servicecontract', service_contracts[0]['recordid_'])
+                servicecontract_record = UserRecord('servicecontract', service_contracts[0]['recordid_'], load_fields=False)
                 
                 if invoicestatus == 'To Process':
                     timesheet_record.values['invoicestatus'] = 'Service Contract: Monte Ore'

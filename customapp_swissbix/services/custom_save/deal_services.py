@@ -1,6 +1,8 @@
 from commonapp.bixmodels.user_record import UserRecord
 from commonapp.bixmodels.helper_db import HelpderDB
 from commonapp.helper import Helper
+from datetime import *
+
 
 class DealService:
     @staticmethod
@@ -13,7 +15,7 @@ class DealService:
         Ritorna una lista di tuple (tableid, recordid) di record collegati
         da salvare a cascata.
         """
-        deal_record = UserRecord('deal', recordid)
+        deal_record = UserRecord('deal', recordid, load_fields=False)
         dealline_records = deal_record.get_linkedrecords_dict(linkedtable='dealline')
         
         # 1. Fixedprice check & Installazione/configurazione
@@ -63,11 +65,11 @@ class DealService:
         if deal_record.values.get('fixedprice') == 'Si':
             if found_dl:
                 if (found_dl.get('price') or 0) < 0:
-                    dl_rec = UserRecord('dealline', found_dl['recordid_'])
+                    dl_rec = UserRecord('dealline', found_dl['recordid_'], load_fields=False)
                     dl_rec.values['price'] = 10000
                     dl_rec.save()
             else:
-                dl_rec = UserRecord('dealline')
+                dl_rec = UserRecord('dealline', load_fields=False)
                 dl_rec.values['recordiddeal_'] = recordid
                 dl_rec.values['recordidproduct_'] = fixedprice_product
                 dl_rec.values['name'] = 'Installazione e configurazione a progetto'
@@ -76,14 +78,14 @@ class DealService:
                 dl_rec.save()
         else:
             if found_dl:
-                dl_rec = UserRecord('dealline', found_dl['recordid_'])
+                dl_rec = UserRecord('dealline', found_dl['recordid_'], load_fields=False)
                 dl_rec.values['deleted_'] = 'Y'
                 dl_rec.save()
 
     @staticmethod
     def _update_reference(deal_record: UserRecord):
         company_id = deal_record.values.get('recordidcompany_')
-        company_record = UserRecord('company', company_id) if company_id else None
+        company_record = UserRecord('company', company_id, load_fields=False) if company_id else None
         
         val_id = str(deal_record.values.get('id') or '')
         val_company = str(company_record.values.get('companyname') or '') if company_record else ''
@@ -130,7 +132,7 @@ class DealService:
         timesheets_dict = {}
         
         if project_recordid:
-            project_record = UserRecord('project', project_recordid)
+            project_record = UserRecord('project', project_recordid, load_fields=False)
             expectedhours = project_record.values.get('expectedhours') or 0
             for ts in project_record.get_linkedrecords_dict('timesheet'):
                 timesheets_dict[ts.get('recordid_')] = ts
@@ -220,7 +222,7 @@ class DealService:
 
         for dl_dict in dealline_records:
             dl_recordid = dl_dict['recordid_']
-            dl_record = UserRecord('dealline', dl_recordid)
+            dl_record = UserRecord('dealline', dl_recordid, load_fields=False)
             dl_record.values['recordidproject_'] = project_recordid
             
             product_recordid = dl_dict.get('recordidproduct_')
@@ -245,7 +247,7 @@ class DealService:
             
             product_fixedprice = 'No'
             if product_recordid:
-                product_record = UserRecord('product', product_recordid)
+                product_record = UserRecord('product', product_recordid, load_fields=False)
                 if not Helper.isempty(product_record.recordid) and not Helper.isempty(product_record.values):
                     product_fixedprice = product_record.values.get('fixedprice', 'No')
 

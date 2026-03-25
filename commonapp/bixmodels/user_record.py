@@ -67,7 +67,7 @@ def cast_value(value, fieldtype):
 class UserRecord:
 
     context=""
-    def __init__(self, tableid, recordid=None, userid=1, master_tableid="", master_recordid="", _prefetched_data=None):
+    def __init__(self, tableid, recordid=None, userid=1, master_tableid="", master_recordid="", _prefetched_data=None, load_fields=True):
         self.tableid = tableid
         self.recordid = recordid
         self.userid = userid
@@ -117,10 +117,11 @@ class UserRecord:
 
                 self.fields[fieldid] = field_instance
         else:
-            # --- Caso NON OTTIMIZZATO (fallback alla logica originale) ---
-            self._fetch_field_definitions_from_db()
             if recordid:
                 self._fetch_record_values_from_db()
+            # --- Caso NON OTTIMIZZATO (fallback alla logica originale) ---
+            if load_fields:
+                self._fetch_field_definitions_from_db()
                 self._populate_fields_with_values() # Questo ora chiamerà il _convert_display_value aggiornato
 
     def _populate_fields_with_values(self):
