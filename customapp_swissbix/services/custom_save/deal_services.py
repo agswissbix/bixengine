@@ -38,6 +38,7 @@ class DealService:
         project_recordid = DealService._get_project_id(recordid)
         
         # 4.5 Processa timesheets del progetto
+        # Non invertire 4.5 con 5 per logica laborcost
         DealService._process_project_timesheets(deal_record, project_recordid)
 
         # 5. Iterazione Dealline records e calcolo aggregati
@@ -121,9 +122,12 @@ class DealService:
         fixedpricehours = 0
         servicecontracthours = 0
         bankhours = 0
-        deductedhoursamount = 0
+        deductedhoursamount = 100
+        deductedhoursmargin = 0
+        deductedhourscost = 0
         invoicedhours = 0
         invoicedhoursamount = 0
+        laborcost = 0
         nonbillablehours = 0
         nonbillablecost = 0
         saleshours = 0
@@ -151,11 +155,32 @@ class DealService:
             invoicestatus = ts_dict.get('invoicestatus')
             hours = ts_dict.get('totaltime_decimal') or 0
             price = ts_dict.get('totalprice') or 0
+
+            try:
+                hours = float(hours)
+            except ValueError:
+                hours = 0
+            
+            try:
+                price = float(price)
+            except ValueError:
+                price = 0
             
             usedhours += hours
 
             travel_hours = ts_dict.get('traveltime_decimal') or 0
             travel_price = ts_dict.get('travelprice') or 0
+
+            try:
+                travel_hours = float(travel_hours)
+            except ValueError:
+                travel_hours = 0
+            
+            try:
+                travel_price = float(travel_price)
+            except ValueError:
+                travel_price = 0
+
             travelhours += travel_hours
             travelcost += travel_price
 
@@ -168,13 +193,14 @@ class DealService:
                 fixedpricehours += hours
             elif invoicestatus == 'service contract: monte ore':
                 bankhours += hours
-                deductedhoursamount += price
+                deductedhourscost += hours * 60
             elif invoicestatus == 'attività non fatturabile':
                 nonbillablehours += hours
                 nonbillablecost += price
             elif invoicestatus == 'invoiced':
                 invoicedhours += hours
                 invoicedhoursamount += price
+                laborcost += hours * 60
                 
         if expectedhours:
             residualhours = expectedhours - usedhours
@@ -188,12 +214,16 @@ class DealService:
         deal_record.values['bankhours'] = bankhours
         deal_record.values['deductedhours'] = bankhours
         deal_record.values['deductedhoursamount'] = deductedhoursamount
+        deal_record.values['deductedhourscost'] = deductedhourscost
+        deal_record.values['deductedhoursmargin'] = deductedhoursamount - deductedhourscost
         deal_record.values['invoicedhours'] = invoicedhours
         deal_record.values['invoicedhoursamount'] = invoicedhoursamount
         deal_record.values['saleshours'] = saleshours
         deal_record.values['salescost'] = salescost
         deal_record.values['nonbillablehours'] = nonbillablehours
         deal_record.values['nonbillablecost'] = nonbillablecost
+
+        deal_record.values['actuallaborcost'] = laborcost
 
     @staticmethod
     def _process_deallines(deal_record: UserRecord, dealline_records: list, project_recordid: str) -> dict:
@@ -312,8 +342,13 @@ class DealService:
             
         deal_expectedmargin = deal_price - deal_expectedcost
         
-        deal_actualmargin = totals['deal_actualmargin']
-        deal_actualcost = totals['deal_actualcost']
+        # Recupero costo e ricavo ore fatturabili generati dai timesheet 
+        invoiced_laborcost = deal_record.values.get('actuallaborcost') or 0
+        invoiced_amount = deal_record.values.get('invoicedhoursamount') or 0
+        invoiced_margin = invoiced_amount - invoiced_laborcost
+
+        deal_actualcost = totals['deal_actualcost'] + invoiced_laborcost
+        deal_actualmargin = totals['deal_actualmargin'] + invoiced_margin
 
         if deal_actualcost == 0:
             deal_actualmargin = deal_expectedmargin
@@ -336,8 +371,8 @@ class DealService:
         deal_record.values['expectedlaborprice'] = totals['deal_labor_price']
         deal_record.values['expectedlaborcost'] = totals['deal_labor_expected_cost']
         deal_record.values['expectedlabormargin'] = totals['deal_labor_expected_margin']
-        deal_record.values['actuallaborcost'] = totals['deal_labor_actual_cost']
-        deal_record.values['actuallabormargin'] = totals['deal_labor_actual_margin']
+        deal_record.values['actuallaborcost'] = totals['deal_labor_actual_cost'] + invoiced_laborcost
+        deal_record.values['actuallabormargin'] = totals['deal_labor_actual_margin'] + invoiced_margin
 
     @staticmethod
     def _check_project_completion(deal_record: UserRecord):
