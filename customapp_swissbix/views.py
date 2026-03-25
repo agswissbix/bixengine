@@ -1417,6 +1417,7 @@ def get_record_badge_swissbix_deals(request):
 
     deal_name = fields.get("dealname", {})
     deal_amount = fields.get("amount", {})
+    deal_expectedmargin = fields.get("expectedmargin", {})
     deal_effectivemargin = fields.get("effectivemargin", {})
     deal_stage = fields.get("dealstage", {})
     salesuser = fields.get("dealuser1", {})
@@ -1436,6 +1437,7 @@ def get_record_badge_swissbix_deals(request):
     # Badge items
     return_badgeItems["deal_name"] = deal_name.get("value", '')
     return_badgeItems["deal_amount"] = deal_amount.get("value", 0)
+    return_badgeItems["deal_expectedmargin"] = deal_expectedmargin.get("value", 0)
     return_badgeItems["deal_effectivemargin"] = deal_effectivemargin.get("value", 0)
     return_badgeItems["deal_stage"] = deal_stage.get("value", '')
 
