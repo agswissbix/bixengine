@@ -23,6 +23,20 @@ env = environ.Env()
 environ.Env.read_env()
 
 
+def calculate_dependent_fields(request):
+    data = json.loads(request.body)
+    updated_fields = {}
+    recordid=data.get('recordid')
+    tableid=data.get('tableid')
+    fields = data.get('fields', {})
+    
+    #---DEALLINE---
+    if tableid=='dealline':
+        updated_fields = Helper.compute_dealline_fields(fields, UserRecord)
+    
+
+
+    return JsonResponse({'status': 'success', 'updated_fields': updated_fields})
 
 def save_record_fields(tableid,recordid, old_record=""):
 
