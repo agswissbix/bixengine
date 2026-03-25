@@ -112,48 +112,86 @@ class DealService:
     @staticmethod
     def _process_project_timesheets(deal_record: UserRecord, project_recordid: str):
         usedhours = 0
+        residualhours = 0
+        expectedhours = 0
+        travelhours = 0
+        travelcost = 0
         fixedpricehours = 0
         servicecontracthours = 0
         bankhours = 0
+        deductedhoursamount = 0
         invoicedhours = 0
-        invoicedprice = 0
-        residualhours = 0
+        invoicedhoursamount = 0
+        nonbillablehours = 0
+        nonbillablecost = 0
+        saleshours = 0
+        salescost = 0
+        
+        timesheets_dict = {}
         
         if project_recordid:
             project_record = UserRecord('project', project_recordid)
-            expectedhours = project_record.values.get('expectedhours')
-            timesheet_records_list = project_record.get_linkedrecords_dict('timesheet')
+            expectedhours = project_record.values.get('expectedhours') or 0
+            for ts in project_record.get_linkedrecords_dict('timesheet'):
+                timesheets_dict[ts.get('recordid_')] = ts
+                
+        for ts in deal_record.get_linkedrecords_dict('timesheet'):
+            ts_id = ts.get('recordid_')
+            if ts_id in timesheets_dict:
+                del timesheets_dict[ts_id]
+                
+            hours = ts.get('totaltime_decimal') or 0
+            price = ts.get('totalprice') or 0
+            saleshours += hours
+            salescost += price
             
-            for ts_dict in timesheet_records_list:
-                invoicestatus = ts_dict.get('invoicestatus')
-                hours = ts_dict.get('totaltime_decimal') or 0
-                price = ts_dict.get('totalprice') or 0
-                
-                usedhours += hours
+        for ts_dict in timesheets_dict.values():
+            invoicestatus = ts_dict.get('invoicestatus')
+            hours = ts_dict.get('totaltime_decimal') or 0
+            price = ts_dict.get('totalprice') or 0
+            
+            usedhours += hours
 
-                if not invoicestatus or not str(invoicestatus).strip():
-                    continue
+            travel_hours = ts_dict.get('traveltime_decimal') or 0
+            travel_price = ts_dict.get('travelprice') or 0
+            travelhours += travel_hours
+            travelcost += travel_price
 
-                invoicestatus = str(invoicestatus).strip().lower()
+            if not invoicestatus or not str(invoicestatus).strip():
+                continue
+
+            invoicestatus = str(invoicestatus).strip().lower()
+            
+            if invoicestatus == 'fixed price project':
+                fixedpricehours += hours
+            elif invoicestatus == 'service contract: monte ore':
+                bankhours += hours
+                deductedhoursamount += price
+            elif invoicestatus == 'attività non fatturabile':
+                nonbillablehours += hours
+                nonbillablecost += price
+            elif invoicestatus == 'invoiced':
+                invoicedhours += hours
+                invoicedhoursamount += price
                 
-                if invoicestatus == 'fixed price project':
-                    fixedpricehours += hours
-                elif invoicestatus == 'service contract: monte ore':
-                    bankhours += hours
-                elif invoicestatus == 'invoiced':
-                    invoicedhours += hours
-                    invoicedprice += price
-                    
-            if expectedhours:
-                residualhours = expectedhours - usedhours
-                    
+        if expectedhours:
+            residualhours = expectedhours - usedhours
+                
         deal_record.values['usedhours'] = usedhours
+        deal_record.values['residualhours'] = residualhours
+        deal_record.values['travelhours'] = travelhours
+        deal_record.values['travelcost'] = travelcost
         deal_record.values['fixedpricehours'] = fixedpricehours
         deal_record.values['servicecontracthours'] = servicecontracthours
         deal_record.values['bankhours'] = bankhours
+        deal_record.values['deductedhours'] = bankhours
+        deal_record.values['deductedhoursamount'] = deductedhoursamount
         deal_record.values['invoicedhours'] = invoicedhours
-        deal_record.values['invoicedprice'] = invoicedprice
-        deal_record.values['residualhours'] = residualhours
+        deal_record.values['invoicedhoursamount'] = invoicedhoursamount
+        deal_record.values['saleshours'] = saleshours
+        deal_record.values['salescost'] = salescost
+        deal_record.values['nonbillablehours'] = nonbillablehours
+        deal_record.values['nonbillablecost'] = nonbillablecost
 
     @staticmethod
     def _process_deallines(deal_record: UserRecord, dealline_records: list, project_recordid: str) -> dict:
@@ -167,7 +205,17 @@ class DealService:
             'deal_actualmargin': 0,
             'deal_annualprice': 0,
             'deal_annualcost': 0,
-            'deal_annualmargin': 0
+            'deal_annualmargin': 0,
+            'deal_hw_service_expected_cost': 0,
+            'deal_hw_service_expected_margin': 0,
+            'deal_hw_service_actual_cost': 0,
+            'deal_hw_service_actual_margin': 0,
+            'deal_hw_service_price': 0,
+            'deal_labor_expected_cost': 0,
+            'deal_labor_expected_margin': 0,
+            'deal_labor_actual_cost': 0,
+            'deal_labor_actual_margin': 0,
+            'deal_labor_price': 0
         }
 
         for dl_dict in dealline_records:
@@ -213,6 +261,7 @@ class DealService:
                     dl_record.values['usedhours'] = deal_usedhours
                     dl_actualcost = deal_usedhours * 60
                     deal_usedhours = 0
+
                     
             if dl_actualcost != 0:
                 dl_actualmargin = dl_price - dl_actualcost
@@ -232,6 +281,19 @@ class DealService:
                 totals['deal_annualmargin'] += dl_record.values['annualmargin']
             
             dl_record.save()
+
+            if product_fixedprice == 'Si':
+                totals['deal_labor_expected_cost'] += dl_expectedcost
+                totals['deal_labor_expected_margin'] += dl_expectedmargin
+                totals['deal_labor_actual_cost'] += dl_actualcost
+                totals['deal_labor_actual_margin'] += dl_actualmargin
+                totals['deal_labor_price'] += dl_price
+            else:
+                totals['deal_hw_service_expected_cost'] += dl_expectedcost
+                totals['deal_hw_service_expected_margin'] += dl_expectedmargin
+                totals['deal_hw_service_actual_cost'] += dl_actualcost
+                totals['deal_hw_service_actual_margin'] += dl_actualmargin
+                totals['deal_hw_service_price'] += dl_price
 
             totals['deal_actualcost'] += dl_actualcost
             totals['deal_actualmargin'] += dl_actualmargin
@@ -264,6 +326,16 @@ class DealService:
         deal_record.values['annualprice'] = totals['deal_annualprice']
         deal_record.values['annualcost'] = totals['deal_annualcost']
         deal_record.values['annualmargin'] = totals['deal_annualmargin']
+        deal_record.values['expectedhwserviceprice'] = totals['deal_hw_service_price']
+        deal_record.values['expectedhwservicecost'] = totals['deal_hw_service_expected_cost']
+        deal_record.values['expectedhwservicemargin'] = totals['deal_hw_service_expected_margin']
+        deal_record.values['actualhwservicecost'] = totals['deal_hw_service_actual_cost']
+        deal_record.values['actualhwservicemargin'] = totals['deal_hw_service_actual_margin']
+        deal_record.values['expectedlaborprice'] = totals['deal_labor_price']
+        deal_record.values['expectedlaborcost'] = totals['deal_labor_expected_cost']
+        deal_record.values['expectedlabormargin'] = totals['deal_labor_expected_margin']
+        deal_record.values['actuallaborcost'] = totals['deal_labor_actual_cost']
+        deal_record.values['actuallabormargin'] = totals['deal_labor_actual_margin']
 
     @staticmethod
     def _check_project_completion(deal_record: UserRecord):
