@@ -130,12 +130,17 @@ class DealService:
                 price = ts_dict.get('totalprice') or 0
                 
                 usedhours += hours
+
+                if not invoicestatus or not str(invoicestatus).strip():
+                    continue
+
+                invoicestatus = str(invoicestatus).strip().lower()
                 
-                if invoicestatus == 'Fixed Price Project':
+                if invoicestatus == 'fixed price project':
                     fixedpricehours += hours
-                elif invoicestatus == 'Service Contract: Monte Ore':
+                elif invoicestatus == 'service contract: monte ore':
                     bankhours += hours
-                elif invoicestatus == 'Invoiced':
+                elif invoicestatus == 'invoiced':
                     invoicedhours += hours
                     invoicedprice += price
                     

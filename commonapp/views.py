@@ -3501,7 +3501,8 @@ def duplicate_record(request):
         tableid=tableid,
         recordid='',          # nuovo record
         fields=fields_copy,
-        files=files_to_copy
+        files=files_to_copy,
+        userid=userid
     )
 
     # custom_save_record_fields() ? c'è bisogno ?
