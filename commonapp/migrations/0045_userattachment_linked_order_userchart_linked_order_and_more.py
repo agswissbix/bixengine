@@ -5,6 +5,25 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
 
+    # QUERY Controlla quali tabelle hanno linkedorder_
+    # SELECT 
+    #     table_schema,
+    #     table_name, 
+    #     column_name
+    # FROM 
+    #     information_schema.columns 
+    # WHERE 
+    #     table_name IN (
+    #         'user_attachment', 'user_chart', 'user_deadline', 
+    #         'user_email', 'user_events', 'user_job_status', 
+    #         'user_monitoring', 'user_scheduler_log', 
+    #         'user_system_log', 'user_user_log'
+    #     ) 
+    #     AND column_name = 'linkedorder_'
+    #     -- Questo serve a guardare solo il database in cui sei connesso
+    #     AND table_schema NOT IN ('information_schema', 'pg_catalog');
+
+
     dependencies = [
         ('commonapp', '0044_userdeadline'),
     ]

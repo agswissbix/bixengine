@@ -3575,6 +3575,9 @@ def save_record_fields(request):
             saved_fields = data.get('fields', saved_fields)
         except (json.JSONDecodeError, AttributeError):
             return JsonResponse({'error': 'Invalid or missing data'}, status=400)
+
+    if not tableid:
+        return JsonResponse({'error': 'Missing tableid'}, status=400)
         
     # check permissions
     userid = Helper.get_userid(request)
@@ -3593,7 +3596,7 @@ def save_record_fields(request):
 
     if recordid and not tablesettings.has_permission_for_record(can_edit_settings, recordid):
         return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
-
+    
     # 3. Parsing del campo fields
     try:
         if isinstance(saved_fields, dict):
@@ -3603,12 +3606,65 @@ def save_record_fields(request):
     except json.JSONDecodeError:
         saved_fields_dict = {}
 
-    if not tableid:
-        return JsonResponse({'error': 'Missing tableid'}, status=400)
 
     uploaded_files = request.FILES if request.FILES else None
 
     old_record = UserRecord(tableid, recordid)
+    
+    # 4. Validazione dei campi obbligatori
+    fieldsettings = FieldSettings(tableid=tableid, userid=userid)
+    all_field_settings = fieldsettings.get_all_settings()
+    
+    for field_name, field_data in all_field_settings.items():
+        is_required = fieldsettings.has_permission_for_record(field_data.get('obbligatorio', {}), recordid)
+        is_editable = fieldsettings.has_permission_for_record(field_data.get('is_editable', {}), recordid)
+        
+        if is_required or not is_editable:
+            field_value = saved_fields_dict.get(field_name)
+            old_field_value = old_record.values.get(field_name)
+            
+            # Normalizziamo il nuovo valore usando la stessa logica del salvataggio
+            temp_rec = UserRecord(tableid, "")
+            temp_rec.values = {field_name: field_value}
+            temp_rec._normalize_and_validate_values()
+            norm_new_value = temp_rec.values.get(field_name)
+            
+            if is_required:
+                # Usiamo norm_new_value per evitare falsi positivi (es. integer 0 che fallirebbe il 'not field_value')
+                # e bloccare false submission (es. ID relazionale che non esiste)
+                if norm_new_value is None or str(norm_new_value).strip() == '':
+                    # Se il frontend non ce lo ha mandato affatto in un edit parziale
+                    if field_name not in saved_fields_dict and recordid:
+                        if old_field_value is None or str(old_field_value).strip() == '':
+                            return JsonResponse({
+                                'error': f'Il campo "{field_name}" è obbligatorio.',
+                                'field': field_name
+                            }, status=400)
+                    else:
+                        return JsonResponse({
+                            'error': f'Il campo "{field_name}" è obbligatorio.',
+                            'field': field_name
+                        }, status=400)
+        
+            if not is_editable:
+                str_new = "" if norm_new_value is None else str(norm_new_value).strip()
+                str_old = "" if old_field_value is None else str(old_field_value).strip()
+                
+                # Confronto robusto (gestisce sia stringhe esatte che float equivalenti, es 0 vs 0.0)
+                is_diff = str_new != str_old
+                if is_diff:
+                    try:
+                        if float(str_new) == float(str_old):
+                            is_diff = False
+                    except ValueError:
+                        pass
+
+                # Verifica se il campo è stato modificato
+                if is_diff:
+                    return JsonResponse({
+                        'error': f'Il campo "{field_name}" non è modificabile.',
+                        'field': field_name
+                    }, status=400)
 
     # 4️⃣ Chiama la funzione comune
     record = _save_record_data(
@@ -4033,7 +4089,9 @@ def save_record_fields(request):
 
 
 def custom_save_record_fields(tableid, recordid, params):
-    if hasattr(params, 'values'):
+    if isinstance(params, dict):
+        old_values_dict = params
+    elif hasattr(params, 'values') and not callable(params.values):
         old_values_dict = params.values.copy()
     else:
         old_values_dict = params

@@ -777,7 +777,8 @@ class UserRecord:
                 "default": "",
                 "nascosto": "false",
                 "obbligatorio": "false",
-                "has_dependencies": "false"
+                "has_dependencies": "false",
+                "is_editable": "true"
             }
 
             # Applica override (solo value)
