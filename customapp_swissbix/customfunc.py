@@ -490,7 +490,7 @@ def print_timesheet_func(request):
 
 def swissbix_create_timesheet_from_timetracking(request):
     print("Function: swissbix_create_timesheet_from_timetracking")
-    from customapp_swissbix.script import get_timetracking_ai_summary, check_ai_server
+    from customapp_swissbix.views import get_timetracking_ai_summary, check_ai_server
 
     try:
         userid = Helper.get_userid(request)
@@ -622,7 +622,7 @@ def start_timetracking_from_task(request):
     recordid = params.get('recordid')
     tableid = 'task'
 
-    from customapp_swissbix.script import stop_active_timetracking
+    from customapp_swissbix.views import stop_active_timetracking
     stop_active_timetracking(userid)
 
     conditions = []
@@ -666,7 +666,7 @@ def start_timetracking_from_task(request):
 
 def swissbix_summarize_day(request):
     print("Function: swissbix_summarize_day")
-    from customapp_swissbix.script import check_ai_server, get_timesheet_ai_summary
+    from customapp_swissbix.views import check_ai_server, get_timesheet_ai_summary
 
     userid = Helper.get_userid(request)
     tablesettings = TableSettings("timesheet", userid)
