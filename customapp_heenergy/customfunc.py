@@ -31,10 +31,49 @@ def calculate_dependent_fields(request):
     fields = data.get('fields', {})
     
     #---DEALLINE---
-    if tableid=='dealline':
-        updated_fields = Helper.compute_dealline_fields(fields, UserRecord)
+    if tableid=='fattura':
+        recordid_azienda=fields['recordidazienda_']
+        if recordid_azienda:
+            azienda=UserRecord('azienda', recordid_azienda, load_fields=False )
+            updated_fields['tipologia_pagamento'] = azienda.values.get('condizionipagamento')
     
-
+    #---DISPOSITIVI INSTALLATI---
+    if tableid=='dispositivo_installato':
+        datainstallazione = fields.get('datainstallazione')
+        if datainstallazione:
+            from dateutil.relativedelta import relativedelta
+            dt_installazione = datetime.strptime(datainstallazione, "%Y-%m-%d")
+            
+            # Imposta sempre datagaranzia a +24 mesi
+            dt_garanzia = dt_installazione + relativedelta(months=24)
+            updated_fields['datagaranzia'] = dt_garanzia.strftime("%Y-%m-%d")
+            
+            estensionegaranzia = fields.get('estensionegaranzia')
+            if estensionegaranzia:
+                try:
+                    mesi_estensione = int(estensionegaranzia)
+                    dt_estensione = dt_garanzia + relativedelta(months=mesi_estensione)
+                    updated_fields['dataestensionegaranzia'] = dt_estensione.strftime("%Y-%m-%d")
+                except (ValueError, TypeError):
+                    pass
+    
+    #---RIGA FATTURA---
+    if tableid=='riga_fattura':
+        recordid_prodotto=fields.get('recordidprodotto_')
+        quantita=fields.get('quantita')
+        prezzo_vendita=fields.get('prezzo_vendita')
+        if recordid_prodotto:
+            prodotto=UserRecord('prodotto', recordid_prodotto, load_fields=False )
+            prezzo_vendita=prodotto.values.get('prezzo_vendita')
+            updated_fields['prezzo_vendita'] = prezzo_vendita
+        
+        if quantita and prezzo_vendita:
+            try:
+                q = float(quantita)
+                p = float(prezzo_vendita)
+                updated_fields['totale_prezzo_vendita'] = p * q
+            except (ValueError, TypeError):
+                pass
 
     return JsonResponse({'status': 'success', 'updated_fields': updated_fields})
 
