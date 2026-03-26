@@ -9,6 +9,7 @@ from commonapp.bixmodels.user_record import *
 from commonapp.bixmodels.user_table import *
 from commonapp.bixmodels.helper_db import *
 from commonapp.helper import *
+from customapp_swissbix.helper import HelperSwissbix
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view
 from datetime import *
@@ -386,7 +387,7 @@ def calculate_dependent_fields(request):
     
     #---DEALLINE---
     if tableid=='dealline':
-        updated_fields = Helper.compute_dealline_fields(fields, UserRecord)
+        updated_fields = HelperSwissbix.compute_dealline_fields(fields, UserRecord)
     
     #---ASSENZE---
     if tableid=='assenze':

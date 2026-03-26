@@ -8616,23 +8616,7 @@ def get_custom_functions(request):
 
 def calculate_dependent_fields(request):
     print("FUN:calculate_dependent_fields")
-    idcliente = Helper.get_cliente_id()
-    # Nome del modulo dinamico
-    module_name = f"customapp_{idcliente}.customfunc"
-
-    try:
-        # Import dinamico
-        customfunc = importlib.import_module(module_name)
-
-        # Chiama la funzione se esiste
-        if hasattr(customfunc, "calculate_dependent_fields"):
-            return customfunc.calculate_dependent_fields(request)
-        else:
-            print(f"Funzione 'calculate_dependent_fields' non trovata in {module_name}")
-    except ModuleNotFoundError:
-        print(f"Modulo personalizzato {module_name} non trovato")
-    except Exception as e:
-        print(f"Errore durante l'importazione o l'esecuzione: {e}")
+    return call_custom_function("calculate_dependent_fields", request)
 
 
 

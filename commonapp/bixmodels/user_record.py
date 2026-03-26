@@ -776,7 +776,8 @@ class UserRecord:
                 "calcolato": "false",
                 "default": "",
                 "nascosto": "false",
-                "obbligatorio": "false"
+                "obbligatorio": "false",
+                "has_dependencies": "false"
             }
 
             # Applica override (solo value)
@@ -789,16 +790,16 @@ class UserRecord:
             defaultvalue = insert_field['settings'].get('default', '')
             defaultcode = defaultvalue
 
-            if fieldid in {
-                'unitprice',
-                'quantity',
-                'unitexpectedcost',
-                'recordidproduct_'
-            }:
-                insert_field['hasDependencies'] = True
+            # if fieldid in {
+            #     'unitprice',
+            #     'quantity',
+            #     'unitexpectedcost',
+            #     'recordidproduct_'
+            # }:
+            #     insert_field['hasDependencies'] = True
 
-            if self.tableid == 'assenze' and fieldid == 'giorni':
-                insert_field['hasDependencies'] = True
+            # if self.tableid == 'assenze' and fieldid == 'giorni':
+            #     insert_field['hasDependencies'] = True
 
             fieldtype=field['fieldtypewebid']
             if not Helper.isempty(field['keyfieldlink']):

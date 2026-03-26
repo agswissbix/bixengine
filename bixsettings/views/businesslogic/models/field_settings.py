@@ -35,7 +35,17 @@ class FieldSettings:
             'options': ['true', 'false'],
             'value': 'false'
         },
+        # 'is_editable': {
+        #     'type': 'select',
+        #     'options': ['true', 'false'],
+        #     'value': 'true'
+        # },
         'calcolato': {
+            'type': 'select',
+            'options': ['true', 'false'],
+            'value': 'false'
+        },
+        'has_dependencies': {
             'type': 'select',
             'options': ['true', 'false'],
             'value': 'false'
