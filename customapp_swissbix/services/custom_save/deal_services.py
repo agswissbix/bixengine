@@ -122,7 +122,7 @@ class DealService:
         fixedpricehours = 0
         servicecontracthours = 0
         bankhours = 0
-        deductedhoursamount = 100
+        deductedhoursamount = 0
         deductedhoursmargin = 0
         deductedhourscost = 0
         invoicedhours = 0
@@ -193,6 +193,7 @@ class DealService:
                 fixedpricehours += hours
             elif invoicestatus == 'service contract: monte ore':
                 bankhours += hours
+                deductedhoursamount += hours * 100
                 deductedhourscost += hours * 60
             elif invoicestatus == 'attività non fatturabile':
                 nonbillablehours += hours

@@ -283,10 +283,11 @@ def printing_katun_bexio_api_set_invoice(request):
         for invoiceline in bixdata_invoicelines:
             invoiceline_unitprice= invoiceline['unitprice']
             invoiceline_quantity= invoiceline['quantity']
-            if invoiceline_quantity == "0.00":
+            if invoiceline_quantity == "0.00" or invoiceline_quantity == "0":
                 invoiceline_quantity="0.0001"
             invoiceline_description= invoiceline['description']
             invoiceline_description_html = invoiceline_description.replace('\n', '<br>')
+            invoiceline_description_html += f"<br> Prezzo unitario costo copia: {invoiceline_unitprice}"
 
             bexio_invoiceline = {
                 "tax_id": "39",
@@ -307,7 +308,7 @@ def printing_katun_bexio_api_set_invoice(request):
             "currency_id": 1,
             "payment_type_id": 1,
             "header": "",
-            "footer": "Vi ringraziamo per la vostra fiducia, in caso di disaccordo, vi preghiamo di notificarcelo entro 7 giorni. <br/>Rimaniamo a vostra disposizione per qualsiasi domanda,<br/><br/>Con i nostri più cordiali saluti, Swissbix SA",
+            "footer": "Vi ringraziamo per la vostra fiducia, in caso di disaccordo, vi preghiamo di notificarcelo entro 7 giorni.<br/><br/> <b>N.B.</b>: l’importo del costo di stampa riportato nella colonna del prezzo unitario è arrotondato; il valore esatto, utilizzato per il calcolo del costo supplementare effettivo, è indicato nel testo a sinistra. <br/><br/>Rimaniamo a vostra disposizione per qualsiasi domanda,<br/><br/>Con i nostri più cordiali saluti, Swissbix SA ",
             "mwst_type": 0,
             "mwst_is_net": True,
             "show_position_taxes": False,
@@ -333,26 +334,6 @@ def printing_katun_bexio_api_set_invoice(request):
 
         
 
-
-        payload = """
-            {
-                "title": "TEST3",
-                "contact_id": 308,
-                "user_id": 1,
-                "language_id": 1,
-                "currency_id": 1,
-                "payment_type_id": 1,
-                "header": "",
-                "footer": "We hope that our offer meets your expectations and will be happy to answer your questions.",
-                "mwst_type": 0,
-                "mwst_is_net": true,
-                "show_position_taxes": false,
-                "is_valid_from": "2025-10-01",
-                "is_valid_to": "2025-10-21",
-                "template_slug": "5a9c000702cf22422a8b4641",
-                "positions":[{"text":"Interventi</b>","type":"KbPositionText"},{"text":"TEST 25/06/2025 Galli Alessandro </b></span>","tax_id":"39","account_id":"155","unit_id":2,"amount":"1","unit_price":"140","type":"KbPositionCustom"}]
-            }
-            """
 
         response = requests.request("POST", url, data=payload_invoice, headers=headers)
 
