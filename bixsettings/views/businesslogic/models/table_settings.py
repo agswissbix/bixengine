@@ -159,6 +159,7 @@ class TableSettings:
             #here options should be a list of name and selected = true or false
             'options': [
                 {'name': 'Tabella', 'selected': True},
+                {'name': 'Report', 'selected': True},
                 {'name': 'Kanban', 'selected': True},
                 {'name': 'Pivot', 'selected': True},
                 {'name': 'Calendario', 'selected': True},
@@ -170,7 +171,7 @@ class TableSettings:
         },
         'table_active_tab': {
             'type': 'select',
-            'options': ['Tabella', 'Kanban', 'Pivot', 'Calendario','MatrixCalendar', 'Planner' , 'Gallery', 'TabellaRaggruppata', 'Custom'],
+            'options': ['Tabella', 'Report', 'Kanban', 'Pivot', 'Calendario','MatrixCalendar', 'Planner' , 'Gallery', 'TabellaRaggruppata', 'Custom'],
             'value': 'Tabella'
         },
         "table_custom_tab_name": {

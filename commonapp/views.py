@@ -762,8 +762,9 @@ def get_table_records(request):
     order=data.get("order", {"fieldid": "recordid_", "direction": "desc"})
     order_fieldid= order.get("fieldid", "recordid_")
     order_direction= order.get("direction", "desc")
+    typepreference = data.get("typepreference", "search_results_fields")
 
-    table = UserTable(tableid, Helper.get_userid(request))
+    table = UserTable(tableid, Helper.get_userid(request), typepreference)
 
     # Costruisci la clausola WHERE dai filtri
     # 1. Ottieni gli oggetti UserRecord GIA' PROCESSATI

@@ -34,7 +34,7 @@ bixdata_server = os.environ.get('BIXDATA_SERVER')
 
 class UserTable:
     
-    def __init__(self,tableid,userid=1):
+    def __init__(self,tableid,userid=1, typepreference="search_results_fields"):
         self.tableid=tableid
         self.userid=userid
         self.context=''
@@ -42,6 +42,7 @@ class UserTable:
         self._results_columns = None # Cache per le colonne dei risultati
         self._total_records_count = None
         self._numeric_totals = None
+        self.typepreference = typepreference
 
     # ============================
     #   COSTANTI DI CLASSE
@@ -701,23 +702,35 @@ class UserTable:
             SELECT *
             FROM sys_user_field_order
             LEFT JOIN sys_field ON sys_user_field_order.tableid=sys_field.tableid AND sys_user_field_order.fieldid=sys_field.id
-            WHERE sys_user_field_order.typepreference = 'search_results_fields'
-            AND sys_user_field_order.tableid = '{self.tableid}'
-            AND sys_user_field_order.userid = 1
+            WHERE sys_user_field_order.typepreference = %(typepreference)s
+            AND sys_user_field_order.tableid = %(tableid)s
+            AND sys_user_field_order.userid = %(userid)s
             AND sys_user_field_order.fieldorder IS NOT NULL
             ORDER BY sys_user_field_order.fieldorder
             """
-        columns=HelpderDB.sql_query(sql)
+        columns=HelpderDB.sql_query(sql, params={'typepreference': self.typepreference, 'tableid': self.tableid, 'userid': self.userid})
+        if not columns:
+            sql=f"""
+                SELECT *
+                FROM sys_user_field_order
+                LEFT JOIN sys_field ON sys_user_field_order.tableid=sys_field.tableid AND sys_user_field_order.fieldid=sys_field.id
+                WHERE sys_user_field_order.typepreference = %(typepreference)s
+                AND sys_user_field_order.tableid = %(tableid)s
+                AND sys_user_field_order.userid = 1
+                AND sys_user_field_order.fieldorder IS NOT NULL
+                ORDER BY sys_user_field_order.fieldorder
+                """
+            columns=HelpderDB.sql_query(sql, params={'typepreference': self.typepreference, 'tableid': self.tableid})
         return columns
     
     def get_table_views(self):
         sql=f"""
             SELECT *
             FROM sys_view
-            WHERE tableid = '{self.tableid}' AND (userid = 1 OR userid = {self.userid})
+            WHERE tableid = %(tableid)s AND (userid = 1 OR userid = %(userid)s)
             ORDER BY name
             """
-        views=HelpderDB.sql_query(sql)
+        views=HelpderDB.sql_query(sql, params={'tableid': self.tableid, 'userid': self.userid})
         return views
     
     def get_default_viewid(self):
