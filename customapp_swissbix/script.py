@@ -1,4 +1,4 @@
-from customapp_swissbix.customfunc import save_record_fields
+from customapp_swissbix.custom_handlers import save_record_fields
 from datetime import date, datetime
 import hashlib
 import hmac
@@ -18,7 +18,6 @@ from commonapp.bixmodels.user_record import UserRecord
 from commonapp.utils.email_sender import EmailSender
 from commonapp.bixmodels.helper_db import *
 from commonapp.bixmodels.user_table import *
-from customapp_swissbix.customfunc import *
 from django.conf import settings
 from commonapp.bixmodels.helper_db import HelpderDB
 import xml.etree.ElementTree as ET

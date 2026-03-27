@@ -1,5 +1,6 @@
 from django.urls import path
 from .views import *
+from .customfunc import *
 
 urlpatterns = [
     path('print_pdf_heenergy/', print_pdf_heenergy, name='print_pdf_heenergy'),

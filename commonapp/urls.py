@@ -1,12 +1,9 @@
-from django.contrib import admin
+from commonapp.customfunc import *
 from django.urls import path
 from django.conf.urls.static import static
 from django.conf import settings
 from commonapp.views import *
 from commonapp.settings import *
-from django.views.static import serve
-from django.views.decorators.cache import never_cache
-from bixscheduler import views
 
 urlpatterns = [
     path('examplepost/', get_examplepost, name='examplepost'),
