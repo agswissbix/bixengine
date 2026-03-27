@@ -10,6 +10,7 @@ from django.http import HttpResponse, JsonResponse
 from django_q.models import Schedule, Task
 from django.db import connection
 import psutil, shutil
+from django.views.decorators.csrf import csrf_exempt
 
 import requests
 from bixsettings.models import *
@@ -30,10 +31,6 @@ from cryptography.fernet import Fernet, InvalidToken
 
 from commonapp import views
 from commonapp.helper import Helper
-
-from xhtml2pdf import pisa
-from django.template.loader import get_template
-from customapp_swissbix.views import link_callback
 
 from customapp_swissbix.helper import HelperSwissbix
 
@@ -762,7 +759,7 @@ def update_deals():
             "updated_count": updated_deal_counter,
             "message": f"Sincronizzazione completata: {updated_deal_counter} trattative",
         }, {
-            "details": "\n".join(result_log)
+            "details": "\n".join([str(item) for item in result_log])
         }
 
 
