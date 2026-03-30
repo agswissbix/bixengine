@@ -1,3 +1,4 @@
+from customapp_swissbix.helper import HelperSwissbix
 import datetime
 from datetime import timedelta
 import os
@@ -92,7 +93,7 @@ def process_save_activemind_data(data):
             if k != 'recordid_':
                 record.values[k] = v
 
-        computed = Helper.compute_dealline_fields(record.values, UserRecord)
+        computed = HelperSwissbix.compute_dealline_fields(record.values, UserRecord)
         record.values.update(computed)
         record.save()
         # save_record_fields('dealline', record.recordid)
@@ -160,8 +161,7 @@ def process_save_activemind_data(data):
 
         existing_id = fetch_existing_dealline(recordid_deal, product.values.get('subcategory', ''), product.recordid)
 
-        if existing_id and quantity <= 0:
-            remove_dealline(existing_id)
+        if quantity <= 0:
             continue
 
         unitprice_discounted = unit_price * (1 - discount_rate)
@@ -279,6 +279,7 @@ def process_save_activemind_data(data):
 
     product_id = sectionHours.get('selectedOption')
 
+    if not product_id or product_id == '':
     name_str = sectionHours.get('label')
 
     existing_id = fetch_existing_dealline(recordid_deal, 'monte_ore')
@@ -600,12 +601,12 @@ def print_pdf_activemind(request):
         import os
         from django.conf import settings
         static_img_path = os.path.join(settings.BASE_DIR, "customapp_swissbix/static/images")
-        img_cover = to_base64(os.path.join(static_img_path, "cover.png"))
+        img_cover = HelperSwissbix.to_base64(os.path.join(static_img_path, "cover.png"))
         if is_bwbix:
-            img_cover = to_base64(os.path.join(static_img_path, "cover_bwbix.jpg"))
-        img_systemassurance = to_base64(os.path.join(static_img_path, "systemassurance.png"))
-        img_prodotti = to_base64(os.path.join(static_img_path, "prodotti_beall.jpg"))
-        img_servizi = to_base64(os.path.join(static_img_path, "servizi.jpg"))
+            img_cover = HelperSwissbix.to_base64(os.path.join(static_img_path, "cover_bwbix.jpg"))
+        img_systemassurance = HelperSwissbix.to_base64(os.path.join(static_img_path, "systemassurance.png"))
+        img_prodotti = HelperSwissbix.to_base64(os.path.join(static_img_path, "prodotti_beall.jpg"))
+        img_servizi = HelperSwissbix.to_base64(os.path.join(static_img_path, "servizi.jpg"))
 
         # 0) Salva dati prima di stampare
         save_data = data.get('data', {})

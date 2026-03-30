@@ -1,6 +1,8 @@
 import re
 import logging
 from django.db.models import F
+import base64
+import os
 from commonapp.bixmodels.user_record import UserRecord
 from commonapp.models import SysLookupTableItem
 
@@ -10,6 +12,17 @@ class HelperSwissbix:
     
     # Cache per evitare query ripetitive sulla stessa tabella di lookup
     _first_option_cache = None
+
+    @classmethod
+    def to_base64(cls, path):
+        """Converte immagine locale in Base64 per l'incorporamento nel PDF."""
+        if path and os.path.exists(path):
+            try:
+                with open(path, "rb") as f:
+                    return f"data:image/png;base64,{base64.b64encode(f.read()).decode('utf-8')}"
+            except Exception as e:
+                print(f"Errore conversione Base64: {e}")
+        return None
 
     @classmethod
     def get_first_contractual_option(cls):
