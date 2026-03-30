@@ -162,6 +162,8 @@ def process_save_activemind_data(data):
         existing_id = fetch_existing_dealline(recordid_deal, product.values.get('subcategory', ''), product.recordid)
 
         if quantity <= 0:
+            if existing_id:
+                remove_dealline(existing_id)
             continue
 
         unitprice_discounted = unit_price * (1 - discount_rate)
@@ -280,6 +282,8 @@ def process_save_activemind_data(data):
     product_id = sectionHours.get('selectedOption')
 
     if not product_id or product_id == '':
+        return True
+
     name_str = sectionHours.get('label')
 
     existing_id = fetch_existing_dealline(recordid_deal, 'monte_ore')
