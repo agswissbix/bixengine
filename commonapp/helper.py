@@ -541,7 +541,7 @@ class Helper:
     # ==========================
     #  DEADLINE METHODS
     # ==========================
-
+    # TODO refactor save_record_deadline
     @classmethod
     def save_record_deadline(cls, tableid, current_recordid, recordid, userid, deadline_updates):
         from bixsettings.views.businesslogic.models.table_settings import TableSettings
@@ -579,7 +579,6 @@ class Helper:
             deadline_record.values['tableid'] = tableid
             deadline_record.values['recordidtable'] = current_recordid
             deadline_record.values['description'] = label_table
-            deadline_record.values['notice_days'] = 2
 
             # Recupero actions in modo sicuro
             deadline_record.values['actions'] = ""
@@ -591,7 +590,13 @@ class Helper:
                 print(f"Errore recupero actions deadline: {e}")
 
             for key, value in deadline_updates.items():
-                deadline_record.values[key] = value
+                if key == 'label_reference':
+                    deadline_record.values['description'] += f" - {value}"
+                else:
+                    deadline_record.values[key] = value
+
+            if deadline_record.values.get('notice_days') in [None, '', 0]:
+                deadline_record.values['notice_days'] = 2
 
             start_date = deadline_record.values.get('date_start')
             frequency_label = deadline_record.values.get('frequency')
@@ -608,7 +613,7 @@ class Helper:
                             # Se fallisce formato standard, prova parser dateutil o fallback
                             start_date_obj = parser.parse(start_date).date()
                     elif isinstance(start_date, (datetime.date, datetime.datetime)):
-                         start_date_obj = start_date
+                            start_date_obj = start_date
                     else:
                         start_date_obj = None
 
@@ -663,6 +668,42 @@ class Helper:
                         notice_days = int(notice_days_val)
                     except (ValueError, TypeError):
                         notice_days = 0
+
+                    if deadline_date:
+                        date_start = None
+
+                        # 🔹 Caso 1: frequenza testuale
+                        if frequency_label and isinstance(frequency_label, str):
+                            frequency_map = {
+                                "mensile": relativedelta(months=1),
+                                "trimestrale": relativedelta(months=3),
+                                "semestrale": relativedelta(months=6),
+                                "annuale": relativedelta(years=1),
+                            }
+                            
+                            delta = frequency_map.get(frequency_label.lower())
+                            if delta:
+                                date_start = deadline_date - delta
+
+                        # 🔹 Caso 2: mesi numerici
+                        elif frequency_months:
+                            try:
+                                value = float(frequency_months)
+
+                                months_val = int(value)  # parte intera
+                                fractional_part = value - months_val  # parte decimale
+
+                                days_val = round(fractional_part * 30)  # mese medio = 30 giorni
+
+                                date_start = deadline_date - relativedelta(
+                                    months=months_val,
+                                    days=days_val
+                                )
+                            except (ValueError, TypeError):
+                                pass
+
+                        if date_start:
+                            deadline_record.values['date_start'] = date_start.strftime("%Y-%m-%d")
 
                     if days_remaining < 0:
                         status = "Scaduto"
