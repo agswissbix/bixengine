@@ -127,11 +127,14 @@ class DealService:
         deductedhourscost = 0
         invoicedhours = 0
         invoicedhoursamount = 0
+        toinvoicehours = 0
+        toinvoicehoursamount = 0
         laborcost = 0
         nonbillablehours = 0
         nonbillablecost = 0
         saleshours = 0
         salescost = 0
+        laborhours = 0
         
         timesheets_dict = {}
         
@@ -155,6 +158,7 @@ class DealService:
             invoicestatus = ts_dict.get('invoicestatus')
             hours = ts_dict.get('totaltime_decimal') or 0
             price = ts_dict.get('totalprice') or 0
+            worktime = ts_dict.get('worktime_decimal') or 0
 
             try:
                 hours = float(hours)
@@ -165,7 +169,13 @@ class DealService:
                 price = float(price)
             except ValueError:
                 price = 0
+                
+            try:
+                worktime = float(worktime)
+            except ValueError:
+                worktime = 0
             
+            laborhours += worktime
             usedhours += hours
 
             travel_hours = ts_dict.get('traveltime_decimal') or 0
@@ -185,6 +195,8 @@ class DealService:
             travelcost += travel_price
 
             if not invoicestatus or not str(invoicestatus).strip():
+                nonbillablehours += hours
+                nonbillablecost += price
                 continue
 
             invoicestatus = str(invoicestatus).strip().lower()
@@ -202,6 +214,13 @@ class DealService:
                 invoicedhours += hours
                 invoicedhoursamount += price
                 laborcost += hours * 60
+            elif invoicestatus and invoicestatus.startswith('to invoice'):
+                toinvoicehours += hours
+                toinvoicehoursamount += price
+                laborcost += hours * 60
+            else:
+                nonbillablehours += hours
+                nonbillablecost += price
                 
         if expectedhours:
             residualhours = expectedhours - usedhours
@@ -223,6 +242,9 @@ class DealService:
         deal_record.values['salescost'] = salescost
         deal_record.values['nonbillablehours'] = nonbillablehours
         deal_record.values['nonbillablecost'] = nonbillablecost
+        deal_record.values['unbilledhours'] = toinvoicehours
+        deal_record.values['unbilledhoursamount'] = toinvoicehoursamount
+        deal_record.values['laborhours'] = laborhours
 
         deal_record.values['actuallaborcost'] = laborcost
 
@@ -347,20 +369,46 @@ class DealService:
         invoiced_laborcost = deal_record.values.get('actuallaborcost') or 0
         invoiced_amount = deal_record.values.get('invoicedhoursamount') or 0
         invoiced_margin = invoiced_amount - invoiced_laborcost
+        salescost = deal_record.values.get('salescost') or 0
 
-        deal_actualcost = totals['deal_actualcost'] + invoiced_laborcost
-        deal_actualmargin = totals['deal_actualmargin'] + invoiced_margin
+        # effectivemargin NON include invoiced_margin
+        deal_actualcost = totals['deal_actualcost']
+        deal_actualmargin = totals['deal_actualmargin']
 
         if deal_actualcost == 0:
             deal_actualmargin = deal_expectedmargin
 
+        # actualgrossmargin include invoiced_margin
+        actualgrossmargin = deal_actualmargin + invoiced_margin
+        
+        # actualnetmargin include invoiced_margin e sottrae salescost
+        actualnetmargin = actualgrossmargin - salescost
+
+        price_safe = deal_price if deal_price else 1
+        expectedmargin_perc = round((deal_expectedmargin / price_safe) * 100, 2) if deal_price else 0
+        effectivemargin_perc = round((deal_actualmargin / price_safe) * 100, 2) if deal_price else 0
+        actualgrossmargin_perc = round((actualgrossmargin / price_safe) * 100, 2) if deal_price else 0
+        actualnetmargin_perc = round((actualnetmargin / price_safe) * 100, 2) if deal_price else 0
+
         deal_record.values['amount'] = round(deal_price, 2)
         deal_record.values['expectedcost'] = round(deal_expectedcost, 2)
         deal_record.values['expectedmargin'] = round(deal_expectedmargin, 2)
+        deal_record.values['expectedmargin_perc'] = expectedmargin_perc
         deal_record.values['expectedhours'] = totals['deal_expectedhours']
-        deal_record.values['actualcost'] = deal_actualcost
-        deal_record.values['effectivemargin'] = deal_actualmargin
-        deal_record.values['margindifference'] = deal_actualmargin - deal_expectedmargin
+        
+        deal_record.values['actualcost'] = round(deal_actualcost + invoiced_laborcost, 2)
+        
+        deal_record.values['effectivemargin'] = round(deal_actualmargin, 2)
+        deal_record.values['effectivemargin_perc'] = effectivemargin_perc
+        deal_record.values['margindifference'] = round(deal_actualmargin - deal_expectedmargin, 2)
+
+        deal_record.values['actualgrossmargin'] = round(actualgrossmargin, 2)
+        deal_record.values['actualgrossmargin_perc'] = actualgrossmargin_perc
+        deal_record.values['actualgrossmargindifference'] = round(actualgrossmargin - deal_expectedmargin, 2)
+
+        deal_record.values['actualnetmargin'] = round(actualnetmargin, 2)
+        deal_record.values['actualnetmargin_perc'] = actualnetmargin_perc
+        deal_record.values['actualnetmargindifference'] = round(actualnetmargin - deal_expectedmargin, 2)
         deal_record.values['annualprice'] = totals['deal_annualprice']
         deal_record.values['annualcost'] = totals['deal_annualcost']
         deal_record.values['annualmargin'] = totals['deal_annualmargin']
@@ -369,11 +417,20 @@ class DealService:
         deal_record.values['expectedhwservicemargin'] = totals['deal_hw_service_expected_margin']
         deal_record.values['actualhwservicecost'] = totals['deal_hw_service_actual_cost']
         deal_record.values['actualhwservicemargin'] = totals['deal_hw_service_actual_margin']
+        
+        deal_record.values['hwservicedifference'] = totals['deal_hw_service_actual_margin'] - totals['deal_hw_service_expected_margin']
+
         deal_record.values['expectedlaborprice'] = totals['deal_labor_price']
         deal_record.values['expectedlaborcost'] = totals['deal_labor_expected_cost']
         deal_record.values['expectedlabormargin'] = totals['deal_labor_expected_margin']
-        deal_record.values['actuallaborcost'] = totals['deal_labor_actual_cost'] + invoiced_laborcost
+        
+        actuallaborcost = totals['deal_labor_actual_cost'] + invoiced_laborcost
+        deal_record.values['actuallaborcost'] = actuallaborcost
         deal_record.values['actuallabormargin'] = totals['deal_labor_actual_margin'] + invoiced_margin
+
+        deal_record.values['laborcostdifference'] = totals['deal_labor_price'] - actuallaborcost
+        laborhours = deal_record.values.get('laborhours') or 0
+        deal_record.values['laborhoursdifference'] = totals['deal_expectedhours'] - laborhours
 
     @staticmethod
     def _check_project_completion(deal_record: UserRecord):

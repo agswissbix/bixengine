@@ -1966,7 +1966,7 @@ def run_test():
     
     # Prepara la query per recuperare tutti i deal con data di apertura successiva al 01-01-2026.
     # Assumiamo che la tabella fisica nel database per 'deal' sia 'user_deal'
-    query = "SELECT recordid_ FROM user_deal WHERE opendate >= '2026-01-01' AND deleted_='N'"
+    query = "SELECT recordid_ FROM user_deal WHERE closedate >= '2026-01-01' AND deleted_='N'"
     
     try:
         rows = HelpderDB.sql_query(query)
