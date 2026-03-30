@@ -2804,6 +2804,62 @@ def get_lenovo_device_info(request):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
+from django.core.cache import cache
+
+@csrf_exempt
+def lenovo_mobile_handoff(request):
+    """
+    API for Mobile to PC real-time handoff without WebSockets.
+    Uses Django's cache to pass the serial number from mobile to polling PC.
+    """
+    try:
+        data = json.loads(request.body)
+    except:
+        data = request.POST
+
+    action = data.get('action')
+    session_id = data.get('session_id')
+    
+    if not session_id:
+        return JsonResponse({'success': False, 'error': 'session_id missing'}, status=400)
+        
+    cache_key = f"lenovo_mobile_session_{session_id}"
+    
+    if action == 'set':
+        serial = data.get('serial')
+        if not serial:
+            return JsonResponse({'success': False, 'error': 'serial missing'}, status=400)
+        cache.set(cache_key, serial, 300) # 5 minutes expiry
+        return JsonResponse({'success': True})
+        
+    elif action == 'check':
+        serial = cache.get(cache_key)
+        if serial:
+            cache.delete(cache_key) # clear immediately once read
+            return JsonResponse({'success': True, 'found': True, 'serial': serial})
+        return JsonResponse({'success': True, 'found': False})
+        
+    return JsonResponse({'success': False, 'error': 'invalid action'}, status=400)
+
+@csrf_exempt
+def search_lenovo_ticket_by_serial(request):
+    try:
+        serial = request.POST.get('serial')
+        if not serial:
+            return JsonResponse({'success': False, 'error': 'Missing serial'}, status=400)
+            
+        open_tickets = UserTable('ticket_lenovo').get_records(
+            conditions_list=["serial = '%s'" % serial, "status != 'Consegnato'", "deleted_ = 'N'"]
+        )
+        if open_tickets:
+            ticket_id = open_tickets[0]['recordid_']
+            rec = UserRecord('ticket_lenovo', ticket_id)
+            return JsonResponse({'success': True, 'found': True, 'recordid': rec.recordid, 'status': rec.values.get('status')})
+        else:
+            return JsonResponse({'success': True, 'found': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
 @csrf_exempt
 def get_lenovo_ticket(request):
     """
@@ -2850,6 +2906,8 @@ def get_lenovo_ticket(request):
             'accessories': rec.values.get('accessories'),
             'technician': rec.values.get('technician'),
             'pick_up': rec.values.get('pick_up'),
+            'internal_notes': rec.values.get('internal_notes'),
+            'replaced_components': rec.values.get('replaced_components'),
         }
         
         # Check for signature file (Fixed Path)
@@ -2900,15 +2958,15 @@ def save_lenovo_ticket(request):
             'address', 'place', 'brand', 'model', 'username', 'password',
             'warranty', 'warranty_type',
             'auth_factory_reset', 'request_quote', 'direct_repair', 'direct_repair_limit', 'auth_formatting', 'accessories',
-            'technician', 'pick_up'
+            'technician', 'pick_up', 'internal_notes', 'replaced_components'
         ]
 
         rec = UserRecord('ticket_lenovo', recordid)
 
         old_status = rec.values.get('status')
 
-        if old_status != 'Draft':
-            del fields['status']
+        # if old_status != 'Draft':
+        #     del fields['status']
 
         lookup_item = SysLookupTableItem.objects.filter(lookuptableid='status_ticket_lenovo').order_by(F('itemorder').asc(nulls_last=True), 'itemcode').first()
         if not recordid:
