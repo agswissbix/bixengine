@@ -316,35 +316,39 @@ class UserTable:
         return self._total_records_count
     
     def calculate_totals_sql(self, numeric_fields, from_sql, where_sql):
-        if not numeric_fields:
+        try:
+            if not numeric_fields:
+                return {}
+
+            # whitelist colonne
+            allowed_columns = {c['fieldid'] for c in self.get_results_columns()}
+            safe_fields = [f for f in numeric_fields if f in allowed_columns]
+
+            if not safe_fields:
+                return {}
+
+            sum_columns = ", ".join(
+                f"SUM(user_{self.tableid}.{field}) AS {field}"
+                for field in safe_fields
+            )
+
+            sql = f"""
+                SELECT {sum_columns}
+                {from_sql}
+                WHERE {where_sql}
+            """
+
+            with connection.cursor() as cursor:
+                cursor.execute(sql)
+                row = cursor.fetchone()
+
+            return {
+                field: round(float(row[idx] or 0), 2)
+                for idx, field in enumerate(safe_fields)
+            }
+        except Exception as e:
+            print(f"Errore nel calcolo dei totali: {e}")
             return {}
-
-        # whitelist colonne
-        allowed_columns = {c['fieldid'] for c in self.get_results_columns()}
-        safe_fields = [f for f in numeric_fields if f in allowed_columns]
-
-        if not safe_fields:
-            return {}
-
-        sum_columns = ", ".join(
-            f"SUM(user_{self.tableid}.{field}) AS {field}"
-            for field in safe_fields
-        )
-
-        sql = f"""
-            SELECT {sum_columns}
-            {from_sql}
-            WHERE {where_sql}
-        """
-
-        with connection.cursor() as cursor:
-            cursor.execute(sql)
-            row = cursor.fetchone()
-
-        return {
-            field: round(float(row[idx] or 0), 2)
-            for idx, field in enumerate(safe_fields)
-        }
 
 
     @timing_decorator
@@ -383,10 +387,12 @@ class UserTable:
             if field_id.startswith('_'):
                 field_id = field_id[1:] + "_"
 
+            aliased_field_id = f"user_{self.tableid}.{field_id}"
+
             if filter_value == "NULL_VALUE":
-                sql_condition = f"({field_id} IS NULL OR {field_id} = '')"
+                sql_condition = f"({aliased_field_id} IS NULL OR {aliased_field_id} = '')"
             else:
-                sql_condition = self.build_condition(filter_type, field_id, filter_value, filter_condition)
+                sql_condition = self.build_condition(filter_type, aliased_field_id, filter_value, filter_condition)
 
             if sql_condition:
                 conditions_list.append(sql_condition)
