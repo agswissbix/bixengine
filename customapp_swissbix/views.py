@@ -2849,7 +2849,7 @@ def search_lenovo_ticket_by_serial(request):
             return JsonResponse({'success': False, 'error': 'Missing serial'}, status=400)
             
         open_tickets = UserTable('ticket_lenovo').get_records(
-            conditions_list=["serial = '%s'" % serial, "status != 'Consegnato'", "deleted_ = 'N'"]
+            conditions_list=["serial = '%s'" % serial, "status != 'Riconsegnato'", "deleted_ = 'N'"]
         )
         if open_tickets:
             ticket_id = open_tickets[0]['recordid_']
