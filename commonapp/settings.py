@@ -314,17 +314,22 @@ def settings_table_tablefields_save(request):
         if not field:
             continue
 
-        order_value = order if order is not None else None
-
-        user_table_order, created = SysUserFieldOrder.objects.get_or_create(
-            userid=user,
-            tableid=table,
-            fieldid=field,
-            typepreference=typepreference,
-        )
-
-        user_table_order.fieldorder = order_value
-        user_table_order.save()
+        if order is None:
+            SysUserFieldOrder.objects.filter(
+                userid=user,
+                tableid=table,
+                fieldid=field,
+                typepreference=typepreference,
+            ).delete()
+        else:
+            user_table_order, created = SysUserFieldOrder.objects.get_or_create(
+                userid=user,
+                tableid=table,
+                fieldid=field,
+                typepreference=typepreference,
+            )
+            user_table_order.fieldorder = order
+            user_table_order.save()
 
     return JsonResponse({"success": True})
 
@@ -648,6 +653,7 @@ def settings_table_fields_new_field(request):
                     tablelink=linked_table,
                 )
 
+                # TODO: eliminare questo campo
                 SysField.objects.create(
                     tableid=tableid,
                     fieldid=cols_to_add[1], # _recordidLINKED
