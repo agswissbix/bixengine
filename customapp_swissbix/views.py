@@ -44,6 +44,7 @@ def get_activemind(request):
                     "citta": record_company.values.get('city', '')
                 }
             }
+            response_data["cliente"]["deal_user"] = record_deal.fields.get('dealuser1', None)['convertedvalue']
         return JsonResponse(response_data)
     except Exception as e:
         return JsonResponse({
@@ -156,7 +157,7 @@ def process_save_activemind_data(data):
         quantity = product_data.get('quantity', 1)
         unit_price = product_data.get('unitPrice', 0)
         unit_cost = product_data.get('unitCost', 0)
-        billing_type = product_data.get('billingType', 'monthly')
+        billing_type = product_data.get('billingType', 'Trimestrale')
         name = product.values.get('name')
 
         existing_id = fetch_existing_dealline(recordid_deal, product.values.get('subcategory', ''), product.recordid)
@@ -173,81 +174,51 @@ def process_save_activemind_data(data):
             'recordiddeal_': recordid_deal,
             'recordidproduct_': product.values.get('recordid_'),
             'name': name,
-            'unitprice': unitprice_discounted,
-            'unitexpectedcost': unit_cost,
-            'quantity': quantity,
-            'frequency': 'Annuale' if billing_type == 'yearly' else 'Mensile',
+            'unitprice': unitprice_discounted * 3,
+            'unitexpectedcost': unit_cost * 3,
+            'quantity': quantity * 3,
+            'frequency': 'Annuale' if billing_type == 'yearly' else 'Trimestrale',
             'contractual_obligation': contract_constraint,
             'discount': discount_percentage
         })
 
     # -------------------------------------------------
-    # SECTION 3 — Servizi
+    # SECTION 3 — Servizi (una riga dealline per servizio)
     # -------------------------------------------------
     services = data.get('section2Services', {})
-    if services:
-        conditions = data.get('section3', {})
-        frequency = conditions.get('selectedFrequency', 'Mensile')
-        frequency_price = float(conditions.get('price', 0))
+    conditions = data.get('section3', {})
+    frequency = conditions.get('selectedFrequency', 'Mensile')
 
-        total_price = 0
-        total_cost = 0
-        name_parts = []
+    for product_key, service in services.items():
+        product_key_str = str(service.get('idproduct', ''))
+        qty = int(service.get('quantity', 0))
+        unit_price = float(service.get('unitPrice', 0))
+        unit_cost = float(service.get('unitCost', 0))
+        title = service.get('title', '')
 
-        for key, service in services.items():
-            qty = int(service.get('quantity', 0))
-            unit_price = float(service.get('unitPrice', 0))
-            unit_cost = float(service.get('unitCost', 0))
-            title = service.get('title', '')
-            total = service.get('total', 0)
+        existing_id = fetch_existing_dealline(recordid_deal, service.get('subcategory', ''), product_key_str)
 
-            if qty <= 0:
-                continue
+        if qty <= 0:
+            if existing_id:
+                remove_dealline(existing_id)
+            continue
 
-            name_parts.append(f"{title}: qta. {qty} - price: {unit_price}")
-            service_total = qty * unit_price
+        unitprice_discounted = unit_price * (1 - discount_rate)
 
-            total_price += service_total
-            total_cost += qty * unit_cost
-
-        # total_price += frequency_price
-        name_str = "AM - Manutenzione servizi - \n" + ",\n".join(name_parts) if name_parts else "AM - Manutenzione servizi"
-
-        # Recupera productid del servizio
-        with connection.cursor() as cursor:
-            cursor.execute("""
-                SELECT recordid_
-                FROM user_product
-                WHERE category = 'ActiveMind'
-                AND subcategory = 'services_maintenance'
-                AND deleted_ = 'N'
-                LIMIT 1
-            """)
-            product_row = cursor.fetchone()
-
-        product_id = product_row[0] if product_row else None
-
-        # Check esistenza dealline
-        existing_id = fetch_existing_dealline(recordid_deal, "services_maintenance")
-        
-        unitprice_discounted = total_price * (1 - discount_rate)
-
+        # Fatturazione trimestrale: moltiplica i valori unitari x3
         save_dealline({
             'recordid_': existing_id,
             'recordiddeal_': recordid_deal,
-            'recordidproduct_': product_id,
-            'name': name_str,
-            'unitprice': unitprice_discounted,
-            'unitexpectedcost': total_cost,
-            'quantity': 1,
+            'recordidproduct_': product_key_str,
+            'name': title,
+            'unitprice': unitprice_discounted * 3,
+            'unitexpectedcost': unit_cost * 3,
+            'quantity': qty * 3,
             'intervention_frequency': frequency,
-            'frequency': 'Mensile',
+            'frequency': 'Trimestrale',
             'contractual_obligation': contract_constraint,
             'discount': discount_percentage
         })
-
-    else:
-        remove_dealline(fetch_existing_dealline(recordid_deal, "services_maintenance"))
 
     # -------------------------------------------------
     # SECTION Assistance BwBix
@@ -656,6 +627,7 @@ def print_pdf_activemind(request):
         # 4) contesto per il template
         context = {
             "client_info": cliente,
+            "deal_user": record_deal.fields.get('dealuser1', None)['convertedvalue'] or "Davide Crudo",
             "offer_data": offer_data,
             "section2_services_pages": section2_services_pages,
             "section2_products_pages": section2_products_pages,
@@ -837,7 +809,7 @@ def get_services_activemind(request):
 
         with connection.cursor() as cursor:
             cursor.execute("""
-                SELECT recordid_, name,description, price, cost, note
+                SELECT recordid_, name,description, price, cost, note, subcategory
                 FROM user_product
                 WHERE category = 'ActiveMind'
                   AND subcategory IN ({placeholders})
@@ -846,7 +818,7 @@ def get_services_activemind(request):
             """.format(placeholders=placeholders), subcategories)
             db_products = cursor.fetchall()
 
-        for recordid_product, name,description, price, cost, note in db_products:
+        for recordid_product, name,description, price, cost, note, subcategory in db_products:
             clean_name = name.replace("AM - ", "").strip()
             key = clean_name.lower()
 
@@ -860,45 +832,47 @@ def get_services_activemind(request):
                 "total": 0,
                 "selected": False,
                 "icon": "Server",
-                "features": parse_features(note)
+                "features": parse_features(note),
+                "subcategory": subcategory
             }
 
-        # 2️⃣ Recupero quantità dalla dealline (Manutenzione servizi)
-        quantities_map = {}
-        custom_prices = {}
-
+        # 2️⃣ Recupero quantità dalla dealline — una riga per prodotto
+        params = [recordid_deal] + list(subcategories)
         with connection.cursor() as cursor:
             cursor.execute("""
-                SELECT dl.name
+                SELECT dl.recordidproduct_, dl.quantity, dl.unitprice, dl.discount
                 FROM user_dealline dl
-                JOIN user_product p
-                  ON p.recordid_ = dl.recordidproduct_
+                JOIN user_product p ON p.recordid_ = dl.recordidproduct_
                 WHERE dl.recordiddeal_ = %s
                   AND p.category = 'ActiveMind'
-                  AND p.subcategory = 'services_maintenance'
+                  AND p.subcategory IN ({placeholders})
                   AND dl.deleted_ = 'N'
                   AND p.deleted_ = 'N'
-                LIMIT 1
-            """, [recordid_deal])
-            row = cursor.fetchone()
+            """.format(placeholders=placeholders), params)
+            dealline_rows = cursor.fetchall()
 
-        if row:
-            raw = row[0].replace("AM - Manutenzione servizi - ", "")
-            for entry in raw.split(","):
-                if ": qta." not in entry:
-                    continue
-                name, qty_and_price = entry.split(": qta.", 1)
-                if "- price: " in qty_and_price:
-                    qty, price = qty_and_price.split("- price: ", 1)
-                    custom_prices[name.strip().lower()] = float(price.strip())
-                else:
-                    qty = qty_and_price
-                quantities_map[name.strip().lower()] = int(qty.strip())
+        # Mappa: recordid_product → (quantity, unitprice)
+        dealline_map = {
+            str(row[0]): {'quantity': int(row[1] or 0), 'unitprice': float(row[2] or 0), 'discount': float(row[3] or 0)}
+            for row in dealline_rows
+        }
 
         # 3️⃣ Calcolo quantità, totale e selected
         for key, s in services_dict.items():
-            qty = quantities_map.get(key, 0)
-            unit_price = custom_prices.get(key, s["unitPrice"])
+            product_id_str = str(s["recordid_product"])
+            dl = dealline_map.get(product_id_str)
+            if dl:
+                # unitprice in DB è già il valore trimestrale; per mostrare il prezzo
+                # unitario mensile lo dividiamo per 3
+                stored_unit_price = dl['unitprice']
+                discount = dl['discount']
+                qty = dl['quantity'] / 3 if dl['quantity'] else 0
+                unit_price = stored_unit_price / 3 if stored_unit_price else s["unitPrice"]
+                if discount:
+                    unit_price = unit_price / (1 - (discount / 100))
+            else:
+                qty = 0
+                unit_price = s["unitPrice"]
 
             total = qty * unit_price
 
@@ -1004,9 +978,9 @@ def get_products_activemind(request):
             if frequency == "Annuale":
                 unitprice = unitprice / 12
             if discount:
-                price = unitprice / (1 - (discount / 100))
+                price = unitprice / 3 / (1 - (discount / 100))
             else:
-                price = unitprice
+                price = unitprice / 3
 
         matched_icon = next(
             (icon for key, icon in icon_map.items() if key.lower() in name.lower()),
@@ -1024,7 +998,7 @@ def get_products_activemind(request):
             "monthlyPrice": float(price) if price else None,
             "yearlyPrice": float(price) * 12 if price else None,
             "features": features,
-            "quantity": quantity,
+            "quantity": quantity / 3,
             "billingType": "yearly" if frequency == "Annuale" else "monthly",
         }
 
@@ -1055,19 +1029,21 @@ def get_conditions_activemind(request):
         products = cursor.fetchall()
 
         cursor.execute("""
-            SELECT dl.intervention_frequency
+            SELECT DISTINCT dl.intervention_frequency
             FROM user_dealline dl
-            JOIN user_product p
-            ON p.recordid_ = dl.recordidproduct_
+            JOIN user_product p ON p.recordid_ = dl.recordidproduct_
             WHERE dl.recordiddeal_ = %s
-            AND p.subcategory = 'services_maintenance'
-            AND p.category = 'ActiveMind'
-            AND dl.deleted_ = 'N'
-            AND p.deleted_ = 'N'
-            LIMIT 1
+              AND p.category = 'ActiveMind'
+              AND p.subcategory IN ('services', 'services_bwbix')
+              AND dl.deleted_ = 'N'
+              AND p.deleted_ = 'N'
+              AND dl.intervention_frequency IS NOT NULL
+              AND dl.intervention_frequency != ''
         """, [recordid_deal])
-        row = cursor.fetchone()
-        selected_frequency = row[0] if row else None
+        freq_rows = cursor.fetchall()
+        # Se tutte le righe di servizio hanno la stessa frequenza → selezionata
+        frequencies_found = [r[0] for r in freq_rows if r[0]]
+        selected_frequency = frequencies_found[0] if len(set(frequencies_found)) == 1 else None
 
     conditions_list = []
     for recordid_product, name, description, price, note in products:
