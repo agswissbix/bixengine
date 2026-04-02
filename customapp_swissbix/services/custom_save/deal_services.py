@@ -613,11 +613,20 @@ class DealService:
             deal_record.values['projectcompleted'] = pr_dict.get('completed')
 
             if pr_dict.get('completed') == 'Si':
+                included_subcategories = {
+                    'data_security',
+                    'mobile_security',
+                    'infrastructure',
+                    'sophos',
+                    'microsoft',
+                    'firewall',
+                }
+                included_subcategories.add('service_and_asset')
                 for dl_dict in dealline_records:
                     product = UserRecord('product', dl_dict['recordidproduct_'], load_fields=False)
-                    if product and product.recordid:
+                    if product and product.recordid and product.values.get('subcategory') in included_subcategories:
                         sql = f"""
-                            SELECT recordid_ FROM user_serviceandasset WHERE recordidcompany_ = {deal_record.values.get('recordidcompany_')} AND recordidproduct_ = {dl_dict['recordidproduct_']}
+                            SELECT recordid_ FROM user_serviceandasset WHERE recordidcompany_ = {deal_record.values.get('recordidcompany_')} AND recordidproduct_ = {dl_dict['recordidproduct_']} AND deleted_ = 'N'
                         """
                         with connection.cursor() as cursor:
                             cursor.execute(sql)
