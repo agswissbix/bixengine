@@ -138,7 +138,7 @@ class TableSettings:
                 {'name': 'Steps', 'selected': True},
                 {'name': 'Checklist', 'selected': True},
             ],
-            'value': 'Campi, Collegati'
+            'value': 'Campi,Collegati'
         },
         "card_default_size": {
             "type": "select",
