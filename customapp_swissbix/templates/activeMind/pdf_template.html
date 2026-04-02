@@ -1036,9 +1036,13 @@
               font-weight: bold;
             "
           >
-            <td colspan="4">TOTALE MENSILE EFFETTIVO (SOLUZIONI E SERVIZI)</td>
-            <td class="price">
+            <td colspan="3">TOTALE MENSILE EFFETTIVO (SOLUZIONI E SERVIZI)</td>
+            <td colspan="2" class="price">
               CHF {{ offer_data.totals.monthly_discounted|format_price }}
+              <br />
+              <span style="font-weight: normal; font-size: 10pt">
+                CHF {{ offer_data.totals.quarterly_annual_discounted|format_price }} /trimestre
+              </span>
               <br />
               <span style="font-weight: normal; font-size: 10pt">
                 CHF {{ offer_data.totals.yearly_discounted|format_price }} /anno

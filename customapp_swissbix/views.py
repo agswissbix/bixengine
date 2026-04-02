@@ -176,7 +176,7 @@ def process_save_activemind_data(data):
             'name': name,
             'unitprice': unitprice_discounted * 3,
             'unitexpectedcost': unit_cost * 3,
-            'quantity': quantity * 3,
+            'quantity': quantity,
             'frequency': 'Annuale' if billing_type == 'yearly' else 'Trimestrale',
             'contractual_obligation': contract_constraint,
             'discount': discount_percentage
@@ -213,7 +213,7 @@ def process_save_activemind_data(data):
             'name': title,
             'unitprice': unitprice_discounted * 3,
             'unitexpectedcost': unit_cost * 3,
-            'quantity': qty * 3,
+            'quantity': qty,
             'intervention_frequency': frequency,
             'frequency': 'Trimestrale',
             'contractual_obligation': contract_constraint,
@@ -458,6 +458,7 @@ def build_offer_data(recordid_deal, fe_data=None):
     discount_rate = 0.10 if contract_constraint == 36 else 0.05 if contract_constraint == 24 else 0.0
     
     monthly_total_discounted = monthly_total * (1 - discount_rate)
+    quarterly_total_discounted = monthly_total_discounted * 3
     yearly_total_discounted = monthly_total_discounted * 12
 
     grand_total = (monthly_total_discounted * 12) + yearly_total_discounted + total_monte_ore + total_tiers
@@ -472,6 +473,7 @@ def build_offer_data(recordid_deal, fe_data=None):
         "monthly_annual_discounted": monthly_total_discounted * 12,
         "quarterly": quarterly_total,
         "quarterly_annual": quarterly_total * 4,
+        "quarterly_annual_discounted": quarterly_total_discounted,
         "biannual": biannual_total,
         "biannual_annual": biannual_total * 2,
         "yearly": yearly_total,
@@ -866,7 +868,7 @@ def get_services_activemind(request):
                 # unitario mensile lo dividiamo per 3
                 stored_unit_price = dl['unitprice']
                 discount = dl['discount']
-                qty = dl['quantity'] / 3 if dl['quantity'] else 0
+                qty = dl['quantity'] if dl['quantity'] else 0
                 unit_price = stored_unit_price / 3 if stored_unit_price else s["unitPrice"]
                 if discount:
                     unit_price = unit_price / (1 - (discount / 100))
@@ -998,7 +1000,7 @@ def get_products_activemind(request):
             "monthlyPrice": float(price) if price else None,
             "yearlyPrice": float(price) * 12 if price else None,
             "features": features,
-            "quantity": quantity / 3,
+            "quantity": quantity,
             "billingType": "yearly" if frequency == "Annuale" else "monthly",
         }
 
