@@ -135,6 +135,7 @@ class DealService:
         saleshours = 0
         salescost = 0
         laborhours = 0
+        totalhours = 0
         
         timesheets_dict = {}
         
@@ -151,6 +152,11 @@ class DealService:
                 
             hours = ts.get('totaltime_decimal') or 0
             price = ts.get('totalprice') or 0
+            try:
+                _h = float(hours)
+            except (ValueError, TypeError):
+                _h = 0
+            totalhours += _h
             saleshours += hours
             salescost += price
             
@@ -177,6 +183,7 @@ class DealService:
             
             laborhours += worktime
             usedhours += hours
+            totalhours += hours
 
             travel_hours = ts_dict.get('traveltime_decimal') or 0
             travel_price = ts_dict.get('travelprice') or 0
@@ -245,8 +252,69 @@ class DealService:
         deal_record.values['unbilledhours'] = toinvoicehours
         deal_record.values['unbilledhoursamount'] = toinvoicehoursamount
         deal_record.values['laborhours'] = laborhours
+        deal_record.values['totalhours'] = totalhours
 
         deal_record.values['actuallaborcost'] = laborcost
+
+        # Generazione nota HTML riepilogativa
+        html_note = f"""
+        <div style="font-family: Arial, sans-serif; font-size: 13px; line-height: 1.5;">
+            <div class="deal-summary"><strong>Totale Ore: {totalhours}</strong></div>
+            <table class="deal-details" style="width: 100%; border-collapse: collapse; max-width: 400px; margin-top: 8px;">
+                <tbody>
+                    <tr style="border-bottom: 2px solid #ccc; padding-bottom: 6px;">
+                        <td style="padding: 4px 0;"><strong>Totale Generale Ore</strong></td>
+                        <td style="padding: 4px 0; text-align: right;"><strong>{totalhours}</strong></td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 4px 0;">Ore Previste</td>
+                        <td style="padding: 4px 0; text-align: right;">{expectedhours}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 4px 0;">Ore Utilizzate</td>
+                        <td style="padding: 4px 0; text-align: right;">{usedhours}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 4px 0;">Ore Residue</td>
+                        <td style="padding: 4px 0; text-align: right;">{residualhours}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 4px 0;">Ore Lavorate (Labor)</td>
+                        <td style="padding: 4px 0; text-align: right;">{laborhours}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 4px 0;">Ore Fatturate</td>
+                        <td style="padding: 4px 0; text-align: right;">{invoicedhours}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 4px 0;">Ore da Fatturare</td>
+                        <td style="padding: 4px 0; text-align: right;">{toinvoicehours}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 4px 0;">Ore Non Fatturabili</td>
+                        <td style="padding: 4px 0; text-align: right;">{nonbillablehours}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 4px 0;">Ore di Viaggio</td>
+                        <td style="padding: 4px 0; text-align: right;">{travelhours}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 4px 0;">Ore Contratto/Monte Ore</td>
+                        <td style="padding: 4px 0; text-align: right;">{bankhours}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 4px 0;">Ore Progetto (Fixed Price)</td>
+                        <td style="padding: 4px 0; text-align: right;">{fixedpricehours}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 4px 0;">Ore Commerciali</td>
+                        <td style="padding: 4px 0; text-align: right;">{saleshours}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        """
+        deal_record.values['hoursnote'] = html_note.strip()
 
     @staticmethod
     def _process_deallines(deal_record: UserRecord, dealline_records: list, project_recordid: str) -> dict:
@@ -371,6 +439,10 @@ class DealService:
         invoiced_margin = invoiced_amount - invoiced_laborcost
         salescost = deal_record.values.get('salescost') or 0
 
+        #recupero costo e ricavo ore monte ore
+        deductedhoursamount = deal_record.values.get('deductedhoursamount') or 0
+        deductedhoursmargin = deal_record.values.get('deductedhoursmargin') or 0
+
         # effectivemargin NON include invoiced_margin
         deal_actualcost = totals['deal_actualcost']
         deal_actualmargin = totals['deal_actualmargin']
@@ -381,8 +453,10 @@ class DealService:
         # actualgrossmargin include invoiced_margin
         actualgrossmargin = deal_actualmargin + invoiced_margin
         
+        virtualgrossmargin = actualgrossmargin + deductedhoursmargin
         # actualnetmargin include invoiced_margin e sottrae salescost
         actualnetmargin = actualgrossmargin - salescost
+        virtualnetmargin = actualnetmargin + deductedhoursmargin
 
         price_safe = deal_price if deal_price else 1
         expectedmargin_perc = round((deal_expectedmargin / price_safe) * 100, 2) if deal_price else 0
@@ -391,6 +465,8 @@ class DealService:
         actualnetmargin_perc = round((actualnetmargin / price_safe) * 100, 2) if deal_price else 0
 
         deal_record.values['amount'] = round(deal_price, 2)
+        deal_record.values['grossamount'] = round(deal_price + invoiced_amount, 2)
+        deal_record.values['virtualamount'] = round(deal_price + invoiced_amount + deductedhoursamount, 2)
         deal_record.values['expectedcost'] = round(deal_expectedcost, 2)
         deal_record.values['expectedmargin'] = round(deal_expectedmargin, 2)
         deal_record.values['expectedmargin_perc'] = expectedmargin_perc
@@ -409,6 +485,13 @@ class DealService:
         deal_record.values['actualnetmargin'] = round(actualnetmargin, 2)
         deal_record.values['actualnetmargin_perc'] = actualnetmargin_perc
         deal_record.values['actualnetmargindifference'] = round(actualnetmargin - deal_expectedmargin, 2)
+
+        deal_record.values['virtualgrossmargin'] = round(virtualgrossmargin , 2)
+        deal_record.values['virtualgrossmargindifference'] = round(virtualgrossmargin - deal_expectedmargin, 2)
+
+        deal_record.values['virtualnetmargin'] = round(virtualnetmargin, 2)
+        deal_record.values['virtualnetmargindifference'] = round(virtualnetmargin - deal_expectedmargin, 2)
+        
         deal_record.values['annualprice'] = totals['deal_annualprice']
         deal_record.values['annualcost'] = totals['deal_annualcost']
         deal_record.values['annualmargin'] = totals['deal_annualmargin']
@@ -431,6 +514,95 @@ class DealService:
         deal_record.values['laborcostdifference'] = totals['deal_labor_price'] - actuallaborcost
         laborhours = deal_record.values.get('laborhours') or 0
         deal_record.values['laborhoursdifference'] = totals['deal_expectedhours'] - laborhours
+
+        # Generazione nota HTML riepilogativa per Totali e Margini
+        import locale
+        
+        # Formattazione per la nota inline visibile
+        formatted_amount = f"{deal_price:,.2f}".replace(",", "'")
+        
+        html_totals_note = f"""
+        <div style="font-family: Arial, sans-serif; font-size: 13px; line-height: 1.5;">
+            <div class="deal-summary"><strong>Prezzo Deal: {formatted_amount}</strong></div>
+            <table class="deal-details" style="width: 100%; border-collapse: collapse; max-width: 450px; margin-top: 8px;">
+                <tbody>
+                    <tr style="border-bottom: 2px solid #ccc; padding-bottom: 6px;">
+                        <td style="padding: 4px 0;"><strong>Ricavi</strong></td>
+                        <td style="padding: 4px 0; text-align: right;"><strong>Ammontare</strong></td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 4px 0;">Prezzo Vendita Deal</td>
+                        <td style="padding: 4px 0; text-align: right;">{deal_price:,.2f}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 4px 0;">Ricavo Lordo (incl. Invoiced)</td>
+                        <td style="padding: 4px 0; text-align: right;">{(deal_price + invoiced_amount):,.2f}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 4px 0;">Ricavo Virtuale</td>
+                        <td style="padding: 4px 0; text-align: right;">{(deal_price + invoiced_amount + deductedhoursamount):,.2f}</td>
+                    </tr>
+                    
+                    <tr style="border-bottom: 2px solid #ccc;">
+                        <td style="padding: 8px 0 4px 0;"><strong>Costi</strong></td>
+                        <td style="padding: 8px 0 4px 0; text-align: right;"></td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 4px 0;">Costo Previsto</td>
+                        <td style="padding: 4px 0; text-align: right;">{deal_expectedcost:,.2f}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 4px 0;">Costo Reale</td>
+                        <td style="padding: 4px 0; text-align: right;">{(deal_actualcost + invoiced_laborcost):,.2f}</td>
+                    </tr>
+
+                    <tr style="border-bottom: 2px solid #ccc;">
+                        <td style="padding: 8px 0 4px 0;"><strong>Margini</strong></td>
+                        <td style="padding: 8px 0 4px 0; text-align: right;"><strong>Ammontare (%)</strong></td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 4px 0;">Margine Previsto</td>
+                        <td style="padding: 4px 0; text-align: right;">{deal_expectedmargin:,.2f} ({expectedmargin_perc}%)</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 4px 0;">Margine Effettivo</td>
+                        <td style="padding: 4px 0; text-align: right;">{deal_actualmargin:,.2f} ({effectivemargin_perc}%)</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 4px 0;">Margine Lordo Reale</td>
+                        <td style="padding: 4px 0; text-align: right;">{actualgrossmargin:,.2f} ({actualgrossmargin_perc}%)</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 4px 0;">Margine Netto Reale</td>
+                        <td style="padding: 4px 0; text-align: right;">{actualnetmargin:,.2f} ({actualnetmargin_perc}%)</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 4px 0;">Margine Netto Virtuale</td>
+                        <td style="padding: 4px 0; text-align: right;">{virtualnetmargin:,.2f}</td>
+                    </tr>
+
+                    <tr style="border-bottom: 2px solid #ccc;">
+                        <td style="padding: 8px 0 4px 0;"><strong>Dettaglio Ripartito</strong></td>
+                        <td style="padding: 8px 0 4px 0; text-align: right;"></td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 4px 0;">Margine Annuo</td>
+                        <td style="padding: 4px 0; text-align: right;">{totals['deal_annualmargin']:,.2f}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 4px 0;">Margine Reale Hardware / Servizi</td>
+                        <td style="padding: 4px 0; text-align: right;">{totals['deal_hw_service_actual_margin']:,.2f}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 4px 0;">Margine Reale Lavoro</td>
+                        <td style="padding: 4px 0; text-align: right;">{(totals['deal_labor_actual_margin'] + invoiced_margin):,.2f}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        """
+        # Utilizziamo replace per assicurarci che la formattazione dei float segua una convenzione decente, ma .2f con comma è supportato da str nativamente (es stringa 1,000.00).
+        deal_record.values['totalsnote'] = html_totals_note.strip()
 
     @staticmethod
     def _check_project_completion(deal_record: UserRecord):

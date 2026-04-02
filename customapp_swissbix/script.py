@@ -1966,7 +1966,7 @@ def run_test():
     
     # Prepara la query per recuperare tutti i deal con data di apertura successiva al 01-01-2026.
     # Assumiamo che la tabella fisica nel database per 'deal' sia 'user_deal'
-    query = "SELECT recordid_ FROM user_deal WHERE closedate >= '2026-01-01' AND deleted_='N'"
+    query = "SELECT recordid_ FROM user_deal WHERE closedate >= '2025-01-01' AND deleted_='N'"
     
     try:
         rows = HelpderDB.sql_query(query)
@@ -1978,15 +1978,16 @@ def run_test():
         print("Nessun deal trovato con opendate >= 2026-01-01.")
         return
     
-    print(f"Trovati {len(rows)} record da processare.")
+    total = len(rows)
+    print(f"Trovati {total} record da processare.")
     success_count = 0
     
-    for row in rows:
+    for idx, row in enumerate(rows, start=1):
         recordid = row.get('recordid_')
         if not recordid:
             continue
             
-        print(f"Chiamata a custom_save_record_fields per deal con recordid_: {recordid}")
+        print(f"[{idx}/{total}] Chiamata a custom_save_record_fields per deal con recordid_: {recordid}")
         
         try:
             # Creiamo l'istanza UserRecord. Questo non è strettamente necessario se vuoti il dict dei params,
