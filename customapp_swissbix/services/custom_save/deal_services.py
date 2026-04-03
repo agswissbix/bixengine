@@ -626,7 +626,7 @@ class DealService:
                     product = UserRecord('product', dl_dict['recordidproduct_'], load_fields=False)
                     if product and product.recordid and product.values.get('subcategory') in included_subcategories:
                         sql = f"""
-                            SELECT recordid_ FROM user_serviceandasset WHERE recordidcompany_ = {deal_record.values.get('recordidcompany_')} AND recordidproduct_ = {dl_dict['recordidproduct_']} AND deleted_ = 'N'
+                            SELECT recordid_ FROM user_serviceandasset WHERE recordiddeal_ = {deal_record.recordid} AND recordidcompany_ = {deal_record.values.get('recordidcompany_')} AND recordidproduct_ = {dl_dict['recordidproduct_']} AND deleted_ = 'N'
                         """
                         with connection.cursor() as cursor:
                             cursor.execute(sql)
@@ -636,6 +636,7 @@ class DealService:
                                 record_serviceandasset = UserRecord('serviceandasset', recordid_serviceandasset)
                             else:
                                 record_serviceandasset = UserRecord('serviceandasset')
+                                record_serviceandasset.values['recordiddeal_'] = deal_record.recordid
                                 record_serviceandasset.values['recordidcompany_'] = deal_record.values.get('recordidcompany_')
                                 record_serviceandasset.values['recordidproduct_'] = dl_dict['recordidproduct_']
                             record_serviceandasset.values['quantity'] = dl_dict.get('quantity')
