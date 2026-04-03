@@ -4664,6 +4664,13 @@ def get_input_linked(request):
                 if not (key.endswith('_') and value):
                     continue
 
+                if isinstance(value, list):
+                    if len(value) == 1:
+                        value = value[0]
+                    else:
+                        # Handle multi-value case if needed
+                        continue
+
                 converted_value = value
                 field_desc_rows = HelpderDB.sql_query(
                     f"SELECT description FROM sys_field WHERE tableid='{tableid}' AND fieldid='{key}'"
