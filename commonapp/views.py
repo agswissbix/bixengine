@@ -4707,6 +4707,17 @@ def get_input_linked(request):
         except Exception as e:
             print(f"Error in generic context filtering: {e}")
 
+    # Hook custom per condizioni aggiuntive per-cliente
+    custom_conditions = call_custom_function(
+        "get_input_linked_conditions",
+        linkedmaster_tableid=linkedmaster_tableid,
+        tableid=tableid,
+        fieldid=fieldid,
+        form_values=form_values,
+    )
+    if custom_conditions:
+        additional_conditions += f" {custom_conditions}"
+
     if recordid:
         sql = f"""
             SELECT recordid_ as recordid, {keyfieldlink} as name
