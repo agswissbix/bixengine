@@ -839,20 +839,31 @@ class UserRecord:
 
             if field['fieldtypewebid'] == 'Utente':
                 fieldtype='Utente'
-                lookupitemsusers=[]
-                users=HelperSys.get_users()
-                for user in users:
-                    lookupitemsuser={}
-                    lookupitemsuser['userid']=user['id']
-                    lookupitemsuser['firstname']=user['firstname']
-                    lookupitemsuser['lastname']=user['lastname']
-                    lookupitemsuser['link']=''
-                    lookupitemsuser['linkdefield']=''
-                    lookupitemsuser['linkedvalue']=''
-                    lookupitemsusers.append(lookupitemsuser)
-                insert_field['lookupitemsuser']=lookupitemsusers
-                defaultcode=self.userid
-                defaultvalue=self.userid
+                users = HelperSys.get_users()
+                insert_field['lookupitemsuser'] = [
+                    {
+                        'userid': u['id'],
+                        'firstname': u['firstname'],
+                        'lastname': u['lastname'],
+                        'link': '',
+                        'linkdefield': '',
+                        'linkedvalue': ''
+                    } 
+                    for u in users
+                ]
+
+                user_obj = None
+                if defaultcode not in [None, '']:
+                    user_obj = SysUser.objects.filter(id=defaultcode).first()
+
+                if user_obj:
+                    # Se l'utente esiste, usiamo il suo ID
+                    defaultcode = user_obj.id
+                    defaultvalue = user_obj.id
+                else:
+                    # Se non esiste o il codice era vuoto, usiamo l'ID dell'utente corrente (self.userid)
+                    defaultcode = self.userid
+                    defaultvalue = self.userid
 
             if field['fieldtypewebid'] == 'Memo':
                 fieldtype='Memo'
