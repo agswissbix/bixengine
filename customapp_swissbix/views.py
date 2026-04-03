@@ -2398,8 +2398,6 @@ def upload_markdown_image(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 def check_ai_status(request):
-    from customapp_swissbix.script import check_ai_server
-
     is_online, message = check_ai_server()
     if is_online:
         print(f"✅  {message}")
@@ -2409,8 +2407,6 @@ def check_ai_status(request):
         return JsonResponse({"status": False})
 
 def check_ai_chat_status(request):
-    from customapp_swissbix.script import check_ai_chat_server
-
     is_online, message = check_ai_chat_server()
     if is_online:
         print(f"✅  {message}")
@@ -2537,36 +2533,36 @@ def get_bixhub_initial_data(request):
                     "is_signed": is_signed
                 })
 
-        lenovo_tickets = []
-        if userid:
-            condition_list_lenovo = []
-            condition_list_lenovo.append(f"technician='{userid}'")
-            condition_list_lenovo.append("status != 'Riconsegnato'")
-            condition_list_lenovo.append("deleted_ = 'N'")
+        # lenovo_tickets = []
+        # if userid:
+        #     condition_list_lenovo = []
+        #     condition_list_lenovo.append(f"technician='{userid}'")
+        #     condition_list_lenovo.append("status != 'Riconsegnato'")
+        #     condition_list_lenovo.append("deleted_ = 'N'")
 
-            lenovo_records = UserTable('ticket_lenovo').get_records(
-                conditions_list=condition_list_lenovo,
-                limit=10,
-                orderby="reception_date desc"
-            )
+        #     lenovo_records = UserTable('ticket_lenovo').get_records(
+        #         conditions_list=condition_list_lenovo,
+        #         limit=10,
+        #         orderby="reception_date desc"
+        #     )
 
-            for tk in lenovo_records:
-                lenovo_tickets.append({
-                    "id": str(tk.get('recordid_')),
-                    "name": tk.get('name') or "",
-                    "surname": tk.get('surname') or "",
-                    "company": tk.get('company_name') or "",
-                    "status": tk.get('status') or "Bozza",
-                    "date": str(tk.get('reception_date'))[:10] if tk.get('reception_date') else "",
-                    "problem_description": tk.get('problem_description') or "",
-                    "serial": tk.get('serial') or "",
-                })
+        #     for tk in lenovo_records:
+        #         lenovo_tickets.append({
+        #             "id": str(tk.get('recordid_')),
+        #             "name": tk.get('name') or "",
+        #             "surname": tk.get('surname') or "",
+        #             "company": tk.get('company_name') or "",
+        #             "status": tk.get('status') or "Bozza",
+        #             "date": str(tk.get('reception_date'))[:10] if tk.get('reception_date') else "",
+        #             "problem_description": tk.get('problem_description') or "",
+        #             "serial": tk.get('serial') or "",
+        #         })
 
         data = {
             "bixApps": bix_apps,
             "timesheets": recent_timesheets,
             "closedTimesheets": closed_timesheets,
-            "lenovoTickets": lenovo_tickets,
+            # "lenovoTickets": lenovo_tickets,
             "user": {
                 "name": username
             },
@@ -2717,9 +2713,8 @@ def get_lenovo_intake_context(request):
                 settings = f.get('settings', {})
                 field_settings[field_id] = {
                     'required': settings.get('obbligatorio') == 'true',
-                    'hidden': settings.get('nascosto') == 'true',
-                    'label': f.get('label', ''),
-                    'read_only': settings.get('sola_lettura') == 'true' # Hypothetical, check if exists
+                    'default': settings.get('default', ''),
+                    'label': f.get('description', ''),
                 }
 
             if 'lookupitems' in f and f['fieldtypewebid'] == 'multiselect':
@@ -2734,6 +2729,7 @@ def get_lenovo_intake_context(request):
 
         return JsonResponse({
             'success': True,
+            'card_fields': card_fields,
             'field_settings': field_settings,
             'lookups': {
                 'accessories': accessories_lookup if 'accessories_lookup' in locals() else [],
@@ -2982,9 +2978,16 @@ def save_lenovo_ticket(request):
                 w_rec.values['remaining_days'] = w.get('remainingDays', 0)
                 w_rec.save()
 
-        if str(new_status).lower() == str(lookup_item.itemcode).lower() and str(old_status).lower() != str(lookup_item.itemcode).lower():
+        if str(new_status).lower() == 'entrata' and str(old_status).lower() != 'entrata':
             from customapp_swissbix.services.custom_save.lenovo_ticket_services import LenovoTicketService
-            LenovoTicketService.send_status_update_email(rec.recordid)
+            response = LenovoTicketService.send_status_update_email(rec.recordid)
+            if response and response.status_code != 200:
+                return response
+        elif str(new_status).lower() == 'riparato' and str(old_status).lower() != 'riparato':
+            from customapp_swissbix.services.custom_save.lenovo_ticket_services import LenovoTicketService
+            response = LenovoTicketService.send_repair_completed_email(rec.recordid)
+            if response and response.status_code != 200:
+                return response
 
         # _send_email_lenovo(rec.recordid)      
         return JsonResponse({'success': True, 'recordid': rec.recordid})
