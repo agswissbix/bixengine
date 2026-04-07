@@ -577,6 +577,8 @@ class UserTable:
 
         if can_view['value'] == 'true' and 'where_list' in can_view:
             where_clauses.append(f" {can_view['where_list']}")
+        elif can_view['value'] == 'false':
+            where_clauses.append(f" false")
 
         # 4. Aggiungi i campi specifici se richiesti
         if fields:

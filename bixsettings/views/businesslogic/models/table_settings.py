@@ -926,3 +926,188 @@ class TableSettings:
                 success = False
 
         return success
+
+    @classmethod
+    def get_bulk_specific_settings(cls, tableids, userid, settingids=None):
+        """
+        Retrieves merged settings for multiple tables efficiently.
+        Returns: { tableid: { settingid: {'value': '...'} } }
+        """
+        # 1. Recupero dati Gruppi e Priorità
+        group_user_qs = SysGroupUser.objects.filter(userid=userid).exclude(disabled='Y')
+        group_ids = group_user_qs.values_list('groupid', flat=True)
+        sys_groups = SysGroup.objects.filter(id__in=group_ids).exclude(disabled='Y')
+        
+        group_data = {}
+        for sg in sys_groups:
+            if sg.idmanager_id:
+                priority = sg.priority if sg.priority is not None else 9999
+                group_data[sg.idmanager_id] = priority
+                
+        group_user_ids = list(group_data.keys())
+
+        # 2. Query impostazioni per i gruppi
+        group_settings_qs = SysUserTableSettings.objects.filter(
+            tableid__in=tableids,
+            userid__in=group_user_ids
+        )
+        if settingids:
+            if isinstance(settingids, str):
+                settingids = [settingids]
+            group_settings_qs = group_settings_qs.filter(settingid__in=settingids)
+        group_settings_qs = group_settings_qs.values('tableid', 'settingid', 'value', 'conditions', 'userid')
+
+        # 3. Gestione Conflitti Gruppi
+        best_group_settings = {}
+        for s in group_settings_qs:
+            tid = s['tableid']
+            sid = s['settingid']
+            val_lower = str(s['value']).lower()
+            current_priority = group_data.get(s['userid'], 9999)
+            is_bool = val_lower in ['true', 'false', '1', '0']
+
+            if tid not in best_group_settings:
+                best_group_settings[tid] = {}
+
+            # Parsing conditions
+            s_cond = s.get('conditions')
+            if isinstance(s_cond, str):
+                try:
+                    s_cond = json.loads(s_cond)
+                except:
+                    s_cond = None
+            s['conditions'] = s_cond
+
+            if sid not in best_group_settings[tid]:
+                s['priority'] = current_priority
+                s['source'] = 'group'
+                best_group_settings[tid][sid] = dict(s)
+            else:
+                existing = best_group_settings[tid][sid]
+                
+                if is_bool:
+                    is_s_true = val_lower in ['true', '1']
+                    is_e_true = str(existing['value']).lower() in ['true', '1']
+
+                    if is_e_true and not is_s_true:
+                        continue
+                    elif is_s_true and not is_e_true:
+                        existing['value'] = 'true'
+                        existing['conditions'] = s['conditions']
+                        existing['priority'] = current_priority
+                    elif is_s_true and is_e_true:
+                        e_cond = existing.get('conditions')
+                        n_cond = s['conditions']
+
+                        if not e_cond or not n_cond:
+                            existing['conditions'] = None
+                            existing['priority'] = min(existing['priority'], current_priority)
+                        else:
+                            merged = []
+                            if isinstance(e_cond, dict) and e_cond.get('is_merged'):
+                                merged.extend(e_cond['conditions_list'])
+                            elif e_cond:
+                                merged.append(e_cond)
+
+                            if isinstance(n_cond, dict) and n_cond.get('is_merged'):
+                                merged.extend(n_cond['conditions_list'])
+                            elif n_cond:
+                                merged.append(n_cond)
+
+                            existing['conditions'] = {
+                                'is_merged': True,
+                                'conditions_list': merged
+                            }
+                            existing['priority'] = min(existing['priority'], current_priority)
+                else:
+                    if current_priority < existing['priority']:
+                        existing['value'] = s['value']
+                        existing['conditions'] = s['conditions']
+                        existing['priority'] = current_priority
+                        existing['userid'] = s['userid']
+
+        # 4. Query User e Admin
+        user_settings_qs = SysUserTableSettings.objects.filter(
+            tableid__in=tableids, 
+            userid=userid
+        )
+        admin_settings_qs = SysUserTableSettings.objects.filter(
+            tableid__in=tableids, 
+            userid=1
+        )
+        if settingids:
+            user_settings_qs = user_settings_qs.filter(settingid__in=settingids)
+            admin_settings_qs = admin_settings_qs.filter(settingid__in=settingids)
+
+        user_settings_qs = user_settings_qs.values('tableid', 'settingid', 'value', 'conditions', 'userid')
+        admin_settings_qs = admin_settings_qs.values('tableid', 'settingid', 'value', 'conditions', 'userid')
+
+        user_settings = {}
+        for s in user_settings_qs:
+            tid = s['tableid']
+            if tid not in user_settings:
+                user_settings[tid] = {}
+            user_settings[tid][s['settingid']] = {**s, 'source': 'user'}
+
+        admin_settings = {}
+        for s in admin_settings_qs:
+            tid = s['tableid']
+            if tid not in admin_settings:
+                admin_settings[tid] = {}
+            admin_settings[tid][s['settingid']] = {**s, 'source': 'default'}
+
+        # 5. Merge finale per tutte le tabelle (Utente > Gruppi > Admin)
+        try:
+            current_uid = int(userid)
+        except (ValueError, TypeError):
+            current_uid = userid
+
+        if settingids and isinstance(settingids, str):
+            settingids = [settingids]
+
+        result = {}
+        for tid in tableids:
+            result[tid] = {}
+            
+            t_user = user_settings.get(tid, {})
+            t_admin = admin_settings.get(tid, {})
+            t_group = best_group_settings.get(tid, {})
+
+            all_ids = set(t_admin) | set(t_group) | set(t_user)
+
+            if settingids:
+                keys_to_process = settingids
+            else:
+                keys_to_process = cls.settings.keys()
+
+            defaults = {}
+            for k in keys_to_process:
+                if k in cls.settings:
+                    defaults[k] = cls.settings[k].copy()
+                    defaults[k]['source'] = 'hardcoded'
+                    defaults[k]['original_default'] = defaults[k].get('value')
+                    result[tid][k] = defaults[k]
+
+            merged_settings = []
+            for sid in all_ids:
+                if settingids and sid not in settingids:
+                    continue
+                if sid in t_user and current_uid != 1:
+                    merged_settings.append(t_user[sid])
+                elif sid in t_group:
+                    s = t_group[sid]
+                    s.pop('priority', None)
+                    merged_settings.append(s)
+                elif sid in t_admin:
+                    merged_settings.append(t_admin[sid])
+
+            for ms in merged_settings:
+                sid = ms['settingid']
+                if sid in result[tid]:
+                    result[tid][sid]['value'] = ms['value']
+                    result[tid][sid]['source'] = ms.get('source', 'unknown')
+                    cond = ms.get('conditions')
+                    if cond:
+                        result[tid][sid]['conditions'] = cond
+
+        return result
