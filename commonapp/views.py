@@ -4653,13 +4653,6 @@ def get_input_linked(request):
     fieldid = data.get('fieldid')
     form_values = data.get('formValues')
 
-    userid = Helper.get_userid(request)
-
-    tablesettings = TableSettings(linkedmaster_tableid, userid)
-    linkedmaster_table_can_view = tablesettings.get_specific_settings('view')['view']['value']
-    if linkedmaster_table_can_view == 'false':
-        return JsonResponse({'error': 'You do not have permission to view this table'}, status=403)
-
     keyfieldlink = HelpderDB.sql_query_value(
         f"SELECT keyfieldlink FROM sys_field WHERE tableid='{tableid}' AND fieldid='{fieldid}'",
         'keyfieldlink'
