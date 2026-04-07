@@ -123,7 +123,35 @@ def update_groups_priority_api(request):
     with connection.cursor() as cursor:
         for g in groups:
             cursor.execute("UPDATE sys_group SET priority=%s WHERE id=%s", [g.get('priority', 9999), g.get('id')])
-            
+    return JsonResponse({"success": True})
+
+@superuser_required
+def delete_group_api(request):
+    data = json.loads(request.body)
+    groupid = data.get('groupid')
+    
+    with connection.cursor() as cursor:
+        cursor.execute("DELETE FROM sys_group_user WHERE groupid=%s", [groupid])
+        cursor.execute("DELETE FROM sys_group WHERE id=%s", [groupid])
+        
+    return JsonResponse({"success": True})
+
+@superuser_required
+def delete_user_api(request):
+    data = json.loads(request.body)
+    userid = data.get('userid')
+    
+    with connection.cursor() as cursor:
+        cursor.execute("DELETE FROM sys_group_user WHERE userid=%s", [userid])
+        cursor.execute("DELETE FROM sys_user WHERE id=%s", [userid])
+        
+    try:
+        from django.contrib.auth.models import User
+        user = User.objects.get(id=userid)
+        user.delete()
+    except Exception:
+        pass
+        
     return JsonResponse({"success": True})
     
 @superuser_required
