@@ -99,6 +99,12 @@ urlpatterns = [
     
      # ------------------  Settings views --------------------------------- 
     path('get_users_and_groups_api/', get_users_and_groups, name='get_users_and_groups'),
+    path('get_group_detail_api/', get_group_detail_api, name='get_group_detail_api'),
+    path('save_new_group_api/', save_new_group_api, name='save_new_group_api'),
+    path('update_group_api/', update_group_api, name='update_group_api'),
+    path('update_groups_priority_api/', update_groups_priority_api, name='update_groups_priority_api'),
+    path('add_user_to_group_api/', add_user_to_group_api, name='add_user_to_group_api'),
+    path('remove_user_from_group_api/', remove_user_from_group_api, name='remove_user_from_group_api'),
     path('settings_table_usertables/', settings_table_usertables, name='settings_table_usertables'),
     path('settings_table_fields/', settings_table_fields, name='settings_table_fields'),
     path('settings_table_settings/', settings_table_settings, name='settings_table_settings'),

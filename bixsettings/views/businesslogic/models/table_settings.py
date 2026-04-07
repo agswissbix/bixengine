@@ -443,6 +443,140 @@ class TableSettings:
         self.userid = userid
         self.settings = self.get_settings()
 
+    def _get_merged_settings(self, settingids=None):
+        # 1. Recupero dati Gruppi e Priorità
+        group_user_qs = SysGroupUser.objects.filter(userid=self.userid).exclude(disabled='Y')
+        group_ids = group_user_qs.values_list('groupid', flat=True)
+        sys_groups = SysGroup.objects.filter(id__in=group_ids).exclude(disabled='Y')
+        
+        group_data = {}
+        for sg in sys_groups:
+            if sg.idmanager_id:
+                priority = sg.priority if sg.priority is not None else 9999
+                group_data[sg.idmanager_id] = priority
+                
+        group_user_ids = list(group_data.keys())
+
+        # 2. Query impostazioni per i gruppi
+        group_settings_qs = SysUserTableSettings.objects.filter(
+            tableid=self.tableid,
+            userid__in=group_user_ids
+        )
+        if settingids:
+            group_settings_qs = group_settings_qs.filter(settingid__in=settingids)
+        group_settings_qs = group_settings_qs.values('settingid', 'value', 'conditions', 'userid')
+
+        # 3. Gestione Conflitti Gruppi
+        best_group_settings = {}
+        for s in group_settings_qs:
+            sid = s['settingid']
+            val_lower = str(s['value']).lower()
+            current_priority = group_data.get(s['userid'], 9999)
+            is_bool = val_lower in ['true', 'false', '1', '0']
+
+            # Gestione parsing conditions per il mix
+            s_cond = s.get('conditions')
+            if isinstance(s_cond, str):
+                try:
+                    s_cond = json.loads(s_cond)
+                except:
+                    s_cond = None
+            s['conditions'] = s_cond
+
+            if sid not in best_group_settings:
+                s['priority'] = current_priority
+                s['source'] = 'group'
+                best_group_settings[sid] = dict(s)
+            else:
+                existing = best_group_settings[sid]
+                if is_bool:
+                    is_s_true = val_lower in ['true', '1']
+                    is_e_true = str(existing['value']).lower() in ['true', '1']
+
+                    if is_e_true and not is_s_true:
+                        # Existing is true, new is false -> Ignore new
+                        continue
+                    elif is_s_true and not is_e_true:
+                        # Existing is false, new is true -> Take new
+                        existing['value'] = 'true'
+                        existing['conditions'] = s['conditions']
+                        existing['priority'] = current_priority
+                    elif is_s_true and is_e_true:
+                        # Both are true.
+                        e_cond = existing.get('conditions')
+                        n_cond = s['conditions']
+
+                        if not e_cond or not n_cond:
+                            # A true without conditions overrides everything and becomes absolute true
+                            existing['conditions'] = None
+                            existing['priority'] = min(existing['priority'], current_priority)
+                        else:
+                            # Both have conditions -> We must merge them with OR
+                            merged = []
+                            # Unpack existing merged conditions if it exists
+                            if isinstance(e_cond, dict) and e_cond.get('is_merged'):
+                                merged.extend(e_cond['conditions_list'])
+                            elif e_cond:
+                                merged.append(e_cond)
+
+                            if isinstance(n_cond, dict) and n_cond.get('is_merged'):
+                                merged.extend(n_cond['conditions_list'])
+                            elif n_cond:
+                                merged.append(n_cond)
+
+                            existing['conditions'] = {
+                                'is_merged': True,
+                                'conditions_list': merged
+                            }
+                            existing['priority'] = min(existing['priority'], current_priority)
+                else:
+                    if current_priority < existing['priority']:
+                        existing['value'] = s['value']
+                        existing['conditions'] = s['conditions']
+                        existing['priority'] = current_priority
+                        existing['userid'] = s['userid']
+
+        # 4. Query User e Admin
+        user_settings_qs = SysUserTableSettings.objects.filter(
+            tableid=self.tableid, 
+            userid=self.userid
+        )
+        admin_settings_qs = SysUserTableSettings.objects.filter(
+            tableid=self.tableid, 
+            userid=1
+        )
+        
+        if settingids:
+            user_settings_qs = user_settings_qs.filter(settingid__in=settingids)
+            admin_settings_qs = admin_settings_qs.filter(settingid__in=settingids)
+
+        user_settings_qs = user_settings_qs.values('settingid', 'value', 'conditions', 'userid')
+        admin_settings_qs = admin_settings_qs.values('settingid', 'value', 'conditions', 'userid')
+
+        user_settings = {s['settingid']: {**s, 'source': 'user'} for s in user_settings_qs}
+        admin_settings = {s['settingid']: {**s, 'source': 'default'} for s in admin_settings_qs}
+
+        # 5. Merge finale (Utente > Gruppi > Admin)
+        merged_settings = []
+        all_ids = set(admin_settings) | set(best_group_settings) | set(user_settings)
+
+        try:
+            current_uid = int(self.userid)
+        except (ValueError, TypeError):
+            current_uid = self.userid
+
+        for sid in all_ids:
+            if sid in user_settings and current_uid != 1:
+                merged_settings.append(user_settings[sid])
+            elif sid in best_group_settings:
+                s = best_group_settings[sid]
+                s.pop('priority', None)
+                merged_settings.append(s)
+            elif sid in admin_settings:
+                merged_settings.append(admin_settings[sid])
+
+        return merged_settings
+
     def get_settings(self, with_option=False):
         # Copia profonda delle impostazioni
         settings_copy = {key: value.copy() for key, value in self.settings.items()}
@@ -457,43 +591,7 @@ class TableSettings:
             value['source'] = 'hardcoded'
             value['original_default'] = value.get('value')
 
-        user_settings_qs = SysUserTableSettings.objects.filter(
-            tableid=self.tableid,
-            userid=self.userid
-        ).values('settingid', 'value', 'conditions')
-
-        # Settings del defaultuser (admin)
-        admin_settings_qs = SysUserTableSettings.objects.filter(
-            tableid=self.tableid,
-            userid=1
-        ).values('settingid', 'value', 'conditions')
-
-        # Indicizza per settingid
-        user_settings = {
-            s['settingid']: s for s in user_settings_qs
-        }
-
-        admin_settings = {
-            s['settingid']: s for s in admin_settings_qs
-        }
-
-        # Merge: user → admin
-        merged_settings = []
-        for settingid in set(admin_settings) | set(user_settings):
-            if settingid in user_settings and str(self.userid) != '1':
-                s = user_settings[settingid]
-                s['source'] = 'user'
-                merged_settings.append(s)
-            elif settingid in admin_settings:
-                s = admin_settings[settingid]
-                s['source'] = 'default'
-                merged_settings.append(s)
-            else:
-                # Fallback per userid=1
-                s = user_settings[settingid]
-                s['source'] = 'default'
-                merged_settings.append(s)
-
+        merged_settings = self._get_merged_settings()
         self._apply_user_settings(settings_copy, merged_settings)
 
         return settings_copy
@@ -656,6 +754,28 @@ class TableSettings:
         - lista di recordid validi per cui la condizione passa
         - le where conditions
         """
+        if isinstance(conditions, str):
+            try:
+                conditions = json.loads(conditions)
+            except:
+                return [], ""
+
+        if not conditions:
+            return [], ""
+
+        if conditions.get('is_merged'):
+            all_records = set()
+            all_where_clauses = []
+            for sub_cond in conditions.get('conditions_list', []):
+                if sub_cond:
+                    recs, wheres = self._evaluate_conditions(sub_cond)
+                    all_records.update(recs)
+                    if wheres:
+                        all_where_clauses.append(f"({wheres})")
+            
+            sql_where = " OR ".join(all_where_clauses)
+            return list(all_records), sql_where
+
         table_name = f'user_{self.tableid}'
         logic = conditions.get("logic", "AND").upper()
         rules = conditions.get("rules", [])
@@ -723,7 +843,6 @@ class TableSettings:
             return {}
 
         # Applica solo le popolate necessarie
-        # Evita le due chiamate globali se non servono
         if any("field_options" in v for v in base_settings.values()):
             self._populate_field_options(base_settings)
 
@@ -733,23 +852,11 @@ class TableSettings:
         if "duplicate_with_linked" in base_settings:
             self._populate_linked_table_options(base_settings)
 
-        # Carica SOLO gli user settings necessari (non tutti!)
-        user_settings = SysUserTableSettings.objects.filter(
-            tableid=self.tableid,
-            userid=self.userid,
-            settingid__in=settingids
-        ).values('settingid', 'value')
+        # Merge usando il nuovo metodo globale
+        merged_settings = self._get_merged_settings(settingids)
 
-        # Fallback su admin solo per quelli richiesti
-        if not user_settings.exists():
-            user_settings = SysUserTableSettings.objects.filter(
-                tableid=self.tableid,
-                userid=1,
-                settingid__in=settingids
-            ).values('settingid', 'value')
-
-        # Applica solo le impostazioni richieste
-        self._apply_user_settings(base_settings, user_settings)
+        # Applica
+        self._apply_user_settings(base_settings, merged_settings)
 
         return base_settings
     

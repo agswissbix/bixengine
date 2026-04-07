@@ -703,7 +703,6 @@ class UserTable:
         return self._fields_definitions
     
     def get_results_columns(self):
-        #TODO abilitare per i singoli utenti e non solo con i parametri del superuser
         sql=f"""
             SELECT *
             FROM sys_user_field_order
@@ -714,19 +713,31 @@ class UserTable:
             AND sys_user_field_order.fieldorder IS NOT NULL
             ORDER BY sys_user_field_order.fieldorder
             """
-        columns=HelpderDB.sql_query(sql, params={'typepreference': self.typepreference, 'tableid': self.tableid, 'userid': self.userid})
+            
+        # 1. Tentativo con l'utente corrente
+        columns = HelpderDB.sql_query(sql, params={'typepreference': self.typepreference, 'tableid': self.tableid, 'userid': self.userid})
+        
+        # 2. Tentativo con i gruppi (ordinati per priorità globale)
         if not columns:
-            sql=f"""
-                SELECT *
-                FROM sys_user_field_order
-                LEFT JOIN sys_field ON sys_user_field_order.tableid=sys_field.tableid AND sys_user_field_order.fieldid=sys_field.id
-                WHERE sys_user_field_order.typepreference = %(typepreference)s
-                AND sys_user_field_order.tableid = %(tableid)s
-                AND sys_user_field_order.userid = 1
-                AND sys_user_field_order.fieldorder IS NOT NULL
-                ORDER BY sys_user_field_order.fieldorder
-                """
-            columns=HelpderDB.sql_query(sql, params={'typepreference': self.typepreference, 'tableid': self.tableid})
+            group_sql = """
+                SELECT g.idmanager
+                FROM sys_group_user gu
+                JOIN sys_group g ON gu.groupid = g.id
+                WHERE gu.userid = %(userid)s AND (gu.disabled IS NULL OR gu.disabled != 'Y')
+                ORDER BY COALESCE(g.priority, 9999) ASC
+            """
+            groups = HelpderDB.sql_query(group_sql, params={'userid': self.userid})
+            if groups:
+                for group in groups:
+                    if group.get('idmanager'):
+                        columns = HelpderDB.sql_query(sql, params={'typepreference': self.typepreference, 'tableid': self.tableid, 'userid': group['idmanager']})
+                        if columns:
+                            break
+                            
+        # 3. Fallback al superuser (userid = 1)
+        if not columns:
+            columns = HelpderDB.sql_query(sql, params={'typepreference': self.typepreference, 'tableid': self.tableid, 'userid': 1})
+            
         return columns
     
     def get_table_views(self):

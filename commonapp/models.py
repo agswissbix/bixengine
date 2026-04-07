@@ -223,6 +223,7 @@ class SysGroup(models.Model):
     creatorid = models.IntegerField(blank=True, null=True)
     creationdate = models.DateTimeField()
     disabled = models.CharField(max_length=1, blank=True, null=True)
+    priority = models.IntegerField(blank=True, null=True)
 
     class Meta:
         db_table = 'sys_group'
