@@ -926,9 +926,6 @@ class UserRecord:
         #TODO custom da gestire diversamente
         if linkedtable=='salesorderline':
             records=HelpderDB.sql_query(f"SELECT * FROM user_{linkedtable} WHERE recordid{self.tableid}_='{self.recordid}' AND deleted_='N' AND status='In Progress'")
-        #TODO custom da gestire diversamente
-        elif linkedtable=='dealline':
-            records=HelpderDB.sql_query(f"SELECT * FROM user_{linkedtable} WHERE recordid{self.tableid}_='{self.recordid}' AND deleted_='N' ORDER BY name DESC")
         else:
-            records=HelpderDB.sql_query(f"SELECT * FROM user_{linkedtable} WHERE recordid{self.tableid}_='{self.recordid}' AND deleted_='N'")
+            records=HelpderDB.sql_query(f"SELECT * FROM user_{linkedtable} WHERE recordid{self.tableid}_='{self.recordid}' AND deleted_='N' ORDER BY linkedorder_ ASC")
         return records 
