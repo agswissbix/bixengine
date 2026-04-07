@@ -28,6 +28,7 @@ from commonapp.bixmodels.helper_db import *
 from commonapp.bixmodels.user_record import *
 from commonapp.helper import *
 from collections import defaultdict
+from bixsettings.views.businesslogic.models.field_settings import FieldSettings
 
 
 bixdata_server = os.environ.get('BIXDATA_SERVER')
@@ -656,20 +657,12 @@ class UserTable:
 
             field_ids_str = "'" + "','".join([f['fieldid'] for f in fields]) + "'"
 
-            # Query per ottenere TUTTE le impostazioni utente per questi campi in una volta
-            sql_settings = f"""
-                SELECT fieldid, settingid, value
-                FROM sys_user_field_settings
-                WHERE tableid='{self.tableid}' AND userid='{str(self.userid)}' AND fieldid IN ({field_ids_str})
-            """
-            all_settings_list = HelpderDB.sql_query(sql_settings)
-            # Organizza le impostazioni per fieldid per un accesso rapido
+            all_settings_bulk = FieldSettings.get_bulk_field_settings(self.tableid, self.userid)
             all_settings = {}
-            for setting in all_settings_list:
-                fieldid = setting['fieldid']
-                if fieldid not in all_settings:
-                    all_settings[fieldid] = {}
-                all_settings[fieldid][setting['settingid']] = setting['value']
+            for fieldid, settings_map in all_settings_bulk.items():
+                all_settings[fieldid] = {}
+                for settingid, s_data in settings_map.items():
+                    all_settings[fieldid][settingid] = s_data.get('value')
 
             # Query per ottenere TUTTI gli ordinamenti per questi campi in una volta (se necessario)
             # Esempio per 'insert_fields', aggiungi altri typepreference se servono altrove

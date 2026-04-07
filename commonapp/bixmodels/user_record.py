@@ -197,13 +197,27 @@ class UserRecord:
         if self.tableid:
             fields_db = HelpderDB.sql_query(f"SELECT * FROM sys_field WHERE tableid='{self.tableid}'")
             temp_fields = {}
+            
+            bulk_settings = FieldSettings.get_bulk_field_settings(self.tableid, self.userid)
+            
             for field in fields_db:
-                # Recupera settings e default (potrebbe essere ottimizzato anche qui)
-                sql_settings = f"SELECT * FROM sys_user_field_settings WHERE fieldid='{field['fieldid']}' AND tableid='{self.tableid}' AND userid='{str(self.userid)}'" # Usa self.userid
-                field['settings'] = HelpderDB.sql_query(sql_settings)
-                sql_default = f"SELECT value FROM sys_user_field_settings WHERE settingid='default' AND fieldid='{field['fieldid']}' AND tableid='{self.tableid}' AND userid='{str(self.userid)}'" # Usa self.userid
-                field['defaultvalue'] = HelpderDB.sql_query_value(sql_default, 'value')
-                temp_fields[field['fieldid']] = field
+                fid = field['fieldid']
+                field_sets = bulk_settings.get(fid, {})
+                
+                f_settings_list = []
+                defaultvalue = ""
+                for k, v in field_sets.items():
+                    f_settings_list.append({
+                        "settingid": k,
+                        "value": v.get("value"),
+                        "conditions": v.get("conditions")
+                    })
+                    if k == 'default':
+                        defaultvalue = v.get("value")
+
+                field['settings'] = f_settings_list
+                field['defaultvalue'] = defaultvalue
+                temp_fields[fid] = field
             self.fields = temp_fields # Inizializza self.fields con le definizioni base
 
     def _fetch_record_values_from_db(self):

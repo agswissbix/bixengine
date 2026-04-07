@@ -5161,6 +5161,9 @@ def get_card_active_tab(request):
     if not card_tabs:
         card_tabs = ['Campi','Collegati']
 
+    if isinstance(card_tabs, str):
+        card_tabs = card_tabs.split(',')
+
     if not active_tab:
         active_tab = ''
 
