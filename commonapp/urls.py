@@ -81,8 +81,9 @@ urlpatterns = [
     path('get_user_settings_api/', get_user_settings_api, name='get_user_settings_api'),
     path('save_user_settings_api/', save_user_settings_api, name='save_user_settings_api'),
     path('get_user_profile_api/', get_user_profile_api, name='get_user_profile_api'),
-    path('save_user_profile_api/', save_user_profile_api, name='save_user_profile_api'),
     path('get_users/', get_users, name='get_users'),
+    path('delete_group_api/', delete_group_api, name='delete_group_api'),
+    path('delete_user_api/', delete_user_api, name='delete_user_api'),
     path('calculate_dependent_fields/', calculate_dependent_fields, name='calculate_dependent_fields'),
     path('get_filter_options/', get_filter_options, name='get_filter_options'),
     path('get_chart_data/', get_chart_data, name='get_chart_data'),
@@ -99,6 +100,12 @@ urlpatterns = [
     
      # ------------------  Settings views --------------------------------- 
     path('get_users_and_groups_api/', get_users_and_groups, name='get_users_and_groups'),
+    path('get_group_detail_api/', get_group_detail_api, name='get_group_detail_api'),
+    path('save_new_group_api/', save_new_group_api, name='save_new_group_api'),
+    path('update_group_api/', update_group_api, name='update_group_api'),
+    path('update_groups_priority_api/', update_groups_priority_api, name='update_groups_priority_api'),
+    path('add_user_to_group_api/', add_user_to_group_api, name='add_user_to_group_api'),
+    path('remove_user_from_group_api/', remove_user_from_group_api, name='remove_user_from_group_api'),
     path('settings_table_usertables/', settings_table_usertables, name='settings_table_usertables'),
     path('settings_table_fields/', settings_table_fields, name='settings_table_fields'),
     path('settings_table_settings/', settings_table_settings, name='settings_table_settings'),

@@ -28,6 +28,7 @@ from commonapp.bixmodels.helper_db import *
 from commonapp.bixmodels.user_record import *
 from commonapp.helper import *
 from collections import defaultdict
+from bixsettings.views.businesslogic.models.field_settings import FieldSettings
 
 
 bixdata_server = os.environ.get('BIXDATA_SERVER')
@@ -577,6 +578,8 @@ class UserTable:
 
         if can_view['value'] == 'true' and 'where_list' in can_view:
             where_clauses.append(f" {can_view['where_list']}")
+        elif can_view['value'] == 'false':
+            where_clauses.append(f" false")
 
         # 4. Aggiungi i campi specifici se richiesti
         if fields:
@@ -654,20 +657,12 @@ class UserTable:
 
             field_ids_str = "'" + "','".join([f['fieldid'] for f in fields]) + "'"
 
-            # Query per ottenere TUTTE le impostazioni utente per questi campi in una volta
-            sql_settings = f"""
-                SELECT fieldid, settingid, value
-                FROM sys_user_field_settings
-                WHERE tableid='{self.tableid}' AND userid='{str(self.userid)}' AND fieldid IN ({field_ids_str})
-            """
-            all_settings_list = HelpderDB.sql_query(sql_settings)
-            # Organizza le impostazioni per fieldid per un accesso rapido
+            all_settings_bulk = FieldSettings.get_bulk_field_settings(self.tableid, self.userid)
             all_settings = {}
-            for setting in all_settings_list:
-                fieldid = setting['fieldid']
-                if fieldid not in all_settings:
-                    all_settings[fieldid] = {}
-                all_settings[fieldid][setting['settingid']] = setting['value']
+            for fieldid, settings_map in all_settings_bulk.items():
+                all_settings[fieldid] = {}
+                for settingid, s_data in settings_map.items():
+                    all_settings[fieldid][settingid] = s_data.get('value')
 
             # Query per ottenere TUTTI gli ordinamenti per questi campi in una volta (se necessario)
             # Esempio per 'insert_fields', aggiungi altri typepreference se servono altrove
@@ -703,7 +698,6 @@ class UserTable:
         return self._fields_definitions
     
     def get_results_columns(self):
-        #TODO abilitare per i singoli utenti e non solo con i parametri del superuser
         sql=f"""
             SELECT *
             FROM sys_user_field_order
@@ -714,19 +708,31 @@ class UserTable:
             AND sys_user_field_order.fieldorder IS NOT NULL
             ORDER BY sys_user_field_order.fieldorder
             """
-        columns=HelpderDB.sql_query(sql, params={'typepreference': self.typepreference, 'tableid': self.tableid, 'userid': self.userid})
+            
+        # 1. Tentativo con l'utente corrente
+        columns = HelpderDB.sql_query(sql, params={'typepreference': self.typepreference, 'tableid': self.tableid, 'userid': self.userid})
+        
+        # 2. Tentativo con i gruppi (ordinati per priorità globale)
         if not columns:
-            sql=f"""
-                SELECT *
-                FROM sys_user_field_order
-                LEFT JOIN sys_field ON sys_user_field_order.tableid=sys_field.tableid AND sys_user_field_order.fieldid=sys_field.id
-                WHERE sys_user_field_order.typepreference = %(typepreference)s
-                AND sys_user_field_order.tableid = %(tableid)s
-                AND sys_user_field_order.userid = 1
-                AND sys_user_field_order.fieldorder IS NOT NULL
-                ORDER BY sys_user_field_order.fieldorder
-                """
-            columns=HelpderDB.sql_query(sql, params={'typepreference': self.typepreference, 'tableid': self.tableid})
+            group_sql = """
+                SELECT g.idmanager
+                FROM sys_group_user gu
+                JOIN sys_group g ON gu.groupid = g.id
+                WHERE gu.userid = %(userid)s AND (gu.disabled IS NULL OR gu.disabled != 'Y')
+                ORDER BY COALESCE(g.priority, 9999) ASC
+            """
+            groups = HelpderDB.sql_query(group_sql, params={'userid': self.userid})
+            if groups:
+                for group in groups:
+                    if group.get('idmanager'):
+                        columns = HelpderDB.sql_query(sql, params={'typepreference': self.typepreference, 'tableid': self.tableid, 'userid': group['idmanager']})
+                        if columns:
+                            break
+                            
+        # 3. Fallback al superuser (userid = 1)
+        if not columns:
+            columns = HelpderDB.sql_query(sql, params={'typepreference': self.typepreference, 'tableid': self.tableid, 'userid': 1})
+            
         return columns
     
     def get_table_views(self):

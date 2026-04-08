@@ -287,10 +287,10 @@
                 <div style="border-bottom: 1px solid #000; height: 16px; margin-top: 10px;">{% if reception_date %}Massagno / {{ reception_date }}{% endif %}</div>
             </div>
 
-            <div>
+            <!-- <div>
                 <div style="font-weight: bold; font-size: 10px;">Firma</div>
                 <div style="border-bottom: 1px solid #000; height: 30px; margin-top: 10px;"></div>
-            </div>
+            </div> -->
         </div>
 
         <!-- Right Column: Picked Up -->
@@ -305,7 +305,7 @@
             <div>
                 <div style="font-weight: bold; font-size: 10px;">Firma</div>
                 {% if signatureUrl %}
-                    <img src="{{ signatureUrl }}" style="height: 40px; border-bottom: 1px solid #000; width: 100%; object-fit: contain; object-position: left bottom;" />
+                    <img src="{{ signatureUrl }}" style="height: 60px; border-bottom: 1px solid #000; width: 100%; object-fit: contain; object-position: left bottom;" />
                 {% else %}
                     <div style="border-bottom: 1px solid #000; height: 30px; margin-top: 10px;"></div>
                 {% endif %}

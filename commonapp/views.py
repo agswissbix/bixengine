@@ -310,9 +310,16 @@ def get_sidebarmenu_items(request):
     favorite_tables_list = []
 
     # 3. Elaborazione Tabelle e Workspace
+    table_ids = [table["id"] for table in tables]
+    bulk_view_settings = TableSettings.get_bulk_specific_settings(table_ids, userid, ['view'])
+    
     for table in tables:
-        workspace_name = table["workspace"]
         table_id = table["id"]
+        can_view = bulk_view_settings.get(table_id, {}).get("view", {"value": "true"})
+        if can_view.get("value") == "false":
+            continue
+
+        workspace_name = table["workspace"]
 
         # Aggiunta ai preferiti se presente
         if table_id in favorite_ids:
@@ -3462,8 +3469,9 @@ def duplicate_record(request):
     userid = Helper.get_userid(request)
 
     tablesettings = TableSettings(tableid, userid)
-    can_duplicate_settings = tablesettings.get_specific_settings('duplicate')['duplicate']
-    can_duplicate_with_linked_settings = tablesettings.get_specific_settings('duplicate_with_linked')['duplicate_with_linked']
+    permissions = tablesettings.get_specific_settings(['duplicate', 'duplicate_with_linked'])
+    can_duplicate_settings = permissions['duplicate']
+    can_duplicate_with_linked_settings = permissions['duplicate_with_linked']
 
     if not tablesettings.has_permission_for_record(can_duplicate_settings):
         return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
@@ -3584,13 +3592,15 @@ def save_record_fields(request):
     userid = Helper.get_userid(request)
 
     tablesettings = TableSettings(tableid, userid)
-    can_edit_settings = tablesettings.get_specific_settings('edit')['edit']
-    can_add_settings = tablesettings.get_specific_settings('add')['add']
+    permissions = tablesettings.get_specific_settings(['edit', 'add'])
+    can_edit_settings = permissions['edit']
+    can_add_settings = permissions['add']
 
     if mastertableid and masterrecordid:
         tablesettings = TableSettings(mastertableid, userid)
-        can_edit_settings = tablesettings.get_specific_settings('edit_linked')['edit_linked']
-        can_add_settings = tablesettings.get_specific_settings('add_linked')['add_linked']
+        permissions_linked = tablesettings.get_specific_settings(['edit_linked', 'add_linked'])
+        can_edit_settings = permissions_linked['edit_linked']
+        can_add_settings = permissions_linked['add_linked']
 
     if not recordid and not tablesettings.has_permission_for_record(can_add_settings):
         return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
@@ -4664,6 +4674,15 @@ def get_input_linked(request):
                 if not (key.endswith('_') and value):
                     continue
 
+                if isinstance(value, list):
+                    if len(value) == 1:
+                        if value[0] == '':
+                            continue
+                        value = value[0]
+                    else:
+                        # Handle multi-value case if needed
+                        continue
+
                 converted_value = value
                 field_desc_rows = HelpderDB.sql_query(
                     f"SELECT description FROM sys_field WHERE tableid='{tableid}' AND fieldid='{key}'"
@@ -4706,6 +4725,17 @@ def get_input_linked(request):
 
         except Exception as e:
             print(f"Error in generic context filtering: {e}")
+
+    # Hook custom per condizioni aggiuntive per-cliente
+    custom_conditions = call_custom_function(
+        "get_input_linked_conditions",
+        linkedmaster_tableid=linkedmaster_tableid,
+        tableid=tableid,
+        fieldid=fieldid,
+        form_values=form_values,
+    )
+    if custom_conditions:
+        additional_conditions += f" {custom_conditions}"
 
     if recordid:
         sql = f"""
@@ -5122,24 +5152,22 @@ def get_card_active_tab(request):
     data = json.loads(request.body)
     tableid = data.get('tableid')
 
-    sql=f"SELECT * FROM sys_user_table_settings WHERE tableid='{tableid}' AND settingid='card_tabs'"
-    query_result=HelpderDB.sql_query_row(sql)
-    if not query_result:
+    userid = Helper.get_userid(request)
+
+    table_settings = TableSettings(tableid=tableid, userid=userid)
+
+    permissions = table_settings.get_specific_settings(['card_tabs', 'scheda_active_tab'])
+    card_tabs = permissions['card_tabs']['value']
+    active_tab = permissions['scheda_active_tab']['value']
+
+    if not card_tabs:
         card_tabs = ['Campi','Collegati']
-    else:
-        card_tabs=query_result['value']
-        card_tabs=card_tabs.split(',')
 
+    if isinstance(card_tabs, str):
+        card_tabs = card_tabs.split(',')
 
-    
-
-    sql=f"SELECT * FROM sys_user_table_settings WHERE tableid='{tableid}' AND settingid='scheda_active_tab'"
-    query_result=HelpderDB.sql_query_row(sql)
-
-    if not query_result:
+    if not active_tab:
         active_tab = ''
-    else:
-        active_tab=query_result['value']
 
     if active_tab not in card_tabs:
         active_tab=card_tabs[0]
@@ -5158,30 +5186,26 @@ def get_table_active_tab(request):
 
     userid = Helper.get_userid(request)
 
-    sql=f"SELECT * FROM sys_user_table_settings WHERE tableid='{tableid}' AND settingid='table_tabs'"
-    query_result=HelpderDB.sql_query(sql)
+    table_settings = TableSettings(tableid=tableid, userid=userid)
 
-    target = (next((i for i in query_result if i['userid'] == userid), None) or 
-          next((i for i in query_result if i['userid'] == 1), None))
+    permissions = table_settings.get_specific_settings(settingids=['table_tabs','table_active_tab'])
 
-    if not target:
+    table_tabs = permissions['table_tabs']['value']
+    active_tab = permissions['table_active_tab']['value']
+
+    if not table_tabs:
         table_tabs = ['Tabella']
-    else:
-        table_tabs=target['value']
-        table_tabs=table_tabs.split(',')
 
-    sql=f"SELECT * FROM sys_user_table_settings WHERE tableid='{tableid}' AND settingid='table_active_tab'"
-    query_result=HelpderDB.sql_query_row(sql)
+    if isinstance(table_tabs, str):
+        table_tabs = table_tabs.split(',')
 
-    if not query_result:
-        active_tab_id = ''
-    else:
-        active_tab_id = query_result['value']
+    if not active_tab:
+        active_tab = ''
 
-    if active_tab_id not in table_tabs:
-        active_tab_id = table_tabs[0]
+    if active_tab not in table_tabs:
+        active_tab = table_tabs[0]
 
-    active_tab = {"id": active_tab_id, "name": active_tab_id}
+    active_tab = {"id": active_tab, "name": active_tab}
 
     formatted_tabs = []
     
@@ -5190,10 +5214,9 @@ def get_table_active_tab(request):
         tab_name = table_tabs[k]
         
         if 'custom' == tab_id.lower():
-            sql=f"SELECT * FROM sys_user_table_settings WHERE tableid='{tableid}' AND settingid='table_custom_tab_name'"
-            query_result=HelpderDB.sql_query_row(sql)
-            if query_result:
-                tab_name=query_result['value']
+            table_custom_tab_name = table_settings.get_specific_settings('table_custom_tab_name')['table_custom_tab_name']['value']
+            if table_custom_tab_name:
+                tab_name=table_custom_tab_name
                 if active_tab['id'].lower() == 'custom':
                     active_tab['name'] = tab_name
         

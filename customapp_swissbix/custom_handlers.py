@@ -248,3 +248,14 @@ def calculate_dependent_fields(request):
           #  updated_fields['ore']=ore_updated   
 
     return JsonResponse({'status': 'success', 'updated_fields': updated_fields})
+
+
+def get_input_linked_conditions(linkedmaster_tableid, tableid, fieldid, form_values):
+    """
+    Ritorna condizioni SQL aggiuntive per get_input_linked, specifiche per swissbix.
+    """
+    # Filtra la tabella company per mostrare solo i record attivi su Bexio
+    if linkedmaster_tableid == 'company':
+        return "AND bexio_status = 'Active'"
+    
+    return ''

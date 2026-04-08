@@ -2,6 +2,7 @@ from commonapp.bixmodels.user_record import UserRecord
 from commonapp.bixmodels.helper_db import HelpderDB
 from commonapp.helper import Helper
 from datetime import *
+from django.db import connection
 
 
 class DealService:
@@ -48,7 +49,7 @@ class DealService:
         DealService._finalize_deal_calculations(deal_record, dealline_records, totals)
 
         # 7. Completamento progetti
-        DealService._check_project_completion(deal_record)
+        DealService._check_project_completion(deal_record, dealline_records)
 
         # 8. Workflow Step & Validazioni
         DealService._evaluate_workflow_steps(deal_record)
@@ -301,6 +302,7 @@ class DealService:
             'actuallabormargin': 0,
             'expectedlaborprice': 0
         }
+
 
         for dl_dict in dealline_records:
             dl_recordid = dl_dict['recordid_']
@@ -689,10 +691,44 @@ class DealService:
         deal_record.values['totalsnote'] = ''.join(lines)
 
     @staticmethod
-    def _check_project_completion(deal_record: UserRecord):
+    def _check_project_completion(deal_record: UserRecord, dealline_records: list):
         project_records = deal_record.get_linkedrecords_dict(linkedtable='project')
         for pr_dict in project_records:
             deal_record.values['projectcompleted'] = pr_dict.get('completed')
+
+            if pr_dict.get('completed') == 'Si':
+                included_subcategories = {
+                    'data_security',
+                    'mobile_security',
+                    'infrastructure',
+                    'sophos',
+                    'microsoft',
+                    'firewall',
+                }
+                included_subcategories.add('service_and_asset')
+                for dl_dict in dealline_records:
+                    product = UserRecord('product', dl_dict['recordidproduct_'], load_fields=False)
+                    if product and product.recordid and product.values.get('subcategory') in included_subcategories:
+                        sql = f"""
+                            SELECT recordid_ FROM user_serviceandasset WHERE recordiddeal_ = {deal_record.recordid} AND recordidcompany_ = {deal_record.values.get('recordidcompany_')} AND recordidproduct_ = {dl_dict['recordidproduct_']} AND deleted_ = 'N'
+                        """
+                        with connection.cursor() as cursor:
+                            cursor.execute(sql)
+                            row = cursor.fetchone()
+                            if row:
+                                recordid_serviceandasset = row[0]
+                                record_serviceandasset = UserRecord('serviceandasset', recordid_serviceandasset)
+                            else:
+                                record_serviceandasset = UserRecord('serviceandasset')
+                                record_serviceandasset.values['recordiddeal_'] = deal_record.recordid
+                                record_serviceandasset.values['recordidcompany_'] = deal_record.values.get('recordidcompany_')
+                                record_serviceandasset.values['recordidproduct_'] = dl_dict['recordidproduct_']
+                            record_serviceandasset.values['quantity'] = dl_dict.get('quantity')
+                            record_serviceandasset.values['description'] = dl_dict.get('name')
+                            record_serviceandasset.values['type'] = product.values.get('category')
+                            record_serviceandasset.values['sector'] = product.values.get('category')
+                            record_serviceandasset.save()
+                
 
     @staticmethod
     def _evaluate_workflow_steps(deal_record: UserRecord):

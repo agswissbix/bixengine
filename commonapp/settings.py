@@ -19,27 +19,26 @@ from commonapp.models import *
 def get_users_and_groups(request):
     """
     API per ottenere la lista di utenti e gruppi.
-    Restituisce un JSON con due liste separate.
+    Restituisce un JSON con due liste separate, e i gruppi includono gli utenti associati.
     """
     active_server = Helper.get_cliente_id()
     if not request.user.is_superuser and active_server != "wegolf":
         return JsonResponse({"success": False, "error": "Unauthorized"}, status=401)
 
     try:
-        # Esegui la query una sola volta
         all_sys_users = Helperdb.sql_query("SELECT * FROM sys_user")
 
-        users = []
-        groups = []
-
-        # Filtra e separa gli utenti e i gruppi
-        for user_data in all_sys_users:
-            if user_data.get('description') == 'Gruppo':
-                groups.append(user_data)
-            else:
-                users.append(user_data)
+        users = all_sys_users
         
-        # Restituisci i dati in formato JSON
+        all_sys_groups = Helperdb.sql_query("SELECT * FROM sys_group")
+        all_sys_group_users = Helperdb.sql_query("SELECT * FROM sys_group_user")
+
+        groups = []
+        for g in all_sys_groups:
+            group_id = g.get('id')
+            g['users'] = [rel for rel in all_sys_group_users if rel.get('groupid') == group_id]
+            groups.append(g)
+        
         return JsonResponse({
             "success": True,
             "users": users,
@@ -47,6 +46,113 @@ def get_users_and_groups(request):
         })
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=500)
+    
+@superuser_required
+def get_group_detail_api(request):
+    data = json.loads(request.body)
+    groupid = data.get('groupid')
+    
+    group = Helperdb.sql_query(f"SELECT * FROM sys_group WHERE id = '{groupid}'")
+    if not group:
+        return JsonResponse({"success": False, "error": "Group not found"}, status=404)
+        
+    group = group[0]
+    group_users = Helperdb.sql_query(f"SELECT * FROM sys_group_user WHERE groupid = '{groupid}' AND disabled != 'Y'")
+    
+    return JsonResponse({
+        "success": True,
+        "group": group,
+        "users": group_users
+    })
+
+@superuser_required
+def save_new_group_api(request):
+    data = json.loads(request.body)
+    name = data.get('name')
+    description = data.get('description', '')
+    idmanager = data.get('idmanager')
+    priority = data.get('priority', 9999)
+    
+    with connection.cursor() as cursor:
+        cursor.execute("INSERT INTO sys_group (name, description, idmanager, priority) VALUES (%s, %s, %s, %s)", [name, description, idmanager, priority])
+        new_group_id = cursor.lastrowid
+        
+    return JsonResponse({"success": True, "new_group_id": new_group_id})
+
+@superuser_required
+def update_group_api(request):
+    data = json.loads(request.body)
+    groupid = data.get('groupid')
+    name = data.get('name')
+    description = data.get('description', '')
+    idmanager = data.get('idmanager')
+    priority = data.get('priority', 9999)
+    
+    with connection.cursor() as cursor:
+        cursor.execute("UPDATE sys_group SET name=%s, description=%s, idmanager=%s, priority=%s WHERE id=%s", [name, description, idmanager, priority, groupid])
+        
+    return JsonResponse({"success": True})
+
+@superuser_required
+def add_user_to_group_api(request):
+    data = json.loads(request.body)
+    groupid = data.get('groupid')
+    userid = data.get('userid')
+    
+    with connection.cursor() as cursor:
+        cursor.execute("INSERT INTO sys_group_user (groupid, userid, disabled) VALUES (%s, %s, 'N')", [groupid, userid])
+        
+    return JsonResponse({"success": True})
+
+@superuser_required
+def remove_user_from_group_api(request):
+    data = json.loads(request.body)
+    groupid = data.get('groupid')
+    userid = data.get('userid')
+    
+    with connection.cursor() as cursor:
+        cursor.execute("DELETE FROM sys_group_user WHERE groupid=%s AND userid=%s", [groupid, userid])
+        
+    return JsonResponse({"success": True})
+
+@superuser_required
+def update_groups_priority_api(request):
+    data = json.loads(request.body)
+    groups = data.get('groups', [])
+    
+    with connection.cursor() as cursor:
+        for g in groups:
+            cursor.execute("UPDATE sys_group SET priority=%s WHERE id=%s", [g.get('priority', 9999), g.get('id')])
+    return JsonResponse({"success": True})
+
+@superuser_required
+def delete_group_api(request):
+    data = json.loads(request.body)
+    groupid = data.get('groupid')
+    
+    with connection.cursor() as cursor:
+        cursor.execute("DELETE FROM sys_group_user WHERE groupid=%s", [groupid])
+        cursor.execute("DELETE FROM sys_group WHERE id=%s", [groupid])
+        
+    return JsonResponse({"success": True})
+
+@superuser_required
+def delete_user_api(request):
+    data = json.loads(request.body)
+    userid = data.get('userid')
+    
+    with connection.cursor() as cursor:
+        cursor.execute("DELETE FROM sys_group_user WHERE userid=%s", [userid])
+        cursor.execute("DELETE FROM sys_user WHERE id=%s", [userid])
+        
+    try:
+        from django.contrib.auth.models import User
+        user = User.objects.get(id=userid)
+        user.delete()
+    except Exception:
+        pass
+        
+    return JsonResponse({"success": True})
     
 @superuser_required
 def settings_table_usertables(request):
@@ -387,25 +493,49 @@ def settings_user_customizations_summary(request):
             customizations[group][category] = []
         customizations[group][category].append(text)
 
+    # Fetch groups for user
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT g.idmanager, g.name
+            FROM sys_group_user gu
+            JOIN sys_group g ON gu.groupid = g.id
+            WHERE gu.userid = %s AND (gu.disabled IS NULL OR gu.disabled != 'Y')
+        """, [userid])
+        groups_info = cursor.fetchall()
+        
+    group_managers = {row[0]: row[1] for row in groups_info if row[0]}
+    user_ids_to_check = [int(userid)] + list(group_managers.keys())
+
+    def get_source_label(uid):
+        if uid == int(userid):
+            return ""
+        group_name = group_managers.get(uid, "Gruppo Sconosciuto")
+        return f" [Gruppo: {group_name}]"
+
     # Table settings
-    table_settings = SysUserTableSettings.objects.filter(userid=user)
+    table_settings = SysUserTableSettings.objects.filter(userid__in=user_ids_to_check)
     for ts in table_settings:
         table_name = ts.tableid.id if hasattr(ts.tableid, 'id') else ts.tableid
-        add_customization(table_name, "Table Settings", ts.settingid)
+        source_label = get_source_label(ts.userid.id)
+        add_customization(table_name, "Table Settings", f"{ts.settingid}{source_label}")
 
     # Field settings
-    field_settings = SysUserFieldSettings.objects.filter(userid=user)
+    field_settings = SysUserFieldSettings.objects.filter(userid__in=user_ids_to_check)
     for fs in field_settings:
-        add_customization(fs.tableid, "Field Settings", f"{fs.fieldid} - {fs.settingid}")
+        source_label = get_source_label(fs.userid.id)
+        add_customization(fs.tableid, "Field Settings", f"{fs.fieldid} - {fs.settingid}{source_label}")
 
     # Field Order Insert (and other type preferences)
-    field_orders = SysUserFieldOrder.objects.filter(userid=user).values('tableid_id', 'typepreference').distinct()
+    field_orders = SysUserFieldOrder.objects.filter(userid__in=user_ids_to_check).values('tableid_id', 'typepreference', 'userid_id').distinct()
     for fo in field_orders:
-        add_customization(fo['tableid_id'], "Order Fields", f"{fo['typepreference']}: Personalizzato")
+        source_label = get_source_label(fo['userid_id'])
+        add_customization(fo['tableid_id'], "Order Fields", f"{fo['typepreference']}: Personalizzato{source_label}")
 
     # Table Order
-    if SysUserTableOrder.objects.filter(userid=user).exists():
-        add_customization("Sistema", "Impostazioni Globali", "Ordine Tabelle: Personalizzato")
+    for uid in user_ids_to_check:
+        if SysUserTableOrder.objects.filter(userid=uid).exists():
+            source_label = get_source_label(uid)
+            add_customization("Sistema", "Impostazioni Globali", f"Ordine Tabelle: Personalizzato{source_label}")
 
     return JsonResponse({"customizations": customizations})
 
