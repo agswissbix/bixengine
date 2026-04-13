@@ -3631,6 +3631,7 @@ def save_record_fields(request):
         is_editable = fieldsettings.has_permission_for_record(field_data.get('is_editable', {}), recordid)
         
         if is_required or not is_editable:
+            file_value = uploaded_files.get(f"files[{field_name}]") or uploaded_files.get(field_name)
             field_value = saved_fields_dict.get(field_name)
             old_field_value = old_record.values.get(field_name)
             
@@ -3643,7 +3644,7 @@ def save_record_fields(request):
             if is_required:
                 # Usiamo norm_new_value per evitare falsi positivi (es. integer 0 che fallirebbe il 'not field_value')
                 # e bloccare false submission (es. ID relazionale che non esiste)
-                if norm_new_value is None or str(norm_new_value).strip() == '':
+                if (norm_new_value is None or str(norm_new_value).strip() == '') and file_value is None:
                     # Se il frontend non ce lo ha mandato affatto in un edit parziale
                     if field_name not in saved_fields_dict and recordid:
                         if old_field_value is None or str(old_field_value).strip() == '':
