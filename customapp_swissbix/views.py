@@ -3142,6 +3142,9 @@ def generate_lenovo_pdf(recordid, signature_path=None):
         rec = UserRecord('ticket_lenovo', recordid)
 
         row = rec.values
+        for k, v in row.items():
+            if v is None:
+                row[k] = ''
         row['recordid'] = recordid
         
         # Attachments
