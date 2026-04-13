@@ -1079,6 +1079,8 @@ def get_monte_ore_activemind(request):
     recordid_deal = data.get('dealid')
     is_bwbix = data.get('isBwbix', False)
 
+    userid = Helper.get_userid(request) if hasattr(request, 'user') else 1
+
     if not recordid_deal:
         return JsonResponse({'error': 'Missing dealid'}, status=400)
 
@@ -1132,7 +1134,21 @@ def get_monte_ore_activemind(request):
             "hours": hours_val,
         })
 
-    return JsonResponse({"options": options_list}, safe=False)
+    record_deal = UserRecord(tableid='deal', recordid=recordid_deal, userid=userid, load_fields=False)
+
+    conditions_list = [
+        f"recordidcompany_ = {record_deal.values['recordidcompany_']}",
+        f"status = 'In Progress'",
+        f"type = 'Monte Ore'"
+    ]
+
+    service_and_contract = UserTable('servicecontract', userid=userid).get_records(conditions_list=conditions_list)
+
+    monte_ore_existing = {}
+    if service_and_contract:
+        monte_ore_existing = service_and_contract[0]
+
+    return JsonResponse({"options": options_list, "monte_ore_existing": monte_ore_existing}, safe=False)
 
 
 def get_assistance_bwbix_activemind(request):
@@ -3142,6 +3158,9 @@ def generate_lenovo_pdf(recordid, signature_path=None):
         rec = UserRecord('ticket_lenovo', recordid)
 
         row = rec.values
+        for k, v in row.items():
+            if v is None:
+                row[k] = ''
         row['recordid'] = recordid
         
         # Attachments

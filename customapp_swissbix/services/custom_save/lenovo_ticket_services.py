@@ -111,6 +111,10 @@ class LenovoTicketService:
         if not name and not surname:
             customer_name = companyname
         else:
+            if name is None:
+                name = "Signore/a"
+            if surname is None:
+                surname = ""
             customer_name = f"{name} {surname}".strip()
         
         email_data['subject'] = f"{customer_name} - Riparazione Completata - Swissbix"
