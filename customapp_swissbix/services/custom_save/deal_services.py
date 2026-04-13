@@ -38,15 +38,8 @@ class DealService:
         # Recupero ID progetto legato se esiste
         project_recordid = DealService._get_project_id(recordid)
         
-        # 4.5 Processa timesheets del progetto
-        # Non invertire 4.5 con 5 per logica laborcost
-        DealService._process_project_timesheets(deal_record, project_recordid)
-
-        # 5. Iterazione Dealline records e calcolo aggregati
-        totals = DealService._process_deallines(deal_record, dealline_records, project_recordid)
-
-        # 6. Finalizzazione conteggi master
-        DealService._finalize_deal_calculations(deal_record, dealline_records, totals)
+        # 5. Processa timesheets, deallines e finalizza calcoli
+        DealService._process_deal_calculations(deal_record, dealline_records, project_recordid)
 
         # 7. Completamento progetti
         DealService._check_project_completion(deal_record, dealline_records)
@@ -114,7 +107,7 @@ class DealService:
         return deal_project_record_dict.get('recordid_') if deal_project_record_dict else ''
 
     @staticmethod
-    def _process_project_timesheets(deal_record: UserRecord, project_recordid: str):
+    def _process_deal_calculations(deal_record: UserRecord, dealline_records: list, project_recordid: str):
         usedhours = 0
         residualhours = 0
         expectedhours = 0
@@ -166,6 +159,8 @@ class DealService:
             hours = ts_dict.get('totaltime_decimal') or 0
             price = ts_dict.get('totalprice') or 0
             worktime = ts_dict.get('worktime_decimal') or 0
+            travel_hours = ts_dict.get('traveltime_decimal') or 0
+            travel_price = ts_dict.get('travelprice') or 0
 
             try:
                 hours = float(hours)
@@ -182,13 +177,6 @@ class DealService:
             except ValueError:
                 worktime = 0
             
-            laborhours += worktime
-            usedhours += hours
-            totalhours += hours
-
-            travel_hours = ts_dict.get('traveltime_decimal') or 0
-            travel_price = ts_dict.get('travelprice') or 0
-
             try:
                 travel_hours = float(travel_hours)
             except ValueError:
@@ -198,6 +186,10 @@ class DealService:
                 travel_price = float(travel_price)
             except ValueError:
                 travel_price = 0
+
+            laborhours += worktime
+            usedhours += hours
+            totalhours += hours
 
             travelhours += travel_hours
             travelcost += travel_price
@@ -253,37 +245,38 @@ class DealService:
         deal_record.values['unbilledhours'] = toinvoicehours
         deal_record.values['unbilledhoursamount'] = toinvoicehoursamount
         deal_record.values['laborhours'] = laborhours
-        deal_record.values['totalhours'] = totalhours
+        deal_record.values['totalhours'] = totalhours +saleshours
 
         deal_record.values['actuallaborcost'] = laborcost
 
         # Generazione nota HTML riepilogativa formattata in modo leggibile anche per i tooltip
-        hoursnote = f"""<div class="deal-summary" style="font-size: 1em;color: black;"><strong>Ore: {totalhours}</strong></div>
+        hoursnote = f"""<div class="deal-summary" style="font-size: 1em;color: black;"><strong>{expectedhours:.0f}/{laborhours:.0f}/{totalhours:.0f}</strong></div>
 <div class="deal-details" style="font-family: system-ui, sans-serif; line-height: 1.5; color: #1f2937;">
 <div style="font-size: 1.1em; color: #1e40af; margin-bottom: 8px; border-bottom: 1px solid #bfdbfe; padding-bottom: 4px;"><b>Dettaglio Tempistiche</b></div>
-&bull; Totale Generale Ore: <b>{totalhours}</b><br/>
 &bull; Ore Previste: <b>{expectedhours}</b><br/>
 &bull; Ore Utilizzate: <b>{usedhours}</b><br/>
+&bull; Totale Generale Ore: <b>{totalhours}</b><br/>
+&bull; Ore Lavorate (Labor): {laborhours}<br/>
 &bull; Ore Residue: <span style="font-weight: 700; color: {'#15803d' if float(residualhours or 0) >= 0 else '#b91c1c'};">{residualhours}</span><br/>
 <div style="margin-top: 12px; margin-bottom: 4px;"><i>Ripartizione:</i></div>
-&bull; Ore Lavorate (Labor): {laborhours}<br/>
+&bull; Ore Progetto (Fixed Price): {fixedpricehours}<br/>
+&bull; Ore Contratto/Monte Ore: {bankhours}<br/>
 &bull; Ore Fatturate: <span style="color: #047857; font-weight: 500;">{invoicedhours}</span><br/>
 &bull; Ore da Fatturare: <span style="color: #d97706; font-weight: 500;">{toinvoicehours}</span><br/>
 &bull; Ore Non Fatturabili: <span style="color: #b91c1c; font-weight: 500;">{nonbillablehours}</span><br/>
 &bull; Ore di Viaggio: {travelhours}<br/>
 &bull; Ore Commerciali (Sales): {saleshours}<br/>
-<div style="margin-top: 12px; margin-bottom: 4px;"><i>Contrattualistica:</i></div>
-&bull; Ore Progetto (Fixed Price): {fixedpricehours}<br/>
-&bull; Ore Contratto/Monte Ore: {bankhours}<br/>
+
 </div>"""
         deal_record.values['hoursnote'] = hoursnote.strip()
 
-    @staticmethod
-    def _process_deallines(deal_record: UserRecord, dealline_records: list, project_recordid: str) -> dict:
         deal_fixedpricehours = deal_record.values.get('fixedpricehours') or 0
         
         totals = {
             'amount_sum': 0,
+            'totalcontractvalue': 0,
+            'totalcontractmargin_act': 0,
+            'totalcontractexpectedcost': 0,
             'expectedcost': 0,
             'expectedhours': 0,
             'actualcost': 0,
@@ -327,6 +320,21 @@ class DealService:
             totals['amount_sum'] += dl_price
             totals['expectedcost'] += dl_expectedcost
 
+            contractual_obligation_raw = dl_dict.get('contractual_obligation')
+            try:
+                contract_ob = int(contractual_obligation_raw)
+            except (ValueError, TypeError):
+                contract_ob = 0
+                
+            if not Helper.isempty(dl_frequency):
+                monthly_price = (dl_price * multiplier) / 12.0
+                totals['totalcontractvalue'] += (monthly_price * contract_ob)
+                monthly_expcost = (dl_expectedcost * multiplier) / 12.0
+                totals['totalcontractexpectedcost'] += (monthly_expcost * contract_ob)
+            else:
+                totals['totalcontractvalue'] += dl_price
+                totals['totalcontractexpectedcost'] += dl_expectedcost
+
             dl_actualcost = dl_unitactualcost * dl_quantity
             
             product_fixedprice = 'No'
@@ -358,6 +366,12 @@ class DealService:
             dl_record.values['margin_actual'] = dl_actualmargin
 
             if not Helper.isempty(dl_frequency):
+                monthly_marg_act = (dl_actualmargin * multiplier) / 12.0
+                totals['totalcontractmargin_act'] += (monthly_marg_act * contract_ob)
+            else:
+                totals['totalcontractmargin_act'] += dl_actualmargin
+
+            if not Helper.isempty(dl_frequency):
                 dl_record.values['annualprice'] = dl_price * multiplier
                 dl_record.values['annualcost'] = dl_actualcost * multiplier if dl_actualcost != 0 else dl_expectedcost * multiplier
                 dl_record.values['annualmargin'] = dl_record.values['annualprice'] - dl_record.values['annualcost']
@@ -384,10 +398,7 @@ class DealService:
             totals['actualcost'] += dl_actualcost
             totals['effectivemargin'] += dl_actualmargin
 
-        return totals
 
-    @staticmethod
-    def _finalize_deal_calculations(deal_record: UserRecord, dealline_records: list, totals: dict):
         amount = deal_record.values.get('amount') or 0
         expectedcost = deal_record.values.get('expectedcost') or 0
         
@@ -421,6 +432,15 @@ class DealService:
         # actualnetmargin include invoiced_margin e sottrae salescost e nonbillablecost
         actualnetmargin = actualgrossmargin - salescost - nonbillablecost
 
+        contract_expectedmargin = totals['totalcontractvalue'] - totals['totalcontractexpectedcost']
+        contract_effectivemargin = totals['totalcontractmargin_act']
+        
+        if actualcost == 0:
+            contract_effectivemargin = contract_expectedmargin
+            
+        contract_grossmargin = contract_effectivemargin + invoiced_margin
+        totalcontractnetmargin = contract_grossmargin - salescost - nonbillablecost
+
         price_safe = amount if amount else 1
         expectedmargin_perc = round((deal_expectedmargin / price_safe) * 100, 2) if amount else 0
         effectivemargin_perc = round((effectivemargin / price_safe) * 100, 2) if amount else 0
@@ -428,6 +448,8 @@ class DealService:
         actualnetmargin_perc = round((actualnetmargin / price_safe) * 100, 2) if amount else 0
 
         deal_record.values['amount'] = round(amount, 2)
+        deal_record.values['totalcontractvalue'] = round(totals['totalcontractvalue'], 2)
+        deal_record.values['totalcontractnetmargin'] = round(totalcontractnetmargin, 2)
         deal_record.values['grossamount'] = round(amount + invoiced_amount, 2)
         deal_record.values['expectedcost'] = round(expectedcost, 2)
         deal_record.values['expectedmargin'] = round(deal_expectedmargin, 2)
@@ -568,9 +590,10 @@ class DealService:
 
         # Generazione nota HTML riepilogativa per Totali e Margini
         lines = []
-        lines.append(f'<div class="deal-summary" style="font-size: 1em;color: black"><strong>Fatturato: {c_rev(tot_rev)}</strong></div>')
+        lines.append(f'<div class="deal-summary" style="font-size: 1em;color: black"><strong>Marg: {c_marg(actualnetmargin)}  ({c_perc(actualnetmargin_perc)}%) --> {c_marg(totalcontractnetmargin)} </strong></div>')
         lines.append('<div class="deal-details" style="font-family: system-ui, sans-serif; line-height: 1.5; color: #1f2937;">')
-        
+        lines.append(f'<div style="font-size: 0.9em; color: #4b5563; margin-top: 4px; margin-bottom: 8px;">Margine Netto: <b>{c_marg(actualnetmargin)}  ({c_perc(actualnetmargin_perc)}%)</b></div>')
+        lines.append(f'<div style="font-size: 0.9em; color: #4b5563; margin-top: 4px; margin-bottom: 8px;">Margine Netto fino a fine contratto: <b>{c_marg(totalcontractnetmargin)}</b></div>')
         # 1. Analisi HARDWARE
         lines.append('<div style="margin-bottom: 20px;">')
         lines.append('<div style="font-size: 1.1em; color: #1e40af; margin-bottom: 8px; border-bottom: 1px solid #bfdbfe; padding-bottom: 4px;"><b>1. Analisi HARDWARE</b></div>')
@@ -689,6 +712,7 @@ class DealService:
         lines.append('</div>')
         
         deal_record.values['totalsnote'] = ''.join(lines)
+
 
     @staticmethod
     def _check_project_completion(deal_record: UserRecord, dealline_records: list):
