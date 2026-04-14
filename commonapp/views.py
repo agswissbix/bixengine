@@ -698,8 +698,8 @@ def get_table_filters(request):
         f['lookups'] = []
         lookuptableid = f['lookuptableid']
         if lookuptableid:
-            sql = f'SELECT itemcode, itemdesc FROM sys_lookup_table_item WHERE lookuptableid="{lookuptableid}"'
-            f['lookups'] = HelpderDB.sql_query(sql)
+            lookup_items = SysLookupTableItem.objects.filter(lookuptableid=lookuptableid).order_by(F('itemorder').asc(nulls_last=True), 'itemcode').values('itemcode', 'itemdesc')
+            f['lookups'] = list(lookup_items)
         
         
             
