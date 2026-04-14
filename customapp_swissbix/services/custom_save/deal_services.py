@@ -715,44 +715,197 @@ class DealService:
 
 
     @staticmethod
+    def _get_recalculated_quantity(group_field: str, group_value: str, product_id: str, exclude_deal_id: str) -> float:
+        sql_qty = f"""
+            SELECT SUM(CAST(dl.quantity AS DECIMAL(10,2))) 
+            FROM user_dealline dl 
+            JOIN user_deal d ON dl.recordiddeal_ = d.recordid_ 
+            WHERE d.{group_field} = '{group_value}'
+        """
+        if group_field == 'recordidcompany_':
+            sql_qty += " AND d.projectcompleted = 'Si' "
+            
+        sql_qty += f"""
+              AND dl.recordidproduct_ = '{product_id}' 
+              AND dl.deleted_ = 'N' AND d.deleted_ = 'N'
+              AND d.recordid_ != '{exclude_deal_id}'
+        """
+        tot_qty = 0
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute(sql_qty)
+            row = cursor.fetchone()
+            if row and row[0]:
+                tot_qty = float(row[0])
+        return tot_qty
+
+    @staticmethod
+    def _process_service_and_assets(deal_record: UserRecord, dealline_records: list):
+        included_subcategories = {
+            'data_security', 'mobile_security', 'infrastructure', 
+            'sophos', 'microsoft', 'firewall', 'service_and_asset'
+        }
+        
+        from django.db import connection
+        
+        for dl_dict in dealline_records:
+            product = UserRecord('product', dl_dict['recordidproduct_'], load_fields=False)
+            if product and product.recordid and product.values.get('subcategory') in included_subcategories:
+                
+                tot_qty = DealService._get_recalculated_quantity(
+                    'recordidcompany_', deal_record.values.get('recordidcompany_'), 
+                    dl_dict['recordidproduct_'], deal_record.recordid
+                )
+                        
+                try:
+                    curr_qty = float(dl_dict.get('quantity') or 0)
+                except ValueError:
+                    curr_qty = 0
+                tot_qty += curr_qty
+
+                sql = f"""
+                    SELECT recordid_ FROM user_serviceandasset 
+                    WHERE recordidcompany_ = {deal_record.values.get('recordidcompany_')} 
+                    AND recordidproduct_ = {dl_dict['recordidproduct_']} 
+                    AND deleted_ = 'N'
+                """
+                with connection.cursor() as cursor:
+                    cursor.execute(sql)
+                    row = cursor.fetchone()
+                    if row:
+                        record_serviceandasset = UserRecord('serviceandasset', row[0])
+                    else:
+                        record_serviceandasset = UserRecord('serviceandasset')
+                        record_serviceandasset.values['recordidcompany_'] = deal_record.values.get('recordidcompany_')
+                        record_serviceandasset.values['recordidproduct_'] = dl_dict['recordidproduct_']
+                        
+                    record_serviceandasset.values['quantity'] = tot_qty
+                    record_serviceandasset.values['description'] = dl_dict.get('name')
+                    record_serviceandasset.values['type'] = product.values.get('category')
+                    record_serviceandasset.values['sector'] = product.values.get('category')
+                    record_serviceandasset.save()
+                    
+                    sql_update_links = f"""
+                        UPDATE user_dealline dl
+                        JOIN user_deal d ON dl.recordiddeal_ = d.recordid_
+                        SET dl.recordidserviceandasset_ = '{record_serviceandasset.recordid}'
+                        WHERE d.recordidcompany_ = '{deal_record.values.get("recordidcompany_")}' 
+                          AND dl.recordidproduct_ = '{dl_dict['recordidproduct_']}' 
+                          AND dl.deleted_ = 'N' AND d.deleted_ = 'N'
+                    """
+                    with connection.cursor() as cursor:
+                        cursor.execute(sql_update_links)
+
+    @staticmethod
+    def _process_service_contracts(deal_record: UserRecord, dealline_records: list):
+        services_subcategories = {'services', 'services_bwbix'}
+        services_to_contract = []
+        for dl_dict in dealline_records:
+            product = UserRecord('product', dl_dict.get('recordidproduct_'), load_fields=False)
+            if product and product.recordid and product.values.get('subcategory') in services_subcategories:
+                services_to_contract.append(dl_dict)
+
+        if not services_to_contract:
+            return
+            
+        import datetime
+        from django.db import connection
+        
+        first_ob = next((s.get('contractual_obligation', '') for s in services_to_contract if s.get('contractual_obligation')), '')
+        current_date_str = datetime.datetime.now().strftime('%Y-%m-%d')
+        
+        sql_contract = f"""
+            SELECT recordid_ FROM user_servicecontract 
+            WHERE recordidcompany_ = {deal_record.values.get('recordidcompany_')} 
+            AND status = 'In Progress' AND type = 'Manutenzione IT' AND deleted_ = 'N'
+        """
+        with connection.cursor() as cursor:
+            cursor.execute(sql_contract)
+            row = cursor.fetchone()
+            if row:
+                record_servicecontract = UserRecord('servicecontract', row[0])
+            else:
+                record_servicecontract = UserRecord('servicecontract')
+                record_servicecontract.values['recordidcompany_'] = deal_record.values.get('recordidcompany_')
+                record_servicecontract.values['type'] = 'Manutenzione IT'
+                record_servicecontract.values['status'] = 'In Progress'
+                record_servicecontract.values['sector'] = 'Assistenza IT'
+                record_servicecontract.values['startdate'] = current_date_str
+        
+        record_servicecontract.values['subject'] = 'Manutenzione servizi'
+        record_servicecontract.values['note'] = first_ob
+        record_servicecontract.save()
+
+        deal_record.values['recordidservicecontract_'] = record_servicecontract.recordid
+
+        frequencies = set(s.get('intervention_frequency', s.get('frequency', '')) for s in services_to_contract)
+        contractual_planning_records = record_servicecontract.get_linkedrecords_dict(linkedtable='contractual_planning')
+        planning_by_freq = {}
+        
+        for freq in frequencies:
+            if not freq: continue
+                
+            freq_services = [s for s in services_to_contract if s.get('intervention_frequency', s.get('frequency', '')) == freq]
+            freq_names = [s.get('name', '') for s in freq_services if s.get('name')]
+            
+            record_planning_id = next((p.get('recordid_') for p in (contractual_planning_records or []) if p.get('frequency') == freq and p.get('deleted_') == 'N'), None)
+                        
+            if record_planning_id:
+                record_planning = UserRecord('contractual_planning', record_planning_id)
+            else:
+                record_planning = UserRecord('contractual_planning')
+                record_planning.values['recordidservicecontract_'] = record_servicecontract.recordid
+            
+            record_planning.values['title'] = 'Manutenzione servizi'
+            record_planning.values['description'] = '<br/>'.join(freq_names)
+            record_planning.values['frequency'] = freq
+            record_planning.values['start_date'] = current_date_str
+            record_planning.save()
+            planning_by_freq[freq] = record_planning.recordid
+
+        unique_products = {dl.get('recordidproduct_'): dl for dl in services_to_contract}
+
+        for pid, dl_dict in unique_products.items():
+            freq = dl_dict.get('intervention_frequency', dl_dict.get('frequency', ''))
+            planning_id = planning_by_freq.get(freq, '')
+
+            tot_qty = DealService._get_recalculated_quantity(
+                'recordidservicecontract_', record_servicecontract.recordid, 
+                pid, deal_record.recordid
+            )
+            
+            tot_qty += sum(float(dl.get('quantity') or 0) for dl in services_to_contract if dl.get('recordidproduct_') == pid)
+
+            sql_line = f"""
+                SELECT recordid_ FROM user_servicecontractlines 
+                WHERE recordidservicecontract_ = '{record_servicecontract.recordid}' 
+                AND recordidproduct_ = '{pid}' AND deleted_ = 'N'
+            """
+            with connection.cursor() as cursor:
+                cursor.execute(sql_line)
+                row = cursor.fetchone()
+                if row:
+                    record_line = UserRecord('servicecontractlines', row[0])
+                else:
+                    record_line = UserRecord('servicecontractlines')
+                    record_line.values['recordidservicecontract_'] = record_servicecontract.recordid
+                    record_line.values['recordidproduct_'] = pid
+            
+            record_line.values['quantity'] = tot_qty
+            record_line.values['recordidcontractual_planning_'] = planning_id
+            record_line.values['name'] = dl_dict.get('name')
+            record_line.save()
+
+    @staticmethod
     def _check_project_completion(deal_record: UserRecord, dealline_records: list):
         project_records = deal_record.get_linkedrecords_dict(linkedtable='project')
         for pr_dict in project_records:
             deal_record.values['projectcompleted'] = pr_dict.get('completed')
 
             if pr_dict.get('completed') == 'Si':
-                included_subcategories = {
-                    'data_security',
-                    'mobile_security',
-                    'infrastructure',
-                    'sophos',
-                    'microsoft',
-                    'firewall',
-                }
-                included_subcategories.add('service_and_asset')
-                for dl_dict in dealline_records:
-                    product = UserRecord('product', dl_dict['recordidproduct_'], load_fields=False)
-                    if product and product.recordid and product.values.get('subcategory') in included_subcategories:
-                        sql = f"""
-                            SELECT recordid_ FROM user_serviceandasset WHERE recordiddeal_ = {deal_record.recordid} AND recordidcompany_ = {deal_record.values.get('recordidcompany_')} AND recordidproduct_ = {dl_dict['recordidproduct_']} AND deleted_ = 'N'
-                        """
-                        with connection.cursor() as cursor:
-                            cursor.execute(sql)
-                            row = cursor.fetchone()
-                            if row:
-                                recordid_serviceandasset = row[0]
-                                record_serviceandasset = UserRecord('serviceandasset', recordid_serviceandasset)
-                            else:
-                                record_serviceandasset = UserRecord('serviceandasset')
-                                record_serviceandasset.values['recordiddeal_'] = deal_record.recordid
-                                record_serviceandasset.values['recordidcompany_'] = deal_record.values.get('recordidcompany_')
-                                record_serviceandasset.values['recordidproduct_'] = dl_dict['recordidproduct_']
-                            record_serviceandasset.values['quantity'] = dl_dict.get('quantity')
-                            record_serviceandasset.values['description'] = dl_dict.get('name')
-                            record_serviceandasset.values['type'] = product.values.get('category')
-                            record_serviceandasset.values['sector'] = product.values.get('category')
-                            record_serviceandasset.save()
-                
+                DealService._process_service_and_assets(deal_record, dealline_records)
+                DealService._process_service_contracts(deal_record, dealline_records)
+            
 
     @staticmethod
     def _evaluate_workflow_steps(deal_record: UserRecord):
