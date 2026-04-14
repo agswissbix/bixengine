@@ -3391,27 +3391,13 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None, userid=1)
     """
     record = UserRecord(tableid, recordid, userid)
 
-    fieldsettings = FieldSettings(tableid).get_all_settings()
-
     if fields:
         for fieldid, value in fields.items():
             record.values[fieldid] = value
 
     record.save()
 
-    deadline_updates = {}
-    if fields:
-        for fieldid in fields.keys():
-            setting = fieldsettings.get(fieldid, {}).get('is_deadline_field', {}).get('value')
-            if setting:
-                deadline_updates[setting] = record.values.get(fieldid)
-
-    # Se era in creazione ora abbiamo il recordid
-    current_recordid = record.recordid
-
-    if deadline_updates:
-        Helper.save_record_deadline(tableid, current_recordid, recordid, userid, deadline_updates)
-
+    # Il salvataggio delle scadenze (save_record_deadline) ora avviene direttamente in UserRecord.save()
     # 2️⃣ Salva i file (se presenti)
     if files:
         for file_key, uploaded_file in files.items():

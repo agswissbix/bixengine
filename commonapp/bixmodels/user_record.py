@@ -512,11 +512,26 @@ class UserRecord:
                     params_list.append(self.recordid)
 
                     HelpderDB.sql_execute_safe(sql, params_list)
+                    
+                    try:
+                        fieldsettings = FieldSettings(tableid=self.tableid, userid=self.userid).get_all_settings()
+                        deadline_updates = {}
+                        for fieldid in self.values.keys():
+                            setting = fieldsettings.get(fieldid, {}).get('is_deadline_field', {}).get('value')
+                            if setting:
+                                deadline_updates[setting] = self.values.get(fieldid)
+
+                        if deadline_updates:
+                            original_recordid_val = getattr(self, '_original_recordid_for_deadline', self.recordid)
+                            Helper.save_record_deadline(self.tableid, self.recordid, original_recordid_val, self.userid, deadline_updates)
+                    except Exception as e:
+                        print(f"Errore salvataggio scadenze: {e}")
 
                 # =====================================================
                 # INSERT
                 # =====================================================
                 else:
+                    self._original_recordid_for_deadline = self.recordid
                     next_recordid, next_id, next_order = self._generate_next_values()
 
                     sqlinsert = f"""
