@@ -2900,12 +2900,19 @@ def get_lenovo_ticket(request):
             'replaced_components': rec.values.get('replaced_components'),
         }
         
-        # Check for signature file (Fixed Path)
-        sig_path = f"ticket_lenovo/{ticket_id}/signature.png"
-        if default_storage.exists(sig_path):
-            ticket_data['signatureUrl'] = sig_path
+        # Check for intake signature (signature_intake.png)
+        intake_sig_path = f"ticket_lenovo/{ticket_id}/signature_intake.png"
+        if default_storage.exists(intake_sig_path):
+            ticket_data['signatureUrl'] = intake_sig_path
         else:
             ticket_data['signatureUrl'] = ""
+            
+        # Check for delivery signature (signature_delivery.png)
+        delivery_sig_path = f"ticket_lenovo/{ticket_id}/signature_delivery.png"
+        if default_storage.exists(delivery_sig_path):
+            ticket_data['deliverySignatureUrl'] = delivery_sig_path
+        else:
+            ticket_data['deliverySignatureUrl'] = ""
             
         # Fetch Warranty History
         warranties = HelpderDB.sql_query("SELECT * FROM user_warranty WHERE recordidticket_lenovo_ = %s ORDER BY start_date DESC", [ticket_id])
@@ -3142,7 +3149,7 @@ def image_to_base64(path):
         print(f"Error converting image to base64: {e}")
         return None
 
-def generate_lenovo_pdf(recordid, signature_path=None):
+def generate_lenovo_pdf(recordid, signature_path=None, pdf_type='Ricevuta Firmata'):
     try:
         base_path = os.path.normpath(os.path.join(settings.STATIC_ROOT, 'pdf'))
         os.makedirs(base_path, exist_ok=True)
@@ -3152,8 +3159,9 @@ def generate_lenovo_pdf(recordid, signature_path=None):
         if not rec.recordid:
             raise Exception("Ticket not found")
 
-        rec.values['return_date'] = datetime.date.today().strftime('%Y-%m-%d')
-        rec.save()
+        if pdf_type == 'Ricevuta Firmata - Riconsegna':
+            rec.values['return_date'] = datetime.date.today().strftime('%Y-%m-%d')
+            rec.save()
 
         rec = UserRecord('ticket_lenovo', recordid)
 
@@ -3204,7 +3212,10 @@ def generate_lenovo_pdf(recordid, signature_path=None):
 
         # Signature
         if signature_path:
-             row['signatureUrl'] = image_to_base64(signature_path)
+            if pdf_type == 'Ricevuta Firmata - Riconsegna':
+                row['signatureUrl'] = image_to_base64(signature_path)
+            else:
+                row['signatureUrlIn'] = image_to_base64(signature_path)
         else:
              # Check for fixed signature file
              sig_rel_path = f"ticket_lenovo/{recordid}/signature.png"
@@ -3238,7 +3249,7 @@ def generate_lenovo_pdf(recordid, signature_path=None):
         # Save as attachment
         att = UserRecord('attachment')
         att.values['recordidticket_lenovo_'] = recordid
-        att.values['type'] = 'Ricevuta Firmata' # Or just Signature/PDF
+        att.values['type'] = pdf_type # Or just Signature/PDF
         att.values['date'] = datetime.date.today().strftime('%Y-%m-%d')
         att.save()
 
@@ -3266,6 +3277,7 @@ def save_lenovo_signature(request):
     try:
         recordid = request.POST.get('recordid')
         img_base64 = request.POST.get('img_base64')
+        sig_type = request.POST.get('sig_type', 'delivery')
 
         if not recordid or not img_base64:
              return JsonResponse({'success': False, 'error': 'Missing data'}, status=400)
@@ -3276,7 +3288,7 @@ def save_lenovo_signature(request):
         img_data = base64.b64decode(img_base64)
         
         # Fixed filename for signature (one per ticket)
-        filename = "signature.png"
+        filename = f"signature_{sig_type}.png"
         storage_path = f"ticket_lenovo/{recordid}/{filename}"
         
         # Overwrite if exists
@@ -3286,10 +3298,15 @@ def save_lenovo_signature(request):
         final_path = default_storage.save(storage_path, ContentFile(img_data))
         
         # Generate PDF (will use the saved signature file)
-        att_id = generate_lenovo_pdf(recordid)
+        abs_sig_path = os.path.join(settings.UPLOADS_ROOT, storage_path)
+        pdf_type_label = 'Ricevuta Firmata - Presa in Consegna' if sig_type == 'intake' else 'Ricevuta Firmata - Riconsegna'
+        att_id = generate_lenovo_pdf(recordid, signature_path=abs_sig_path, pdf_type=pdf_type_label)
 
         rec = UserRecord('ticket_lenovo', recordid)
-        rec.values['status'] = 'Ritirato'
+        if sig_type == 'delivery':
+            rec.values['status'] = 'Riconsegnato'
+        else:
+            rec.values['status'] = 'Entrata'
         rec.save()
         
         return JsonResponse({'success': True, 'attachment_id': att_id})
@@ -3303,17 +3320,18 @@ def print_lenovo_ticket(request):
     try:
         data = json.loads(request.body)
         recordid = data.get('recordid')
+        print_type = data.get('print_type', 'Ricevuta Firmata - Riconsegna')
         
         # Find latest PDF attachment
         query = """
             SELECT file, filename 
             FROM user_attachment 
             WHERE recordidticket_lenovo_ = %s 
-            AND type = 'Ricevuta Firmata'
+            AND (type = %s OR type = 'Ricevuta Firmata')
             AND deleted_ = 'N'
-            ORDER BY recordid_ DESC LIMIT 1
+            ORDER BY type DESC, recordid_ DESC LIMIT 1
         """
-        row = HelpderDB.sql_query_row(query, [recordid])
+        row = HelpderDB.sql_query_row(query, [recordid, print_type])
         
         if row:
              relative_path = row['file']
@@ -3324,7 +3342,7 @@ def print_lenovo_ticket(request):
              # If just printing, maybe generate draft?
              # Let's try to generate one without signature if missing
              try:
-                att_id = generate_lenovo_pdf(recordid)
+                att_id = generate_lenovo_pdf(recordid, pdf_type=print_type)
                 rec = UserRecord('attachment', att_id)
                 relative_path = rec.values['file']
                 filename = rec.values['filename']
