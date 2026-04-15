@@ -557,6 +557,7 @@ class Helper:
                     FROM user_deadline
                     WHERE tableid = %s
                     AND recordidtable = %s
+                    AND deleted_ = 'N'
                     LIMIT 1
                 """
                 deadline_recordid = HelpderDB.sql_query_value(
@@ -578,7 +579,6 @@ class Helper:
 
             deadline_record.values['tableid'] = tableid
             deadline_record.values['recordidtable'] = current_recordid
-            deadline_record.values['description'] = label_table
 
             # Recupero actions in modo sicuro
             deadline_record.values['actions'] = ""
@@ -589,11 +589,17 @@ class Helper:
             except Exception as e:
                 print(f"Errore recupero actions deadline: {e}")
 
+            description_values = []
             for key, value in deadline_updates.items():
                 if key == 'label_reference':
-                    deadline_record.values['description'] += f" - {value}"
+                    description_values.append(value)
                 else:
                     deadline_record.values[key] = value
+
+            if description_values and len(description_values) > 0:
+                deadline_record.values['description'] = f"{', '.join(description_values)}"
+            else:
+                deadline_record.values['description'] = label_table
 
             if deadline_record.values.get('notice_days') in [None, '', 0]:
                 deadline_record.values['notice_days'] = 2
