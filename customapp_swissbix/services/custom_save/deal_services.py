@@ -829,7 +829,7 @@ class DealService:
                 record_servicecontract.values['recordidcompany_'] = deal_record.values.get('recordidcompany_')
                 record_servicecontract.values['type'] = 'Manutenzione IT'
                 record_servicecontract.values['status'] = 'In Progress'
-                record_servicecontract.values['sector'] = 'Assistenza IT'
+                record_servicecontract.values['service'] = 'Assistenza IT'
                 record_servicecontract.values['startdate'] = current_date_str
         
         record_servicecontract.values['subject'] = 'Manutenzione servizi'
@@ -856,7 +856,7 @@ class DealService:
                 record_planning = UserRecord('contractual_planning')
                 record_planning.values['recordidservicecontract_'] = record_servicecontract.recordid
             
-            record_planning.values['title'] = 'Manutenzione servizi'
+            record_planning.values['title'] = f'Manutenzione servizi - {record_servicecontract.fields.get("recordidcompany_").get("convertedvalue")}'
             record_planning.values['description'] = '<br/>'.join(freq_names)
             record_planning.values['frequency'] = freq
             record_planning.values['start_date'] = current_date_str
