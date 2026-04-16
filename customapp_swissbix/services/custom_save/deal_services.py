@@ -759,9 +759,9 @@ class DealService:
                         
                 try:
                     curr_qty = float(dl_dict.get('quantity') or 0)
-                except ValueError:
-                    curr_qty = 0
-                tot_qty += curr_qty
+                    tot_qty += curr_qty
+                except (ValueError, TypeError):
+                    pass
 
                 sql = f"""
                     SELECT recordid_ FROM user_serviceandasset 
@@ -774,10 +774,21 @@ class DealService:
                     row = cursor.fetchone()
                     if row:
                         record_serviceandasset = UserRecord('serviceandasset', row[0])
+                        transactions = record_serviceandasset.get_linkedrecords_dict('asset_transactions')
+                        if transactions:
+                            for trans in transactions:
+                                try:
+                                    delta = float(trans.get('transaction') or 0)
+                                    tot_qty += delta
+                                except (ValueError, TypeError):
+                                    continue
                     else:
                         record_serviceandasset = UserRecord('serviceandasset')
                         record_serviceandasset.values['recordidcompany_'] = deal_record.values.get('recordidcompany_')
                         record_serviceandasset.values['recordidproduct_'] = dl_dict['recordidproduct_']
+                        company = UserRecord('company', deal_record.values.get('recordidcompany_'), load_fields=False)
+                        record_serviceandasset.values['autonote'] = f"{company.values.get('companyname')} - {product.values.get('name')}"
+
                         
                     record_serviceandasset.values['quantity'] = tot_qty
                     record_serviceandasset.values['description'] = dl_dict.get('name')
