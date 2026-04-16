@@ -66,6 +66,13 @@ def save_record_fields(tableid,recordid, old_values=""):
         for rel_tableid, rel_recordid in records_to_save:
             save_record_fields(tableid=rel_tableid, recordid=rel_recordid)
 
+    # ---ASSET---
+    if tableid == 'asset_transactions':
+        from customapp_swissbix.services.custom_save.asset_transactions_services import AssetTransactionsService
+        records_to_save = AssetTransactionsService.process_asset_transactions(recordid)
+        for rel_tableid, rel_recordid in records_to_save:
+            save_record_fields(tableid=rel_tableid, recordid=rel_recordid)
+
     # ---DEAL---
     if tableid == 'deal':
         from customapp_swissbix.services.custom_save.deal_services import DealService
