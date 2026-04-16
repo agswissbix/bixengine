@@ -142,3 +142,35 @@ class HelperSwissbix:
         updated['expectedmargin'] = round(updated['price'] - updated['expectedcost'], 2)
 
         return updated
+
+
+    @classmethod
+    def task_fields_to_create_from_deadline(cls, deadline_values, action):
+        """
+        Ritorna un dizionario di campi pronti per la creazione di un task
+        partendo dai dati di una scadenza.
+        """
+        action_params = action['action_params']
+        deadline_date = action['deadline_date']
+        deadline_user = deadline_values.get("assigned_to")
+
+        if not deadline_user:
+            deadline_user = action_params[0] if action_params else None
+
+        fields = {
+            'creator': '1',
+            'description': 'Task automatico da scadenza', 
+            'duedate': deadline_date.strftime('%Y-%m-%d') if deadline_date else None,
+            'user': deadline_user if deadline_user else None
+        }
+
+        tableid = deadline_values.get("tableid")
+
+        if tableid == "contractual_planning":
+            contractual_planning = UserRecord('contractual_planning', deadline_values.get("recordidtable"), load_fields=False)
+            fields['description'] = contractual_planning.values.get("title", "") + " - " + fields['description']
+            fields['note'] = contractual_planning.values.get("description", "")
+            servicecontract = UserRecord('servicecontract', contractual_planning.values.get('recordidservicecontract_'), load_fields=False)
+            fields['recordidcompany_'] = servicecontract.values.get('recordidcompany_')
+        
+        return fields

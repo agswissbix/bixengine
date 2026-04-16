@@ -72,12 +72,12 @@ def task_monitor(data_type):
 
 @task_monitor(data_type="no_output")
 @safe_schedule_task(stop_on_error=True)
-@csrf_exempt
-def check_deadlines(request):
+def check_deadlines():
     """
     Controlla le scadenze ed esegue le relative actions
     """
     actions_to_trigger = Helper.check_all_deadlines()
+    actions_triggered = []
     for action in actions_to_trigger:
         action_name = action['action_name']
         action_params = action['action_params']
@@ -97,29 +97,26 @@ def check_deadlines(request):
                 pass
             case "custom_sb_create_task":
                 deadline = UserRecord('deadline', recordid)
-                deadline_user = deadline.values.get("assigned_to")
+                
 
-                if not deadline_user:
-                    deadline_user = action_params[0] if action_params else None
+                task_fields = HelperSwissbix.task_fields_to_create_from_deadline(deadline.values, action)
 
                 # Chiama la funzione interna _save_record_data
                 views._save_record_data(
                     tableid='task', 
-                    fields={
-                        'creator': '1',
-                        'description': 'Task automatico da scadenza', 
-                        'duedate': deadline_date.strftime('%Y-%m-%d') if deadline_date else None,
-                        'user': deadline_user if deadline_user else None
-                    }, 
+                    fields=task_fields, 
                     userid=1
                 )
             case _:
                 pass
+        actions_triggered.append(f"{action_name} ({action_params}[{condition_code}])")
     
     return {
         "status": "success",
         "value": "Scadenze controllate",
         "type": "no_output"
+    }, {
+        "actions_triggered": "\n".join([str(item) for item in actions_triggered])
     }
 
 
@@ -190,7 +187,7 @@ def send_email_deadline(recordid, send_to):
         </p>
 
         <p style="margin:0;">Cordiali saluti,</p>
-        <p style="margin:0;">Il team</p>
+        <p style="margin:0;">Swissbix SA</p>
         """
 
         email_data = {
