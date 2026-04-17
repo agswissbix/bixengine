@@ -4107,25 +4107,58 @@ def custom_save_record_fields(tableid, recordid, params):
 
 def get_table_views(request):
     data = json.loads(request.body)
-    tableid= data.get("tableid")
-    userid=Helper.get_userid(request)
-    table=UserTable(tableid, userid)
-    table_default_viewid=table.get_default_viewid()
+    tableid = data.get("tableid")
+    userid = Helper.get_userid(request)
+    
+    table = UserTable(tableid, userid)
+    table_default_viewid = table.get_default_viewid()
 
-    table_views=table.get_table_views()
+    table_views = table.get_table_views()
 
-    views=[ ]
+    views = []
     for table_view in table_views:
         views.append({
-            'id': table_view['id'],
-            'name': table_view['name'],
-            'userid': table_view.get('userid', 1)
+            'id': table_view.id,
+            'name': table_view.name,
+            'userid': getattr(table_view, 'userid_id', 1)
         })
-    response={ "views": views, "defaultViewId": table_default_viewid}
+    
+    response = {
+        "views": views, 
+        "defaultViewId": table_default_viewid
+    }
 
     return JsonResponse(response)
 
-@csrf_exempt
+@login_required_api
+def reorder_table_views(request):
+    data = json.loads(request.body)
+    ordered_views = data.get('orders', [])  # [{id, order_ascdesc}]
+    userid = Helper.get_userid(request)
+    is_admin = request.user.is_superuser
+    with transaction.atomic():
+        for item in ordered_views:
+            view = SysView.objects.filter(id=item['id']).first()
+            if not view:
+                continue
+            # System view: admin only
+            if view.userid_id == 1 and not is_admin:
+                return JsonResponse({'success': False, 'detail': 'Forbidden'}, status=403)
+            # Personal view: must be owner
+            if view.userid_id != 1 and view.userid_id != userid:
+                return JsonResponse({'success': False, 'detail': 'Forbidden'}, status=403)
+            view.order_ascdesc = item['order']
+            view.save(update_fields=['order_ascdesc'])
+    return JsonResponse({'success': True})
+
+from django.db import models
+from django.db import transaction
+from django.http import JsonResponse
+import json
+
+# Assumo che il modello si chiami SysView
+# from myapp.models import SysView 
+
 @login_required_api
 def save_table_view(request):
     try:
@@ -4136,17 +4169,27 @@ def save_table_view(request):
         userid = Helper.get_userid(request)
 
         if not tableid or not view_name:
-            return JsonResponse({"success": False, "detail": "Dati mancanti"})
+            return JsonResponse({"success": False, "error": "Dati mancanti"}, status=400)
 
-        # Controllare se c'è già una view con questo nome creata dall'utente admin (1)
-        existing_admin_view = HelpderDB.sql_query(f"SELECT id FROM sys_view WHERE tableid='{tableid}' AND name='{view_name}' AND userid=1")
-        if existing_admin_view and str(userid) != '1':
-            return JsonResponse({"success": False, "detail": "Esiste già una vista di sistema con questo nome. Scegli un altro nome."})
+        # 1. Verifica se esiste già una vista di sistema (userid=1) con lo stesso nome
+        # se l'utente attuale non è l'admin
+        if str(userid) != '1':
+            admin_view_exists = SysView.objects.filter(
+                tableid_id=tableid, 
+                name=view_name, 
+                userid_id=1
+            ).exists()
+            
+            if admin_view_exists:
+                return JsonResponse({
+                    "success": False, 
+                    "error": "Esiste già una vista di sistema con questo nome. Scegli un altro nome."
+                }, status=400)
 
-        # Costruisce la query SQL dai filtri passati dal frontend
+        # 2. Costruzione delle condizioni SQL (manteniamo la logica build_condition)
         conditions_list = []
-        table = UserTable(tableid, userid)
-        # Sfruttiamo build_condition in modo simile a come è in user_table.py
+        table_helper = UserTable(tableid, userid)
+        
         for filter_item in filters:
             field_id = filter_item.get('fieldid')
             filter_type = filter_item.get('type')
@@ -4157,42 +4200,40 @@ def save_table_view(request):
                 continue
 
             if field_id.startswith('_'):
-                field_id = field_id[1:] + "_"
+                field_id = f"{field_id[1:]}_"
 
-            # Se l'utente admin (1) sta salvando una vista e filtra per sé stesso, 
-            # rendiamo la vista generica inserendo la keyword '$userid$'
+            # Logica per rendere generiche le viste Admin
             if str(userid) == '1' and filter_type == 'Utente' and str(filter_value) == '["1"]':
                 filter_value = '$userid$'
 
             if filter_value == "NULL_VALUE":
                 sql_condition = f"({field_id} IS NULL OR {field_id} = '')"
             else:
-                sql_condition = table.build_condition(filter_type, field_id, filter_value, filter_condition)
+                sql_condition = table_helper.build_condition(filter_type, field_id, filter_value, filter_condition)
 
             if filter_type == 'Data' and 'Oggi' in filter_condition:
-                sql_condition = f"{field_id} = current_date"
+                sql_condition += f" AND ({field_id} = current_date)"
 
             if sql_condition:
                 conditions_list.append(sql_condition)
 
-        query_conditions = " AND ".join(conditions_list)
-        # Escape stringa per SQL
-        query_conditions = query_conditions.replace("'", "''")
+        query_conditions_str = " AND ".join(conditions_list)
 
-        # Verifica se esiste già una view dell'utente corrente con lo stesso nome
-        existing_user_view = HelpderDB.sql_query(f"SELECT id FROM sys_view WHERE tableid='{tableid}' AND name='{view_name}' AND userid={userid}")
-        
-        if existing_user_view:
-            view_id = existing_user_view[0]['id']
-            HelpderDB.sql_execute(f"UPDATE sys_view SET query_conditions='{query_conditions}' WHERE id={view_id}")
-        else:
-            HelpderDB.sql_execute(f"INSERT INTO sys_view (name, userid, tableid, query_conditions) VALUES ('{view_name}', {userid}, '{tableid}', '{query_conditions}')")
+        # 3. Salvataggio o Aggiornamento tramite ORM (update_or_create)
+        view, created = SysView.objects.update_or_create(
+            tableid_id=tableid,
+            name=view_name,
+            userid_id=userid,
+            defaults={'query_conditions': query_conditions_str}
+        )
 
-        return JsonResponse({"success": True})
+        return JsonResponse({"success": True, "created": created})
+
     except Exception as e:
-        return JsonResponse({"success": False, "detail": str(e)})
+        print("Errore nel salvataggio della vista: " + str(e))
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
 
-@csrf_exempt
+
 @login_required_api
 def delete_table_view(request):
     try:
@@ -4201,21 +4242,30 @@ def delete_table_view(request):
         userid = Helper.get_userid(request)
 
         if not view_id:
-            return JsonResponse({"success": False, "detail": "Dati mancanti"})
+            return JsonResponse({"success": False, "error": "Dati mancanti"})
 
-        # Check view ownership
-        view_info = HelpderDB.sql_query(f"SELECT userid FROM sys_view WHERE id={view_id}")
-        if not view_info:
-            return JsonResponse({"success": False, "detail": "Vista non trovata"})
+        # Recuperiamo l'oggetto o restituiamo 404 se non esiste
+        view = SysView.objects.filter(id=view_id).first()
         
-        view_userid = view_info[0]['userid']
-        if str(view_userid) != str(userid) and not request.user.is_superuser:
-            return JsonResponse({"success": False, "detail": "Non sei autorizzato a eliminare questa vista."})
+        if not view:
+            return JsonResponse({"success": False, "error": "Vista non trovata"})
 
-        HelpderDB.sql_execute(f"DELETE FROM sys_view WHERE id={view_id}")
+        # L'utente può eliminare solo se è il proprietario O se è un superuser (admin)
+        is_owner = view.userid_id == int(userid)
+        is_admin = request.user.is_superuser or str(userid) == '1'
+
+        if not is_owner and not is_admin:
+            return JsonResponse({
+                "success": False, 
+                "error": "Non sei autorizzato a eliminare questa vista."
+            })
+
+        view.delete()
+
         return JsonResponse({"success": True})
+
     except Exception as e:
-        return JsonResponse({"success": False, "detail": str(e)})
+        return JsonResponse({"success": False, "error": str(e)})
 
 
 def get_record_badge(request):

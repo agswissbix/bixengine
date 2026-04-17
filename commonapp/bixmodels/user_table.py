@@ -23,7 +23,8 @@ from django_user_agents.utils import get_user_agent
 #from bixdata_app.models import MyModel
 from django import template
 from bs4 import BeautifulSoup
-from django.db.models import OuterRef, Subquery
+from django.db.models import OuterRef, Subquery, Q
+from django.db.models.functions import Coalesce
 from commonapp.bixmodels.helper_db import *
 from commonapp.bixmodels.user_record import *
 from commonapp.helper import *
@@ -736,14 +737,15 @@ class UserTable:
         return columns
     
     def get_table_views(self):
-        sql=f"""
-            SELECT *
-            FROM sys_view
-            WHERE tableid = %(tableid)s AND (userid = 1 OR userid = %(userid)s)
-            ORDER BY name
-            """
-        views=HelpderDB.sql_query(sql, params={'tableid': self.tableid, 'userid': self.userid})
-        return views
+        results = SysView.objects.filter(
+            tableid=self.tableid
+        ).filter(
+            Q(userid=1) | Q(userid=self.userid)
+        ).annotate(
+            # Creiamo un campo temporaneo che prende il primo valore non nullo
+            sorting_field=Coalesce('order_ascdesc', 'name')
+        ).order_by('sorting_field')
+        return results
     
     def get_default_viewid(self):
         tablesettings = TableSettings(self.tableid, self.userid)

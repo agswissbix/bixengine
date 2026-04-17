@@ -34,6 +34,7 @@ urlpatterns = [
     path('save_record_fields/', save_record_fields, name='save_record_fields'),
     path('duplicate_record/', duplicate_record, name='duplicate_record'),
     path('get_table_views/', get_table_views, name='get_table_views'),
+    path('reorder_table_views/', reorder_table_views, name='reorder_table_views'),
     path('save_table_view/', save_table_view, name='save_table_view'),
     path('delete_table_view/', delete_table_view, name='delete_table_view'),
     path('get_record_badge/', get_record_badge, name='get_record_badge'),
