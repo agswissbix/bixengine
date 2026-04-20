@@ -88,7 +88,7 @@ FIELD_TYPE_MAPPING = {
         "actions": "multiselect",
         "notice_days": "Numero",
         "assigned_to": "Utente",
-        "notification_sent": "lookup",
+        "notification_sent": "Checkbox",
     },
 }
 
@@ -221,7 +221,7 @@ def register_sys_metadata(sender, app_config, **kwargs):
                 )
 
                 # 🧩 4️⃣ Lookup: aggiorna o ricrea
-                if logical_type in ["lookup", "multiselect"]:
+                if logical_type in ["lookup", "multiselect", "Checkbox"]:
                     lookuptableid = f"{f.name}_{tableid}"
                     field_obj.lookuptableid = lookuptableid
                     field_obj.save()
