@@ -11,7 +11,7 @@ from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.staticfiles import finders
 from django.template.loader import render_to_string
-from bixengine.settings import BASE_DIR
+from django.conf import settings
 from commonapp.bixmodels.user_record import *
 from commonapp.bixmodels.user_table import *
 from commonapp.bixmodels.helper_db import *
@@ -23,6 +23,9 @@ from commonapp.models import SysUser
 from customapp_swissbix.utils.browser_manager import BrowserManager
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+import time
+import requests
+from cryptography.fernet import Fernet
 
 logger = logging.getLogger(__name__)
 
@@ -672,7 +675,7 @@ def print_pdf_activemind(request):
         import os
         pdf_filename = f"offerta_{recordid_deal}_{uuid.uuid4().hex}.pdf"
         temp_pdf_path = os.path.join(
-            BASE_DIR, "tmp", pdf_filename
+            settings.BASE_DIR, "tmp", pdf_filename
         )
         os.makedirs(os.path.dirname(temp_pdf_path), exist_ok=True)
 
@@ -3483,6 +3486,8 @@ def check_ai_server():
     """
     try:
         url = os.environ.get("AI_URL")
+        if not url:
+            return False, "AI_URL non configurata."
         
         response = requests.get(url, timeout=5)
         
@@ -3506,6 +3511,8 @@ def check_ai_chat_server():
     """
     try:
         url = os.environ.get("AI_CHAT_URL")
+        if not url:
+            return False, "AI_CHAT_URL non configurata."
         
         response = requests.get(url, timeout=5)
         
@@ -3526,7 +3533,10 @@ def get_timetracking_ai_summary(tracking_data, instructions = None):
     """
     Invia la lista di descrizioni dei timetracking all'agente AI per ottenere la descrizione timesheet
     """
-    url = os.environ.get("AI_URL") + "summarize"
+    base_url = os.environ.get("AI_URL")
+    if not base_url:
+        return "Errore: AI_URL non configurata nel client."
+    url = base_url.rstrip("/") + "/summarize"
     key = os.environ.get("AI_ENCRYPTION_KEY")
     
     if not key:
@@ -3572,8 +3582,11 @@ def get_timesheet_ai_summary(timesheets_per_user_data):
     """
     Ottiene il riassunto globale usando django-environ per le configurazioni.
     """
-    url = env("AI_URL", default=None) + "summarize-team"
-    key = env("AI_ENCRYPTION_KEY", default=None)
+    base_url = os.environ.get("AI_URL")
+    if not base_url:
+        return "Errore: AI_URL non configurata nel client."
+    url = base_url.rstrip("/") + "/summarize-team"
+    key = os.environ.get("AI_ENCRYPTION_KEY")
     
     if not key:
         return "Errore: AI_ENCRYPTION_KEY non configurata nel client."
