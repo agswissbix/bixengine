@@ -589,12 +589,11 @@ class Helper:
             except Exception as e:
                 print(f"Errore recupero actions deadline: {e}")
 
-            description_values = []
+            description_values = deadline_updates.pop('label_references_list', [])
             for key, value in deadline_updates.items():
-                if key == 'label_reference':
-                    description_values.append(value)
-                else:
-                    deadline_record.values[key] = value
+                if value is None:
+                    continue
+                deadline_record.values[key] = value
 
             if description_values and len(description_values) > 0:
                 deadline_record.values['description'] = f"{', '.join(description_values)}"
@@ -756,14 +755,53 @@ class Helper:
             # Determinazione status
             if days_remaining < 0:
                 new_status = "Scaduto"
-                if rec.values.get('frequency') or rec.values.get('frequency_months'):
-                    # TODO: implementare logica corretta per la data di scadenza
+                frequency_label = rec.values.get('frequency')
+                frequency_months = rec.values.get('frequency_months')
+
+                if frequency_label or frequency_months:
                     new_status = "Attivo"
-                    try:
-                        months = float(rec.values.get('frequency_months') or 0)
-                    except ValueError:
-                        months = 0
-                    rec.values['date_deadline'] = rec.values['date_deadline'] + timedelta(days=months * 30)
+                    delta = None
+
+                    # 1. Gestione Frequenza Testuale
+                    if frequency_label and isinstance(frequency_label, str):
+                        frequency_map = {
+                            "mensile": relativedelta(months=1),
+                            "bimestrale": relativedelta(months=2),
+                            "trimestrale": relativedelta(months=3),
+                            "quadrimestrale": relativedelta(months=4),
+                            "semestrale": relativedelta(months=6),
+                            "annuale": relativedelta(years=1),
+                        }
+                        delta = frequency_map.get(frequency_label.lower().strip())
+
+                    # 2. Gestione Frequenza Numerica
+                    if not delta and frequency_months:
+                        try:
+                            months_val = float(frequency_months)
+                            months_int = int(months_val)
+                            days_int = round((months_val - months_int) * 30) 
+                            delta = relativedelta(months=months_int, days=days_int)
+                        except (ValueError, TypeError):
+                            pass
+
+                    # 3. Applicazione del salto temporale
+                    if delta:
+                        current_deadline = rec.values.get('date_deadline')
+                        
+                        if current_deadline:
+                            try:
+                                if isinstance(current_deadline, str):
+                                    current_deadline_obj = datetime.datetime.strptime(current_deadline, "%Y-%m-%d").date()
+                                else:
+                                    current_deadline_obj = current_deadline
+
+                                new_deadline_obj = current_deadline_obj + delta
+                                
+                                rec.values['date_deadline'] = new_deadline_obj.strftime("%Y-%m-%d")
+                                
+                            except Exception as e:
+                                print(f"Errore nel calcolo della ricorrenza: {e}")
+                    
             elif days_remaining <= notice_days:
                 new_status = "In scadenza"
             else:

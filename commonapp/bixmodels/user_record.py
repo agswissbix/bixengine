@@ -513,19 +513,36 @@ class UserRecord:
 
                     HelpderDB.sql_execute_safe(sql, params_list)
                     
-                    try:
-                        fieldsettings = FieldSettings(tableid=self.tableid, userid=self.userid).get_all_settings()
-                        deadline_updates = {}
-                        for fieldid in self.values.keys():
-                            setting = fieldsettings.get(fieldid, {}).get('is_deadline_field', {}).get('value')
-                            if setting:
-                                deadline_updates[setting] = self.values.get(fieldid)
+                    # =====================================================
+                    # GESTIONE SINCRONIZZAZIONE SCADENZE (Bidirezionale)
+                    # =====================================================
+                    
+                    # CASO 1: Stiamo salvando un record NORMALE -> Aggiorniamo la deadline
+                    if self.tableid != 'deadline':
+                        try:
+                            fieldsettings = FieldSettings(tableid=self.tableid, userid=self.userid).get_all_settings()
+                            deadline_updates = {}
+                            deadline_updates['label_references_list'] = []
+                            for fieldid in self.values.keys():
+                                setting = fieldsettings.get(fieldid, {}).get('is_deadline_field', {}).get('value')
+                                if setting:
+                                    value = self.values.get(fieldid)
+                                    if value is not None: # Ignoriamo i None per non avere "buchi" nella descrizione
+                                        if setting == 'label_reference':
+                                            # Lo aggiungiamo alla lista invece di sovrascrivere la chiave
+                                            deadline_updates['label_references_list'].append(str(value))
+                                        else:
+                                            deadline_updates[setting] = value
 
-                        if deadline_updates:
-                            original_recordid_val = getattr(self, '_original_recordid_for_deadline', self.recordid)
-                            Helper.save_record_deadline(self.tableid, self.recordid, original_recordid_val, self.userid, deadline_updates)
-                    except Exception as e:
-                        print(f"Errore salvataggio scadenze: {e}")
+                            if deadline_updates:
+                                original_recordid_val = getattr(self, '_original_recordid_for_deadline', self.recordid)
+                                Helper.save_record_deadline(self.tableid, self.recordid, original_recordid_val, self.userid, deadline_updates)
+                        except Exception as e:
+                            print(f"Errore salvataggio scadenze (Forward Sync): {e}")
+
+                    # CASO 2: Stiamo salvando un record DEADLINE -> Sincronizziamo all'indietro i dati calcolati
+                    elif self.tableid == 'deadline':
+                        self._sync_back_to_original_table()
 
                 # =====================================================
                 # INSERT
@@ -633,6 +650,56 @@ class UserRecord:
             self.values[fieldid] = normalized
 
         return errors
+
+    def _sync_back_to_original_table(self):
+        """
+        Sincronizza i dati calcolati nella tabella deadline 
+        di nuovo verso la tabella originale, usando query SQL dirette.
+        """
+        try:
+            # Recuperiamo i riferimenti della tabella originale dai valori correnti della deadline
+            original_tableid = self.values.get('tableid')
+            original_recordid = self.values.get('recordidtable')
+
+            if not original_tableid or not original_recordid:
+                return  # Senza riferimenti non possiamo fare il sync inverso
+
+            # Attenzione: qui chiediamo i settings della tabella ORIGINALE, non di 'deadline'
+            from bixsettings.views.businesslogic.models.field_settings import FieldSettings
+            fieldsettings = FieldSettings(tableid=original_tableid, userid=self.userid).get_all_settings()
+
+            # Creiamo una mappa inversa: { 'nome_campo_in_deadline': 'nome_campo_in_originale' }
+            reverse_map = {}
+            for original_fieldid, settings in fieldsettings.items():
+                deadline_field = settings.get('is_deadline_field', {}).get('value')
+                if deadline_field:
+                    reverse_map[deadline_field] = original_fieldid
+
+            # Prepariamo i campi da aggiornare nella tabella originale
+            fields_to_update = []
+            params = []
+
+            for deadline_key, original_field_key in reverse_map.items():
+                # Prendiamo il valore che la deadline ha appena calcolato (es. date_deadline calcolata)
+                calculated_value = self.values.get(deadline_key)
+                
+                # Opzionale: Se vuoi sovrascrivere SOLO se il valore è effettivamente presente
+                if calculated_value is not None:
+                    fields_to_update.append(f"`{original_field_key}`=%s")
+                    params.append(calculated_value)
+
+            # Se abbiamo trovato campi da retro-sincronizzare, lanciamo l'update diretto
+            if fields_to_update:
+                sql_update_original = f"""
+                    UPDATE user_{original_tableid}
+                    SET {', '.join(fields_to_update)}
+                    WHERE recordid_=%s
+                """
+                params.append(original_recordid)
+                HelpderDB.sql_execute_safe(sql_update_original, params)
+
+        except Exception as e:
+            print(f"Errore durante il sync inverso verso la tabella originale: {e}")
 
     def get_linked_tables(self, typepreference='keylabel', step_id=None):
         """
