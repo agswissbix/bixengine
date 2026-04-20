@@ -4808,7 +4808,50 @@ def get_input_linked(request):
     items = HelpderDB.sql_query(sql)
     return JsonResponse({"items": items, "active_filters": active_filters}, safe=False)
 
+def autocomplete_linked_fields(request):
+    data = json.loads(request.body)
+    
+    tableid = data.get('tableid')
+    changed_fieldid = data.get('changed_fieldid')
+    current_value = data.get('current_value')
+    fields = data.get('fields', {}) # Tutti i campi attuali del form per sapere cosa è già pieno
+    
+    updated_fields = {}
 
+    # Se non è un campo linked o è stato svuotato, non facciamo nulla
+    if not changed_fieldid or not changed_fieldid.startswith('recordid') or not current_value:
+        return JsonResponse({'status': 'success', 'updated_fields': {}})
+
+    try:
+        # 1. Ricaviamo il nome della tabella collegata (es: 'recordidproject_' -> 'project')
+        linked_table = changed_fieldid[8:-1] 
+        
+        # 2. Recuperiamo il record padre dal DB (usando i parametri sicuri!)
+        parent_query = f"SELECT * FROM user_{linked_table} WHERE recordid_ = %s AND deleted_ = 'N'"
+        parent_rows = HelpderDB.sql_query(parent_query, [current_value])
+        
+        if parent_rows:
+            parent_record = parent_rows[0]
+            
+            # 3. Recuperiamo la lista dei campi validi per la tabella corrente
+            schema_query = "SELECT fieldid FROM sys_field WHERE tableid = %s"
+            valid_fields_rows = HelpderDB.sql_query(schema_query, [tableid])
+            valid_fields = {row['fieldid'] for row in valid_fields_rows} if valid_fields_rows else set()
+
+            # 4. Cerchiamo se il record padre ha campi linked che noi non abbiamo ancora compilato
+            for p_key, p_val in parent_record.items():
+                if p_key.startswith('recordid') and p_key.endswith('_') and p_val:
+                    is_empty_in_form = not fields.get(p_key)
+                    
+                    if p_key in valid_fields and is_empty_in_form:
+                        # Trovato! Autocompiliamo.
+                        updated_fields[p_key] = p_val
+
+    except Exception as e:
+        print(f"Errore in autocomplete_linked_fields: {e}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+    return JsonResponse({'status': 'success', 'updated_fields': updated_fields})
 
 
 @csrf_exempt
