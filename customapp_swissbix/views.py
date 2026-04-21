@@ -2968,11 +2968,53 @@ def save_lenovo_ticket(request):
         # if old_status != 'Draft':
         #     del fields['status']
 
-        lookup_item = SysLookupTableItem.objects.filter(lookuptableid='status_ticket_lenovo').order_by(F('itemorder').asc(nulls_last=True), 'itemcode').first()
+        existing_items_objs = {
+            obj.itemcode.upper(): obj.itemcode 
+            for obj in SysLookupTableItem.objects.filter(lookuptableid='accessories_ticket_lenovo')
+        }      
+        
+        accessories_raw = fields.get('accessories', [])
+
+        if accessories_raw:
+            if isinstance(accessories_raw, str):
+                try:
+                    accessories_list = json.loads(accessories_raw)
+                except json.JSONDecodeError:
+                    accessories_list = [accessories_raw]
+            else:
+                accessories_list = accessories_raw
+
+            to_create = []
+            final_accessories = set()
+
+            for item in accessories_list:
+                parts = [p.strip() for p in str(item).split(',') if p.strip()]
+                final_accessories.update(parts)
+
+            for accessory in final_accessories:
+                acc_upper = accessory.upper()
+                
+                if acc_upper not in existing_items_objs:
+                    to_create.append(
+                        SysLookupTableItem(
+                            lookuptableid='accessories_ticket_lenovo', 
+                            itemcode=accessory,
+                            itemdesc=accessory
+                        )
+                    )
+                else:
+                    final_accessories.remove(accessory)
+                    final_accessories.add(existing_items_objs[acc_upper])
+
+            if to_create:
+                SysLookupTableItem.objects.bulk_create(to_create)
+
+            fields['accessories'] = ", ".join(list(final_accessories))
+
         if not recordid:
             rec.values['reception_date'] = datetime.date.today().strftime('%Y-%m-%d')
             if 'status' not in fields:
-                rec.values['status'] = lookup_item.itemcode
+                rec.values['status'] = 'Draft'
 
         for key in allowed_fields:
             if key in fields:
@@ -3016,7 +3058,7 @@ def save_lenovo_ticket(request):
                 return response
 
         # _send_email_lenovo(rec.recordid)      
-        return JsonResponse({'success': True, 'recordid': rec.recordid})
+        return JsonResponse({'success': True, 'recordid': rec.recordid, 'new_status': new_status})
         
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'Invalid JSON format in fields'}, status=400)
@@ -3312,7 +3354,7 @@ def save_lenovo_signature(request):
             rec.values['status'] = 'Entrata'
         rec.save()
         
-        return JsonResponse({'success': True, 'attachment_id': att_id})
+        return JsonResponse({'success': True, 'attachment_id': att_id, 'signatureUrl': f"attachment/{att_id}/signature.png",})
 
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
