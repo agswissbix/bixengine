@@ -3051,7 +3051,7 @@ def save_lenovo_ticket(request):
             response = LenovoTicketService.send_status_update_email(rec.recordid)
             if response and response.status_code != 200:
                 return response
-        elif str(new_status).lower() == 'riparato' and str(old_status).lower() != 'riparato':
+        elif (str(new_status).lower() == 'riparato' and str(old_status).lower() != 'riparato') or (str(new_status).lower() == 'non riparato' and str(old_status).lower() != 'non riparato'):
             from customapp_swissbix.services.custom_save.lenovo_ticket_services import LenovoTicketService
             response = LenovoTicketService.send_repair_completed_email(rec.recordid)
             if response and response.status_code != 200:
