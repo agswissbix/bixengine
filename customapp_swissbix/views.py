@@ -30,6 +30,7 @@ from cryptography.fernet import Fernet
 logger = logging.getLogger(__name__)
 
 
+@login_required_api
 def get_activemind(request):
     response_data = {}
     try:
@@ -282,6 +283,7 @@ def process_save_activemind_data(data):
 
     return True
 
+@login_required_api
 def save_activemind(request):
     if request.method != 'POST':
         return JsonResponse({'success': False, 'message': 'Metodo non permesso. Utilizza POST.'}, status=405)
@@ -544,7 +546,7 @@ def chunk(iterable):
         pages.append(page)
     return pages
 
-@csrf_exempt
+@login_required_api
 def print_pdf_activemind(request):
     """
     Genera il PDF usando SOLO l'id della trattativa:
@@ -733,6 +735,7 @@ def link_callback(uri, rel):
 
     raise Exception(f"Immagine o file statico non trovato: {uri}")
 
+@login_required_api
 def get_system_assurance_activemind(request):
     data = json.loads(request.body)
     recordid_deal = data.get('trattativaid', None)
@@ -778,7 +781,7 @@ def get_system_assurance_activemind(request):
 # Altrimenti, splitta per virgola e divide a metà la lista in due colonne.
 def parse_features(note_str):
     if not note_str: return []
-    
+
     # Funzione di supporto per classificare l'elemento
     def process_item(item):
         item = item.strip()
@@ -796,6 +799,7 @@ def parse_features(note_str):
         mid = (len(items) + 1) // 2
         return [items[:mid], items[mid:]]
 
+@login_required_api
 def get_services_activemind(request):
     """
     Restituisce i servizi ActiveMind:
@@ -903,7 +907,7 @@ def get_services_activemind(request):
         logger.error(f"Errore in get_services_activemind: {e}")
         return JsonResponse({"error": str(e)}, status=500)
     
-
+@login_required_api
 def get_products_activemind(request):
     data = json.loads(request.body)
     recordid_deal = data.get('trattativaid')
@@ -1028,7 +1032,7 @@ def get_products_activemind(request):
     })
 
 
-
+@login_required_api
 def get_conditions_activemind(request):
     data = json.loads(request.body)
     recordid_deal = data.get('dealid')
@@ -1087,7 +1091,7 @@ def get_conditions_activemind(request):
 
     return JsonResponse({"frequencies": conditions_list}, safe=False)
 
-
+@login_required_api
 def get_monte_ore_activemind(request):
     data = json.loads(request.body)
     recordid_deal = data.get('dealid')
@@ -1164,7 +1168,7 @@ def get_monte_ore_activemind(request):
 
     return JsonResponse({"options": options_list, "monte_ore_existing": monte_ore_existing}, safe=False)
 
-
+@login_required_api
 def get_assistance_bwbix_activemind(request):
     data = json.loads(request.body)
     recordid_deal = data.get('dealid')
@@ -1223,6 +1227,7 @@ def get_assistance_bwbix_activemind(request):
 
     return JsonResponse({"options": options_list}, safe=False)
 
+@login_required_api
 def get_service_and_asset_activemind(request):
     data = json.loads(request.body)
     recordid_deal = data.get('dealid')
@@ -1275,7 +1280,7 @@ def get_service_and_asset_activemind(request):
 
     return JsonResponse({"options": options_list}, safe=False)
 
-
+@login_required_api
 def get_record_badge_swissbix_timesheet(request):
     data = json.loads(request.body)
     tableid= data.get("tableid")
@@ -1401,6 +1406,7 @@ def get_record_badge_swissbix_company(request):
     response = {"badgeItems": return_badgeItems}
     return JsonResponse(response)
 
+@login_required_api
 def get_record_badge_swissbix_deals(request):
     data = json.loads(request.body)
     tableid = data.get("tableid")
@@ -1445,6 +1451,7 @@ def get_record_badge_swissbix_deals(request):
     return JsonResponse(response)
 
 
+@login_required_api
 def get_record_badge_swissbix_project(request):
     data = json.loads(request.body)
     tableid = data.get("tableid")
@@ -1494,6 +1501,8 @@ def get_record_badge_swissbix_project(request):
 from commonapp.models import *
 from django.db.models.functions import Coalesce
 from django.db.models import IntegerField
+
+@login_required_api
 def get_fields_swissbix_deal(request):
     """
     Restituisce tutti gli step di una tabella, includendo:
@@ -1603,6 +1612,7 @@ def sync_contacts(request):
     return sync_contacts(request)
 
 
+@login_required_api
 def get_timetracking(request):
     print("get_timetracking")
     
@@ -1714,6 +1724,7 @@ def get_timetracking(request):
         return JsonResponse({'error': f"Errore  nell'ottenimento dei timetracker per l'utente: {str(e)}"}, status=500)
 
 
+@login_required_api
 def resume_timetracking(request):
     print("resume_timetracking")
 
@@ -1770,6 +1781,7 @@ def resume_timetracking(request):
         )
 
 
+@login_required_api
 def delete_timetracking(request):
     print("delete_timetracking")
 
@@ -1805,6 +1817,7 @@ def delete_timetracking(request):
         )
 
 
+@login_required_api
 def update_timetracking(request):
     print("update_timetracking")
 
@@ -1858,6 +1871,8 @@ def update_timetracking(request):
             status=500
         )
 
+
+@login_required_api
 def save_timetracking(request):
     print("save_timetracking")
 
@@ -1890,6 +1905,8 @@ def save_timetracking(request):
         return JsonResponse({'error': f"Errore nell'avviare il timetracking: {str(e)}"}, status=500)
 
 
+
+@login_required_api
 def stop_timetracking(request):
     print("stop_timetracking")
 
@@ -1929,6 +1946,8 @@ def stop_timetracking(request):
         return JsonResponse({'error': f"Errore nel fermare il timetracking: {str(e)}"}, status=500)
 
 
+
+@login_required_api
 def get_timesheet_initial_data(request):
     print("get_timesheet_initial_data")
 
@@ -2153,6 +2172,7 @@ def get_timesheet_initial_data(request):
         return JsonResponse({'error': f"Errore nel fetch dei dati iniziali per la creazione di un nuovo timesheeet: {str(e)}"}, status=500)
 
 
+@login_required_api
 def save_timesheet(request):
     """
     Salvataggio Timesheet da BixApp mobile
@@ -2209,6 +2229,7 @@ def save_timesheet(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+@login_required_api
 def save_timesheet_material(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
@@ -2239,6 +2260,7 @@ def save_timesheet_material(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+@login_required_api
 def remove_timesheet_material(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
@@ -2279,6 +2301,7 @@ def remove_timesheet_material(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+@login_required_api
 def save_timesheet_attachment(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
@@ -2321,6 +2344,7 @@ def save_timesheet_attachment(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+@login_required_api
 def remove_timesheet_attachment(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
@@ -2345,6 +2369,8 @@ def remove_timesheet_attachment(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
+
+@login_required_api
 def search_timesheet_entities(request):
     """
     Endpoint dinamico via POST per cercare entità.
@@ -2397,6 +2423,7 @@ def search_timesheet_entities(request):
         return JsonResponse({'error': str(e), 'results': []}, status=500)
 
 
+@login_required_api
 def upload_markdown_image(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Metodo non consentito'}, status=405)
@@ -2427,6 +2454,7 @@ def upload_markdown_image(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
+@login_required_api
 def check_ai_status(request):
     is_online, message = check_ai_server()
     if is_online:
@@ -2436,6 +2464,7 @@ def check_ai_status(request):
         print(f"❌  {message}")
         return JsonResponse({"status": False})
 
+@login_required_api
 def check_ai_chat_status(request):
     is_online, message = check_ai_chat_server()
     if is_online:
@@ -2446,6 +2475,7 @@ def check_ai_chat_status(request):
         return JsonResponse({"status": False})
 
 
+@login_required_api
 def get_bixhub_initial_data(request):
     print("get_bixhub_initial_data")
 
@@ -2606,6 +2636,7 @@ def get_bixhub_initial_data(request):
         return JsonResponse({"error": f"Errore nel prendere i dati iniziali: {str(e)}"}, status=500)
 
 
+@login_required_api
 def get_widget_employee(request):
     try:
         data = json.loads(request.body)
@@ -2722,7 +2753,7 @@ def get_widget_employee(request):
     except Exception as e:
         return JsonResponse({"error": f"Errore nel prendere i dati iniziali: {str(e)}"}, status=500)
 
-@csrf_exempt
+@login_required_api
 def get_lenovo_intake_context(request):
     """
     Returns initial context for the Lenovo Intake App, including dynamic field settings.
@@ -2773,7 +2804,7 @@ def get_lenovo_intake_context(request):
 
 import requests
 
-@csrf_exempt
+@login_required_api
 def get_lenovo_device_info(request):
     """
     Proxy to Lenovo's pcsupport API to fetch device data bypassing frontend CORS.
@@ -2810,7 +2841,7 @@ def get_lenovo_device_info(request):
 
 from django.core.cache import cache
 
-@csrf_exempt
+@login_required_api
 def lenovo_mobile_handoff(request):
     """
     API for Mobile to PC real-time handoff without WebSockets.
@@ -2845,7 +2876,7 @@ def lenovo_mobile_handoff(request):
         
     return JsonResponse({'success': False, 'error': 'invalid action'}, status=400)
 
-@csrf_exempt
+@login_required_api
 def search_lenovo_ticket_by_serial(request):
     try:
         serial = request.POST.get('serial')
@@ -2864,7 +2895,7 @@ def search_lenovo_ticket_by_serial(request):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
-@csrf_exempt
+@login_required_api
 def get_lenovo_ticket(request):
     """
     Fetch a specific ticket by ID.
@@ -2950,7 +2981,7 @@ def get_lenovo_ticket(request):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
-@csrf_exempt
+@login_required_api
 def save_lenovo_ticket(request):
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
@@ -3076,7 +3107,7 @@ def save_lenovo_ticket(request):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
-@csrf_exempt
+@login_required_api
 def upload_lenovo_photo(request):
     """
     Uploads a photo for the Lenovo Ticket.
@@ -3109,7 +3140,7 @@ def upload_lenovo_photo(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
-@csrf_exempt
+@login_required_api
 def upload_lenovo_attachment(request):
     """
     Uploads a GENERIC attachment (photo/doc) to user_attachment.
@@ -3157,7 +3188,7 @@ def upload_lenovo_attachment(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
-@csrf_exempt
+@login_required_api
 def get_lenovo_attachments(request):
     try:
         data = json.loads(request.body)
@@ -3325,7 +3356,7 @@ def generate_lenovo_pdf(recordid, signature_path=None, pdf_type='Ricevuta Firmat
         print(f"Error generating PDF: {e}")
         raise
 
-@csrf_exempt
+@login_required_api
 def save_lenovo_signature(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Invalid method'}, status=405)
@@ -3371,7 +3402,7 @@ def save_lenovo_signature(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
-@csrf_exempt
+@login_required_api
 def print_lenovo_ticket(request):
     try:
         data = json.loads(request.body)
