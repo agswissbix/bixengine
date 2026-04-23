@@ -777,9 +777,19 @@ def get_table_records(request):
     # 1. Ottieni gli oggetti UserRecord GIA' PROCESSATI
     # Passa i filtri a get_table_records_obj
     if not order_fieldid:
-        order_fieldid = 'recordid_'
+        table_setting=TableSettings(tableid, Helper.get_userid(request))
+        default_orderby=table_setting.get_specific_settings('default_orderby')['default_orderby']
+        if default_orderby['value']:
+            order_fieldid = default_orderby['value']
+        else:
+            order_fieldid = 'recordid_'
     if not order_direction:
-        order_direction = 'desc'
+        table_setting=TableSettings(tableid, Helper.get_userid(request))
+        default_orderby=table_setting.get_specific_settings('risultati_order')['risultati_order']
+        if default_orderby['value']:
+            order_direction = default_orderby['value']
+        else:
+            order_direction = 'desc'
 
     record_objects = table.get_table_records_obj(
         viewid=viewid,
