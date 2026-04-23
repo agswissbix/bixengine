@@ -379,7 +379,7 @@ class TableSettings:
         'default_orderby': {
             'type': 'select',
             'options': [],
-            'value': 'recordid'
+            'value': 'recordid_'
         },
         'default_save': {
             'type': 'select',

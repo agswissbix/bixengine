@@ -107,6 +107,12 @@ class LenovoTicketService:
         model = ticket.values.get('model', 'N/A')
         serial = ticket.values.get('serial', 'N/A')
         companyname = ticket.values.get('company_name', 'Signore/a')
+        ticket_status = ticket.values.get('status', 'N/A')
+
+        if ticket_status == 'Non riparato':
+            status_message = "Siamo spiacenti di informarla che non è stato possibile riparare il Suo dispositivo."
+        else:
+            status_message = "Siamo lieti di informarla che l'intervento tecnico sul Suo dispositivo è stato <strong>completato con successo</strong>."
 
         if not name and not surname:
             customer_name = companyname
@@ -118,18 +124,26 @@ class LenovoTicketService:
             customer_name = f"{name} {surname}".strip()
         
         email_data['subject'] = f"{customer_name} - Riparazione Completata - Swissbix"
-        device_info = f"{brand} {model}".strip()
+
+        if brand and model:
+            device_info = f"{brand} {model}".strip()
+        elif brand:
+            device_info = brand
+        elif model:
+            device_info = model
+        else:
+            device_info = 'N/A'
         
         # Corpo email per riparazione completata
         mailbody = f"""
         <p style="margin:0 0 6px 0;">Gentile {customer_name},</p>
-        <p style="margin:0 0 10px 0;">Siamo lieti di informarti che l'intervento tecnico sul tuo dispositivo è stato <strong>completato con successo</strong>.</p>
+        <p style="margin:0 0 10px 0;">{status_message}</p>
         <p style="margin:0 0 10px 0;">Il dispositivo è ora pronto per il ritiro.</p>
 
         <table style="border-collapse:collapse; width:100%; font-size:14px; margin-top: 15px; border: 1px solid #eee;">
             <tr style="background-color: #f9f9f9;"><td style="padding:8px; font-weight:bold; width: 120px;">Dispositivo:</td><td style="padding:8px;">{device_info}</td></tr>
             <tr><td style="padding:8px; font-weight:bold;">Seriale:</td><td style="padding:8px;">{serial}</td></tr>
-            <tr style="background-color: #f9f9f9;"><td style="padding:8px; font-weight:bold;">Stato attuale:</td><td style="padding:8px;"><span style="color: #28a745; font-weight: bold;">Riparazione Completata</span></td></tr>
+            <tr style="background-color: #f9f9f9;"><td style="padding:8px; font-weight:bold;">Stato attuale:</td><td style="padding:8px;"><span style="color: #28a745; font-weight: bold;">{ticket_status}</span></td></tr>
         </table>
         
         <p style="margin:16px 0 0 0;">

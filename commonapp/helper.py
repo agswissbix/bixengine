@@ -31,7 +31,7 @@ def login_required_api(view_func):
     def wrapped(request, *args, **kwargs):
         print("sessionid:", request.COOKIES.get("sessionid"))
         if not request.user.is_authenticated:
-            return JsonResponse({'error': 'Not authenticated'}, status=401)
+            return JsonResponse({'error': 'Non sei autenticato. Effettua il login per continuare.'}, status=401)
         return view_func(request, *args, **kwargs)
     return wrapped
 

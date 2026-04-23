@@ -842,6 +842,74 @@ class UserRecord:
             """
             fields = HelpderDB.sql_query(sql)
 
+
+        # ==============================================================================
+        # 1. PRE-PROCESSING: DEDUZIONE DATI A CASCATA (Record Vecchi + Nuovo da Master)
+        # ==============================================================================
+        
+        original_db_values = dict(self.values)
+
+        # Facciamo una copia dei valori noti per poterci lavorare
+        known_values = dict(self.values)
+
+        # GESTIONE CASO 2: Se è un nuovo record creato da un "master" (es. Timesheet da Progetto)
+        # self.values potrebbe non avere ancora il progetto, ma noi lo conosciamo da master_recordid.
+        if self.recordid == '' and self.master_tableid and self.master_recordid:
+            for f in fields:
+                if f['tablelink'] == self.master_tableid:
+                    fid = f['fieldid']
+                    if fid and fid.startswith("_"): fid = fid[1:] + "_"
+                    known_values[fid] = self.master_recordid
+                    break # Trovato il campo che fa da ponte, usciamo dal ciclo
+
+        # Separiamo i campi linked già compilati da quelli da riempire
+        populated_links = {}
+        empty_links = []
+
+        for f in fields:
+            fid = f['fieldid']
+            if fid and fid.startswith("_"): fid = fid[1:] + "_"
+            
+            val = known_values.get(fid)
+            # Verifica se è un campo collegato
+            is_linked = not Helper.isempty(f.get('keyfieldlink'))
+            
+            if is_linked:
+                if val:
+                    populated_links[fid] = {"val": val, "table": f['tablelink']}
+                else:
+                    empty_links.append(f)
+
+        # MOTORE DI DEDUZIONE: Per ogni link compilato (es. Progetto), andiamo a leggerlo 
+        # nel DB e vediamo se ha qualcosa da "regalare" ai campi vuoti (es. Azienda)
+        if populated_links and empty_links:
+            for source_fid, source_data in populated_links.items():
+                
+                # Query parametrizzata sicura per leggere il padre
+                parent_rec = HelpderDB.sql_query(
+                    f"SELECT * FROM user_{source_data['table']} WHERE recordid_ = %s AND deleted_ = 'N'", 
+                    [source_data['val']]
+                )
+                
+                if parent_rec:
+                    parent_data = parent_rec[0]
+                    
+                    for target_field in empty_links:
+                        t_fid = target_field['fieldid']
+                        if t_fid and t_fid.startswith("_"): t_fid = t_fid[1:] + "_"
+                        
+                        # Se il padre possiede il dato che a noi manca
+                        if parent_data.get(t_fid) and not known_values.get(t_fid):
+                            # Lo aggiungiamo ai valori noti
+                            known_values[t_fid] = parent_data[t_fid]
+                            # CRITICO: Aggiorniamo self.values così il resto del tuo metodo
+                            # (la creazione di insert_fields) lo vedrà come se fosse un valore esistente!
+                            self.values[t_fid] = parent_data[t_fid]
+
+        # ==============================================================================
+        # 2. GENERAZIONE COMPONENTI UI (il tuo codice originale)
+        # ==============================================================================
+
         insert_fields = []
 
         for field in fields:
@@ -852,6 +920,9 @@ class UserRecord:
                 fieldid = fieldid[1:] + "_"
 
             value = self.values.get(fieldid, '')
+            original_value = original_db_values.get(fieldid, '')
+
+            is_deduced = bool(value and value != original_value)
 
             insert_field['tableid']="1"
             insert_field['fieldid']=fieldid
@@ -863,6 +934,7 @@ class UserRecord:
             insert_field["lookuptableid"]= field['lookuptableid']
             insert_field["tablelink"]= field['tablelink']
             insert_field['linked_mastertable']=field['tablelink']
+            insert_field['is_deduced'] = is_deduced
 
             # Settings specifici del campo
             current_field_settings = all_field_settings.get(fieldid, {})
@@ -987,6 +1059,7 @@ class UserRecord:
 
             if self.recordid=='' and value=='':
                 insert_field['value']={"code": defaultcode, "value": defaultvalue}
+                # insert_field['is_deduced'] = True
 
             insert_fields.append(insert_field)
 
