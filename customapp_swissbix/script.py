@@ -1000,8 +1000,12 @@ def sync_bexio_positions(bexiotable,bexio_parent_id):
     return {"message": f"Sincronizzazione bexio positions per {bexiotable} id {bexio_parent_id} completata", "total_positions": len(response)}
 
 @task_monitor(data_type="sync")
-def sync_bexio_invoices(request):
-    url = "https://api.bexio.com/2.0/kb_invoice?order_by=id_desc&limit=10&offset=0"
+def sync_bexio_invoices():
+    sql="DELETE FROM user_bexio_invoices"
+    HelpderDB.sql_execute(sql)
+    sql="DELETE FROM user_bexio_positions"
+    HelpderDB.sql_execute(sql)
+
     accesstoken=os.environ.get('BEXIO_ACCESSTOKEN')
     headers = {
         'Accept': "application/json",
@@ -1009,41 +1013,103 @@ def sync_bexio_invoices(request):
         'Authorization': f"Bearer {accesstoken}",
     }
 
-    response = requests.request("GET", url, headers=headers)
-    response = json.loads(response.text)
+    #8: pending e vari step di reminder
+    #9: paid
+    #16: overdue
+    #19: cancelled
+    payload = """
+    [
+        {
+            "field": "kb_item_status_id",
+            "value": [8,9,16,19],
+            "criteria": "in"
+        }
+    ]
+    """
+
+ 
 
     new_invoices = 0
     updated_invoices = 0
+    
+    limit = 1000
+    max_records = 2000
+    offset = 0
 
+    import time
+    import datetime
+    
+    start_time = time.time()
+    start_datetime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    for invoice in response:
-        field = HelpderDB.sql_query_row(f"select * from user_bexio_invoices WHERE bexio_id='{invoice['id']}'")
-        if not field:
-            record = UserRecord("bexio_invoices")
-            new_invoices += 1
-        else:
-            record = UserRecord("bexio_invoices", field['recordid_'])
-            updated_invoices += 1
+    print(f"--- INIZIO Sincronizzazione Bexio Invoices ({start_datetime}) ---")
 
-        record.values['bexio_id'] = invoice['id']
-        record.values['document_nr'] = invoice['document_nr']
-        record.values['title'] = invoice['title']
-        record.values['contact_id'] = invoice['contact_id']
-        record.values['user_id'] = invoice['user_id']
-        record.values['total_gross'] = invoice['total_gross']
-        record.values['total_net'] = invoice['total_net']
-        record.values['total_taxes'] = invoice['total_taxes']
-        record.values['total_received_payments'] = invoice['total_received_payments']
-        record.values['total_remaining_payments'] = invoice['total_remaining_payments']
-        record.values['total'] = invoice['total']
-        record.values['is_valid_from'] = invoice['is_valid_from']
-        record.values['is_valid_to'] = invoice['is_valid_to']
-        record.values['contact_address'] = invoice['contact_address']
+    while offset < max_records:
+        print(f"-> Richiesta batch fatture: offset {offset}, limit {limit}")
+        url = f"https://api.bexio.com/2.0/kb_invoice/search/?order_by=id_desc&limit={limit}&offset={offset}"
+        response = requests.request("POST", url, data=payload, headers=headers)
+        
+        try:
+            invoices = json.loads(response.text)
+        except Exception as e:
+            print(f"Errore nel parsing della risposta da Bexio: {e}")
+            break
 
-        record.save()
+        if not invoices or len(invoices) == 0:
+            print("Nessuna fattura trovata in questo batch. Paginazione terminata.")
+            break
 
-        sync_bexio_positions(request, 'kb_invoice', invoice['id'])
+        print(f"Elaborazione di {len(invoices)} fatture in corso...")
 
+        from django.db import transaction
+        with transaction.atomic():
+            for loop_idx, invoice in enumerate(invoices, 1):
+                if loop_idx % 100 == 0:
+                    print(f"Stato: {loop_idx}/{len(invoices)} del batch in elaborazione...")
+
+                current_count = offset + loop_idx
+                field = HelpderDB.sql_query_row(f"select * from user_bexio_invoices WHERE bexio_id='{invoice['id']}'")
+                if not field:
+                    print(f"\033[92m[{current_count}/{max_records}] CARICAMENTO NUOVA FATTURA - ID: {invoice['id']} | NR: {invoice.get('document_nr', '')}\033[0m")
+                    record = UserRecord("bexio_invoices")
+                    new_invoices += 1
+                else:
+                    print(f"\033[93m[{current_count}/{max_records}] AGGIORNAMENTO FATTURA ESISTENTE - ID: {invoice['id']} | NR: {invoice.get('document_nr', '')}\033[0m")
+                    record = UserRecord("bexio_invoices", field['recordid_'])
+                    updated_invoices += 1
+
+                record.values['bexio_id'] = invoice['id']
+                record.values['document_nr'] = invoice['document_nr']
+                record.values['title'] = invoice['title']
+                record.values['contact_id'] = invoice['contact_id']
+                record.values['user_id'] = invoice['user_id']
+                record.values['total_gross'] = invoice['total_gross']
+                record.values['total_net'] = invoice['total_net']
+                record.values['total_taxes'] = invoice['total_taxes']
+                record.values['total_received_payments'] = invoice['total_received_payments']
+                record.values['total_remaining_payments'] = invoice['total_remaining_payments']
+                record.values['total'] = invoice['total']
+                record.values['is_valid_from'] = invoice['is_valid_from']
+                record.values['is_valid_to'] = invoice['is_valid_to']
+                record.values['contact_address'] = invoice['contact_address']
+                record.values['kb_item_status_id'] = invoice['kb_item_status_id']
+                
+                record.save()
+                sync_bexio_positions('kb_invoice', invoice['id'])
+            
+        if len(invoices) < limit:
+            print("Il numero di fatture ricevute è inferiore al limite. Paginazione terminata.")
+            break
+            
+        offset += limit
+
+    end_datetime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    total_time_seconds = time.time() - start_time
+    total_time_formatted = str(datetime.timedelta(seconds=int(total_time_seconds)))
+
+    print(f"--- FINE Sincronizzazione Bexio Invoices ({end_datetime}) ---")
+    print(f"Tempo totale impiegato: {total_time_formatted}")
+    print(f"Risultato: {new_invoices} nuove fatture, {updated_invoices} aggiornate.")
 
     return {"message": "Sincronizzazione bexio invoices completata", "new_invoices": new_invoices, "updated_invoices": updated_invoices}
 
@@ -1344,47 +1410,51 @@ def sync_table(tableid):
 
         data = HelpderDB.sql_query(query)
 
-        # --- INIZIO MODIFICHE ---
-        
         # Ottieni il numero totale di righe
         total_rows = len(data)
         print(f"**Found {total_rows} total rows to process from {table['sync_table']}**")
 
-        # Usa enumerate per ottenere l'indice (i) e la riga (row)
-        # start=1 fa partire il conteggio da 1 invece che da 0
-        for i, row in enumerate(data, start=1):
-            
-            # Stampa il feedback di avanzamento
-            print(f"**Processing row {i}/{total_rows}...**")
-            
-            sync_value = row[sync_fieldid_origin]
-            
-            record_target = HelpderDB.sql_query_row(f"SELECT * FROM user_{table['id']} WHERE {sync_fieldid_target}='{sync_value}'")
+        from django.db import transaction
+        batch_size = 500
 
-            if record_target:
-                # Modificato il print per maggiore chiarezza
-                print(f"  -> Updating record (ID: {id})")
-                record = UserRecord(table['id'], record_target['recordid_'])
+        for i in range(0, total_rows, batch_size):
+            batch_data = data[i:i + batch_size]
+            with transaction.atomic():
+                for j, row in enumerate(batch_data, start=1):
+                    current_idx = i + j
+                    
+                    # Stampa il feedback di avanzamento
+                    if current_idx % 100 == 0 or current_idx == total_rows or current_idx == 1:
+                        print(f"**Processing row {current_idx}/{total_rows}...**")
+                    
+                    sync_value = row[sync_fieldid_origin]
+                    
+                    record_target = HelpderDB.sql_query_row(f"SELECT * FROM user_{table['id']} WHERE {sync_fieldid_target}='{sync_value}'")
 
-                for column in columns:
-                    if column['sync_fieldid'] in row:
-                        record.values[column['fieldid']] = row[column['sync_fieldid']]
+                    if record_target:
+                        # Modificato il print per maggiore chiarezza
+                        # print(f"  -> Updating record")
+                        record = UserRecord(table['id'], record_target['recordid_'])
+
+                        for column in columns:
+                            if column['sync_fieldid'] in row:
+                                record.values[column['fieldid']] = row[column['sync_fieldid']]
+                            else:
+                                print("Missing column: " + column['sync_fieldid'])
+
+                        record.save()
                     else:
-                        print("Missing column: " + column['sync_fieldid'])
+                        # Modificato il print per maggiore chiarezza
+                        # print(f"  -> Creating record (Sync value: {sync_value})")
+                        new_record = UserRecord(table['id'])
 
-                record.save()
-            else:
-                # Modificato il print per maggiore chiarezza
-                print(f"  -> Creating record (Sync value: {sync_value})")
-                new_record = UserRecord(table['id'])
-
-                for column in columns:
-                    if column['sync_fieldid'] in row:
-                        new_record.values[column['fieldid']] = row[column['sync_fieldid']]
-                    else:
-                        print("Missing column: " + column['sync_fieldid'])
-                
-                new_record.save()
+                        for column in columns:
+                            if column['sync_fieldid'] in row:
+                                new_record.values[column['fieldid']] = row[column['sync_fieldid']]
+                            else:
+                                print("Missing column: " + column['sync_fieldid'])
+                        
+                        new_record.save()
         
         # --- FINE MODIFICHE ---
 
@@ -1442,6 +1512,42 @@ def sync_bixdata_salesorders():
     
     return {"message": "Sincronizzazione salesorder completata"}
 
+
+@task_monitor(data_type="sync")
+def sync_bixdata_invoices():
+    import time
+    import datetime
+
+    start_time = time.time()
+    start_datetime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    print(f"--- INIZIO sync_invoices ({start_datetime}) ---")
+    
+    sync_output = sync_table('invoice')
+    sync_output = sync_table('invoiceline')
+
+    #aggiornamento company in salesorder
+    sql="UPDATE user_invoice JOIN user_company ON user_invoice.id_bexio_company=user_company.id_bexio SET user_invoice.recordidcompany_=user_company.recordid_ where (user_invoice.id_bexio_company <> 591 AND user_invoice.id_bexio_company <> 248)"
+    HelpderDB.sql_execute(sql)
+
+    #LINK TABLES
+    sql="UPDATE user_invoiceline AS uil JOIN user_invoice AS ui ON uil.id_bexio_invoice = ui.id_bexio SET uil.recordidinvoice_ = ui.recordid_ WHERE uil.recordidinvoice_ IS NULL"
+    HelpderDB.sql_execute(sql)
+
+    sql="UPDATE user_invoiceline JOIN user_invoice ON user_invoiceline.id_bexio_invoice=user_invoice.id_bexio SET user_invoiceline.recordidcompany_=user_invoice.recordidcompany_ WHERE user_invoiceline.recordidcompany_ IS NULL"
+    HelpderDB.sql_execute(sql)
+
+    # Aggiornamento dello status_id numerico della singola fattura con il nome verbale dello stato
+    sql="UPDATE user_invoice JOIN user_bexio_invoice_status ON user_invoice.status = user_bexio_invoice_status.status_id SET user_invoice.status = user_bexio_invoice_status.name"
+    HelpderDB.sql_execute(sql)
+
+    end_datetime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    total_time_seconds = time.time() - start_time
+    total_time_formatted = str(datetime.timedelta(seconds=int(total_time_seconds)))
+
+    print(f"--- FINE sync_invoices ({end_datetime}) ---")
+    print(f"Tempo totale impiegato: {total_time_formatted}")
+    
+    return {"message": "Sincronizzazione invoices completata"}
 
 @task_monitor(data_type="sync")
 def sync_servicecontract():
@@ -2000,3 +2106,23 @@ def run_test():
             print(f"Errore durante l'elaborazione del deal {recordid}: {e}")
 
     print(f"Elaborazione terminata. Aggiornati {success_count} su {len(rows)} deal.")
+
+@task_monitor(data_type="sync")
+def update_company_statistics():
+    # Calcola il totale del campo totalnet di user_invoice raggruppato per recordidcompany_
+    # e lo aggiorna nel campo invoiced di user_company relazionato
+    sql = """
+        UPDATE user_company AS c
+        JOIN (
+            SELECT recordidcompany_, SUM(IFNULL(totalnet, 0)) as total_invoiced
+            FROM user_invoice
+            WHERE recordidcompany_ IS NOT NULL 
+              AND recordidcompany_ != ''
+              AND status != 'Cancelled'
+              AND status != '19'
+            GROUP BY recordidcompany_
+        ) AS i ON c.recordid_ = i.recordidcompany_
+        SET c.invoiced = i.total_invoiced
+    """
+    HelpderDB.sql_execute(sql)
+    print("Statistiche aggregate 'invoiced' di user_company aggiornate con successo.")

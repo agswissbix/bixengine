@@ -44,11 +44,21 @@ class TimesheetService:
         sc_rec = TimesheetService._evaluate_flat_service_contract(timesheet_record, servicecontract_table, work_dec, travel_dec)
         if sc_rec: servicecontract_record = sc_rec
         
+        invoiceoption = timesheet_record.values.get('invoiceoption')  
+        if invoiceoption == 'Monte ore':
+            timesheet_record.values['print_type'] = ''
+            timesheet_record.values['invoicestatus'] = 'To Process'
+            timesheet_record.values['productivity'] = ''
+            timesheet_record.values['print_hourprice'] = ''
+            timesheet_record.values['print_travel'] = ''
+            
         sc_rec = TimesheetService._evaluate_monte_ore_remoto_pbx(timesheet_record, servicecontract_table, travel_dec)
         if sc_rec: servicecontract_record = sc_rec
 
         sc_rec = TimesheetService._evaluate_monte_ore_standard(timesheet_record, servicecontract_table)
         if sc_rec: servicecontract_record = sc_rec
+
+        
 
         # 5. Calcolo prezzi e da fatturare
         TimesheetService._calculate_to_invoice(timesheet_record, company_record, project_record, ticket_record, work_dec, travel_dec)
@@ -140,7 +150,7 @@ class TimesheetService:
     @staticmethod
     def _evaluate_project(timesheet_record: UserRecord, project_record: UserRecord):
         invoicestatus = timesheet_record.values.get('invoicestatus')
-        invoiceoption = timesheet_record.values.get('invoiceoption')
+        
 
         if invoicestatus == 'To Process' and not Helper.isempty(project_record.recordid) and invoiceoption != 'Out of contract':
             timesheet_record.values['print_type'] = 'Progetto N. ' + str(project_record.values['id'])
@@ -150,13 +160,8 @@ class TimesheetService:
                 timesheet_record.values['productivity'] = 'Ricavo indiretto'
                 timesheet_record.values['print_hourprice'] = 'Compreso nel progetto'
                 timesheet_record.values['print_travel'] = 'Inclusa'
-                
-            if invoiceoption == 'Monte ore':
-                timesheet_record.values['print_type'] = ''
-                timesheet_record.values['invoicestatus'] = 'To Process'
-                timesheet_record.values['productivity'] = ''
-                timesheet_record.values['print_hourprice'] = ''
-                timesheet_record.values['print_travel'] = ''
+            
+            
 
     @staticmethod
     def _evaluate_flat_service_contract(timesheet_record: UserRecord, servicecontract_table: UserTable, work_dec: float, travel_dec: float) -> UserRecord:
