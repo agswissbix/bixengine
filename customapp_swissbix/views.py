@@ -153,7 +153,7 @@ def process_save_activemind_data(data):
     # SECTION 2 — Prodotti multipli
     # -------------------------------------------------
     for product_key, product_data in data.get('section2Products', {}).items():
-        product = UserRecord('product', product_key)
+        product = UserRecord('product', product_key, load_fields=False)
         if not product or not product.values:
             continue
 
@@ -165,7 +165,7 @@ def process_save_activemind_data(data):
 
         existing_id = fetch_existing_dealline(recordid_deal, product.values.get('subcategory', ''), product.recordid)
 
-        if quantity <= 0:
+        if quantity <= 0 and unit_price == product.values.get('price'):
             if existing_id:
                 remove_dealline(existing_id)
             continue
@@ -201,7 +201,9 @@ def process_save_activemind_data(data):
 
         existing_id = fetch_existing_dealline(recordid_deal, service.get('subcategory', ''), product_key_str)
 
-        if qty <= 0:
+        product = UserRecord('product', product_key_str, load_fields=False)
+
+        if qty <= 0 and unit_price == product.values.get('price'):
             if existing_id:
                 remove_dealline(existing_id)
             continue
@@ -777,10 +779,19 @@ def get_system_assurance_activemind(request):
 def parse_features(note_str):
     if not note_str: return []
     
+    # Funzione di supporto per classificare l'elemento
+    def process_item(item):
+        item = item.strip()
+        if item.startswith('#'):
+            # Rimuove il '#' iniziale e gli spazi
+            return {"type": "title", "text": item[1:].strip()}
+        else:
+            return {"type": "feature", "text": item}
+    
     if "|" in note_str:
-        return [[f.strip() for f in col.split(",") if f.strip()] for col in note_str.split("|")]
+        return [[process_item(f) for f in col.split(",") if f.strip()] for col in note_str.split("|")]
     else:
-        items = [f.strip() for f in note_str.split(",") if f.strip()]
+        items = [process_item(f) for f in note_str.split(",") if f.strip()]
         if not items: return []
         mid = (len(items) + 1) // 2
         return [items[:mid], items[mid:]]
