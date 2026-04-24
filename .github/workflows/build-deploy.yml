@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       client_id:
-        description: 'ID Cliente'
+        description: "ID Cliente"
         required: true
       tag:
-        description: 'Tag versione (es. latest)'
-        default: 'latest'
+        description: "Tag versione (es. latest)"
+        default: "latest"
 
 env:
   REGISTRY: ghcr.io
@@ -30,7 +30,6 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-          python-version: '3.11'
 
       - name: Prepare image name
         id: prep

@@ -1,4 +1,4 @@
-FROM python:3.13-slim-bookworm
+FROM python:3.11.1
 
 # Variabili d'ambiente Python
 ENV PYTHONDONTWRITEBYTECODE=1
