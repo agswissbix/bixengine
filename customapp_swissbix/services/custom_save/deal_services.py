@@ -110,7 +110,7 @@ class DealService:
     def _process_deal_calculations(deal_record: UserRecord, dealline_records: list, project_recordid: str):
         usedhours = 0
         residualhours = 0
-        expectedhours = 0
+        expectedhours = deal_record.values.get('expectedhours') or 0
         travelhours = 0
         travelcost = 0
         fixedpricehours = 0
@@ -135,7 +135,7 @@ class DealService:
         
         if project_recordid:
             project_record = UserRecord('project', project_recordid, load_fields=False)
-            expectedhours = project_record.values.get('expectedhours') or 0
+            # expectedhours = project_record.values.get('expectedhours') or 0
             for ts in project_record.get_linkedrecords_dict('timesheet'):
                 timesheets_dict[ts.get('recordid_')] = ts
                 
@@ -454,7 +454,7 @@ class DealService:
         deal_record.values['expectedcost'] = round(expectedcost, 2)
         deal_record.values['expectedmargin'] = round(deal_expectedmargin, 2)
         deal_record.values['expectedmargin_perc'] = expectedmargin_perc
-        deal_record.values['expectedhours'] = totals['expectedhours']
+        deal_record.values['expectedhours'] = totals['expectedhours'] if totals['expectedhours'] > 0 else deal_record.values.get('expectedhours')
         
         deal_record.values['actualcost'] = round(actualcost + invoiced_laborcost, 2)
         
