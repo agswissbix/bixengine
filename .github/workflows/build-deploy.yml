@@ -30,6 +30,7 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+          python-version: '3.11'
 
       - name: Prepare image name
         id: prep
