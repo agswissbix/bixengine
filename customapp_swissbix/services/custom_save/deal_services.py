@@ -590,7 +590,10 @@ class DealService:
 
         # Generazione nota HTML riepilogativa per Totali e Margini
         lines = []
-        lines.append(f'<div class="deal-summary" style="font-size: 1em;color: black"><strong>Marg: {c_marg(actualnetmargin)}  ({c_perc(actualnetmargin_perc)}%) --> {c_marg(totalcontractnetmargin)} </strong></div>')
+        if totalcontractnetmargin != actualnetmargin:
+            lines.append(f'<div class="deal-summary" style="font-size: 1em;color: black"><strong>Marg: {c_marg(actualnetmargin)}  ({c_perc(actualnetmargin_perc)}%) --> {c_marg(totalcontractnetmargin)} </strong></div>')
+        else:
+            lines.append(f'<div class="deal-summary" style="font-size: 1em;color: black"><strong>Marg: {c_marg(actualnetmargin)}  ({c_perc(actualnetmargin_perc)}%)</strong></div>')
         lines.append('<div class="deal-details" style="font-family: system-ui, sans-serif; line-height: 1.5; color: #1f2937;">')
         lines.append(f'<div style="font-size: 0.9em; color: #4b5563; margin-top: 4px; margin-bottom: 8px;">Margine Netto: <b>{c_marg(actualnetmargin)}  ({c_perc(actualnetmargin_perc)}%)</b></div>')
         lines.append(f'<div style="font-size: 0.9em; color: #4b5563; margin-top: 4px; margin-bottom: 8px;">Margine Netto fino a fine contratto: <b>{c_marg(totalcontractnetmargin)}</b></div>')
