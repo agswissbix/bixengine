@@ -4548,8 +4548,11 @@ Cordiali saluti
         stabile_recordid=recordid
         stabile_record=UserRecord('stabile',stabile_recordid)
         #TODO pitservice sistemare dinamico TODO GASOLI
-        meseLettura='2026-03'
-        anno, mese = meseLettura.split('-')
+        
+        meseLettura = data.get("popupData", {}).get("date")
+        if not meseLettura:
+            meseLettura = "2026 03-Marzo"
+        anno, mese = meseLettura.split(' ')
 
         sql=f"SELECT * FROM user_contattostabile WHERE deleted_='N' AND recordidstabile_='{stabile_recordid}'"
         row=HelpderDB.sql_query_row(sql)
@@ -4571,7 +4574,8 @@ Cordiali saluti
         attachment_relativepath=stampa_gasoli(request)
         riferimento=stabile_record.values.get('riferimento', '')
         stabile_citta=stabile_record.values['citta']
-        subject=f"Livello Gasolio - {mese} {anno} - {riferimento} {stabile_citta}"
+        mese_num = mese.split('-')[0] if '-' in mese else mese
+        subject=f"Livello Gasolio - {mese_num} {anno} - {riferimento} {stabile_citta}"
         body=f"""
          <p>
                 Egregi Signori,<br/>
@@ -4605,7 +4609,7 @@ Cordiali saluti
             "text": body,
             "attachment_fullpath": "",
             "attachment_relativepath": attachment_relativepath,
-            "attachment_name": f"Lettura_Gasolio_{mese}-{anno}-{riferimento}-{stabile_citta}.pdf",
+            "attachment_name": f"Lettura_Gasolio_{mese_num}-{anno}-{riferimento}-{stabile_citta}.pdf",
             }
 
     return JsonResponse({"success": True, "emailFields": email_fields})
@@ -4619,9 +4623,9 @@ def stampa_gasoli(request):
     data = json.loads(request.body)
     if request.method == 'POST':
         recordid_stabile = data.get('recordid')
-        #meseLettura=data.get('date')
-        #TODO pitservice sistemare dinamico TODO GASOLI
-        meseLettura="2026 03-Marzo"
+        meseLettura = data.get('date') or (data.get('popupData') or {}).get('date')
+        if not meseLettura:
+            meseLettura = "2026 03-Marzo"
         anno, mese = meseLettura.split(' ')
     script_dir = os.path.dirname(os.path.abspath(__file__))
     wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
@@ -4656,7 +4660,8 @@ def stampa_gasoli(request):
     wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
     config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
     
-    filename = f"Lettura Gasolio {mese} {anno}  {record_stabile.values['indirizzo']}.pdf"
+    mese_num = mese.split('-')[0] if '-' in mese else mese
+    filename = f"Lettura Gasolio {mese_num} {anno}  {record_stabile.values['indirizzo']}.pdf"
     filename = re.sub(r'[\\/*?:"<>|]', "", filename)
     #filename='gasolio.pdf'
 
@@ -4920,7 +4925,6 @@ def stampa_bollettini_test(request):
     finally:
         os.remove(filename_with_path)
 
-@login_required_api
 def send_emails(request):
     data = {}
     
