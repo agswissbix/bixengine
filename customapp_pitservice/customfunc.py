@@ -151,7 +151,7 @@ def aggiorna_lista_piscina(request):
         print(counter)
     return JsonResponse({'status': 'success', 'stabili piscina aggiunti': counter})
 
-def aggiorna_lista_ricaldamento(request):
+def aggiorna_lista_riscaldamento(request):
     # Extract any needed data from the request, if relevant
     # mese = request.POST.get('mese')
     # Ottieni la data attuale
