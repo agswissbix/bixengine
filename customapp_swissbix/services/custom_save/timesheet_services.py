@@ -150,7 +150,7 @@ class TimesheetService:
     @staticmethod
     def _evaluate_project(timesheet_record: UserRecord, project_record: UserRecord):
         invoicestatus = timesheet_record.values.get('invoicestatus')
-        
+        invoiceoption = timesheet_record.values.get('invoiceoption')
 
         if invoicestatus == 'To Process' and not Helper.isempty(project_record.recordid) and invoiceoption != 'Out of contract':
             timesheet_record.values['print_type'] = 'Progetto N. ' + str(project_record.values['id'])
