@@ -75,6 +75,16 @@ def calculate_dependent_fields(request):
             except (ValueError, TypeError):
                 pass
 
+    #---AZIENDA/FORNITORE---
+    if tableid == 'azienda' or tableid=='fornitori':
+        comune = fields.get('recordidcomune_')
+        if comune:
+            comune_record=UserRecord('comune', comune, load_fields=False )
+            updated_fields['nap'] = comune_record.values.get('nap')
+            updated_fields['cantone'] = comune_record.values.get('cantone')
+            updated_fields['zona'] = comune_record.values.get('zona')
+            updated_fields['subzona'] = comune_record.values.get('subzona')
+
     return JsonResponse({'status': 'success', 'updated_fields': updated_fields})
 
 def save_record_fields(tableid,recordid, old_record=""):
