@@ -118,6 +118,73 @@ def aggiorna_lista_acqua(request):
         print(counter)
     return JsonResponse({'status': 'success', 'stabili acqua aggiunti': counter})
 
+def aggiorna_lista_piscina(request):
+    # Extract any needed data from the request, if relevant
+    # mese = request.POST.get('mese')
+    # Ottieni la data attuale
+    # Imposta la localizzazione in italiano
+    post_data = json.loads(request.body)
+    year=  date.today().year 
+
+    sql=f"""
+            SELECT  *
+            FROM user_stabile
+            WHERE piscina='Si' AND deleted_ = 'N'
+            AND recordid_ NOT IN (
+                SELECT recordidstabile_
+                FROM user_piscina
+                WHERE annoriferimento = '{year}' 
+                AND deleted_ = 'N'
+            );
+
+
+    """
+    stabili=HelpderDB.sql_query(sql)
+    counter=0
+    for stabile in stabili:
+        record_piscina=UserRecord('piscina')
+        record_piscina.values['recordidstabile_']=stabile['recordid_']
+        record_piscina.values['recordidcliente_']=stabile['recordidcliente_']
+        record_piscina.values['annoriferimento']=year
+        record_piscina.save()
+        counter=counter+1
+        print(counter)
+    return JsonResponse({'status': 'success', 'stabili piscina aggiunti': counter})
+
+def aggiorna_lista_ricaldamento(request):
+    # Extract any needed data from the request, if relevant
+    # mese = request.POST.get('mese')
+    # Ottieni la data attuale
+    # Imposta la localizzazione in italiano
+    post_data = json.loads(request.body)
+    year=  date.today().year 
+
+    sql=f"""
+            SELECT  *
+            FROM user_stabile
+            WHERE riscaldamento='Si' AND deleted_ = 'N'
+            AND recordid_ NOT IN (
+                SELECT recordidstabile_
+                FROM user_ricaldamento
+                WHERE annoriferimento = '{year}' 
+                AND deleted_ = 'N'
+            );
+
+
+    """
+    stabili=HelpderDB.sql_query(sql)
+    counter=0
+    for stabile in stabili:
+        record_ricaldamento=UserRecord('ricaldamento')
+        record_ricaldamento.values['recordidstabile_']=stabile['recordid_']
+        record_ricaldamento.values['recordidcliente_']=stabile['recordidcliente_']
+        record_ricaldamento.values['annoriferimento']=year
+        record_ricaldamento.save()
+        counter=counter+1
+        print(counter)
+    return JsonResponse({'status': 'success', 'stabili riscaldamento aggiunti': counter})
+
+
 
 @csrf_exempt
 def stampa_bollettino(request):

@@ -4548,7 +4548,8 @@ Cordiali saluti
         stabile_recordid=recordid
         stabile_record=UserRecord('stabile',stabile_recordid)
         #TODO pitservice sistemare dinamico TODO GASOLI
-        meseLettura='2026-03'
+        
+        meseLettura=data.get("popupData").get("date")
         anno, mese = meseLettura.split('-')
 
         sql=f"SELECT * FROM user_contattostabile WHERE deleted_='N' AND recordidstabile_='{stabile_recordid}'"
