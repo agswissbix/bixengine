@@ -157,7 +157,7 @@ def aggiorna_lista_riscaldamento(request):
     # Ottieni la data attuale
     # Imposta la localizzazione in italiano
     post_data = json.loads(request.body)
-    year=  date.today().year 
+    year=  '2025-2026'
 
     sql=f"""
             SELECT  *
@@ -165,7 +165,7 @@ def aggiorna_lista_riscaldamento(request):
             WHERE riscaldamento='Si' AND deleted_ = 'N'
             AND recordid_ NOT IN (
                 SELECT recordidstabile_
-                FROM user_ricaldamento
+                FROM user_riscaldamento
                 WHERE annoriferimento = '{year}' 
                 AND deleted_ = 'N'
             );
@@ -175,11 +175,11 @@ def aggiorna_lista_riscaldamento(request):
     stabili=HelpderDB.sql_query(sql)
     counter=0
     for stabile in stabili:
-        record_ricaldamento=UserRecord('ricaldamento')
-        record_ricaldamento.values['recordidstabile_']=stabile['recordid_']
-        record_ricaldamento.values['recordidcliente_']=stabile['recordidcliente_']
-        record_ricaldamento.values['annoriferimento']=year
-        record_ricaldamento.save()
+        record_riscaldamento=UserRecord('riscaldamento')
+        record_riscaldamento.values['recordidstabile_']=stabile['recordid_']
+        record_riscaldamento.values['recordidcliente_']=stabile['recordidcliente_']
+        record_riscaldamento.values['annoriferimento']=year
+        record_riscaldamento.save()
         counter=counter+1
         print(counter)
     return JsonResponse({'status': 'success', 'stabili riscaldamento aggiunti': counter})
