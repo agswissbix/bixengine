@@ -611,7 +611,12 @@ class UserTable:
         if not limit:
             limit = 100
             
-        orderby_safe = f"user_{self.tableid}.{orderby}" # Previeni SQL Injection su orderby
+        orderby_safe = f"user_{self.tableid}.{orderby}"
+
+        if orderby.startswith("recordid_"):
+            orderby_safe = f"{orderby_safe}" 
+        else:
+            orderby_safe = f"{orderby_safe}, user_{self.tableid}.recordid_ DESC"
         
         # TODO custom telefonodo amico gestire limit
         sql = (
