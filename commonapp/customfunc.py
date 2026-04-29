@@ -25,13 +25,14 @@ from pathlib import Path
 import json
 from django.http import JsonResponse
 from commonapp.bixmodels.helper_db import *
-from commonapp.views import custom_save_record_fields
+from commonapp.views import custom_save_record_fields, _save_record_data
 
 env = environ.Env()
 environ.Env.read_env()
 
 logger = logging.getLogger(__name__)
 
+@login_required_api
 def fieldsupdate(request):
     data = json.loads(request.body)
     params = data.get('params',{})
@@ -63,7 +64,6 @@ def fieldsupdate(request):
         custom_save_record_fields(tableid, recordid, old_record)
     return JsonResponse({'status': 'ok', 'message': 'Fields updated successfully.'})
 
-@csrf_exempt
 @login_required_api
 def check_csv_compatibility(request):
     try:
@@ -166,7 +166,6 @@ def check_csv_compatibility(request):
         traceback.print_exc()
         return JsonResponse({'error': str(e)}, status=500)
 
-@csrf_exempt
 @login_required_api
 def import_csv_data(request):
     try:
@@ -178,7 +177,8 @@ def import_csv_data(request):
         data = json.loads(request.body)
         token = data.get('token')
         tableid = data.get('tableid')
-        print(f"DEBUG: token={token}, tableid={tableid}")
+        unique_fields = data.get('unique_fields', [])
+        print(f"DEBUG: token={token}, tableid={tableid}, unique_fields={unique_fields}")
         
         if not token or not tableid:
             print("DEBUG: Token or tableid missing")
@@ -207,6 +207,7 @@ def import_csv_data(request):
             
         success_count = 0
         error_count = 0
+        skipped_count = 0
         
         encodings_to_try = ['utf-8-sig', 'latin-1', 'cp1252']
         file_opened = False
@@ -246,6 +247,29 @@ def import_csv_data(request):
                                 record_values[fieldid] = value
                                 
                         if record_values:
+                            is_duplicate = False
+                            if unique_fields:
+                                query_conditions = []
+                                for u_field in unique_fields:
+                                    if u_field in record_values and record_values[u_field] != "":
+                                        val = str(record_values[u_field]).replace("'", "''")
+                                        query_conditions.append(f"{u_field} = '{val}'")
+                                
+                                if query_conditions and len(query_conditions) == len(unique_fields):
+                                    where_clause = " AND ".join(query_conditions)
+                                    check_query = f"SELECT recordid_ FROM user_{tableid} WHERE {where_clause} LIMIT 1"
+                                    try:
+                                        existing = HelpderDB.sql_query(check_query)
+                                        if existing and len(existing) > 0:
+                                            is_duplicate = True
+                                    except Exception as e:
+                                        print(f"DEBUG: Error checking duplicate: {e}")
+                                        
+                            if is_duplicate:
+                                print(f"DEBUG: Row {row_idx} skipped (duplicate)")
+                                skipped_count += 1
+                                continue
+                                
                             try:
                                 _save_record_data(
                                     tableid,
@@ -281,11 +305,12 @@ def import_csv_data(request):
             print("DEBUG: Failed to remove file")
             pass
             
-        print(f"DEBUG: Finished. Imported: {success_count}, Errors: {error_count}")
+        print(f"DEBUG: Finished. Imported: {success_count}, Errors: {error_count}, Skipped: {skipped_count}")
         return JsonResponse({
             'success': True,
             'imported': success_count,
-            'errors': error_count
+            'errors': error_count,
+            'skipped': skipped_count
         })
         
     except Exception as e:
