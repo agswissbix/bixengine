@@ -160,15 +160,27 @@ def login_view(request):
     user = authenticate(request, username=username, password=password)
     
     if user is not None:
+        is_2fa_enabled = False
+        if hasattr(user, 'userprofile'):
+            try:
+                is_2fa_enabled = user.userprofile.is_2fa_enabled
+            except:
+                is_2fa_enabled = False
+        
+        if is_2fa_enabled:
+            request.session['pre_2fa_user_id'] = user.id
+            return JsonResponse({"success": True, "detail": "2FA required", "is_2fa_enabled": True})
+
         #Temp solution
         activeServer = HelpderDB.sql_query_row("SELECT value FROM sys_settings WHERE setting='cliente_id'")
-        if activeServer['value'] == 'telefonoamico':
-            recordid_utente=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_utenti WHERE nomeutente='{username}' AND deleted_='N'",'recordid_')
-            record_utente=UserRecord('utenti',recordid_utente)
         #ruolo=record_utente.values['ruolo']
         ruolo = ''
         login(request, user)
-        return JsonResponse({"success": True, "detail": "User logged in", "ruolo":ruolo})
+        if activeServer['value'] == 'telefonoamico':
+            recordid_utente=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_utenti WHERE nomeutente='{username}' AND deleted_='N'",'recordid_')
+            record_utente=UserRecord('utenti',recordid_utente)
+
+        return JsonResponse({"success": True, "detail": "User logged in", "ruolo":ruolo, "is_2fa_enabled": False})
     else:
         return JsonResponse({"success": False, "detail": "Invalid credentials"}, status=401)
 
@@ -403,11 +415,13 @@ def enable_2fa(request):
     user_profile = user.userprofile  # Ottieni il profilo dell'utente
 
     if request.method != "POST":
-        return JsonResponse({"message": "Metodo non permesso"}, status=405)
+        return JsonResponse({"error": "Metodo non permesso"}, status=405)
 
     # Controlla se il 2FA è già attivo
     if user_profile.is_2fa_enabled:
-        return JsonResponse({"message": "2FA già attivato"}, status=400)
+        return JsonResponse({"error": "2FA già attivato"}, status=400)
+
+    active_server = Helper.get_cliente_id()
 
     try:
         # Se 2FA non è attivo, generiamo un nuovo segreto OTP
@@ -418,7 +432,7 @@ def enable_2fa(request):
 
         # Genera l'URL del QR Code
         totp = pyotp.TOTP(secret)
-        otp_url = totp.provisioning_uri(name=user.username, issuer_name="Tabellone")
+        otp_url = totp.provisioning_uri(name=user.username, issuer_name=f"{active_server} - BixData")
 
         # Genera il QR Code e convertilo in base64
         img = qrcode.make(otp_url)
@@ -429,37 +443,46 @@ def enable_2fa(request):
         return JsonResponse({"otp_url": otp_url, "qr_code": qr_base64})
 
     except Exception as e:
-        return JsonResponse({"message": f"Errore nel generare il QR: {str(e)}"}, status=500)
+        return JsonResponse({"error": f"Errore nel generare il QR: {str(e)}"}, status=500)
 
 
 
 @csrf_exempt
-@login_required
 def verify_2fa(request):
     if request.method != "POST":
-        return JsonResponse({"message": "Metodo non permesso"}, status=405)
+        return JsonResponse({"error": "Metodo non permesso"}, status=405)
 
     # Ottieni i dati JSON
     data = json.loads(request.body)
     otp_token = data.get("otp")
     
     if not otp_token:
-        return JsonResponse({"message": "Codice OTP mancante"}, status=400)
+        return JsonResponse({"error": "Codice OTP mancante"}, status=400)
 
-    # Ottieni il profilo utente e il segreto OTP
-    user_profile = request.user.userprofile  # Ottieni il profilo dell'utente
+    pre_2fa_user_id = request.session.get('pre_2fa_user_id')
+    if not pre_2fa_user_id:
+        return JsonResponse({"error": "Sessione scaduta o utente non trovato"}, status=401)
+
+    user = User.objects.filter(id=pre_2fa_user_id).first()
+    if not user or not hasattr(user, 'userprofile'):
+        return JsonResponse({"error": "Utente non valido"}, status=400)
+
+    user_profile = user.userprofile
 
     if not user_profile.is_2fa_enabled:
-        return JsonResponse({"message": "2FA non attivato per questo utente"}, status=400)
+        return JsonResponse({"error": "2FA non attivato per questo utente"}, status=400)
 
     secret = user_profile.otp_secret  # Ottieni il segreto OTP salvato nel profilo
 
     # Verifica l'OTP
     totp = pyotp.TOTP(secret)
     if totp.verify(otp_token):
-        return JsonResponse({"message": "2FA verificato con successo"})
+        login(request, user)
+        if 'pre_2fa_user_id' in request.session:
+            del request.session['pre_2fa_user_id']
+        return JsonResponse({"success": True, "message": "2FA verificato con successo"})
     else:
-        return JsonResponse({"message": "Codice OTP errato"}, status=400)
+        return JsonResponse({"success": False, "error": "Codice OTP errato"}, status=400)
     
 
 @csrf_exempt
