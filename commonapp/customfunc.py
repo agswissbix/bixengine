@@ -251,9 +251,15 @@ def import_csv_data(request):
                             if unique_fields:
                                 query_conditions = []
                                 for u_field in unique_fields:
-                                    if u_field in record_values and record_values[u_field] != "":
-                                        val = str(record_values[u_field]).replace("'", "''")
-                                        query_conditions.append(f"{u_field} = '{val}'")
+                                    if u_field in record_values:
+                                        val = str(record_values[u_field]).strip()
+                                        if val == "":
+                                            query_conditions.append(f"({u_field} IS NULL OR {u_field} = '')")
+                                        else:
+                                            val_escaped = val.replace("'", "''")
+                                            query_conditions.append(f"{u_field} = '{val_escaped}'")
+                                    else:
+                                        query_conditions.append(f"({u_field} IS NULL OR {u_field} = '')")
                                 
                                 if query_conditions and len(query_conditions) == len(unique_fields):
                                     where_clause = " AND ".join(query_conditions)
