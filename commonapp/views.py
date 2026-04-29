@@ -5154,7 +5154,7 @@ def export_excel(request):
             order_fieldid= order.get("fieldid", "recordid_")
             order_direction= order.get("direction", "desc")
         
-            table = UserTable(tableid)
+            table = UserTable(tableid,Helper.get_userid(request))
             if viewid == '':
                 viewid=table.get_default_viewid()
 
