@@ -3303,10 +3303,16 @@ def generate_lenovo_pdf(recordid, signature_path=None, pdf_type='Ricevuta Firmat
                 row['signatureUrlIn'] = image_to_base64(signature_path)
         else:
              # Check for fixed signature file
-             sig_rel_path = f"ticket_lenovo/{recordid}/signature.png"
+             name = 'intake'
+             if pdf_type == 'Ricevuta Firmata - Riconsegna':
+                name = 'delivery'
+             sig_rel_path = f"ticket_lenovo/{recordid}/signature_{name}.png"
              if default_storage.exists(sig_rel_path):
                  abs_sig_path = os.path.join(settings.UPLOADS_ROOT, sig_rel_path)
-                 row['signatureUrl'] = image_to_base64(abs_sig_path)
+                 if name == 'intake':
+                    row['signatureUrlIn'] = image_to_base64(abs_sig_path)
+                 else:
+                    row['signatureUrl'] = image_to_base64(abs_sig_path)
 
         # Product Photo & Conditions
         if row.get('product_photo'):
