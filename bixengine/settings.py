@@ -85,6 +85,7 @@ MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    'db_multitenant.middleware.MultiTenantMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -128,6 +129,11 @@ DATABASES = {
     },
 }
 
+MULTITENANT_MAPPER_CLASS = 'commonapp.multitenant.HeaderTenantMapper'
+MULTITENANT_DATABASE_PREFIX = env('MULTITENANT_DATABASE_PREFIX', default='bixdata_')
+MULTITENANT_ALLOWED_TENANTS = env.list('MULTITENANT_ALLOWED_TENANTS', default=[])
+MULTITENANT_DEFAULT_TENANT = env('MULTITENANT_DEFAULT_TENANT', default='default')
+
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
@@ -144,6 +150,25 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+tenants_str = "devriccardo,wegolf,heenergy" # O env('MULTITENANT_ALLOWED_TENANTS')
+tenants_list = [t.strip() for t in tenants_str.split(',') if t.strip()]
+
+# 2. Genera gli URL dinamici
+dynamic_origins = [f'https://{tenant}.bixdata.com:3022' for tenant in tenants_list]
+dynamic_origins_http = [f'http://{tenant}.bixdata.com:3022' for tenant in tenants_list]
+
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+    "x-tenant-id",  # <--- AGGIUNGI QUESTO
+]
 CORS_ORIGIN_ALLOW_ALL = False
 CORS_ALLOWED_ORIGINS = [
     env('BIXENGINE_SERVER'),
@@ -167,7 +192,7 @@ CORS_ALLOWED_ORIGINS = [
     'http://' + env('BIXCUSTOM_DOMAIN', default='dummy.local') + ':' + env('BIXCUSTOM_NGINX_PORT'),
     'https://' + env('BIXCUSTOM_DOMAIN', default='dummy.local') + ':' + env('BIXCUSTOM_NGINX_PORT'),
     'https://' + env('BIXCUSTOM_DOMAIN', default='dummy.local')
-]
+] + dynamic_origins + dynamic_origins_http
 
 CORS_ALLOW_CREDENTIALS = True
 

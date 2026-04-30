@@ -157,18 +157,39 @@ def login_view(request):
     username = data.get("username")
     password = data.get("password")
 
+    # Prima prova dall'header, poi dal body
+    tenant_id = request.META.get('HTTP_X_TENANT_ID', '').strip()
+    if not tenant_id:
+        tenant_id = data.get("tenant_id", '').strip()
+
+    allowed_tenants = getattr(settings, 'MULTITENANT_ALLOWED_TENANTS', [])
+    if allowed_tenants and tenant_id not in allowed_tenants:
+        return JsonResponse({"success": False, "detail": "Tenant not allowed."}, status=403)
+
     user = authenticate(request, username=username, password=password)
     
     if user is not None:
         #Temp solution
-        activeServer = HelpderDB.sql_query_row("SELECT value FROM sys_settings WHERE setting='cliente_id'")
-        if activeServer['value'] == 'telefonoamico':
-            recordid_utente=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_utenti WHERE nomeutente='{username}' AND deleted_='N'",'recordid_')
-            record_utente=UserRecord('utenti',recordid_utente)
+        # activeServer = HelpderDB.sql_query_row("SELECT value FROM sys_settings WHERE setting='cliente_id'")
+        # if activeServer['value'] == 'telefonoamico':
+        #     recordid_utente=HelpderDB.sql_query_value(f"SELECT recordid_ FROM user_utenti WHERE nomeutente='{username}' AND deleted_='N'",'recordid_')
+        #     record_utente=UserRecord('utenti',recordid_utente)
         #ruolo=record_utente.values['ruolo']
         ruolo = ''
+        # Imposta il tenant_id PRIMA del login per assicurare che venga salvato
         login(request, user)
-        return JsonResponse({"success": True, "detail": "User logged in", "ruolo":ruolo})
+
+        response = JsonResponse({"success": True, "detail": "User logged in", "ruolo": ruolo, "tenant_id": tenant_id})
+
+        response.set_cookie(
+            key='current_tenant',
+            value=tenant_id,
+            max_age=31536000,     # Durata in secondi (es. 1 anno: 60 * 60 * 24 * 365)
+            samesite='None',      # Permette l'invio cross-domain
+            secure=True,          # OBBLIGATORIO se SameSite='None' (richiede HTTPS)
+            httponly=True         # True: lo legge solo il server. False: lo può leggere anche il JS del frontend (document.cookie)
+        )
+        return response
     else:
         return JsonResponse({"success": False, "detail": "Invalid credentials"}, status=401)
 
@@ -176,6 +197,7 @@ def login_view(request):
 def logout_view(request):
     logout(request)
     # Pulisci la sessione
+    request.session.pop('tenant_id', None)
     request.session.flush()
     
     return JsonResponse({"success": True, "detail": "User logged out"})
