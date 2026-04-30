@@ -735,7 +735,7 @@ def link_callback(uri, rel):
 
     raise Exception(f"Immagine o file statico non trovato: {uri}")
 
-@login_required_api
+
 def get_system_assurance_activemind(request):
     data = json.loads(request.body)
     recordid_deal = data.get('trattativaid', None)
@@ -799,7 +799,7 @@ def parse_features(note_str):
         mid = (len(items) + 1) // 2
         return [items[:mid], items[mid:]]
 
-@login_required_api
+
 def get_services_activemind(request):
     """
     Restituisce i servizi ActiveMind:
@@ -907,7 +907,6 @@ def get_services_activemind(request):
         logger.error(f"Errore in get_services_activemind: {e}")
         return JsonResponse({"error": str(e)}, status=500)
     
-@login_required_api
 def get_products_activemind(request):
     data = json.loads(request.body)
     recordid_deal = data.get('trattativaid')
@@ -1032,7 +1031,6 @@ def get_products_activemind(request):
     })
 
 
-@login_required_api
 def get_conditions_activemind(request):
     data = json.loads(request.body)
     recordid_deal = data.get('dealid')
@@ -1091,7 +1089,7 @@ def get_conditions_activemind(request):
 
     return JsonResponse({"frequencies": conditions_list}, safe=False)
 
-@login_required_api
+
 def get_monte_ore_activemind(request):
     data = json.loads(request.body)
     recordid_deal = data.get('dealid')
@@ -1168,7 +1166,7 @@ def get_monte_ore_activemind(request):
 
     return JsonResponse({"options": options_list, "monte_ore_existing": monte_ore_existing}, safe=False)
 
-@login_required_api
+
 def get_assistance_bwbix_activemind(request):
     data = json.loads(request.body)
     recordid_deal = data.get('dealid')
@@ -1227,7 +1225,7 @@ def get_assistance_bwbix_activemind(request):
 
     return JsonResponse({"options": options_list}, safe=False)
 
-@login_required_api
+
 def get_service_and_asset_activemind(request):
     data = json.loads(request.body)
     recordid_deal = data.get('dealid')
