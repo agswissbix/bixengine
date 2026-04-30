@@ -11,3 +11,4 @@ uploads/*
 uploads_backup/*
 venv/
 .venv/
+.vscode/
