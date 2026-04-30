@@ -904,6 +904,95 @@ def settings_table_fields_delete_field(request):
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=500)
 
+@superuser_required
+def settings_table_fields_make_index(request):
+    try:
+        data = json.loads(request.body)
+        tableid = data.get("tableid")
+        field_id = data.get("fieldid")
+        userid = data.get("userid")
+
+        if userid != 1:
+            return JsonResponse({"success": False, "error": "L'utente deve essere l'utente di default"}, status=400)
+
+        if not tableid or not field_id:
+            return JsonResponse({"success": False, "error": "Dati mancanti"}, status=400)
+
+        field = SysField.objects.filter(tableid=tableid, id=field_id).first()
+        if not field:
+            return JsonResponse({"success": False, "error": "Campo non trovato"}, status=404)
+
+        user_table_name = f"user_{tableid}"
+        column_name = field.fieldid
+
+        index_name = f"idx_{user_table_name}_{column_name}"
+        if len(index_name) > 64:
+            index_name = index_name[:64]
+
+        with connection.cursor() as cursor:
+            # Check se l'indice esiste già
+            cursor.execute(f"""
+                SELECT COUNT(1) 
+                FROM information_schema.statistics 
+                WHERE table_schema = DATABASE() 
+                AND table_name = %s 
+                AND index_name = %s
+            """, [user_table_name, index_name])
+            
+            if cursor.fetchone()[0] > 0:
+                return JsonResponse({"success": True, "message": "Indice già esistente"})
+
+            cursor.execute(f"ALTER TABLE {user_table_name} ADD INDEX {index_name} ({column_name})")
+
+        return JsonResponse({"success": True})
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
+
+
+@superuser_required
+def settings_table_fields_remove_index(request):
+    try:
+        data = json.loads(request.body)
+        tableid = data.get("tableid")
+        field_id = data.get("fieldid")
+        userid = data.get("userid")
+
+        if userid != 1:
+            return JsonResponse({"success": False, "error": "L'utente deve essere l'utente di default"}, status=400)
+
+        if not tableid or not field_id:
+            return JsonResponse({"success": False, "error": "Dati mancanti"}, status=400)
+
+        field = SysField.objects.filter(tableid=tableid, id=field_id).first()
+        if not field:
+            return JsonResponse({"success": False, "error": "Campo non trovato"}, status=404)
+
+        user_table_name = f"user_{tableid}"
+        column_name = field.fieldid
+
+        index_name = f"idx_{user_table_name}_{column_name}"
+        if len(index_name) > 64:
+            index_name = index_name[:64]
+
+        with connection.cursor() as cursor:
+            # Check se l'indice esiste
+            cursor.execute(f"""
+                SELECT COUNT(1) 
+                FROM information_schema.statistics 
+                WHERE table_schema = DATABASE() 
+                AND table_name = %s 
+                AND index_name = %s
+            """, [user_table_name, index_name])
+            
+            if cursor.fetchone()[0] == 0:
+                return JsonResponse({"success": True, "message": "Indice non trovato"})
+
+            cursor.execute(f"ALTER TABLE {user_table_name} DROP INDEX {index_name}")
+
+        return JsonResponse({"success": True})
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
+
 
 @superuser_required
 def settings_table_fields_change_to_lookup(request):

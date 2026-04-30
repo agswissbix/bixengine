@@ -633,11 +633,17 @@
           <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px;">
             {% for col in product.features %}
             <div>
-              <ul style="margin: 0; padding-left: 25px; list-style-type: square;">
-                {% for feature in col %}
-                <li>{{ feature }}</li>
-                {% endfor %}
-              </ul>
+              {% for feature in col %}
+                {% if feature.type == 'title' %}
+                  <div style="font-weight: bold; font-size: 10pt; text-transform: uppercase; margin-top: 8px; margin-bottom: 4px;">
+                    {{ feature.text }}
+                  </div>
+                {% else %}
+                  <ul style="margin: 0; padding-left: 25px; list-style-type: square;">
+                    <li style="margin-bottom: 4px;">{{ feature.text }}</li>
+                  </ul>
+                {% endif %}
+              {% endfor %}
             </div>
             {% endfor %}
           </div>
@@ -753,11 +759,17 @@
           <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px;">
             {% for col in service.features %}
             <div>
-              <ul style="margin: 0; padding-left: 25px; list-style-type: square;">
-                {% for feature in col %}
-                <li>{{ feature }}</li>
-                {% endfor %}
-              </ul>
+              {% for feature in col %}
+                {% if feature.type == 'title' %}
+                  <div style="font-weight: bold; font-size: 10pt; text-transform: uppercase; margin-top: 8px; margin-bottom: 4px;">
+                    {{ feature.text }}
+                  </div>
+                {% else %}
+                  <ul style="margin: 0; padding-left: 25px; list-style-type: square;">
+                    <li style="margin-bottom: 4px;">{{ feature.text }}</li>
+                  </ul>
+                {% endif %}
+              {% endfor %}
             </div>
             {% endfor %}
           </div>

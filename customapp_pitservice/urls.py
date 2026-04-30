@@ -13,6 +13,8 @@ urlpatterns = [
     path('download_offerta/', download_offerta, name='download_offerta'),
     path('script_test/', script_test, name='script_test'),
     path('aggiorna_lista_acqua/', aggiorna_lista_acqua, name='aggiorna_lista_acqua'),
+    path('aggiorna_lista_riscaldamento/', aggiorna_lista_riscaldamento, name='aggiorna_lista_riscaldamento'),
+    path('aggiorna_lista_piscina/', aggiorna_lista_piscina, name='aggiorna_lista_piscina'),
 
 
 ]

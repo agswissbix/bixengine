@@ -75,6 +75,16 @@ def calculate_dependent_fields(request):
             except (ValueError, TypeError):
                 pass
 
+    #---AZIENDA/FORNITORE---
+    if tableid == 'azienda' or tableid=='fornitori':
+        comune = fields.get('recordidcomune_')
+        if comune:
+            comune_record=UserRecord('comune', comune, load_fields=False )
+            updated_fields['nap'] = comune_record.values.get('nap')
+            updated_fields['cantone'] = comune_record.values.get('cantone')
+            updated_fields['zona'] = comune_record.values.get('zona')
+            updated_fields['subzona'] = comune_record.values.get('subzona')
+
     return JsonResponse({'status': 'success', 'updated_fields': updated_fields})
 
 def save_record_fields(tableid,recordid, old_record=""):
@@ -134,3 +144,31 @@ def save_record_fields(tableid,recordid, old_record=""):
             
             fornitore.values['codice'] = float(max_code) + 1
             fornitore.save()
+
+    elif tableid == 'manutenzione':
+        manutenzione = UserRecord(tableid, recordid)
+        protocollo = manutenzione.values.get('protocollo')
+        if not protocollo:
+            current_date = datetime.now()
+            current_year_short = current_date.strftime("%y") # '26'
+            
+            # Cerca l'ultimo protocollo di quest'anno
+            sql = f"SELECT protocollo FROM user_manutenzione WHERE protocollo LIKE '%/{current_year_short}' AND deleted_='N' ORDER BY protocollo DESC LIMIT 1"
+            row = HelpderDB.sql_query_row(sql)
+            
+            new_sequence = 1
+            if row and row.get('protocollo'):
+                last_protocollo = row['protocollo']
+                try:
+                    # Formato previsto: 0001/26
+                    parts = last_protocollo.split('/')
+                    if len(parts) == 2:
+                        new_sequence = int(parts[0]) + 1
+                except ValueError:
+                    pass
+            
+            # Formatta: 0001/26
+            new_protocollo = f"{new_sequence:04d}/{current_year_short}"
+            
+            manutenzione.values['protocollo'] = new_protocollo
+            manutenzione.save()

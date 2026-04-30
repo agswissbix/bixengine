@@ -169,6 +169,17 @@ def login_view(request):
     user = authenticate(request, username=username, password=password)
     
     if user is not None:
+        is_2fa_enabled = False
+        if hasattr(user, 'userprofile'):
+            try:
+                is_2fa_enabled = user.userprofile.is_2fa_enabled
+            except:
+                is_2fa_enabled = False
+        
+        if is_2fa_enabled:
+            request.session['pre_2fa_user_id'] = user.id
+            return JsonResponse({"success": True, "detail": "2FA required", "is_2fa_enabled": True})
+
         #Temp solution
         # activeServer = HelpderDB.sql_query_row("SELECT value FROM sys_settings WHERE setting='cliente_id'")
         # if activeServer['value'] == 'telefonoamico':
@@ -179,7 +190,7 @@ def login_view(request):
         # Imposta il tenant_id PRIMA del login per assicurare che venga salvato
         login(request, user)
 
-        response = JsonResponse({"success": True, "detail": "User logged in", "ruolo": ruolo, "tenant_id": tenant_id})
+        response = JsonResponse({"success": True, "detail": "User logged in", "ruolo": ruolo, "tenant_id": tenant_id, "is_2fa_enabled": False})
 
         response.set_cookie(
             key='current_tenant',
@@ -425,11 +436,13 @@ def enable_2fa(request):
     user_profile = user.userprofile  # Ottieni il profilo dell'utente
 
     if request.method != "POST":
-        return JsonResponse({"message": "Metodo non permesso"}, status=405)
+        return JsonResponse({"error": "Metodo non permesso"}, status=405)
 
     # Controlla se il 2FA è già attivo
     if user_profile.is_2fa_enabled:
-        return JsonResponse({"message": "2FA già attivato"}, status=400)
+        return JsonResponse({"error": "2FA già attivato"}, status=400)
+
+    active_server = Helper.get_cliente_id()
 
     try:
         # Se 2FA non è attivo, generiamo un nuovo segreto OTP
@@ -440,7 +453,7 @@ def enable_2fa(request):
 
         # Genera l'URL del QR Code
         totp = pyotp.TOTP(secret)
-        otp_url = totp.provisioning_uri(name=user.username, issuer_name="Tabellone")
+        otp_url = totp.provisioning_uri(name=user.username, issuer_name=f"{active_server} - BixData")
 
         # Genera il QR Code e convertilo in base64
         img = qrcode.make(otp_url)
@@ -451,37 +464,46 @@ def enable_2fa(request):
         return JsonResponse({"otp_url": otp_url, "qr_code": qr_base64})
 
     except Exception as e:
-        return JsonResponse({"message": f"Errore nel generare il QR: {str(e)}"}, status=500)
+        return JsonResponse({"error": f"Errore nel generare il QR: {str(e)}"}, status=500)
 
 
 
 @csrf_exempt
-@login_required
 def verify_2fa(request):
     if request.method != "POST":
-        return JsonResponse({"message": "Metodo non permesso"}, status=405)
+        return JsonResponse({"error": "Metodo non permesso"}, status=405)
 
     # Ottieni i dati JSON
     data = json.loads(request.body)
     otp_token = data.get("otp")
     
     if not otp_token:
-        return JsonResponse({"message": "Codice OTP mancante"}, status=400)
+        return JsonResponse({"error": "Codice OTP mancante"}, status=400)
 
-    # Ottieni il profilo utente e il segreto OTP
-    user_profile = request.user.userprofile  # Ottieni il profilo dell'utente
+    pre_2fa_user_id = request.session.get('pre_2fa_user_id')
+    if not pre_2fa_user_id:
+        return JsonResponse({"error": "Sessione scaduta o utente non trovato"}, status=401)
+
+    user = User.objects.filter(id=pre_2fa_user_id).first()
+    if not user or not hasattr(user, 'userprofile'):
+        return JsonResponse({"error": "Utente non valido"}, status=400)
+
+    user_profile = user.userprofile
 
     if not user_profile.is_2fa_enabled:
-        return JsonResponse({"message": "2FA non attivato per questo utente"}, status=400)
+        return JsonResponse({"error": "2FA non attivato per questo utente"}, status=400)
 
     secret = user_profile.otp_secret  # Ottieni il segreto OTP salvato nel profilo
 
     # Verifica l'OTP
     totp = pyotp.TOTP(secret)
     if totp.verify(otp_token):
-        return JsonResponse({"message": "2FA verificato con successo"})
+        login(request, user)
+        if 'pre_2fa_user_id' in request.session:
+            del request.session['pre_2fa_user_id']
+        return JsonResponse({"success": True, "message": "2FA verificato con successo"})
     else:
-        return JsonResponse({"message": "Codice OTP errato"}, status=400)
+        return JsonResponse({"success": False, "error": "Codice OTP errato"}, status=400)
     
 
 @csrf_exempt
@@ -511,8 +533,7 @@ def disable_2fa(request):
 
     return JsonResponse({"message": "2FA disabilitato con successo"})
     
-@csrf_exempt
-@login_required
+@login_required_api
 def change_password(request):
     try:
         data = json.loads(request.body)
@@ -535,7 +556,6 @@ def change_password(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-@csrf_exempt
 def request_password_reset(request):
     try:
         data = json.loads(request.body)
@@ -571,7 +591,7 @@ def request_password_reset(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-@csrf_exempt
+
 def reset_password_with_token(request):
     try:
         data = json.loads(request.body)
@@ -620,15 +640,15 @@ def call_custom_function(func_name, *args, **kwargs):
         print(f"Errore durante l'importazione o l'esecuzione di '{func_name}' in {module_name}: {e}")
     return None
 
+
 def custom_change_password(request):
     return call_custom_function("change_password", request)
 
-@csrf_exempt
 def get_active_server(request):
     active_server = HelpderDB.sql_query_row("SELECT value FROM sys_settings WHERE setting='cliente_id'")
     return JsonResponse({"activeServer": active_server['value']})
 
-@csrf_exempt
+@login_required_api
 def delete_record(request):
     try:
         data = json.loads(request.body)
@@ -680,7 +700,7 @@ def custom_delete_record(tableid,recordid):
         dashboard_blocks.delete()
         chart.delete()
     
-
+@login_required_api
 @timing_decorator
 def get_table_filters(request):
     print('Function: get_table_filters')
@@ -743,7 +763,7 @@ def get_table_filters(request):
         "filters": response_filters
     })
 
-
+@login_required_api
 def get_users(request):
     print('Function: get_users')
     data = json.loads(request.body)
@@ -774,6 +794,7 @@ def get_users(request):
         "users": response_users
     })
 
+@login_required_api
 @timing_decorator
 def get_table_records(request):
     print('Function: get_table_records')
@@ -793,15 +814,25 @@ def get_table_records(request):
     order_direction= order.get("direction", "desc")
     typepreference = data.get("typepreference", "search_results_fields")
 
-    table = UserTable(tableid, Helper.get_userid(request), typepreference)
+    table = UserTable(tableid, Helper.get_userid(request), typepreference, master_tableid=master_tableid, master_recordid=master_recordid)
 
     # Costruisci la clausola WHERE dai filtri
     # 1. Ottieni gli oggetti UserRecord GIA' PROCESSATI
     # Passa i filtri a get_table_records_obj
     if not order_fieldid:
-        order_fieldid = 'recordid_'
+        table_setting=TableSettings(tableid, Helper.get_userid(request))
+        default_orderby=table_setting.get_specific_settings('default_orderby')['default_orderby']
+        if default_orderby['value']:
+            order_fieldid = default_orderby['value']
+        else:
+            order_fieldid = 'recordid_'
     if not order_direction:
-        order_direction = 'desc'
+        table_setting=TableSettings(tableid, Helper.get_userid(request))
+        default_orderby=table_setting.get_specific_settings('risultati_order')['risultati_order']
+        if default_orderby['value']:
+            order_direction = default_orderby['value']
+        else:
+            order_direction = 'desc'
 
     record_objects = table.get_table_records_obj(
         viewid=viewid,
@@ -915,6 +946,7 @@ def get_table_records(request):
     }
     return JsonResponse(response_data)
 
+@login_required_api
 @timing_decorator
 def get_available_groups_for_table(request):
     print('Function: get_available_groups_for_table')
@@ -1012,6 +1044,7 @@ def try_parse_date(val):
             continue
     return None
 
+@login_required_api
 @timing_decorator
 def get_grouped_table_records(request):
     """
@@ -1232,6 +1265,7 @@ def get_sql_condition(field_type, values, condition, field_name):
     return ""
 
 
+@login_required_api
 @timing_decorator
 def get_table_records_kanban(request):
     print('Function: get_table_records_kanban')
@@ -1343,7 +1377,7 @@ def get_table_records_kanban(request):
 
     return JsonResponse(response_data)
 
-
+@login_required_api
 def get_calendar_records(request):
     print('Function: get_calendar_records')
     data = json.loads(request.body)
@@ -1670,7 +1704,8 @@ def _map_and_save_event(event_data, user_email):
     except Exception as e:
         print(f"Errore durante il salvataggio/aggiornamento dell'evento {event_data.get('id')}: {e}")
         return None, False
-    
+
+@login_required_api
 def initial_graph_calendar_sync(request):
     """
     Sincronizzazione iniziale degli eventi del calendario con il DB Bixdata.
@@ -1777,6 +1812,7 @@ def initial_graph_calendar_sync(request):
         "detail": f"Merge completato. {total_events_merged} locali promossi. Scaricati/Aggiornati {total_events_downloaded} eventi M365 ({users_synced_count} utenti)."
     })
 
+@login_required_api
 def sync_graph_calendar(request):
     """
     Sincronizza gli eventi del calendario di un utente Outlook con il DB Bixdata
@@ -1896,6 +1932,7 @@ def sync_graph_calendar(request):
         "detail": f"Sincronizzazione Delta Batch completata. {total_users_synced} utenti processati."
     })
     
+@login_required_api
 def create_event(event_data):
     """
     Crea un nuovo evento su Microsoft Graph.
@@ -1944,6 +1981,7 @@ def create_event(event_data):
 
     return result
 
+@login_required_api
 def update_event(event_data):
     """
     Aggiorna un evento esistente su Microsoft Graph.
@@ -2012,6 +2050,7 @@ def update_event(event_data):
 
     return result
 
+@login_required_api
 def delete_event(owner, event_id):
     """
     Cancella un evento esistente su Microsoft Graph.
@@ -2033,6 +2072,7 @@ def delete_event(owner, event_id):
 
     return Response(status=status.HTTP_204_NO_CONTENT)
 
+@login_required_api
 def change_event_owner(event_id, new_owner):
     """
     Cambia l'owner di un evento esistente su Microsoft Graph e nel DB locale.
@@ -2084,6 +2124,7 @@ def change_event_owner(event_id, new_owner):
 
     return event
 
+@login_required_api
 def get_records_matrixcalendar(request):
     print('Function: get_records_matrixcalendar')
     data = json.loads(request.body)
@@ -2272,7 +2313,7 @@ def get_records_matrixcalendar(request):
     return JsonResponse(response_data)
 
 
-
+@login_required_api
 def matrixcalendar_save_record(request):
     """
     Salva l'aggiornamento di un evento del calendario in una tabella dinamica.
@@ -2636,6 +2677,7 @@ def get_pitservice_pivot_lavanderiaDEV(request):
     }
     return JsonResponse(response_data_dev, safe=False)
 
+# TODO spostgare in pitservice
 def get_pitservice_pivot_lavanderia(request):
     # Costruisci la struttura di risposta
     response_data = {"groups": []}
@@ -3459,7 +3501,7 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None, userid=1)
     record.save()
     return record
 
-@csrf_exempt
+@login_required_api
 def duplicate_record(request):
     data = json.loads(request.body)
     source_recordid = data.get('recordid')
@@ -3574,7 +3616,7 @@ def duplicate_record(request):
         'new_recordid': new_record.recordid
     })
 
-@csrf_exempt
+@login_required_api
 def save_record_fields(request):
     recordid = request.POST.get('recordid')
     tableid = request.POST.get('tableid')
@@ -4289,7 +4331,7 @@ def delete_table_view(request):
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)})
 
-
+@login_required_api
 def get_record_badge(request):
     data = json.loads(request.body)
     tableid= data.get("tableid")
@@ -4304,6 +4346,8 @@ def get_record_badge(request):
     response={ "badgeItems": return_badgeItems}
     return JsonResponse(response)
 
+
+@login_required_api
 def get_categories_dashboard(request):
     categories_dashboard = SysDashboard.objects.values_list('category', flat=True).distinct()
     categories_dashboard_lookup = [
@@ -4313,6 +4357,7 @@ def get_categories_dashboard(request):
 
     return JsonResponse({"categories_dashboard": categories_dashboard_lookup})
 
+@login_required_api
 def get_record_card_fields(request):
     data = json.loads(request.body)
     tableid= data.get("tableid")
@@ -4547,8 +4592,11 @@ Cordiali saluti
         stabile_recordid=recordid
         stabile_record=UserRecord('stabile',stabile_recordid)
         #TODO pitservice sistemare dinamico TODO GASOLI
-        meseLettura='2026-03'
-        anno, mese = meseLettura.split('-')
+        
+        meseLettura = data.get("popupData", {}).get("date")
+        if not meseLettura:
+            meseLettura = "2026 03-Marzo"
+        anno, mese = meseLettura.split(' ')
 
         sql=f"SELECT * FROM user_contattostabile WHERE deleted_='N' AND recordidstabile_='{stabile_recordid}'"
         row=HelpderDB.sql_query_row(sql)
@@ -4570,7 +4618,8 @@ Cordiali saluti
         attachment_relativepath=stampa_gasoli(request)
         riferimento=stabile_record.values.get('riferimento', '')
         stabile_citta=stabile_record.values['citta']
-        subject=f"Livello Gasolio - {mese} {anno} - {riferimento} {stabile_citta}"
+        mese_num = mese.split('-')[0] if '-' in mese else mese
+        subject=f"Livello Gasolio - {mese_num} {anno} - {riferimento} {stabile_citta}"
         body=f"""
          <p>
                 Egregi Signori,<br/>
@@ -4604,11 +4653,12 @@ Cordiali saluti
             "text": body,
             "attachment_fullpath": "",
             "attachment_relativepath": attachment_relativepath,
-            "attachment_name": f"Lettura_Gasolio_{mese}-{anno}-{riferimento}-{stabile_citta}.pdf",
+            "attachment_name": f"Lettura_Gasolio_{mese_num}-{anno}-{riferimento}-{stabile_citta}.pdf",
             }
 
     return JsonResponse({"success": True, "emailFields": email_fields})
 
+# TODO spostare in pitservice
 @csrf_exempt
 def stampa_gasoli(request):
     data={}
@@ -4617,9 +4667,9 @@ def stampa_gasoli(request):
     data = json.loads(request.body)
     if request.method == 'POST':
         recordid_stabile = data.get('recordid')
-        #meseLettura=data.get('date')
-        #TODO pitservice sistemare dinamico TODO GASOLI
-        meseLettura="2026 03-Marzo"
+        meseLettura = data.get('date') or (data.get('popupData') or {}).get('date')
+        if not meseLettura:
+            meseLettura = "2026 03-Marzo"
         anno, mese = meseLettura.split(' ')
     script_dir = os.path.dirname(os.path.abspath(__file__))
     wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
@@ -4654,7 +4704,8 @@ def stampa_gasoli(request):
     wkhtmltopdf_path = script_dir + '\\wkhtmltopdf.exe'
     config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
     
-    filename = f"Lettura Gasolio {mese} {anno}  {record_stabile.values['indirizzo']}.pdf"
+    mese_num = mese.split('-')[0] if '-' in mese else mese
+    filename = f"Lettura Gasolio {mese_num} {anno}  {record_stabile.values['indirizzo']}.pdf"
     filename = re.sub(r'[\\/*?:"<>|]', "", filename)
     #filename='gasolio.pdf'
 
@@ -4686,7 +4737,7 @@ def stampa_gasoli(request):
     
 
 
-@csrf_exempt
+@login_required_api
 def save_email(request):
     data = json.loads(request.body)
     email_data = data.get('emailData')
@@ -4697,7 +4748,7 @@ def save_email(request):
 
     return JsonResponse({"success": True})
 
-@csrf_exempt
+@login_required_api
 def get_input_linked(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
@@ -4830,7 +4881,51 @@ def get_input_linked(request):
     items = HelpderDB.sql_query(sql)
     return JsonResponse({"items": items, "active_filters": active_filters}, safe=False)
 
+@login_required_api
+def autocomplete_linked_fields(request):
+    data = json.loads(request.body)
+    
+    tableid = data.get('tableid')
+    changed_fieldid = data.get('changed_fieldid')
+    current_value = data.get('current_value')
+    fields = data.get('fields', {}) # Tutti i campi attuali del form per sapere cosa è già pieno
+    
+    updated_fields = {}
 
+    # Se non è un campo linked o è stato svuotato, non facciamo nulla
+    if not changed_fieldid or not changed_fieldid.startswith('recordid') or not current_value:
+        return JsonResponse({'status': 'success', 'updated_fields': {}})
+
+    try:
+        # 1. Ricaviamo il nome della tabella collegata (es: 'recordidproject_' -> 'project')
+        linked_table = changed_fieldid[8:-1] 
+        
+        # 2. Recuperiamo il record padre dal DB (usando i parametri sicuri!)
+        parent_query = f"SELECT * FROM user_{linked_table} WHERE recordid_ = %s AND deleted_ = 'N'"
+        parent_rows = HelpderDB.sql_query(parent_query, [current_value])
+        
+        if parent_rows:
+            parent_record = parent_rows[0]
+            
+            # 3. Recuperiamo la lista dei campi validi per la tabella corrente
+            schema_query = "SELECT fieldid FROM sys_field WHERE tableid = %s"
+            valid_fields_rows = HelpderDB.sql_query(schema_query, [tableid])
+            valid_fields = {row['fieldid'] for row in valid_fields_rows} if valid_fields_rows else set()
+
+            # 4. Cerchiamo se il record padre ha campi linked che noi non abbiamo ancora compilato
+            for p_key, p_val in parent_record.items():
+                if p_key.startswith('recordid') and p_key.endswith('_') and p_val:
+                    is_empty_in_form = not fields.get(p_key)
+                    
+                    if p_key in valid_fields and is_empty_in_form:
+                        # Trovato! Autocompiliamo.
+                        updated_fields[p_key] = p_val
+
+    except Exception as e:
+        print(f"Errore in autocomplete_linked_fields: {e}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+    return JsonResponse({'status': 'success', 'updated_fields': updated_fields})
 
 
 @csrf_exempt
@@ -4874,7 +4969,6 @@ def stampa_bollettini_test(request):
     finally:
         os.remove(filename_with_path)
 
-@csrf_exempt
 def send_emails(request):
     data = {}
     
@@ -5066,7 +5160,7 @@ def remove_html_tags(input_string):
 
     return cleaned_text
 
-@csrf_exempt
+@login_required_api
 def export_excel(request):
     if request.method == 'POST':
         try:
@@ -5081,7 +5175,7 @@ def export_excel(request):
             order_fieldid= order.get("fieldid", "recordid_")
             order_direction= order.get("direction", "desc")
         
-            table = UserTable(tableid)
+            table = UserTable(tableid,Helper.get_userid(request))
             if viewid == '':
                 viewid=table.get_default_viewid()
 
@@ -5187,7 +5281,7 @@ def export_excel(request):
         return JsonResponse({'error': 'Metodo non consentito'}, status=405)
 
 
-@csrf_exempt
+@login_required_api
 def get_record_attachments(request):
     data = json.loads(request.body)
     tableid = data.get('tableid')
@@ -5208,7 +5302,7 @@ def get_record_attachments(request):
     print(response)
     return JsonResponse(response)
     
-@csrf_exempt
+@login_required_api
 def get_card_active_tab(request):
     data = json.loads(request.body)
     tableid = data.get('tableid')
@@ -5240,7 +5334,7 @@ def get_card_active_tab(request):
     return JsonResponse(response)
 
 
-@csrf_exempt
+@login_required_api
 def get_table_active_tab(request):
     data = json.loads(request.body)
     tableid = data.get('tableid')
@@ -5292,7 +5386,7 @@ def get_table_active_tab(request):
     }
     return JsonResponse(response)
 
-
+@login_required_api
 def get_favorite_tables(request):
     data = json.loads(request.body)
     sys_user_id = Helper.get_userid(request)
@@ -5348,6 +5442,7 @@ def get_favorite_tables(request):
 
     return JsonResponse({"tables": context['tables']})
 
+@login_required_api
 def save_favorite_tables(request):
     body = json.loads(request.body)
     fav_tables = body.get('tables', [])
@@ -5567,6 +5662,7 @@ def replace_text_in_paragraph(paragraph, key, value):
             if key in item.text:
                 item.text = item.text.replace(key, value)
 
+# TODO spostare in pit service
 def download_offerta(request):
     print('download_offerta')
     data = json.loads(request.body)
@@ -5630,7 +5726,7 @@ def download_offerta(request):
         return JsonResponse({'error': 'File not found'}, status=404)
 
 
-
+@login_required_api
 def get_dashboard_data(request):
     userid = Helper.get_userid(request)
     data = json.loads(request.body)
@@ -5834,7 +5930,7 @@ def script_test(request):
 
     return JsonResponse({'success': True, 'path documento': file_path})
 
-
+# TODO vedere perché ce ne sono parecchi di questi metodi, valutare uno unico oppure timesheet sicuramente è duplicato
 def generate_timesheet_pdf(recordid, signature_path):
     """
     Genera il PDF del timesheet con la firma e restituisce il percorso del file PDF.
@@ -5918,7 +6014,7 @@ def generate_timesheet_pdf(recordid, signature_path):
         print(f"Errore in generate_timesheet_pdf: {e}")
         raise
 
-@csrf_exempt
+@login_required_api
 def update_user_profile_pic(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST method allowed'}, status=405)
@@ -5940,7 +6036,7 @@ def update_user_profile_pic(request):
 
     return JsonResponse({'success': True})
 
-@login_required(login_url='/login/')
+@login_required_api
 def get_dashboard_blocks(request):
     request_data = json.loads(request.body)
     #TODO custom wegolf
@@ -6087,7 +6183,7 @@ def get_dashboard_blocks(request):
     return JsonResponse(context, safe=False)
 
 
-@login_required(login_url='/login/')
+@login_required_api
 def get_dashboard_charts(request):
     request_data = json.loads(request.body)
     dashboard_id = request_data.get('dashboardid')
@@ -6175,7 +6271,7 @@ def get_dashboard_charts(request):
 
     return JsonResponse(context, safe=False)
 
-@login_required(login_url='/login/')
+@login_required_api
 def get_chart_data(request):
     try:
         request_data = json.loads(request.body)
@@ -7644,7 +7740,7 @@ def get_dynamic_chart_data(request, chart_id, query_conditions='1=1', viewMode=N
     return handler(request, config, chart_id, chart_record, query_conditions,viewMode, referenceYear, dashboard_category)
 
 
-
+@login_required_api
 def save_dashboard_disposition(request):
     values = json.loads(request.body).get('values', [])
 
@@ -7688,6 +7784,7 @@ def get_chart_size(chart_type: str):
     chart_type = chart_type.lower().strip()
     return CHART_SIZES.get(chart_type, {"w": DEFAULT_W, "h": DEFAULT_H})
 
+@login_required_api
 def add_dashboard_block(request):
     json_data = json.loads(request.body)
     blockid = json_data.get('blockid')
@@ -7785,7 +7882,7 @@ def get_empty_position(existing_blocks, new_gsw, new_gsh, max_width):
     # Fallback, dovrebbe accadere solo se la logica della griglia è satura (improbabile con questo loop).
     return 0, max_y_to_check + new_gsh 
 
-
+@login_required_api
 def save_form_data(request):
     """
     Salva o aggiorna dinamicamente i dati di un form per un utente e un anno specifici.
@@ -7875,6 +7972,7 @@ def save_form_data(request):
 
 
 #TODO spostare in customapp_wegolf
+@login_required_api
 def get_form_fields(request):
     try:
         
@@ -8078,6 +8176,7 @@ def is_valid_locale(locale_str):
 #TEMP
 #CUSTOM TELEFONO AMICO
 
+@login_required_api
 def save_user_settings_api(request):
     """
     API per salvare la preferenza del tema di un utente.
@@ -8109,6 +8208,7 @@ def save_user_settings_api(request):
         print(f"Errore nel salvataggio delle impostazioni utente: {e}")
         return JsonResponse({"success": False, "error": str(e)}, status=500)
 
+@login_required_api
 @transaction.atomic
 def get_user_profile_api(request):
     try:
@@ -8150,6 +8250,7 @@ def get_user_profile_api(request):
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=500)
 
+@login_required_api
 @transaction.atomic
 def save_user_profile_api(request):
     if request.method != 'POST':
@@ -8226,7 +8327,7 @@ def save_user_profile_api(request):
         traceback.print_exc()
         return JsonResponse({"success": False, "error": str(e)}, status=500)
 
-
+@login_required_api
 def get_user_settings_api(request):
     """
     API per ottenere le impostazioni di un utente specifico.
@@ -8259,6 +8360,7 @@ def get_user_settings_api(request):
         return JsonResponse({"success": False, "error": str(e)}, status=500)
 
 
+@login_required_api
 @transaction.atomic
 def save_newuser(request):
     """
@@ -8410,7 +8512,7 @@ def download_trattativa(request):
     response['Content-Disposition'] = 'attachment; filename="documento_trattativa_generato.docx"'
     return response
 
-
+# TODO custom
 @csrf_exempt
 def trasferta_pdf(request):
     if request.method == "POST":
@@ -8451,6 +8553,7 @@ def loading(request):
 
     return render(request, 'loading.html')
 
+@login_required_api
 def new_dashboard(request):
     data = json.loads(request.body)
     dashboard_name = data.get('dashboard_name')
@@ -8583,6 +8686,8 @@ def new_dashboard(request):
 
     return JsonResponse({'success': True, 'message': 'New dashboard created successfully.'})
 
+
+@login_required_api
 def update_dashboard(request):
     if request.method != "POST":
         return JsonResponse({'error': 'Invalid request method'}, status=405)
@@ -8647,7 +8752,7 @@ def update_dashboard(request):
     })
     
 
-
+@login_required_api
 def delete_dashboard_block(request):
     data = json.loads(request.body)
     blockid = data.get('blockid')
@@ -8660,6 +8765,7 @@ def delete_dashboard_block(request):
 
     return JsonResponse({'success': True, 'message': 'Dashboard block deleted successfully.'})
 
+
 def get_user_theme(request):
     userid = Helper.get_userid(request)
     if userid is None:
@@ -8668,6 +8774,7 @@ def get_user_theme(request):
     theme = HelpderDB.sql_query_row(f"SELECT value FROM sys_user_settings WHERE userid = '{userid}' AND setting = 'theme'")
     return JsonResponse({'success': True, 'theme': theme})
 
+@login_required_api
 def set_user_theme(request):
 
     data = json.loads(request.body)
@@ -8723,7 +8830,7 @@ def stampa_pdf_test(request):
 
 
 
-
+@login_required_api
 def get_custom_functions(request):
     data = json.loads(request.body)
     tableid = data.get('tableid')
@@ -8757,13 +8864,14 @@ def get_custom_functions(request):
     return JsonResponse({'fn': valid_functions}, safe=False)
 
 
+@login_required_api
 def calculate_dependent_fields(request):
     print("FUN:calculate_dependent_fields")
     return call_custom_function("calculate_dependent_fields", request)
 
 
 
-
+# TODO custom pitservice
 def get_filter_options(request):
     response = {
         'availableYears': ["2023", "2024", "2025"],
@@ -8882,7 +8990,7 @@ def save_calendar_event(request):
 
     return JsonResponse(data)
 
-
+# TODO custom
 def print_deal(request):
     data = json.loads(request.body)
     recordid_deal = data.get('recordid')
@@ -8981,6 +9089,7 @@ def print_deal(request):
     return response
 
 
+@login_required_api
 def get_job_status(request):
     try:
         clientid = Helper.get_cliente_id()
@@ -9107,6 +9216,8 @@ def encrypt_data(fernet_instance, plaintext):
 
     return fernet_instance.encrypt(plaintext.encode("utf-8")).decode("utf-8")
 
+
+@login_required_api
 def sync_monitoring(request):
     print("monitoring sync start")
 

@@ -66,6 +66,13 @@ def save_record_fields(tableid,recordid, old_values=""):
         for rel_tableid, rel_recordid in records_to_save:
             save_record_fields(tableid=rel_tableid, recordid=rel_recordid)
 
+      # ---SERVICEANDASSET---
+    if tableid == 'serviceandasset':
+        from customapp_swissbix.services.custom_save.serviceandasset_services import ServiceAndAssetService
+        records_to_save = ServiceAndAssetService.process_serviceandasset(recordid)
+        for rel_tableid, rel_recordid in records_to_save:
+            save_record_fields(tableid=rel_tableid, recordid=rel_recordid)
+            
     # ---ASSET---
     if tableid == 'asset_transactions':
         from customapp_swissbix.services.custom_save.asset_transactions_services import AssetTransactionsService
@@ -86,7 +93,13 @@ def save_record_fields(tableid,recordid, old_values=""):
         dealline_record = UserRecord('dealline', recordid)
         save_record_fields(tableid='deal', recordid=dealline_record.values['recordiddeal_'])
 
-
+    # ---SALESORDERLINE---
+    if tableid == 'salesorderline':
+        from customapp_swissbix.services.custom_save.salesorderline_services import SalesOrderLineService
+        records_to_save = SalesOrderLineService.process_salesorderline(recordid)
+        for rel_tableid, rel_recordid in records_to_save:
+            save_record_fields(tableid=rel_tableid, recordid=rel_recordid)
+            
     # ---PROJECT
     if tableid == 'project':
         from customapp_swissbix.services.custom_save.project_services import ProjectService

@@ -513,19 +513,36 @@ class UserRecord:
 
                     HelpderDB.sql_execute_safe(sql, params_list)
                     
-                    try:
-                        fieldsettings = FieldSettings(tableid=self.tableid, userid=self.userid).get_all_settings()
-                        deadline_updates = {}
-                        for fieldid in self.values.keys():
-                            setting = fieldsettings.get(fieldid, {}).get('is_deadline_field', {}).get('value')
-                            if setting:
-                                deadline_updates[setting] = self.values.get(fieldid)
+                    # =====================================================
+                    # GESTIONE SINCRONIZZAZIONE SCADENZE (Bidirezionale)
+                    # =====================================================
+                    
+                    # CASO 1: Stiamo salvando un record NORMALE -> Aggiorniamo la deadline
+                    if self.tableid != 'deadline':
+                        try:
+                            fieldsettings = FieldSettings(tableid=self.tableid, userid=self.userid).get_all_settings()
+                            deadline_updates = {}
+                            deadline_updates['label_references_list'] = []
+                            for fieldid in self.values.keys():
+                                setting = fieldsettings.get(fieldid, {}).get('is_deadline_field', {}).get('value')
+                                if setting:
+                                    value = self.values.get(fieldid)
+                                    if value is not None: # Ignoriamo i None per non avere "buchi" nella descrizione
+                                        if setting == 'label_reference':
+                                            # Lo aggiungiamo alla lista invece di sovrascrivere la chiave
+                                            deadline_updates['label_references_list'].append(str(value))
+                                        else:
+                                            deadline_updates[setting] = value
 
-                        if deadline_updates:
-                            original_recordid_val = getattr(self, '_original_recordid_for_deadline', self.recordid)
-                            Helper.save_record_deadline(self.tableid, self.recordid, original_recordid_val, self.userid, deadline_updates)
-                    except Exception as e:
-                        print(f"Errore salvataggio scadenze: {e}")
+                            if deadline_updates:
+                                original_recordid_val = getattr(self, '_original_recordid_for_deadline', self.recordid)
+                                Helper.save_record_deadline(self.tableid, self.recordid, original_recordid_val, self.userid, deadline_updates)
+                        except Exception as e:
+                            print(f"Errore salvataggio scadenze (Forward Sync): {e}")
+
+                    # CASO 2: Stiamo salvando un record DEADLINE -> Sincronizziamo all'indietro i dati calcolati
+                    elif self.tableid == 'deadline':
+                        self._sync_back_to_original_table()
 
                 # =====================================================
                 # INSERT
@@ -633,6 +650,56 @@ class UserRecord:
             self.values[fieldid] = normalized
 
         return errors
+
+    def _sync_back_to_original_table(self):
+        """
+        Sincronizza i dati calcolati nella tabella deadline 
+        di nuovo verso la tabella originale, usando query SQL dirette.
+        """
+        try:
+            # Recuperiamo i riferimenti della tabella originale dai valori correnti della deadline
+            original_tableid = self.values.get('tableid')
+            original_recordid = self.values.get('recordidtable')
+
+            if not original_tableid or not original_recordid:
+                return  # Senza riferimenti non possiamo fare il sync inverso
+
+            # Attenzione: qui chiediamo i settings della tabella ORIGINALE, non di 'deadline'
+            from bixsettings.views.businesslogic.models.field_settings import FieldSettings
+            fieldsettings = FieldSettings(tableid=original_tableid, userid=self.userid).get_all_settings()
+
+            # Creiamo una mappa inversa: { 'nome_campo_in_deadline': 'nome_campo_in_originale' }
+            reverse_map = {}
+            for original_fieldid, settings in fieldsettings.items():
+                deadline_field = settings.get('is_deadline_field', {}).get('value')
+                if deadline_field:
+                    reverse_map[deadline_field] = original_fieldid
+
+            # Prepariamo i campi da aggiornare nella tabella originale
+            fields_to_update = []
+            params = []
+
+            for deadline_key, original_field_key in reverse_map.items():
+                # Prendiamo il valore che la deadline ha appena calcolato (es. date_deadline calcolata)
+                calculated_value = self.values.get(deadline_key)
+                
+                # Opzionale: Se vuoi sovrascrivere SOLO se il valore è effettivamente presente
+                if calculated_value is not None:
+                    fields_to_update.append(f"`{original_field_key}`=%s")
+                    params.append(calculated_value)
+
+            # Se abbiamo trovato campi da retro-sincronizzare, lanciamo l'update diretto
+            if fields_to_update:
+                sql_update_original = f"""
+                    UPDATE user_{original_tableid}
+                    SET {', '.join(fields_to_update)}
+                    WHERE recordid_=%s
+                """
+                params.append(original_recordid)
+                HelpderDB.sql_execute_safe(sql_update_original, params)
+
+        except Exception as e:
+            print(f"Errore durante il sync inverso verso la tabella originale: {e}")
 
     def get_linked_tables(self, typepreference='keylabel', step_id=None):
         """
@@ -775,6 +842,74 @@ class UserRecord:
             """
             fields = HelpderDB.sql_query(sql)
 
+
+        # ==============================================================================
+        # 1. PRE-PROCESSING: DEDUZIONE DATI A CASCATA (Record Vecchi + Nuovo da Master)
+        # ==============================================================================
+        
+        original_db_values = dict(self.values)
+
+        # Facciamo una copia dei valori noti per poterci lavorare
+        known_values = dict(self.values)
+
+        # GESTIONE CASO 2: Se è un nuovo record creato da un "master" (es. Timesheet da Progetto)
+        # self.values potrebbe non avere ancora il progetto, ma noi lo conosciamo da master_recordid.
+        if self.recordid == '' and self.master_tableid and self.master_recordid:
+            for f in fields:
+                if f['tablelink'] == self.master_tableid:
+                    fid = f['fieldid']
+                    if fid and fid.startswith("_"): fid = fid[1:] + "_"
+                    known_values[fid] = self.master_recordid
+                    break # Trovato il campo che fa da ponte, usciamo dal ciclo
+
+        # Separiamo i campi linked già compilati da quelli da riempire
+        populated_links = {}
+        empty_links = []
+
+        for f in fields:
+            fid = f['fieldid']
+            if fid and fid.startswith("_"): fid = fid[1:] + "_"
+            
+            val = known_values.get(fid)
+            # Verifica se è un campo collegato
+            is_linked = not Helper.isempty(f.get('keyfieldlink'))
+            
+            if is_linked:
+                if val:
+                    populated_links[fid] = {"val": val, "table": f['tablelink']}
+                else:
+                    empty_links.append(f)
+
+        # MOTORE DI DEDUZIONE: Per ogni link compilato (es. Progetto), andiamo a leggerlo 
+        # nel DB e vediamo se ha qualcosa da "regalare" ai campi vuoti (es. Azienda)
+        if populated_links and empty_links:
+            for source_fid, source_data in populated_links.items():
+                
+                # Query parametrizzata sicura per leggere il padre
+                parent_rec = HelpderDB.sql_query(
+                    f"SELECT * FROM user_{source_data['table']} WHERE recordid_ = %s AND deleted_ = 'N'", 
+                    [source_data['val']]
+                )
+                
+                if parent_rec:
+                    parent_data = parent_rec[0]
+                    
+                    for target_field in empty_links:
+                        t_fid = target_field['fieldid']
+                        if t_fid and t_fid.startswith("_"): t_fid = t_fid[1:] + "_"
+                        
+                        # Se il padre possiede il dato che a noi manca
+                        if parent_data.get(t_fid) and not known_values.get(t_fid):
+                            # Lo aggiungiamo ai valori noti
+                            known_values[t_fid] = parent_data[t_fid]
+                            # CRITICO: Aggiorniamo self.values così il resto del tuo metodo
+                            # (la creazione di insert_fields) lo vedrà come se fosse un valore esistente!
+                            self.values[t_fid] = parent_data[t_fid]
+
+        # ==============================================================================
+        # 2. GENERAZIONE COMPONENTI UI (il tuo codice originale)
+        # ==============================================================================
+
         insert_fields = []
 
         for field in fields:
@@ -785,6 +920,9 @@ class UserRecord:
                 fieldid = fieldid[1:] + "_"
 
             value = self.values.get(fieldid, '')
+            original_value = original_db_values.get(fieldid, '')
+
+            is_deduced = bool(value and value != original_value)
 
             insert_field['tableid']="1"
             insert_field['fieldid']=fieldid
@@ -796,6 +934,7 @@ class UserRecord:
             insert_field["lookuptableid"]= field['lookuptableid']
             insert_field["tablelink"]= field['tablelink']
             insert_field['linked_mastertable']=field['tablelink']
+            insert_field['is_deduced'] = is_deduced
 
             # Settings specifici del campo
             current_field_settings = all_field_settings.get(fieldid, {})
@@ -920,6 +1059,7 @@ class UserRecord:
 
             if self.recordid=='' and value=='':
                 insert_field['value']={"code": defaultcode, "value": defaultvalue}
+                # insert_field['is_deduced'] = True
 
             insert_fields.append(insert_field)
 

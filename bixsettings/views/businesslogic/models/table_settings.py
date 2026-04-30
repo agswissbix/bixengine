@@ -27,7 +27,6 @@ from django.db.models import OuterRef, Subquery, Q
 from ..logic_helper import *
 from .database_helper import *
 
-
 bixdata_server = os.environ.get('BIXDATA_SERVER')
 
 
@@ -125,6 +124,11 @@ class TableSettings:
             'type': 'select',
             'options': ['true', 'false'],
             'value': 'false'
+        },
+        'badges': {
+            'type': 'multiselect',
+            'options': [],
+            'value': ''
         },
         'card_tabs': {
             'type': 'multiselect',
@@ -379,7 +383,7 @@ class TableSettings:
         'default_orderby': {
             'type': 'select',
             'options': [],
-            'value': 'recordid'
+            'value': 'recordid_'
         },
         'default_save': {
             'type': 'select',
@@ -585,6 +589,7 @@ class TableSettings:
             self._populate_field_options(settings_copy)
             self._populate_workspace_options(settings_copy)
             self._populate_linked_table_options(settings_copy)
+            self._populate_badges_options(settings_copy)
 
         # Initialize base source and original_default
         for key, value in settings_copy.items():
@@ -630,6 +635,23 @@ class TableSettings:
         if workspace_options and settings_copy['workspace']['value'] == '':
             settings_copy['workspace']['value'] = workspace_options[0]['name']
 
+    def _populate_badges_options(self, settings_copy):
+        """Popola le opzioni dei badges nei settings."""
+        try:
+            import importlib
+            from commonapp.helper import Helper as CommonHelper
+            activeserver = CommonHelper.get_cliente_id()
+            if activeserver:
+                module_name = f"customapp_{activeserver}.services.badges.map_badges"
+                badges_module = importlib.import_module(module_name)
+                badges_map = badges_module.get_badges_map()
+                table_badges = badges_map.get(self.tableid, [])
+                
+                options = [{'name': badge, 'selected': False} for badge in table_badges]
+                settings_copy['badges']['options'] = options
+        except Exception as e:
+            print(f"Error loading badges map for {self.tableid}: {e}")
+            settings_copy['badges']['options'] = []
 
     def _populate_field_options(self, settings_copy):
         """Popola le opzioni dei campi planner e orderby nei settings."""
@@ -851,6 +873,9 @@ class TableSettings:
             
         if "duplicate_with_linked" in base_settings:
             self._populate_linked_table_options(base_settings)
+            
+        if "badges" in base_settings:
+            self._populate_badges_options(base_settings)
 
         # Merge usando il nuovo metodo globale
         merged_settings = self._get_merged_settings(settingids)

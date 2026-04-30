@@ -36,9 +36,11 @@ bixdata_server = os.environ.get('BIXDATA_SERVER')
 
 class UserTable:
     
-    def __init__(self,tableid,userid=1, typepreference="search_results_fields"):
+    def __init__(self,tableid,userid=1, typepreference="search_results_fields", master_tableid=None, master_recordid=None):
         self.tableid=tableid
         self.userid=userid
+        self.master_tableid = master_tableid
+        self.master_recordid = master_recordid
         self.context=''
         self._fields_definitions = None
         self._results_columns = None # Cache per le colonne dei risultati
@@ -609,7 +611,12 @@ class UserTable:
         if not limit:
             limit = 100
             
-        orderby_safe = f"user_{self.tableid}.{orderby}" # Previeni SQL Injection su orderby
+        orderby_safe = f"user_{self.tableid}.{orderby}"
+
+        if orderby.startswith("recordid_"):
+            orderby_safe = f"{orderby_safe}" 
+        else:
+            orderby_safe = f"{orderby_safe}, user_{self.tableid}.recordid_ DESC"
         
         # TODO custom telefonodo amico gestire limit
         sql = (
@@ -699,7 +706,9 @@ class UserTable:
         return self._fields_definitions
     
     def get_results_columns(self):
-        sql=f"""
+        master_table_clause = "AND sys_user_field_order.master_tableid = %(master_tableid)s" if self.master_tableid is not None else "AND sys_user_field_order.master_tableid IS NULL"
+        
+        sql = f"""
             SELECT *
             FROM sys_user_field_order
             LEFT JOIN sys_field ON sys_user_field_order.tableid=sys_field.tableid AND sys_user_field_order.fieldid=sys_field.id
@@ -707,11 +716,18 @@ class UserTable:
             AND sys_user_field_order.tableid = %(tableid)s
             AND sys_user_field_order.userid = %(userid)s
             AND sys_user_field_order.fieldorder IS NOT NULL
+            {master_table_clause}
             ORDER BY sys_user_field_order.fieldorder
             """
             
         # 1. Tentativo con l'utente corrente
-        columns = HelpderDB.sql_query(sql, params={'typepreference': self.typepreference, 'tableid': self.tableid, 'userid': self.userid})
+        params = {
+            'typepreference': self.typepreference, 
+            'tableid': self.tableid, 
+            'userid': self.userid, 
+            'master_tableid': self.master_tableid
+        }
+        columns = HelpderDB.sql_query(sql, params=params)
         
         # 2. Tentativo con i gruppi (ordinati per priorità globale)
         if not columns:
@@ -726,13 +742,24 @@ class UserTable:
             if groups:
                 for group in groups:
                     if group.get('idmanager'):
-                        columns = HelpderDB.sql_query(sql, params={'typepreference': self.typepreference, 'tableid': self.tableid, 'userid': group['idmanager']})
+                        # Aggiorniamo il parametro userid mantenendo gli altri invariati
+                        params['userid'] = group['idmanager']
+                        columns = HelpderDB.sql_query(sql, params=params)
                         if columns:
                             break
                             
         # 3. Fallback al superuser (userid = 1)
         if not columns:
-            columns = HelpderDB.sql_query(sql, params={'typepreference': self.typepreference, 'tableid': self.tableid, 'userid': 1})
+            params['userid'] = 1
+            columns = HelpderDB.sql_query(sql, params=params)
+        
+        if not columns and self.typepreference=='linked_columns':
+            self.typepreference = "search_results_fields"
+            old_master_tableid = self.master_tableid
+            self.master_tableid = None
+            columns = self.get_results_columns()
+            self.typepreference = 'linked_columns'
+            self.master_tableid = old_master_tableid
             
         return columns
     
