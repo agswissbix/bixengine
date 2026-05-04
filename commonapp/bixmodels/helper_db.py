@@ -8,7 +8,6 @@ from django.core.mail import EmailMultiAlternatives, BadHeaderError
 from django.core.files.storage import default_storage
 from django.conf import settings
 
-
 class HelpderDB:
     """
     Utility sicure per interagire con il database e gestire file/upload/email.
@@ -143,14 +142,18 @@ class HelpderDB:
     def get_upload_fullpath(cls, tableid, recordid, field):
         """Restituisce il percorso assoluto di un file caricato (PDF)."""
         cls.validate_path_components(tableid, recordid, field)
-        file_path = os.path.join(settings.UPLOADS_ROOT, f"{tableid}/{recordid}/{field}.pdf")
+        from commonapp.helper import Helper
+        activeserver = Helper.get_cliente_id()
+        file_path = os.path.join(settings.UPLOADS_ROOT, f"{activeserver}/{tableid}/{recordid}/{field}.pdf")
         return default_storage.path(file_path)
 
     @classmethod
     def get_uploadedfile_fullpath(cls, tableid, recordid, field):
         """Restituisce il percorso assoluto del file caricato se esiste, altrimenti None."""
         cls.validate_path_components(tableid, recordid, field)
-        file_path = os.path.join(settings.UPLOADS_ROOT, f"{tableid}/{recordid}/{field}.pdf")
+        from commonapp.helper import Helper
+        activeserver = Helper.get_cliente_id()
+        file_path = os.path.join(settings.UPLOADS_ROOT, f"{activeserver}/{tableid}/{recordid}/{field}.pdf")
 
         if default_storage.exists(file_path):
             full_path = default_storage.path(file_path)

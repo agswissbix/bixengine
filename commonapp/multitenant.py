@@ -34,6 +34,7 @@ class HeaderTenantMapper(TenantMapper):
         # 3. Validazione
         if tenant_name:
             self._assert_allowed_tenant(tenant_name)
+            request.tenant_name = tenant_name  # Salva il tenant nella request per usi futuri
             return tenant_name
 
         # 4. Fallback al default

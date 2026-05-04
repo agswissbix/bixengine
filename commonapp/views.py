@@ -4,7 +4,7 @@ import hashlib
 import hmac
 import uuid
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
-from django.http import JsonResponse
+from django.http import FileResponse, Http404, JsonResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 from django.shortcuts import redirect
@@ -3461,6 +3461,8 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None, userid=1)
 
     record.save()
 
+    activeserver = Helper.get_cliente_id()
+
     # Il salvataggio delle scadenze (save_record_deadline) ora avviene direttamente in UserRecord.save()
     # 2️⃣ Salva i file (se presenti)
     if files:
@@ -3472,7 +3474,7 @@ def _save_record_data(tableid, recordid=None, fields=None, files=None, userid=1)
 
             _, ext = os.path.splitext(uploaded_file.name)
             record_path = f"{tableid}/{record.recordid}/{clean_key}{ext}"
-            file_path = os.path.join(tableid, record.recordid, f"{clean_key}{ext}")
+            file_path = os.path.join(activeserver,tableid, record.recordid, f"{clean_key}{ext}")
 
             if tableid =='attachment':
                 original_filename = uploaded_file.name
@@ -4168,6 +4170,34 @@ def custom_save_record_fields(tableid, recordid, params):
     #     recordid, 
     #     old_values_dict
     # )
+
+@login_required_api
+def serve_tenant_media(request, filepath):
+    # 1. Recupera il tenant dal middleware
+    tenant = getattr(request, 'tenant_name', None)
+    
+    if not tenant:
+        raise Http404("Tenant non specificato.")
+
+    # 2. Costruisci il percorso REALE aggiungendo la cartella del tenant
+    # Es: MEDIA_ROOT + 'devriccardo' + 'userProfilePic/default.jpg'
+    full_path = os.path.join(settings.MEDIA_ROOT, tenant, filepath)
+
+    # 3. Controllo di sicurezza: evita il "Directory Traversal" (es. filepath="../../etc/passwd")
+    real_path = os.path.realpath(full_path)
+    if not real_path.startswith(os.path.realpath(settings.MEDIA_ROOT)):
+        raise Http404("Accesso negato.")
+
+    # 4. Verifica che il file esista
+    if not os.path.exists(real_path):
+        # Fallback opzionale: se non lo trovi nel tenant, cercalo nella cartella "public/default"
+        # fallback_path = os.path.join(settings.MEDIA_ROOT, 'userProfilePic', 'default.jpg')
+        # if os.path.exists(fallback_path):
+        #     return FileResponse(open(fallback_path, 'rb'))
+        raise Http404("Immagine non trovata.")
+
+    # 5. Restituisci il file
+    return FileResponse(open(real_path, 'rb'))
 
 def get_table_views(request):
     data = json.loads(request.body)

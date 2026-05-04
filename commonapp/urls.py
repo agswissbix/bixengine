@@ -146,9 +146,11 @@ urlpatterns = [
     
 
     path('sync_monitoring/', sync_monitoring, name='sync_monitoring'),
+    # urls.py
+    path('uploads/<path:filepath>', serve_tenant_media, name='tenant_media'),
     
 ]
 
 
-urlpatterns += static(settings.UPLOADS_URL, document_root=settings.UPLOADS_ROOT)
+# urlpatterns += static(settings.UPLOADS_URL, document_root=settings.UPLOADS_ROOT)
 urlpatterns += static(settings.TEMPFILE_URL, document_root=settings.TEMPFILE_ROOT)
