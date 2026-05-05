@@ -4744,10 +4744,28 @@ def get_input_linked(request):
     fieldid = data.get('fieldid')
     form_values = data.get('formValues')
 
-    keyfieldlink = HelpderDB.sql_query_value(
-        f"SELECT keyfieldlink FROM sys_field WHERE tableid='{tableid}' AND fieldid='{fieldid}'",
-        'keyfieldlink'
-    )
+    # --- MODIFICA 1: Recupero dinamico del keyfieldlink per il campo polimorfico ---
+    clean_fieldid = fieldid.strip('_') if fieldid else ''
+    if clean_fieldid == 'recordidtable' and linkedmaster_tableid:
+        try:
+            from django.core.exceptions import ObjectDoesNotExist
+            # Recuperiamo la configurazione della tabella target passata dal frontend
+            table_obj = SysTable.objects.get(id=linkedmaster_tableid)
+            keyfieldlink = getattr(table_obj, 'singular_name', 'descrizione')
+        except Exception as e:
+            # Fallback di sicurezza in caso di errore o campo mancante
+            print(f"Error fetching SysTable for polymorphic relation: {e}")
+            keyfieldlink = 'descrizione' 
+    else:
+        # Logica standard
+        keyfieldlink = HelpderDB.sql_query_value(
+            f"SELECT keyfieldlink FROM sys_field WHERE tableid='{tableid}' AND fieldid='{fieldid}'",
+            'keyfieldlink'
+        )
+
+    # Preveniamo crash se keyfieldlink dovesse risultare vuoto in DB
+    if not keyfieldlink:
+        keyfieldlink = 'description'
 
     additional_conditions = ''
     active_filters = []
@@ -4800,6 +4818,16 @@ def get_input_linked(request):
 
                 elif key.startswith('recordid') and key.endswith('_'):
                     other_table = key[8:-1]
+
+                    # --- MODIFICA 2: Intercettiamo se la chiave di contesto è polimorfica ---
+                    if other_table == 'tabl':
+                        # Se other_table è 'table' (derivato da recordidtable_), leggiamo la vera
+                        # tabella di destinazione dai form_values
+                        other_table = form_values.get('tableid_') or form_values.get('tableid')
+                        # Se per qualche motivo non abbiamo il tableid nel form, saltiamo questo filtro
+                        if not other_table:
+                            continue
+
                     reverse_field = f"recordid{linkedmaster_tableid}_"
                     field_exists = HelpderDB.sql_query(
                         f"SELECT fieldid FROM sys_field WHERE tableid='{other_table}' AND fieldid='{reverse_field}'"

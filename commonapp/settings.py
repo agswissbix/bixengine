@@ -1103,11 +1103,22 @@ def settings_table_linkedtables(request):
     tableid = data.get('tableid')
     userid = data.get('userid')
 
+    # 1. Recupera i link espliciti standard da SysTableLink
+    standard_links = list(SysTableLink.objects.filter(tableid=tableid).values_list('tablelinkid', flat=True))
+
+    # 2. Recupera i link polimorfici (tabelle che contengono recordidtable)
+    # Assumiti che HelpderDB sia importato nel tuo file
+    poly_rows = HelpderDB.sql_query("SELECT tableid FROM sys_field WHERE fieldid IN ('recordidtable', 'recordidtable_')")
+    poly_links = [row['tableid'] for row in poly_rows]
+
+    # Combiniamo gli ID in un set unico (convertiti in stringa per sicurezza)
+    all_linked_ids = set([str(link) for link in standard_links] + poly_links)
+
     def _user_order_subqueries(userid):
         """Restituisce subquery per order e id di SysUserOrder per un dato utente."""
         base_filter = {
-            'tableid': OuterRef('tableid'),
-            'fieldid': OuterRef('tablelinkid'),
+            'tableid': tableid,
+            'fieldid': OuterRef('id'), # OuterRef ora punta all'ID di SysTable
             'typepreference': 'keylabel',
             'userid': userid
         }
@@ -1121,11 +1132,10 @@ def settings_table_linkedtables(request):
     # Subquery fallback
     fb_order_subquery, fb_id_subquery = _user_order_subqueries(1)
 
-    # Query principale
-    linked_qs = (
-        SysTableLink.objects
-        .filter(tableid=tableid)
-        .select_related('tablelinkid')
+    # Query principale: Partiamo da SysTable e uniamo tutti gli ID trovati
+    tables_qs = (
+        SysTable.objects
+        .filter(id__in=all_linked_ids)
         .annotate(
             user_order=Subquery(user_order_subquery, output_field=IntegerField()),
             user_order_id=Subquery(user_id_subquery),
@@ -1143,14 +1153,15 @@ def settings_table_linkedtables(request):
         .order_by('fieldorder')
     )
 
-    # Costruiamo la lista per React nel formato richiesto
+    # Costruiamo la lista per React
     linked_tables = [
         {
-            "tablelinkid": link.tablelinkid.id if hasattr(link.tablelinkid, 'id') else link.tablelinkid,
-            "description": getattr(link.tablelinkid, 'description', ''),
-            "fieldorder": link.fieldorder,
+            "tablelinkid": str(t.id),
+            "description": getattr(t, 'description', str(t.id)),
+            "fieldorder": t.fieldorder,
+            "is_polymorphic": str(t.id) in poly_links # Aggiungiamo il flag per il frontend
         }
-        for link in linked_qs
+        for t in tables_qs
     ]
 
     return JsonResponse({
