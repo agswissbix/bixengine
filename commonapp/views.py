@@ -4751,11 +4751,11 @@ def get_input_linked(request):
             from django.core.exceptions import ObjectDoesNotExist
             # Recuperiamo la configurazione della tabella target passata dal frontend
             table_obj = SysTable.objects.get(id=linkedmaster_tableid)
-            keyfieldlink = getattr(table_obj, 'singular_name', 'descrizione')
+            keyfieldlink = getattr(table_obj, 'singular_name', 'description')
         except Exception as e:
             # Fallback di sicurezza in caso di errore o campo mancante
             print(f"Error fetching SysTable for polymorphic relation: {e}")
-            keyfieldlink = 'descrizione' 
+            keyfieldlink = 'description' 
     else:
         # Logica standard
         keyfieldlink = HelpderDB.sql_query_value(
@@ -4765,7 +4765,10 @@ def get_input_linked(request):
 
     # Preveniamo crash se keyfieldlink dovesse risultare vuoto in DB
     if not keyfieldlink:
-        keyfieldlink = 'description'
+        if HelpderDB.column_exists(tableid, 'description'):
+            keyfieldlink = 'description'
+        else:
+            keyfieldlink = 'recordid_'
 
     additional_conditions = ''
     active_filters = []
@@ -4901,6 +4904,9 @@ def autocomplete_linked_fields(request):
 
     # Se non è un campo linked o è stato svuotato, non facciamo nulla
     if not changed_fieldid or not changed_fieldid.startswith('recordid') or not current_value:
+        return JsonResponse({'status': 'success', 'updated_fields': {}})
+
+    if changed_fieldid.strip('_') == 'recordidtable':
         return JsonResponse({'status': 'success', 'updated_fields': {}})
 
     try:

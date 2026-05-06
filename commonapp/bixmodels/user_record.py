@@ -194,8 +194,12 @@ class UserRecord:
                 # altrimenti usiamo un valore di fallback come 'descrizione' (modifica a seconda del tuo standard)
                 table_name = SysTable.objects.get(id=target_table)
                 keyfield = table_name.singular_name or 'description'
-                sql = f"SELECT {keyfield} FROM user_{target_table} WHERE recordid_='{raw_value}'"
-                return HelpderDB.sql_query_value(sql, keyfield) or raw_value
+
+                if HelpderDB.column_exists(f"user_{target_table}", keyfield):
+                    sql = f"SELECT {keyfield} FROM user_{target_table} WHERE recordid_='{raw_value}'"
+                    return HelpderDB.sql_query_value(sql, keyfield) or raw_value
+                else:
+                    return raw_value
 
             # CASO: Data
             elif field_type == 'Data' and raw_value:
@@ -1043,36 +1047,42 @@ class UserRecord:
                 target_table = self.values.get('tableid') or self.values.get('tableid_')
                 
                 if target_table:
-                    from django.core.exceptions import ObjectDoesNotExist
+                    from django.core.exceptions import ObjectDoesNotExist 
+                    
                     try:
-                        # Recuperiamo le informazioni della tabella
                         table_name = SysTable.objects.get(id=target_table)
-                        keyfield = table_name.singular_name
+                        keyfield = table_name.singular_name or 'description'
                         
-                        # 1. Sovrascriviamo la label con la description della tabella
                         insert_field['description'] = getattr(table_name, 'description', table_name.id)
-                        
-                        # Passiamo al frontend i dati corretti per la ricerca
                         insert_field['tablelink'] = target_table
                         insert_field['linked_mastertable'] = target_table
                         
+                        # --- SOLUZIONE AL TUO DUBBIO ---
+                        # Implementa una funzione nel tuo HelpderDB che interroga l'information_schema
+                        # per verificare l'esistenza della colonna. Se non esiste, cadi in modo sicuro.
+                        if not HelpderDB.column_exists(f"user_{target_table}", keyfield):
+                            keyfield = "recordid_" # Fallback estremo: usi l'ID come etichetta se manca il campo
+                            
+                        # Costruiamo la query di base (Nota: le colonne/tabelle vanno nella f-string, 
+                        # i valori andranno parametrizzati al momento dell'esecuzione)
+                        base_sql = f"SELECT recordid_, {keyfield} FROM user_{target_table} WHERE recordid_ = %s"
+                        
                         # 2. Gestione dei default dalla master table
                         if target_table == self.master_tableid and self.master_recordid:
-                            sql = f"SELECT recordid_, {keyfield} FROM user_{target_table} WHERE recordid_='{self.master_recordid}' "
-                            linked_recordid = HelpderDB.sql_query_value(sql, 'recordid_')
-                            linked_key = HelpderDB.sql_query_value(sql, keyfield)
-                            defaultcode = linked_recordid
-                            defaultvalue = linked_key
-                            
-                        # 3. Presa del convertedvalue (se c'è già un valore salvato)
+                            # Presumo tu possa creare un metodo sql_query_row che restituisca
+                            # l'intera riga (dict o tupla) in una sola chiamata al DB, passando il parametro sicuro
+                            row = HelpderDB.sql_query_row(base_sql, [self.master_recordid])
+                            if row:
+                                defaultcode = row['recordid_']
+                                defaultvalue = row[keyfield]
+                                
+                        # 3. Presa del convertedvalue
                         if value != "":
-                            sql = f"SELECT recordid_, {keyfield} FROM user_{target_table} WHERE recordid_='{value}' "
-                            linked_recordid = HelpderDB.sql_query_value(sql, 'recordid_')
-                            linked_key = HelpderDB.sql_query_value(sql, keyfield)
-                            insert_field['value'] = {"code": linked_recordid, "value": linked_key}
-                            
+                            row = HelpderDB.sql_query_row(base_sql, [value])
+                            if row:
+                                insert_field['value'] = {"code": row['recordid_'], "value": row[keyfield]}
+                                
                     except ObjectDoesNotExist:
-                        # Fallback silenzioso se la SysTable non viene trovata
                         pass
 
             if field['fieldtypewebid'] == 'Data':

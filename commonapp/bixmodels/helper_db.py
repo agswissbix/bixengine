@@ -7,6 +7,7 @@ from django.db import connection, connections, DatabaseError
 from django.core.mail import EmailMultiAlternatives, BadHeaderError
 from django.core.files.storage import default_storage
 from django.conf import settings
+from django.core.cache import cache
 
 
 class HelpderDB:
@@ -73,6 +74,36 @@ class HelpderDB:
         """Converte un cursore Django in lista di dizionari."""
         columns = [col[0] for col in cursor.description]
         return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+
+    @staticmethod
+    def column_exists(table_name: str, column_name: str) -> bool:
+        """
+        Verifica l'esistenza di una colonna, utilizzando la cache 
+        per non sovraccaricare il database.
+        """
+        # Creiamo una chiave univoca per questa combinazione tabella/colonna
+        cache_key = f"schema_check_{table_name}_{column_name}"
+        
+        # 1. Controlliamo se abbiamo già la risposta in cache
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            return cached_result
+
+        # 2. Se non è in cache, interroghiamo il database
+        query = """
+            SELECT 1 
+            FROM information_schema.columns 
+            WHERE table_name = %s AND column_name = %s
+        """
+        with connection.cursor() as cursor:
+            cursor.execute(query, [table_name, column_name])
+            exists = cursor.fetchone() is not None
+            
+        # 3. Salviamo il risultato in cache (es. per 24 ore = 86400 secondi)
+        cache.set(cache_key, exists, 86400)
+        
+        return exists
 
     # ==========================
     #  EMAIL METHODS
