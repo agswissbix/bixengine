@@ -1836,5 +1836,55 @@ def save_user_dashboard_setting(request):
             userid=user,
             dashboardid=dashboard
         ).delete()
-
     return JsonResponse({"success": True})
+
+@superuser_required
+def get_permissions_matrix(request):
+    try:
+        relevant_settings = ['edit', 'add', 'delete', 'view', 'duplicate']
+        
+        custom_user_ids = list(SysUserTableSettings.objects.filter(
+            settingid__in=relevant_settings
+        ).exclude(userid_id=1).values_list('userid_id', flat=True).distinct())
+        
+        custom_table_ids = list(SysUserTableSettings.objects.filter(
+            settingid__in=relevant_settings
+        ).exclude(userid_id=1).values_list('tableid_id', flat=True).distinct())
+        
+        if not custom_user_ids or not custom_table_ids:
+            return JsonResponse({"success": True, "users": [], "tables": [], "settings": []})
+        
+        user_ids_to_fetch = [1] + [uid for uid in custom_user_ids if uid != 1]
+        
+        users_qs = list(SysUser.objects.filter(id__in=user_ids_to_fetch).values('id', 'username', 'firstname', 'lastname'))
+        
+        users_map = {u['id']: u for u in users_qs}
+        users = [users_map[uid] for uid in user_ids_to_fetch if uid in users_map]
+
+        groups = list(SysGroup.objects.filter(idmanager__in=user_ids_to_fetch).values('id', 'name', 'idmanager'))
+        
+        for u in users:
+            u['is_group_manager'] = False
+            u['group_names'] = []
+            for g in groups:
+                if g['idmanager'] == u['id']:
+                    u['is_group_manager'] = True
+                    u['group_names'].append(g['name'])
+
+        tables = list(SysTable.objects.filter(id__in=custom_table_ids).values('id', 'description'))
+
+        all_custom_settings = list(SysUserTableSettings.objects.filter(
+            settingid__in=relevant_settings,
+            tableid_id__in=custom_table_ids,
+            userid_id__in=custom_user_ids + [1]
+        ).values('id', 'userid_id', 'tableid_id', 'settingid', 'value', 'conditions'))
+        
+        return JsonResponse({
+            "success": True,
+            "users": users,
+            "tables": tables,
+            "settings": all_custom_settings
+        })
+
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
