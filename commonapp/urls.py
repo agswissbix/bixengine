@@ -137,7 +137,7 @@ urlpatterns = [
     path('settings_table_fields_order_reset/', settings_table_fields_order_reset, name='settings_table_fields_order_reset'),
     path('settings_table_usertables_order_reset/', settings_table_usertables_order_reset, name='settings_table_usertables_order_reset'),
     path('settings_user_customizations_summary/', settings_user_customizations_summary, name='settings_user_customizations_summary'),
-    
+    path('get_permissions_matrix/', get_permissions_matrix, name='get_permissions_matrix'),
     
     # ------------------  WeGolf views ---------------------------------
     path('get_job_status/', get_job_status, name='get_job_status'),

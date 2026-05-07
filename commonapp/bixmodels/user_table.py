@@ -405,7 +405,24 @@ class UserTable:
 
         # Aggiunge le condizioni master-record se presenti
         if master_tableid and master_recordid:
-            conditions_list.append(f"recordid{master_tableid}_='{master_recordid}'")
+            current_tableid = self.tableid 
+            
+            # 2. Controlliamo in sys_field se questa tabella usa il nuovo sistema polimorfico
+            sql_check_poly = f"SELECT fieldid FROM sys_field WHERE tableid='{current_tableid}' AND fieldid IN ('recordidtable', 'recordidtable')"
+            is_polymorphic = HelpderDB.sql_query(sql_check_poly)
+
+            if is_polymorphic:
+                # --- NUOVO SISTEMA (Polimorfico) ---
+                # Cerchiamo i record dove la tabella di origine è il master_tableid 
+                # e l'ID puntato è il master_recordid.
+                conditions_list.append(
+                    f"(tableid='{master_tableid}') AND "
+                    f"(recordidtable='{master_recordid}')"
+                )
+            else:
+                # --- VECCHIO SISTEMA (Legacy/Diretto) ---
+                # Si basa sul fatto che il campo puntato sia noto (es. recordidcompany_)
+                conditions_list.append(f"recordid{master_tableid}_='{master_recordid}'")
 
         field_definitions = self._get_fields_definitions()
         columns_for_search = self.get_results_columns() 

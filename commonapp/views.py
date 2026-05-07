@@ -4115,7 +4115,7 @@ def save_record_fields(request):
                 viewid_id=view_id if view_obj else (default_view.id if default_view else None),
                 chartid=chart_obj,
                 dashboardid_id=dashboard_id if dashboard_obj else None,
-                category="benchmark" if grouping == "recordidgolfclub_" else None,
+                category=dashboard_obj.category if dashboard_obj else None,
             )
 
         # Update existing blocks
@@ -4125,7 +4125,7 @@ def save_record_fields(request):
             final_name = f"{title} {(view_obj.name if view_obj else '')} {(dashboard_obj.name if dashboard_obj else '')}".strip()
             SysDashboardBlock.objects.filter(
                 chartid=chart_obj, dashboardid_id=dashboard_id, viewid_id=view_id
-            ).update(name=final_name)
+            ).update(name=final_name, category=dashboard_obj.category if dashboard_obj else None)
 
     custom_save_record_fields(tableid, recordid, old_record)
     return JsonResponse({"success": True, "detail": "Campi del record salvati con successo", "recordid": record.recordid})
@@ -4745,10 +4745,31 @@ def get_input_linked(request):
     fieldid = data.get('fieldid')
     form_values = data.get('formValues')
 
-    keyfieldlink = HelpderDB.sql_query_value(
-        f"SELECT keyfieldlink FROM sys_field WHERE tableid='{tableid}' AND fieldid='{fieldid}'",
-        'keyfieldlink'
-    )
+    # --- MODIFICA 1: Recupero dinamico del keyfieldlink per il campo polimorfico ---
+    clean_fieldid = fieldid.strip('_') if fieldid else ''
+    if clean_fieldid == 'recordidtable' and linkedmaster_tableid:
+        try:
+            from django.core.exceptions import ObjectDoesNotExist
+            # Recuperiamo la configurazione della tabella target passata dal frontend
+            table_obj = SysTable.objects.get(id=linkedmaster_tableid)
+            keyfieldlink = getattr(table_obj, 'singular_name', 'description')
+        except Exception as e:
+            # Fallback di sicurezza in caso di errore o campo mancante
+            print(f"Error fetching SysTable for polymorphic relation: {e}")
+            keyfieldlink = 'description' 
+    else:
+        # Logica standard
+        keyfieldlink = HelpderDB.sql_query_value(
+            f"SELECT keyfieldlink FROM sys_field WHERE tableid='{tableid}' AND fieldid='{fieldid}'",
+            'keyfieldlink'
+        )
+
+    # Preveniamo crash se keyfieldlink dovesse risultare vuoto in DB
+    if not keyfieldlink:
+        if HelpderDB.column_exists(tableid, 'description'):
+            keyfieldlink = 'description'
+        else:
+            keyfieldlink = 'recordid_'
 
     additional_conditions = ''
     active_filters = []
@@ -4801,6 +4822,16 @@ def get_input_linked(request):
 
                 elif key.startswith('recordid') and key.endswith('_'):
                     other_table = key[8:-1]
+
+                    # --- MODIFICA 2: Intercettiamo se la chiave di contesto è polimorfica ---
+                    if other_table == 'tabl':
+                        # Se other_table è 'table' (derivato da recordidtable_), leggiamo la vera
+                        # tabella di destinazione dai form_values
+                        other_table = form_values.get('tableid_') or form_values.get('tableid')
+                        # Se per qualche motivo non abbiamo il tableid nel form, saltiamo questo filtro
+                        if not other_table:
+                            continue
+
                     reverse_field = f"recordid{linkedmaster_tableid}_"
                     field_exists = HelpderDB.sql_query(
                         f"SELECT fieldid FROM sys_field WHERE tableid='{other_table}' AND fieldid='{reverse_field}'"
@@ -4874,6 +4905,9 @@ def autocomplete_linked_fields(request):
 
     # Se non è un campo linked o è stato svuotato, non facciamo nulla
     if not changed_fieldid or not changed_fieldid.startswith('recordid') or not current_value:
+        return JsonResponse({'status': 'success', 'updated_fields': {}})
+
+    if changed_fieldid.strip('_') == 'recordidtable':
         return JsonResponse({'status': 'success', 'updated_fields': {}})
 
     try:
@@ -5155,7 +5189,7 @@ def export_excel(request):
             order_fieldid= order.get("fieldid", "recordid_")
             order_direction= order.get("direction", "desc")
         
-            table = UserTable(tableid,Helper.get_userid(request))
+            table = UserTable(tableid,Helper.get_userid(request), typepreference='report_fields')
             if viewid == '':
                 viewid=table.get_default_viewid()
 
@@ -6410,6 +6444,31 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
                 if max_anno:
                     selected_years = [str(max_anno)]
                     chart_name = f"{chart_name} {max_anno}"
+                    
+                if user_club:
+                    is_currency_chart = False
+                    try:
+                        fields_to_check = []
+                        for ds in chart_config.get('datasets', []) + chart_config.get('datasets2', []):
+                            if isinstance(ds, dict):
+                                fields_to_check.extend([ds.get('alias'), ds.get('field')])
+                        for pf in chart_config.get('pivot_fields', []):
+                            if isinstance(pf, dict):
+                                fields_to_check.extend([pf.get('alias'), pf.get('field')])
+                        gb = chart_config.get('group_by_field')
+                        if isinstance(gb, dict):
+                            fields_to_check.extend([gb.get('alias'), gb.get('field')])
+                        
+                        fields_to_check = list(set([f for f in fields_to_check if f]))
+                        if fields_to_check and SysField.objects.filter(fieldid__in=fields_to_check, explanation__icontains='number_currency').exists():
+                            is_currency_chart = True
+                    except Exception as e:
+                        print(f"Error checking currency type: {e}")
+
+                    if is_currency_chart:
+                        valuta = HelpderDB.sql_query_value(f"SELECT valuta FROM user_golfclub WHERE recordid_='{user_club}'", 'valuta')
+                        if valuta:
+                            chart_name = f"{chart_name} ({valuta.upper()})"
             except Exception as e:
                 print(f"Error finding max year: {e}")
 

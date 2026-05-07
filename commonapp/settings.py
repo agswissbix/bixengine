@@ -1103,11 +1103,22 @@ def settings_table_linkedtables(request):
     tableid = data.get('tableid')
     userid = data.get('userid')
 
+    # 1. Recupera i link espliciti standard da SysTableLink
+    standard_links = list(SysTableLink.objects.filter(tableid=tableid).values_list('tablelinkid', flat=True))
+
+    # 2. Recupera i link polimorfici (tabelle che contengono recordidtable)
+    # Assumiti che HelpderDB sia importato nel tuo file
+    poly_rows = HelpderDB.sql_query("SELECT tableid FROM sys_field WHERE fieldid IN ('recordidtable', 'recordidtable_')")
+    poly_links = [row['tableid'] for row in poly_rows]
+
+    # Combiniamo gli ID in un set unico (convertiti in stringa per sicurezza)
+    all_linked_ids = set([str(link) for link in standard_links] + poly_links)
+
     def _user_order_subqueries(userid):
         """Restituisce subquery per order e id di SysUserOrder per un dato utente."""
         base_filter = {
-            'tableid': OuterRef('tableid'),
-            'fieldid': OuterRef('tablelinkid'),
+            'tableid': tableid,
+            'fieldid': OuterRef('id'), # OuterRef ora punta all'ID di SysTable
             'typepreference': 'keylabel',
             'userid': userid
         }
@@ -1121,11 +1132,10 @@ def settings_table_linkedtables(request):
     # Subquery fallback
     fb_order_subquery, fb_id_subquery = _user_order_subqueries(1)
 
-    # Query principale
-    linked_qs = (
-        SysTableLink.objects
-        .filter(tableid=tableid)
-        .select_related('tablelinkid')
+    # Query principale: Partiamo da SysTable e uniamo tutti gli ID trovati
+    tables_qs = (
+        SysTable.objects
+        .filter(id__in=all_linked_ids)
         .annotate(
             user_order=Subquery(user_order_subquery, output_field=IntegerField()),
             user_order_id=Subquery(user_id_subquery),
@@ -1143,14 +1153,15 @@ def settings_table_linkedtables(request):
         .order_by('fieldorder')
     )
 
-    # Costruiamo la lista per React nel formato richiesto
+    # Costruiamo la lista per React
     linked_tables = [
         {
-            "tablelinkid": link.tablelinkid.id if hasattr(link.tablelinkid, 'id') else link.tablelinkid,
-            "description": getattr(link.tablelinkid, 'description', ''),
-            "fieldorder": link.fieldorder,
+            "tablelinkid": str(t.id),
+            "description": getattr(t, 'description', str(t.id)),
+            "fieldorder": t.fieldorder,
+            "is_polymorphic": str(t.id) in poly_links # Aggiungiamo il flag per il frontend
         }
-        for link in linked_qs
+        for t in tables_qs
     ]
 
     return JsonResponse({
@@ -1825,5 +1836,55 @@ def save_user_dashboard_setting(request):
             userid=user,
             dashboardid=dashboard
         ).delete()
-
     return JsonResponse({"success": True})
+
+@superuser_required
+def get_permissions_matrix(request):
+    try:
+        relevant_settings = ['edit', 'add', 'delete', 'view', 'duplicate']
+        
+        custom_user_ids = list(SysUserTableSettings.objects.filter(
+            settingid__in=relevant_settings
+        ).exclude(userid_id=1).values_list('userid_id', flat=True).distinct())
+        
+        custom_table_ids = list(SysUserTableSettings.objects.filter(
+            settingid__in=relevant_settings
+        ).exclude(userid_id=1).values_list('tableid_id', flat=True).distinct())
+        
+        if not custom_user_ids or not custom_table_ids:
+            return JsonResponse({"success": True, "users": [], "tables": [], "settings": []})
+        
+        user_ids_to_fetch = [1] + [uid for uid in custom_user_ids if uid != 1]
+        
+        users_qs = list(SysUser.objects.filter(id__in=user_ids_to_fetch).values('id', 'username', 'firstname', 'lastname'))
+        
+        users_map = {u['id']: u for u in users_qs}
+        users = [users_map[uid] for uid in user_ids_to_fetch if uid in users_map]
+
+        groups = list(SysGroup.objects.filter(idmanager__in=user_ids_to_fetch).values('id', 'name', 'idmanager'))
+        
+        for u in users:
+            u['is_group_manager'] = False
+            u['group_names'] = []
+            for g in groups:
+                if g['idmanager'] == u['id']:
+                    u['is_group_manager'] = True
+                    u['group_names'].append(g['name'])
+
+        tables = list(SysTable.objects.filter(id__in=custom_table_ids).values('id', 'description'))
+
+        all_custom_settings = list(SysUserTableSettings.objects.filter(
+            settingid__in=relevant_settings,
+            tableid_id__in=custom_table_ids,
+            userid_id__in=custom_user_ids + [1]
+        ).values('id', 'userid_id', 'tableid_id', 'settingid', 'value', 'conditions'))
+        
+        return JsonResponse({
+            "success": True,
+            "users": users,
+            "tables": tables,
+            "settings": all_custom_settings
+        })
+
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=500)

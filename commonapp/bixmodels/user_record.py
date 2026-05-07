@@ -115,6 +115,14 @@ class UserRecord:
                         field_instance['linkedmaster_tableid'] = table_link
                         field_instance['linkedmaster_recordid'] = record_link_id
 
+                # NUOVO: CASO POLIMORFICO (tableid + recordidtable)
+                # Verifichiamo se il campo in lavorazione è recordidtable e se abbiamo il tableid
+                elif fieldid.strip('_') == 'recordidtable':
+                    target_table = self.values.get('tableid')
+                    if target_table and raw_value:
+                        field_instance['linkedmaster_tableid'] = target_table
+                        field_instance['linkedmaster_recordid'] = raw_value
+
                 self.fields[fieldid] = field_instance
         else:
             if recordid:
@@ -144,6 +152,7 @@ class UserRecord:
 
         field_type = field_definition.get('fieldtypewebid')
         table_link = field_definition.get('tablelink')
+        field_id_clean = field_definition.get('fieldid', '').strip('_')
         
         try:
             # CASO: Utente
@@ -171,6 +180,26 @@ class UserRecord:
                 keyfield = field_definition['keyfieldlink']
                 sql = f"SELECT {keyfield} FROM user_{table_link} WHERE recordid_='{linked_record_id}'"
                 return HelpderDB.sql_query_value(sql, keyfield) or linked_record_id
+
+            # NUOVO: CASO POLIMORFICO (tableid + recordidtable)
+            elif field_id_clean == 'recordidtable' and (target_table := (self.values.get('tableid'))):
+                # raw_value in questo momento è l'ID del record nella tabella target_table
+                
+                # Prova a usare i dati pre-caricati per la tabella dinamica
+                if target_table in eager_data:
+                    return eager_data[target_table].get(raw_value, raw_value)
+                
+                # Fallback: query al DB
+                # Assumiamo che keyfieldlink sia specificato nella configurazione del campo recordidtable,
+                # altrimenti usiamo un valore di fallback come 'descrizione' (modifica a seconda del tuo standard)
+                table_name = SysTable.objects.get(id=target_table)
+                keyfield = table_name.singular_name or 'description'
+
+                if HelpderDB.column_exists(f"user_{target_table}", keyfield):
+                    sql = f"SELECT {keyfield} FROM user_{target_table} WHERE recordid_='{raw_value}'"
+                    return HelpderDB.sql_query_value(sql, keyfield) or raw_value
+                else:
+                    return raw_value
 
             # CASO: Data
             elif field_type == 'Data' and raw_value:
@@ -716,6 +745,9 @@ class UserRecord:
             .order_by('fieldorder')
         )
 
+        # TODO ordine dei gruppi
+
+
         if not user_orders_qs.exists():
             user_orders_qs = (
                 SysUserOrder.objects.filter(
@@ -733,6 +765,17 @@ class UserRecord:
 
         # Recupera tutti gli ID di tabelle collegate (stringhe)
         linked_ids = [uo.fieldid for uo in user_orders_qs if uo.fieldid]
+
+        if not linked_ids:
+            return []
+
+        # --- NUOVO: Scopri quali tabelle usano il link polimorfico ---
+        # Facciamo una sola query per sapere quali delle tabelle collegate possiedono il campo 'recordidtable'
+        linked_ids_str = "','".join(linked_ids)
+        sql_poly = f"SELECT tableid FROM sys_field WHERE tableid IN ('{linked_ids_str}') AND fieldid IN ('recordidtable', 'recordidtable_')"
+        poly_rows = HelpderDB.sql_query(sql_poly)
+        # Creiamo un set per un lookup super veloce
+        polymorphic_tables = {row['tableid'] for row in poly_rows}
 
         # --- Recupera tutte le SysTable corrispondenti
         tables_map = {
@@ -759,10 +802,19 @@ class UserRecord:
                 tablesettings = TableSettings(linked_tableid, self.userid)
                 can_view = tablesettings.get_specific_settings('view')['view']
 
-                where_clauses = f"recordid{self.tableid}_ = '{self.recordid}' AND deleted_ = 'N' "
+                # where_clauses = f"recordid{self.tableid}_ = '{self.recordid}' AND deleted_ = 'N' "
+
+                if linked_tableid in polymorphic_tables:
+                    # Logica Polimorfica: cerca tramite tableid e recordidtable
+                    # (Controllo sia tableid che tableid_ per sicurezza in base alle tue nomenclature precedenti)
+                    where_clauses = f"(tableid = '{self.tableid}') AND (recordidtable = '{self.recordid}') AND deleted_ = 'N' "
+                else:
+                    # Logica Standard: cerca tramite la colonna specifica recordid{master}_
+                    where_clauses = f"recordid{self.tableid}_ = '{self.recordid}' AND deleted_ = 'N' "
 
                 if can_view['value'] == 'true' and 'where_list' in can_view:
                     where_clauses += (f" AND {can_view['where_list']}")
+                
                 sql = f"""
                     SELECT COUNT(recordid_) AS counter
                     FROM {table_name}
@@ -985,6 +1037,53 @@ class UserRecord:
                     linked_recordid=HelpderDB.sql_query_value(sql,'recordid_')
                     linked_key=HelpderDB.sql_query_value(sql,field['keyfieldlink'])
                     insert_field['value']={"code": linked_recordid, "value": linked_key}
+
+            # --- NUOVO: GESTIONE CAMPO POLIMORFICO (recordidtable) ---
+            if fieldid.strip('_') == 'recordidtable':
+                # Lo facciamo comportare come un linkedmaster per il frontend
+                fieldtype = 'linkedmaster'
+                
+                # Cerchiamo il tableid associato
+                target_table = self.values.get('tableid') or self.values.get('tableid_')
+                
+                if target_table:
+                    from django.core.exceptions import ObjectDoesNotExist 
+                    
+                    try:
+                        table_name = SysTable.objects.get(id=target_table)
+                        keyfield = table_name.singular_name or 'description'
+                        
+                        insert_field['description'] = getattr(table_name, 'description', table_name.id)
+                        insert_field['tablelink'] = target_table
+                        insert_field['linked_mastertable'] = target_table
+                        
+                        # --- SOLUZIONE AL TUO DUBBIO ---
+                        # Implementa una funzione nel tuo HelpderDB che interroga l'information_schema
+                        # per verificare l'esistenza della colonna. Se non esiste, cadi in modo sicuro.
+                        if not HelpderDB.column_exists(f"user_{target_table}", keyfield):
+                            keyfield = "recordid_" # Fallback estremo: usi l'ID come etichetta se manca il campo
+                            
+                        # Costruiamo la query di base (Nota: le colonne/tabelle vanno nella f-string, 
+                        # i valori andranno parametrizzati al momento dell'esecuzione)
+                        base_sql = f"SELECT recordid_, {keyfield} FROM user_{target_table} WHERE recordid_ = %s"
+                        
+                        # 2. Gestione dei default dalla master table
+                        if target_table == self.master_tableid and self.master_recordid:
+                            # Presumo tu possa creare un metodo sql_query_row che restituisca
+                            # l'intera riga (dict o tupla) in una sola chiamata al DB, passando il parametro sicuro
+                            row = HelpderDB.sql_query_row(base_sql, [self.master_recordid])
+                            if row:
+                                defaultcode = row['recordid_']
+                                defaultvalue = row[keyfield]
+                                
+                        # 3. Presa del convertedvalue
+                        if value != "":
+                            row = HelpderDB.sql_query_row(base_sql, [value])
+                            if row:
+                                insert_field['value'] = {"code": row['recordid_'], "value": row[keyfield]}
+                                
+                    except ObjectDoesNotExist:
+                        pass
 
             if field['fieldtypewebid'] == 'Data':
                 fieldtype='Data'

@@ -1621,7 +1621,7 @@ def get_timetracking(request):
         condition_list = []
         condition_list.append(f"user={userid}")
 
-        timetrackings_list = UserTable('timetracking').get_records(conditions_list=condition_list)
+        timetrackings_list = UserTable('timetracking', userid=userid).get_records(conditions_list=condition_list)
         timetrackings = []
         task_totals_map = {}
 
