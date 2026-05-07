@@ -6443,6 +6443,31 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
                 if max_anno:
                     selected_years = [str(max_anno)]
                     chart_name = f"{chart_name} {max_anno}"
+                    
+                if user_club:
+                    is_currency_chart = False
+                    try:
+                        fields_to_check = []
+                        for ds in chart_config.get('datasets', []) + chart_config.get('datasets2', []):
+                            if isinstance(ds, dict):
+                                fields_to_check.extend([ds.get('alias'), ds.get('field')])
+                        for pf in chart_config.get('pivot_fields', []):
+                            if isinstance(pf, dict):
+                                fields_to_check.extend([pf.get('alias'), pf.get('field')])
+                        gb = chart_config.get('group_by_field')
+                        if isinstance(gb, dict):
+                            fields_to_check.extend([gb.get('alias'), gb.get('field')])
+                        
+                        fields_to_check = list(set([f for f in fields_to_check if f]))
+                        if fields_to_check and SysField.objects.filter(fieldid__in=fields_to_check, explanation__icontains='number_currency').exists():
+                            is_currency_chart = True
+                    except Exception as e:
+                        print(f"Error checking currency type: {e}")
+
+                    if is_currency_chart:
+                        valuta = HelpderDB.sql_query_value(f"SELECT valuta FROM user_golfclub WHERE recordid_='{user_club}'", 'valuta')
+                        if valuta:
+                            chart_name = f"{chart_name} ({valuta.upper()})"
             except Exception as e:
                 print(f"Error finding max year: {e}")
 
