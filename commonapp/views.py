@@ -4114,7 +4114,7 @@ def save_record_fields(request):
                 viewid_id=view_id if view_obj else (default_view.id if default_view else None),
                 chartid=chart_obj,
                 dashboardid_id=dashboard_id if dashboard_obj else None,
-                category="benchmark" if grouping == "recordidgolfclub_" else None,
+                category=dashboard_obj.category if dashboard_obj else None,
             )
 
         # Update existing blocks
@@ -4124,7 +4124,7 @@ def save_record_fields(request):
             final_name = f"{title} {(view_obj.name if view_obj else '')} {(dashboard_obj.name if dashboard_obj else '')}".strip()
             SysDashboardBlock.objects.filter(
                 chartid=chart_obj, dashboardid_id=dashboard_id, viewid_id=view_id
-            ).update(name=final_name)
+            ).update(name=final_name, category=dashboard_obj.category if dashboard_obj else None)
 
     custom_save_record_fields(tableid, recordid, old_record)
     return JsonResponse({"success": True, "detail": "Campi del record salvati con successo", "recordid": record.recordid})
