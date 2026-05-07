@@ -3946,7 +3946,8 @@ def save_record_fields(request):
                     "from_table": table_name,
                     "aggregation": {"function": "AVG"},
                     "pivot_fields": datasets,
-                    "dataset_label": f"Average {datasets[0]['label']}" if datasets else "Average Data",
+                    #"dataset_label": f"Average2 {datasets[0]['label']}" if datasets else "Average Data",
+                    "dataset_label": f"",
                 }
 
         # =======================
@@ -3989,7 +3990,7 @@ def save_record_fields(request):
                         datasets2.append(
                             {
                                 "alias": field2,
-                                "label": "Average " + field_descriptions.get(field2, field2),
+                                "label": "Average3 " + field_descriptions.get(field2, field2),
                                 "post_calculation": {
                                     "function": "AVG",
                                     "source_dataset_alias": field2,
