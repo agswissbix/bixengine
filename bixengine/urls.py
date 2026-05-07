@@ -6,6 +6,7 @@ from bixengine.core.admin import custom_admin_site
 
 urlpatterns = [
     path('admin/', custom_admin_site.urls), 
+    path('django_admin/', admin.site.urls), 
     path('login/', custom_admin_site.login, name='admin_login'),
     path('logout/', custom_admin_site.logout, name='admin_logout'),    
     path('auth/login/', login_view, name='login'),
