@@ -101,7 +101,7 @@ class FieldSettings:
         
         group_data = {}
         for sg in sys_groups:
-            if sg.idmanager_id:
+            if sg.idmanager_id is not None:
                 priority = sg.priority if sg.priority is not None else 9999
                 group_data[sg.idmanager_id] = priority
                 
@@ -212,6 +212,24 @@ class FieldSettings:
                 merged_settings.append(s)
             elif sid in admin_settings:
                 merged_settings.append(admin_settings[sid])
+
+        is_admin = False
+        if current_uid == 0 or 0 in group_user_ids:
+            is_admin = True
+
+        if is_admin:
+            existing_sids = {ms['settingid']: ms for ms in merged_settings}
+            if 'is_editable' in existing_sids:
+                existing_sids['is_editable']['value'] = 'true'
+                existing_sids['is_editable']['conditions'] = None
+                existing_sids['is_editable']['source'] = 'system_admin'
+            else:
+                merged_settings.append({
+                    'settingid': 'is_editable',
+                    'value': 'true',
+                    'conditions': None,
+                    'source': 'system_admin'
+                })
 
         return merged_settings
 
@@ -409,10 +427,10 @@ class FieldSettings:
         group_user_qs = SysGroupUser.objects.filter(userid=userid).exclude(disabled='Y')
         group_ids = group_user_qs.values_list('groupid', flat=True)
         sys_groups = SysGroup.objects.filter(id__in=group_ids).exclude(disabled='Y')
-        
+
         group_data = {}
         for sg in sys_groups:
-            if sg.idmanager_id:
+            if sg.idmanager_id is not None:
                 priority = sg.priority if sg.priority is not None else 9999
                 group_data[sg.idmanager_id] = priority
                 
@@ -570,6 +588,21 @@ class FieldSettings:
                             defaults[sid]['where_list'] = wheres
                         except (json.JSONDecodeError, AttributeError):
                             pass
+
+            is_admin = False
+            if current_uid == 0:
+                is_admin = True
+            else:
+                is_admin = SysGroupUser.objects.filter(
+                    userid=current_uid, 
+                    groupid__in=SysGroup.objects.filter(idmanager=0).values('id')
+                ).exclude(disabled='Y').exists()
+
+            if is_admin and 'is_editable' in defaults:
+                defaults['is_editable']['value'] = 'true'
+                defaults['is_editable']['conditions'] = None
+                defaults['is_editable']['source'] = 'system_admin'
+
             all_results[fid] = defaults
 
         return all_results        

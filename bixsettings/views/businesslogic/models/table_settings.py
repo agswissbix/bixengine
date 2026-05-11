@@ -455,7 +455,7 @@ class TableSettings:
         
         group_data = {}
         for sg in sys_groups:
-            if sg.idmanager_id:
+            if sg.idmanager_id is not None:
                 priority = sg.priority if sg.priority is not None else 9999
                 group_data[sg.idmanager_id] = priority
                 
@@ -578,6 +578,29 @@ class TableSettings:
                 merged_settings.append(s)
             elif sid in admin_settings:
                 merged_settings.append(admin_settings[sid])
+
+        is_admin = False
+        if current_uid == 0 or 0 in group_user_ids:
+            is_admin = True
+
+        if is_admin:
+            admin_overrides = ['edit', 'add', 'delete', 'view', 'duplicate']
+            if settingids:
+                admin_overrides = [sid for sid in admin_overrides if sid in settingids]
+                
+            existing_sids = {ms['settingid']: ms for ms in merged_settings}
+            for setting_id in admin_overrides:
+                if setting_id in existing_sids:
+                    existing_sids[setting_id]['value'] = 'true'
+                    existing_sids[setting_id]['conditions'] = None
+                    existing_sids[setting_id]['source'] = 'system_admin'
+                else:
+                    merged_settings.append({
+                        'settingid': setting_id,
+                        'value': 'true',
+                        'conditions': None,
+                        'source': 'system_admin'
+                    })
 
         return merged_settings
 
@@ -965,7 +988,7 @@ class TableSettings:
         
         group_data = {}
         for sg in sys_groups:
-            if sg.idmanager_id:
+            if sg.idmanager_id is not None:
                 priority = sg.priority if sg.priority is not None else 9999
                 group_data[sg.idmanager_id] = priority
                 
