@@ -308,10 +308,10 @@ def get_sidebarmenu_items(request):
     print("Function: get_sidebarmenu_items")
     
     # 1. Recupero dati base e inizializzazione
-    tables = SysTable.get_user_tables(1)
-    workspaces_tables = {}
     userid = Helper.get_userid(request)
     username = Helper.get_username(request)
+    tables = SysTable.get_user_tables(userid)
+    workspaces_tables = {}
     
     # 2. Gestione Tabelle Preferite
     favorite_query = "SELECT tableid FROM sys_user_favorite_tables WHERE sys_user_id = %s"
