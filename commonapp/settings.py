@@ -219,7 +219,7 @@ def settings_table_fields(request):
             user_field_conf = SysUserFieldOrder.objects.filter(
                 tableid=tableid,
                 fieldid=field['id'],
-                userid=1,
+                userid=userid,
                 typepreference=typepreference,
                 master_tableid=master_table_id
             ).first()
@@ -685,8 +685,9 @@ def settings_table_fields_new_field(request):
     linked_table_fields = data.get("linkedtablefields", [])
     label = data.get("label", "Dati")
 
-    userid = 1
-    # userid = Helper.get_userid(request)
+    userid = data.get("userid", None)
+    if not SysUser.objects.filter(id=userid).exists():
+        return JsonResponse({"success": False, "error": "Utente non trovato"}, status=404)
 
     if not all([tableid, fielddescription, fieldtype]):
         return JsonResponse({"success": False, "error": "Dati mancanti"}, status=400)
@@ -1887,4 +1888,4 @@ def get_permissions_matrix(request):
         })
 
     except Exception as e:
-        return JsonResponse({"success": False, "error": str(e)}, status=500)
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
