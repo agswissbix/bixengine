@@ -4159,7 +4159,7 @@ def save_record_fields(request):
                 viewid_id=view_id if view_obj else (default_view.id if default_view else None),
                 chartid=chart_obj,
                 dashboardid_id=dashboard_id if dashboard_obj else None,
-                category=dashboard_obj.category if dashboard_obj else None,
+                category=dashboard_obj.category if dashboard_obj and dashboard_obj.category == 'myoverview' else "benchmark",
             )
 
         # Update existing blocks
@@ -4169,7 +4169,7 @@ def save_record_fields(request):
             final_name = f"{title} {(view_obj.name if view_obj else '')} {(dashboard_obj.name if dashboard_obj else '')}".strip()
             SysDashboardBlock.objects.filter(
                 chartid=chart_obj, dashboardid_id=dashboard_id, viewid_id=view_id
-            ).update(name=final_name, category=dashboard_obj.category if dashboard_obj else None)
+            ).update(name=final_name, category=dashboard_obj.category if dashboard_obj and dashboard_obj.category == 'myoverview' else "benchmark")
 
     custom_save_record_fields(tableid, recordid, old_record)
     return JsonResponse({"success": True, "detail": "Campi del record salvati con successo", "recordid": record.recordid})
@@ -6594,8 +6594,8 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
     
     final_type = chart_layout.lower() if chart_layout else "value"
     if chart_data.get('datasets2') and final_type in ['barchart', 'multibarchart']:
-        final_type = 'multibarlinechart'
-        chart_data['layout'] = 'multi-bar-line'
+        final_type = 'barchart'
+        # chart_data['layout'] = 'multi-bar-line'
 
     chart_data_json = json.dumps(chart_data, default=json_date_handler)
 
