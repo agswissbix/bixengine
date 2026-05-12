@@ -183,6 +183,11 @@ class TableSettings:
             'options': [],
             'value': 'recordid_'
         },
+        'default_orderbydirection': {
+            'type': 'select',
+            'options': ['asc', 'desc', ''],
+            'value': 'desc'
+        },
         'default_viewid': {
             'type': 'select',
             'options': [],

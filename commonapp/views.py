@@ -807,7 +807,7 @@ def get_table_records(request):
             order_fieldid = 'recordid_'
     if not order_direction:
         table_setting=TableSettings(tableid, Helper.get_userid(request))
-        default_orderby=table_setting.get_specific_settings('risultati_order')['risultati_order']
+        default_orderby=table_setting.get_specific_settings('default_orderbydirection')['default_orderbydirection']
         if default_orderby['value']:
             order_direction = default_orderby['value']
         else:
