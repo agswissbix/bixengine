@@ -57,17 +57,47 @@ class TableSettings:
             'options': ['true', 'false'],
             'value': 'true'
         },
+        'duplicate_with_linked': {
+            'type': 'multiselect',
+            'options': [],
+            'value': ''
+        },
         'add_linked': {
             'type': 'select',
             'options': ['true', 'false'],
             'value': 'true'
+        },
+        'which_linked_to_add': {
+            'type': 'multiselect',
+            'options': [],
+            'value': ''
         },
         'edit_linked': {
             'type': 'select',
             'options': ['true', 'false'],
             'value': 'true'
         },
-        'duplicate_with_linked': {
+        'which_linked_to_edit': {
+            'type': 'multiselect',
+            'options': [],
+            'value': ''
+        },
+        'delete_linked': {
+            'type': 'select',
+            'options': ['true', 'false'],
+            'value': 'true'
+        },
+        'which_linked_to_delete': {
+            'type': 'multiselect',
+            'options': [],
+            'value': ''
+        },
+        'duplicate_linked': {
+            'type': 'select',
+            'options': ['true', 'false'],
+            'value': 'true'
+        },
+        'which_linked_to_duplicate': {
             'type': 'multiselect',
             'options': [],
             'value': ''
@@ -347,7 +377,7 @@ class TableSettings:
             is_admin = True
 
         if is_admin:
-            admin_overrides = ['edit', 'add', 'delete', 'view', 'duplicate']
+            admin_overrides = ['edit', 'add', 'delete', 'view', 'duplicate', 'add_linked', 'edit_linked']
             if settingids:
                 admin_overrides = [sid for sid in admin_overrides if sid in settingids]
                 
@@ -389,18 +419,36 @@ class TableSettings:
 
     def _populate_linked_table_options(self, settings_copy):
         """Popola le opzioni delle tabelle collegate per il setting duplicate_with_linked."""
+        keys_to_populate = ['duplicate_with_linked', 'which_linked_to_add', 'which_linked_to_edit', 'which_linked_to_delete', 'which_linked_to_duplicate']
+        
+        if not any(k in settings_copy for k in keys_to_populate):
+            return
+
         from commonapp.bixmodels.user_record import UserRecord
         user_record = UserRecord(self.tableid, userid=self.userid)
         linked_tables = user_record.get_linked_tables()
+
         if not linked_tables:
-            settings_copy['duplicate_with_linked']['options'] = []
+            for key in keys_to_populate:
+                if key in settings_copy:
+                    settings_copy[key]['options'] = []
             return
 
         options = [
             {'name': str(table['tableid']), 'label': str(table['description']), 'selected': False}
             for table in linked_tables
         ]
-        settings_copy['duplicate_with_linked']['options'] = options
+        
+        all_linked_names = [o['name'] for o in options]
+
+        for key in keys_to_populate:
+            if key in settings_copy:
+                settings_copy[key]['options'] = options
+                
+                if key in ['which_linked_to_add', 'which_linked_to_edit','which_linked_to_delete','which_linked_to_duplicate']:
+                    current_value = settings_copy[key].get('value')
+                    if not current_value:
+                        settings_copy[key]['value'] = ",".join(all_linked_names)
 
     def _populate_workspace_options(self, settings_copy):
         """Popola le opzioni del workspace nei settings."""
@@ -487,9 +535,10 @@ class TableSettings:
         for field_type, setting_keys in field_option_mappings.items():
             options = option_mapping[field_type]
             for setting_key in setting_keys:
-                settings_copy[setting_key]['options'] = options
-                if options and settings_copy[setting_key]['value'] == '':
-                    settings_copy[setting_key]['value'] = options[0]
+                if setting_key in settings_copy:
+                    settings_copy[setting_key]['options'] = options
+                    if options and settings_copy[setting_key]['value'] == '':
+                        settings_copy[setting_key]['value'] = options[0]
 
 
     def _apply_user_settings(self, settings_copy, user_settings):
@@ -657,7 +706,7 @@ class TableSettings:
         if any("workspace_options" in v for v in base_settings.values()):
             self._populate_workspace_options(base_settings)
             
-        if "duplicate_with_linked" in base_settings:
+        if any(k in base_settings for k in ["duplicate_with_linked", "which_linked_to_add", "which_linked_to_edit","which_linked_to_delete","which_linked_to_duplicate"]):
             self._populate_linked_table_options(base_settings)
             
         if "badges" in base_settings:
