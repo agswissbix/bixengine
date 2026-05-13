@@ -50,11 +50,15 @@ def winteler_wip_barcode_scan(request):
     # Oppure puoi semplicemente ritornare una conferma
     for barcode_wip in barcode_wip_list:
         print(barcode_wip)
-        sql=f"INSERT INTO t_wipbarcode (wipbarcode,lottobarcode) VALUES ('{barcode_wip}','{barcode_lotto}')"
+        now = datetime.datetime.now()
+        today = now.strftime('%Y-%m-%d')
+        sql=f"INSERT INTO t_wipbarcode (wipbarcode,lottobarcode,datascansione) VALUES ('{barcode_wip}','{barcode_lotto}','{today}')"
         HelpderDB.sql_execute(sql)
         wip_record=UserRecord('wipbarcode')
         wip_record.values['wipbarcode']=barcode_wip
         wip_record.values['lottobarcode']=barcode_lotto
+        wip_record.values['datascansione']=today
+        wip_record.values['statowip']='Barcodato'
         wip_record.save()
         
 
