@@ -3614,12 +3614,15 @@ def duplicate_record(request):
                         except Exception as e:
                             print(f"Errore copia file collegato {fieldid}: {e}")
 
-                _save_record_data(
+                new_child_record = _save_record_data(
                     tableid=linked_table_id,
                     recordid='',
                     fields=child_fields_copy,
                     files=child_files_to_copy
                 )
+                
+    call_custom_function("duplicate_record", tableid, new_record.recordid)
+    call_custom_function("save_record_fields", tableid, new_record.recordid)
 
     return JsonResponse({
         'success': True,

@@ -247,6 +247,20 @@ def delete_record(tableid, recordid):
             save_record_fields(tableid='dipendente', recordid=accredito_ferie.values.get('recordiddipendente_'))
 
 
+def duplicate_record(tableid, recordid):
+    excluded_fields = []
+    record = UserRecord(tableid, recordid, load_fields=False)
+    if tableid == 'deal':
+        excluded_fields = ['dealstatus']
+
+    for fildname, value in record.values.items():
+        if fildname in excluded_fields:
+            record.values[fildname] = None
+
+    record.save()
+
+
+
 def calculate_dependent_fields(request):
     data = json.loads(request.body)
     updated_fields = {}
