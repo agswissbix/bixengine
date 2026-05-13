@@ -3881,10 +3881,10 @@ def save_record_fields(request):
 
 
         if not fields and operation == 'Conteggio':
-            fields = 'recordid_'
+            fields = 'id'
 
         if not fields_2 and operation2 == 'Conteggio':
-            fields_2 = 'recordid_'
+            fields_2 = 'id'
 
 
         # =======================
