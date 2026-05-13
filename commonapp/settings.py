@@ -1862,15 +1862,27 @@ def get_permissions_matrix(request):
         users_map = {u['id']: u for u in users_qs}
         users = [users_map[uid] for uid in user_ids_to_fetch if uid in users_map]
 
-        groups = list(SysGroup.objects.filter(idmanager__in=user_ids_to_fetch).values('id', 'name', 'idmanager'))
+        groups = list(SysGroup.objects.filter(idmanager__in=user_ids_to_fetch).values('id', 'name', 'idmanager', 'priority'))
         
         for u in users:
             u['is_group_manager'] = False
             u['group_names'] = []
+            u['group_priority'] = 9999
             for g in groups:
                 if g['idmanager'] == u['id']:
                     u['is_group_manager'] = True
                     u['group_names'].append(g['name'])
+                    if g.get('priority') is not None and g['priority'] < u['group_priority']:
+                        u['group_priority'] = g['priority']
+
+        def sort_key(u):
+            if u['id'] == 1:
+                return (0, 0, "")
+            if u['is_group_manager']:
+                return (1, u['group_priority'], str(u.get('username', '')))
+            return (2, 9999, str(u.get('username', '')))
+            
+        users.sort(key=sort_key)
 
         tables = list(SysTable.objects.filter(id__in=custom_table_ids).values('id', 'description'))
 
@@ -1888,4 +1900,69 @@ def get_permissions_matrix(request):
         })
 
     except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
+
+
+@superuser_required
+def get_orders_matrix(request):
+    try:
+        custom_user_table_ids = list(SysUserTableOrder.objects.exclude(userid_id=1).values_list('userid_id', flat=True).distinct())
+        custom_user_field_ids = list(SysUserFieldOrder.objects.exclude(userid_id=1).values_list('userid_id', flat=True).distinct())
+        
+        custom_user_ids = list(set(custom_user_table_ids + custom_user_field_ids))
+        custom_table_ids = list(SysUserFieldOrder.objects.exclude(userid_id=1).values_list('tableid_id', flat=True).distinct())
+        
+        if not custom_user_ids:
+            return JsonResponse({"success": True, "users": [], "tables": [], "custom_table_order_users": [], "field_orders": []})
+        
+        user_ids_to_fetch = [1] + [uid for uid in custom_user_ids if uid != 1]
+        users_qs = list(SysUser.objects.filter(id__in=user_ids_to_fetch).values('id', 'username', 'firstname', 'lastname'))
+        users_map = {u['id']: u for u in users_qs}
+        users = [users_map[uid] for uid in user_ids_to_fetch if uid in users_map]
+
+        groups = list(SysGroup.objects.filter(idmanager__in=user_ids_to_fetch).values('id', 'name', 'idmanager', 'priority'))
+        
+        for u in users:
+            u['is_group_manager'] = False
+            u['group_names'] = []
+            u['group_priority'] = 9999
+            for g in groups:
+                if g['idmanager'] == u['id']:
+                    u['is_group_manager'] = True
+                    u['group_names'].append(g['name'])
+                    if g.get('priority') is not None and g['priority'] < u['group_priority']:
+                        u['group_priority'] = g['priority']
+
+        def sort_key(u):
+            if u['id'] == 1:
+                return (0, 0, "")
+            if u['is_group_manager']:
+                return (1, u['group_priority'], str(u.get('username', '')))
+            return (2, 9999, str(u.get('username', '')))
+            
+        users.sort(key=sort_key)
+
+        tables = list(SysTable.objects.filter(id__in=custom_table_ids).values('id', 'description'))
+
+        all_table_orders = list(SysUserTableOrder.objects.filter(userid_id__in=user_ids_to_fetch).values('userid_id').distinct())
+        custom_table_order_users = [item['userid_id'] for item in all_table_orders]
+
+        all_field_orders_qs = SysUserFieldOrder.objects.filter(
+            userid_id__in=user_ids_to_fetch,
+            tableid_id__in=custom_table_ids
+        ).values('userid_id', 'tableid_id', 'typepreference').distinct()
+        
+        all_field_orders = list(all_field_orders_qs)
+
+        return JsonResponse({
+            "success": True,
+            "users": users,
+            "tables": tables,
+            "custom_table_order_users": custom_table_order_users,
+            "field_orders": all_field_orders
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         return JsonResponse({"success": False, "error": str(e)}, status=500)

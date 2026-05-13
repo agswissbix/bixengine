@@ -47,16 +47,6 @@ class TableSettings:
             'options': ['true', 'false'],
             'value': 'true'
         },
-        'risultati_edit': {
-            'type': 'select',
-            'options': ['true', 'false'],
-            'value': 'false'
-        },
-        'autosave': {
-            'type': 'select',
-            'options': ['true', 'false'],
-            'value': 'true'
-        },
         'delete': {
             'type': 'select',
             'options': ['true', 'false'],
@@ -67,17 +57,47 @@ class TableSettings:
             'options': ['true', 'false'],
             'value': 'true'
         },
+        'duplicate_with_linked': {
+            'type': 'multiselect',
+            'options': [],
+            'value': ''
+        },
         'add_linked': {
             'type': 'select',
             'options': ['true', 'false'],
             'value': 'true'
+        },
+        'which_linked_to_add': {
+            'type': 'multiselect',
+            'options': [],
+            'value': ''
         },
         'edit_linked': {
             'type': 'select',
             'options': ['true', 'false'],
             'value': 'true'
         },
-        'duplicate_with_linked': {
+        'which_linked_to_edit': {
+            'type': 'multiselect',
+            'options': [],
+            'value': ''
+        },
+        'delete_linked': {
+            'type': 'select',
+            'options': ['true', 'false'],
+            'value': 'true'
+        },
+        'which_linked_to_delete': {
+            'type': 'multiselect',
+            'options': [],
+            'value': ''
+        },
+        'duplicate_linked': {
+            'type': 'select',
+            'options': ['true', 'false'],
+            'value': 'true'
+        },
+        'which_linked_to_duplicate': {
             'type': 'multiselect',
             'options': [],
             'value': ''
@@ -85,45 +105,6 @@ class TableSettings:
         'deadline_actions': {
             'type': 'parola',
             'value': ''
-        },
-        'hidden': {
-            'type': 'select',
-            'options': ['true', 'false'],
-            'value': 'false'
-        },
-        'menu': {
-            'type': 'select',
-            'options': ['true', 'false'],
-            'value': 'false'
-        },
-        'icon_type': {
-            'type': 'select',
-            'options': ['fontawesome', 'material'],
-            'value': 'fontawesome'
-        },
-        'icon': {
-            'type': 'parola',
-            'value': 'database'
-        },
-        'customview_list': {
-            'type': 'select',
-            'options': ['true', 'false'],
-            'value': 'false'
-        },
-        'customview_card': {
-            'type': 'select',
-            'options': ['true', 'false'],
-            'value': 'false'
-        },
-        'scheda_layout': {
-            'type': 'select',
-            'options': ['standard_dati', 'standard_allegati', 'allargata'],
-            'value': 'standard_dati'
-        },
-        'scheda_mostratutti': {
-            'type': 'select',
-            'options': ['true', 'false'],
-            'value': 'false'
         },
         'badges': {
             'type': 'multiselect',
@@ -227,212 +208,24 @@ class TableSettings:
             'options': ['day', 'week', 'month'],
             'value': 'week'
         },
-        'popup_layout': {
-            'type': 'select',
-            'options': ['standard_dati', 'standard_allegati', 'allargata'],
-            'value': 'standard_dati'
-        },
-        'popup_width': {
-            'type': 'select',
-            'options': ['30', '60', '90'],
-            'value': '60'
-        },
-        'scheda_record_width': {
-            'type': 'select',
-            'options': ['25', '42', '48', '57', '98'],
-            'value': '25'
-        },
-        'allargata_dati_width': {
-            'type': 'parola',
-            'value': '50'
-        },
-        'scheda_ricerca_display': {
-            'type': 'select',
-            'options': ['true', 'false'],
-            'value': 'true'
-        },
-        'scheda_ricerca_width': {
-            'type': 'select',
-            'options': ['20', '42', ''],
-            'value': '20'
-        },
-        'scheda_ricerca_default': {
-            'type': 'select',
-            'options': ['filtri', 'ricerche_salvate'],
-            'value': 'filtri'
-        },
-        'ricerca_lockedview': {
-            'type': 'select',
-            'options': ['true', 'false'],
-            'value': 'false'
-        },
-        'risultati_limit': {
-            'type': 'parola',
-            'value': '50'
-        },
-        'risultati_layout': {
-            'type': 'select',
-            'options': ['righe', 'table', 'preview', 'badge', 'report', 'calendar'],
-            'value': 'righe'
-        },
-        'risultati_width': {
-            'type': 'select',
-            'options': ['42', '48', '57', '98'],
-            'value': '57'
-        },
-        'risultati_border': {
-            'type': 'select',
-            'options': ['1px solid transparent', '1px solid #dedede'],
-            'value': '1px solid transparent'
-        },
-        'risultati_font_size': {
-            'type': 'select',
-            'options': ['6', '8', '10', '12', '14', '16', '18'],
-            'value': '14'
-        },
-        'risultati_open': {
-            'type': 'select',
-            'options': ['right', 'down', 'popup'],
-            'value': 'right'
-        },
-        'risultati_new': {
-            'type': 'select',
-            'options': ['right', 'down', 'popup'],
-            'value': 'right'
-        },
-        'risultati_order': {
-            'type': 'select',
-            'options': ['asc', 'desc', ''],
-            'value': 'desc'
-        },
-        'risultati_showreport': {
-            'type': 'select',
-            'options': ['true', 'false', ''],
-            'value': 'false'
-        },
-        'risultati_showcalendar': {
-            'type': 'select',
-            'options': ['true', 'false', ''],
-            'value': 'false'
-        },
-        'risultati_anteprima_aspectratio': {
-            'type': 'select',
-            'options': ['2:3', '3:2', '16:9'],
-            'value': '2:3'
-        },
-        'risultati_stampa_elenco_orientamento': {
-            'type': 'select',
-            'options': ['portrait', 'landscape', ''],
-            'value': 'portrait'
-        },
-        'linked_layout': {
-            'type': 'select',
-            'options': ['righe', 'preview', 'badge'],
-            'value': 'righe'
-        },
-        'linked_open': {
-            'type': 'select',
-            'options': ['right', 'down', 'popup'],
-            'value': 'down'
-        },
-        'linked_new': {
-            'type': 'select',
-            'options': ['right', 'down', 'popup'],
-            'value': 'popup'
-        },
-        'linked_rows': {
-            'type': 'select',
-            'options': ['5', '10', '15', '20', '25', '30'],
-            'value': '5'
-        },
-        'linked_label_opened': {
-            'type': 'select',
-            'options': ['true', 'false'],
-            'value': 'false'
-        },
-        'pages_display': {
-            'type': 'select',
-            'options': ['true', 'false'],
-            'value': 'true'
-        },
-        'pages_fileupload_display': {
-            'type': 'select',
-            'options': ['true', 'false'],
-            'value': 'true'
-        },
-        'pages_view': {
-            'type': 'select',
-            'options': ['thumbnail', 'name', 'detail'],
-            'value': 'thumbnail'
-        },
-        'pages_scheda_layout': {
-            'type': 'select',
-            'options': ['list', 'grid', 'hidden'],
-            'value': 'list'
-        },
-        'pages_popup_layout': {
-            'type': 'select',
-            'options': ['list', 'grid', 'hidden'],
-            'value': 'list'
-        },
-        'pages_thumbnail_show': {
-            'type': 'select',
-            'options': ['true', 'false', ''],
-            'value': 'true'
-        },
         'default_orderby': {
             'type': 'select',
             'options': [],
             'value': 'recordid_'
         },
-        'default_save': {
+        'default_orderbydirection': {
             'type': 'select',
-            'options': ['salva', 'salva e chiudi', 'salva e nuovo', 'salva e nuovo-salva e chiudi',
-                        'allega salva e nuovo', 'salva e ripeti'],
-            'value': 'salva'
+            'options': ['asc', 'desc', ''],
+            'value': 'desc'
         },
         'default_viewid': {
             'type': 'select',
             'options': [],
             'value': 'true'
         },
-        'default_recordstab': {
-            'type': 'parola',
-            'value': 'Tabella'
-        },
         'default_recordtab': {
             'type': 'parola',
             'value': 'Fields'
-        },
-        'dem_mail_field': {
-            'type': 'select',
-            'options': ['address', 'bexio_contact_type_id', 'bexio_status', 'cap', 'city', 'companyname',
-                        'customertype', 'email', 'ictpbx_price', 'id', 'id_bexio', 'id_vte', 'note', 'paymentstatus',
-                        'phonenumber', 'recordidcontact_', 'recordiddealline_', 'recordiddeal_', 'recordidinvoiceline_',
-                        'recordidinvoice_', 'recordidprojectmilestone_', 'recordidproject_', 'recordidsalesorderline_',
-                        'recordidsalesorderplannedinvoice', 'recordidsalesorder_', 'recordidserviceandasset_',
-                        'recordidservicecontract_', 'recordidtask_', 'recordidticket_', 'recordidtimesheet_',
-                        'recordiduser_log_', 'recordid_jdoc', 'salesperson_text', 'salesuser', 'scn', 'sector',
-                        'servizitxt', 'state', 'status', 'sw_price', 'tipo', 'travelkm_price', 'travel_price',
-                        'vatnumber', 'website'],
-            'value': 'address'
-        },
-        'fields_autoscroll': {
-            'type': 'select',
-            'options': ['true', 'false'],
-            'value': 'false'
-        },
-        'col_s': {
-            'type': 'parola',
-            'value': '3'
-        },
-        'col_m': {
-            'type': 'parola',
-            'value': '3'
-        },
-        'col_l': {
-            'type': 'parola',
-            'value': '3'
         },
         'workspace': {
             'type': 'select',
@@ -584,7 +377,7 @@ class TableSettings:
             is_admin = True
 
         if is_admin:
-            admin_overrides = ['edit', 'add', 'delete', 'view', 'duplicate']
+            admin_overrides = ['edit', 'add', 'delete', 'view', 'duplicate', 'add_linked', 'edit_linked']
             if settingids:
                 admin_overrides = [sid for sid in admin_overrides if sid in settingids]
                 
@@ -626,18 +419,36 @@ class TableSettings:
 
     def _populate_linked_table_options(self, settings_copy):
         """Popola le opzioni delle tabelle collegate per il setting duplicate_with_linked."""
+        keys_to_populate = ['duplicate_with_linked', 'which_linked_to_add', 'which_linked_to_edit', 'which_linked_to_delete', 'which_linked_to_duplicate']
+        
+        if not any(k in settings_copy for k in keys_to_populate):
+            return
+
         from commonapp.bixmodels.user_record import UserRecord
         user_record = UserRecord(self.tableid, userid=self.userid)
         linked_tables = user_record.get_linked_tables()
+
         if not linked_tables:
-            settings_copy['duplicate_with_linked']['options'] = []
+            for key in keys_to_populate:
+                if key in settings_copy:
+                    settings_copy[key]['options'] = []
             return
 
         options = [
             {'name': str(table['tableid']), 'label': str(table['description']), 'selected': False}
             for table in linked_tables
         ]
-        settings_copy['duplicate_with_linked']['options'] = options
+        
+        all_linked_names = [o['name'] for o in options]
+
+        for key in keys_to_populate:
+            if key in settings_copy:
+                settings_copy[key]['options'] = options
+                
+                if key in ['which_linked_to_add', 'which_linked_to_edit','which_linked_to_delete','which_linked_to_duplicate']:
+                    current_value = settings_copy[key].get('value')
+                    if not current_value:
+                        settings_copy[key]['value'] = ",".join(all_linked_names)
 
     def _populate_workspace_options(self, settings_copy):
         """Popola le opzioni del workspace nei settings."""
@@ -724,9 +535,10 @@ class TableSettings:
         for field_type, setting_keys in field_option_mappings.items():
             options = option_mapping[field_type]
             for setting_key in setting_keys:
-                settings_copy[setting_key]['options'] = options
-                if options and settings_copy[setting_key]['value'] == '':
-                    settings_copy[setting_key]['value'] = options[0]
+                if setting_key in settings_copy:
+                    settings_copy[setting_key]['options'] = options
+                    if options and settings_copy[setting_key]['value'] == '':
+                        settings_copy[setting_key]['value'] = options[0]
 
 
     def _apply_user_settings(self, settings_copy, user_settings):
@@ -894,7 +706,7 @@ class TableSettings:
         if any("workspace_options" in v for v in base_settings.values()):
             self._populate_workspace_options(base_settings)
             
-        if "duplicate_with_linked" in base_settings:
+        if any(k in base_settings for k in ["duplicate_with_linked", "which_linked_to_add", "which_linked_to_edit","which_linked_to_delete","which_linked_to_duplicate"]):
             self._populate_linked_table_options(base_settings)
             
         if "badges" in base_settings:

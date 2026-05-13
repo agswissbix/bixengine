@@ -10,7 +10,8 @@ from django.contrib.auth.models import User
 import pyotp
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from django.db.models import F, OuterRef, Subquery
+from django.db.models import F, OuterRef, Subquery, Value, IntegerField
+from django.db.models.functions import Coalesce
 
 
 class AuthUser(models.Model):
@@ -391,28 +392,64 @@ class SysTable(models.Model):
 
     @classmethod
     def get_user_tables(cls, userid):
-    # Subquery per prendere info dal workspace in base al nome
+        # Subquery per prendere info dal workspace in base al nome
         workspace_qs = SysTableWorkspace.objects.filter(name=OuterRef('workspace'))
 
-        rows = (
-            cls.objects
-            .filter(sysusertableorder__userid=userid)
-            .annotate(
-                workspace_order=Subquery(workspace_qs.values('order')[:1]),
-                workspace_icon=Subquery(workspace_qs.values('icon')[:1]),
-                table_order=F('sysusertableorder__tableorder'),
+        # Funzione di appoggio per evitare di duplicare la query ORM
+        def _fetch_tables_for_user(target_userid):
+            return (
+                cls.objects
+                .filter(sysusertableorder__userid=target_userid)
+                .annotate(
+                    workspace_order=Subquery(workspace_qs.values('order')[:1]),
+                    workspace_icon=Subquery(workspace_qs.values('icon')[:1]),
+                    table_order=F('sysusertableorder__tableorder'),
+                )
+                .values(
+                    'id',
+                    'description',
+                    'workspace',
+                    'workspace_order',
+                    'workspace_icon',
+                    'sysusertableorder__userid',
+                    'table_order',
+                )
+                .order_by('workspace_order', 'table_order', 'id')
             )
-            .values(
-                'id',
-                'description',
-                'workspace',
-                'workspace_order',
-                'workspace_icon',
-                'sysusertableorder__userid',
-                'table_order',
+
+        # 1. Tentativo con l'utente corrente
+        rows = _fetch_tables_for_user(userid)
+
+        # 2. Tentativo con i gruppi (ordinati per priorità globale)
+        # Usiamo .exists() per verificare se la query ORM ha restituito risultati
+        if not rows.exists():
+            group_priority_sq = SysGroup.objects.filter(id=OuterRef('groupid')).values('priority')[:1]
+            group_manager_sq = SysGroup.objects.filter(id=OuterRef('groupid')).values('idmanager')[:1]
+
+            manager_ids = (
+                SysGroupUser.objects
+                .filter(userid=userid)
+                .exclude(disabled='Y')
+                .annotate(
+                    # Prende la priorità dalla subquery e gestisce i NULL con Coalesce
+                    sort_priority=Coalesce(Subquery(group_priority_sq), Value(9999), output_field=IntegerField()),
+                    # Prende l'idmanager del gruppo corrispondente
+                    manager_id=Subquery(group_manager_sq)
+                )
+                .order_by('sort_priority')
+                .values_list('manager_id', flat=True)
             )
-            .order_by('workspace_order', 'table_order', 'id')
-        )
+
+            for idmanager in manager_ids:
+                if idmanager is not None:
+                    rows = _fetch_tables_for_user(idmanager)
+                    if rows.exists():
+                        break
+                            
+        # 3. Fallback al superuser (userid = 1)
+        if not rows.exists():
+            rows = _fetch_tables_for_user(1)
+
         return rows
 
 class SysTableFeature(models.Model):

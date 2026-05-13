@@ -308,10 +308,10 @@ def get_sidebarmenu_items(request):
     print("Function: get_sidebarmenu_items")
     
     # 1. Recupero dati base e inizializzazione
-    tables = SysTable.get_user_tables(1)
-    workspaces_tables = {}
     userid = Helper.get_userid(request)
     username = Helper.get_username(request)
+    tables = SysTable.get_user_tables(userid)
+    workspaces_tables = {}
     
     # 2. Gestione Tabelle Preferite
     favorite_query = "SELECT tableid FROM sys_user_favorite_tables WHERE sys_user_id = %s"
@@ -633,6 +633,8 @@ def delete_record(request):
         data = json.loads(request.body)
         recordid = data.get("recordid")
         tableid = data.get("tableid")
+        mastertableid = data.get("mastertableid")
+        masterrecordid = data.get("masterrecordid")
 
         if not recordid or not tableid:
             return JsonResponse({"success": False, "detail": "recordid o tableid mancante"}, status=400)
@@ -644,6 +646,20 @@ def delete_record(request):
 
         if not tablesettings.has_permission_for_record(can_delete, recordid):
             return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
+
+        if mastertableid and masterrecordid:
+            tablesettings = TableSettings(mastertableid, userid)
+            permissions_linked = tablesettings.get_specific_settings(['delete_linked', 'which_linked_to_delete'])
+            can_delete_linked = permissions_linked['delete_linked']
+            which_linked_to_delete = permissions_linked['which_linked_to_delete']['value']
+            which_linked_to_delete = [x.strip() for x in which_linked_to_delete.split(',')] if type(which_linked_to_delete) == str else which_linked_to_delete
+        
+            if tableid not in which_linked_to_delete:
+                return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
+
+            if tableid in which_linked_to_delete and not tablesettings.has_permission_for_record(can_delete_linked):
+                return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
+
 
         # Esegui l'UPDATE marcando il record come cancellato
         sql = f"UPDATE user_{tableid} SET deleted_='Y' WHERE recordid_={recordid}"
@@ -807,7 +823,7 @@ def get_table_records(request):
             order_fieldid = 'recordid_'
     if not order_direction:
         table_setting=TableSettings(tableid, Helper.get_userid(request))
-        default_orderby=table_setting.get_specific_settings('risultati_order')['risultati_order']
+        default_orderby=table_setting.get_specific_settings('default_orderbydirection')['default_orderbydirection']
         if default_orderby['value']:
             order_direction = default_orderby['value']
         else:
@@ -3485,6 +3501,8 @@ def duplicate_record(request):
     data = json.loads(request.body)
     source_recordid = data.get('recordid')
     tableid = data.get('tableid')
+    mastertableid = data.get('mastertableid')
+    masterrecordid = data.get('masterrecordid')
 
     if not source_recordid or not tableid:
         return JsonResponse({'error': 'Missing recordid or tableid'}, status=400)
@@ -3505,9 +3523,22 @@ def duplicate_record(request):
     if not tablesettings.has_permission_for_record(can_duplicate_settings):
         return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
 
+    if mastertableid and masterrecordid:
+        tablesettings = TableSettings(mastertableid, userid)
+        permissions_linked = tablesettings.get_specific_settings(['duplicate_linked', 'which_linked_to_duplicate'])
+        can_duplicate_linked = permissions_linked['duplicate_linked']
+        which_linked_to_duplicate = permissions_linked['which_linked_to_duplicate']['value']
+        which_linked_to_duplicate = [x.strip() for x in which_linked_to_duplicate.split(',')] if type(which_linked_to_duplicate) == str else which_linked_to_duplicate
+    
+        if tableid not in which_linked_to_duplicate:
+            return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
+
+        if tableid in which_linked_to_duplicate and not tablesettings.has_permission_for_record(can_duplicate_linked):
+            return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
+
     excluded_fields = {
         'recordid_', 'creatorid_', 'creation_', 'lastupdaterid_', 'lastupdate_',
-        'totpages_', 'firstpagefilename_', 'recordstatus_', 'deleted_',
+        'totpages_', 'firstpagefilename_', 'recordstatus_', 'deleted_', 
     }
 
     if tableid == 'chart':
@@ -3625,17 +3656,30 @@ def save_record_fields(request):
     can_edit_settings = permissions['edit']
     can_add_settings = permissions['add']
 
-    if mastertableid and masterrecordid:
-        tablesettings = TableSettings(mastertableid, userid)
-        permissions_linked = tablesettings.get_specific_settings(['edit_linked', 'add_linked'])
-        can_edit_settings = permissions_linked['edit_linked']
-        can_add_settings = permissions_linked['add_linked']
-
     if not recordid and not tablesettings.has_permission_for_record(can_add_settings):
         return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
 
     if recordid and not tablesettings.has_permission_for_record(can_edit_settings, recordid):
         return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
+    
+    if mastertableid and masterrecordid:
+        tablesettings = TableSettings(mastertableid, userid)
+        permissions_linked = tablesettings.get_specific_settings(['edit_linked', 'add_linked', 'which_linked_to_edit', 'which_linked_to_add'])
+        can_edit_settings = permissions_linked['edit_linked']
+        can_add_settings = permissions_linked['add_linked']
+        which_linked_to_edit = permissions_linked['which_linked_to_edit']['value']
+        which_linked_to_add = permissions_linked['which_linked_to_add']['value']
+        which_linked_to_edit = [x.strip() for x in which_linked_to_edit.split(',')] if type(which_linked_to_edit) == str else which_linked_to_edit
+        which_linked_to_add = [x.strip() for x in which_linked_to_add.split(',')] if type(which_linked_to_add) == str else which_linked_to_add
+        
+        if tableid not in which_linked_to_add and tableid not in which_linked_to_edit:
+            return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
+
+        if tableid in which_linked_to_add and not tablesettings.has_permission_for_record(can_add_settings):
+            return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
+
+        if tableid in which_linked_to_edit and not tablesettings.has_permission_for_record(can_edit_settings, recordid):
+            return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
     
     # 3. Parsing del campo fields
     try:
@@ -4115,7 +4159,7 @@ def save_record_fields(request):
                 viewid_id=view_id if view_obj else (default_view.id if default_view else None),
                 chartid=chart_obj,
                 dashboardid_id=dashboard_id if dashboard_obj else None,
-                category=dashboard_obj.category if dashboard_obj else None,
+                category=dashboard_obj.category if dashboard_obj and dashboard_obj.category == 'myoverview' else "benchmark",
             )
 
         # Update existing blocks
@@ -4125,7 +4169,7 @@ def save_record_fields(request):
             final_name = f"{title} {(view_obj.name if view_obj else '')} {(dashboard_obj.name if dashboard_obj else '')}".strip()
             SysDashboardBlock.objects.filter(
                 chartid=chart_obj, dashboardid_id=dashboard_id, viewid_id=view_id
-            ).update(name=final_name, category=dashboard_obj.category if dashboard_obj else None)
+            ).update(name=final_name, category=dashboard_obj.category if dashboard_obj and dashboard_obj.category == 'myoverview' else "benchmark")
 
     custom_save_record_fields(tableid, recordid, old_record)
     return JsonResponse({"success": True, "detail": "Campi del record salvati con successo", "recordid": record.recordid})
@@ -6550,8 +6594,8 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
     
     final_type = chart_layout.lower() if chart_layout else "value"
     if chart_data.get('datasets2') and final_type in ['barchart', 'multibarchart']:
-        final_type = 'multibarlinechart'
-        chart_data['layout'] = 'multi-bar-line'
+        final_type = 'barchart'
+        # chart_data['layout'] = 'multi-bar-line'
 
     chart_data_json = json.dumps(chart_data, default=json_date_handler)
 
