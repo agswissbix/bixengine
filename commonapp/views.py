@@ -3877,6 +3877,13 @@ def save_record_fields(request):
         userid_chart = values.get("user", None)
 
 
+        if not fields and operation == 'Conteggio':
+            fields = 'recordid_'
+
+        if not fields_2 and operation2 == 'Conteggio':
+            fields_2 = 'recordid_'
+
+
         # =======================
         # DASHBOARDS / VIEWS
         # =======================
