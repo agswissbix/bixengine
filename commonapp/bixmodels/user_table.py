@@ -282,7 +282,7 @@ class UserTable:
                 continue
 
             # --- TIPO Text / Parola ---
-            if filter_type in ["Text", "Parola"]:
+            if filter_type in ["Text", "Parola", "linkedmaster"]:
                 # se val_i è lista -> ogni elemento è un valore singolo (1:1 non list-vs-cond handled above)
                 if isinstance(val_i, list):
                     # comportamento: per la singola coppia (cond_i, val_i_as_list) combiniamo i subvalori
