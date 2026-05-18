@@ -706,10 +706,12 @@ def stampa_offerta(request):
         price = line.get('price', 0.0)
         total += price
         
-        # Formatta i numeri in stile italiano
-        qty_str = f"{quantity:.0f}".replace('.', ',')
-        unit_str = f"CHF {unit_price:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
-        price_str = f"CHF {price:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        from customapp_swissbix.templatetags.swissbix_filters import format_price
+        
+        # Formatta i numeri in stile svizzero
+        qty_str = f"{quantity:.0f}"
+        unit_str = f"CHF {format_price(unit_price)}"
+        price_str = f"CHF {format_price(price)}"
         
         # Crea RichText per questa riga prodotto
         rt_prodotto = RichText()
@@ -729,7 +731,7 @@ def stampa_offerta(request):
     separatore = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
     # Crea il totale finale
-    total_str = f"CHF {total:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+    total_str = f"CHF {format_price(total)}"
     rt_totale = RichText()
     rt_totale.add('TOTALE COMPLESSIVO: ', bold=True, size=22)
     rt_totale.add(total_str, bold=True, size=22)
