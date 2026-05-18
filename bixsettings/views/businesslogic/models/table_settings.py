@@ -657,10 +657,18 @@ class TableSettings:
 
             if operator in ["=", "!=", ">", "<"]:
                 where_clauses.append(f"{field} {operator} {value_str}")
+            elif operator == "= or null":
+                where_clauses.append(f"({field} = {value_str} OR {field} IS NULL)")
+            elif operator == "!= or null":
+                where_clauses.append(f"({field} != {value_str} OR {field} IS NULL)")
             elif operator == "in":
                 if isinstance(value, list):
                     value_list = ",".join([f"'{v}'" for v in value])
                     where_clauses.append(f"{field} IN ({value_list})")
+            elif operator == "not in":
+                if isinstance(value, list):
+                    value_list = ",".join([f"'{v}'" for v in value])
+                    where_clauses.append(f"{field} NOT IN ({value_list})")
             else:
                 continue  # operatore non supportato
 
