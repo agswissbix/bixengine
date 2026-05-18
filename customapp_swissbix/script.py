@@ -2005,7 +2005,10 @@ def sync_bixdata_assenze():
         result_log.append("sync_bixdata_assenze")
 
         #aggiornamento dipendente
-        sql="UPDATE user_assenze JOIN user_dipendente ON user_assenze.adiuto_user=user_dipendente.adiuto_user SET user_assenze.recordiddipendente_=user_dipendente.recordid_"
+        sql="""UPDATE user_assenze a 
+                JOIN user_dipendente d ON a.adiuto_user = d.adiuto_user 
+                SET a.recordiddipendente_ = d.recordid_, 
+                a.user = d.utente;"""
         HelpderDB.sql_execute(sql)
         
 
