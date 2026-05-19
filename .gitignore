@@ -9,5 +9,6 @@ customapp_swissbix/static
 staticfiles/*
 uploads/*
 uploads_backup/*
+logs/*
 venv/
 .venv/
