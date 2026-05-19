@@ -6,8 +6,8 @@ from django.db import connection
 
 DISABLE_SCRIPT = True
 
-INCLUDE_FIELDS = { "commonapp.UserJobStatus"}
-INDIFFERENT_FIELDS = {"commonapp.UserDeadline","commonapp.UserSchedulerLog","commonapp.UserMonitoring","commonapp.UserEmail","commonapp.UserChart", "commonapp.UserSystemLog","commonapp.UserEvents", "commonapp.UserUserLog" }
+INCLUDE_FIELDS = { "commonapp.UserUserLog"}
+INDIFFERENT_FIELDS = {"commonapp.UserDeadline","commonapp.UserSchedulerLog","commonapp.UserMonitoring","commonapp.UserEmail","commonapp.UserChart", "commonapp.UserSystemLog","commonapp.UserEvents", "commonapp.UserJobStatus" }
 
 
 FIELD_TYPE_MAPPING = {
@@ -90,6 +90,18 @@ FIELD_TYPE_MAPPING = {
         "assigned_to": "Utente",
         "notification_sent": "Checkbox",
     },
+    "user_log": {
+        "tableid": "Parola",
+        "recordidtable": "Parola",
+        "action_type": "lookup",
+        "user": "Utente",
+        "ip_address": "Parola",
+        "log_id": "Parola",
+        "old_values": "Memo",
+        "new_values": "Memo",
+        "date": "Data",
+        "time": "Ora",
+    }
 }
 
 LOOKUP_ITEMS_MAP = {
@@ -103,6 +115,7 @@ LOOKUP_ITEMS_MAP = {
     "operation2_chart": ["Somma", "Media", "Conteggio"],
     "operation2_total_chart": ["Si", "No"],
     "date_granularity_chart": ["year", "month", "day"],
+    "action_type_user_log": ["CREATE", "UPDATE", "DELETE"],
 }
 
 

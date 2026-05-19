@@ -8,7 +8,7 @@ import bixscheduler.tasks as tasks_module
 def get_available_tasks():
     available = []
 
-    # Funzioni interne di bixscheduler.tasks
+    # 1. Funzioni interne di bixscheduler.tasks
     for name, func in inspect.getmembers(tasks_module, inspect.isfunction):
         if not name.startswith('_'):
             path = f'bixscheduler.tasks.{name}'
@@ -16,23 +16,32 @@ def get_available_tasks():
             description = inspect.getdoc(func) or ''
             available.append((path, label, description))
 
-    # Recupera cliente_id
+    # 2. Funzioni della commonapp
+    try:
+        common_module = importlib.import_module("commonapp.script")
+        for name, func in inspect.getmembers(common_module, inspect.isfunction):
+            if not name.startswith('_'):
+                path = f"commonapp.script.{name}"
+                label = f"COMMONAPP: {name.replace('_', ' ').title()}"
+                description = inspect.getdoc(func) or ''
+                available.append((path, label, description))
+    except ImportError:
+        pass  # In caso di errore di importazione, ignora e prosegue
+
+    # 3. Funzioni della customapp specifica per il cliente
     cliente_id = get_cliente_id()
     target_module = f"customapp_{cliente_id}"
 
-    # Prova a importare script.py dentro customapp_<cliente_id>
     try:
-        module = importlib.import_module(f"{target_module}.script")
-    except ImportError:
-        module = None
-
-    if module:
-        for name, func in inspect.getmembers(module, inspect.isfunction):
+        custom_module = importlib.import_module(f"{target_module}.script")
+        for name, func in inspect.getmembers(custom_module, inspect.isfunction):
             if not name.startswith('_'):
                 path = f"{target_module}.script.{name}"
                 label = f"{target_module.upper()}: {name.replace('_', ' ').title()}"
                 description = inspect.getdoc(func) or ''
                 available.append((path, label, description))
+    except ImportError:
+        pass
 
     return available
 

@@ -2129,3 +2129,6 @@ def update_company_statistics():
     """
     HelpderDB.sql_execute(sql)
     print("Statistiche aggregate 'invoiced' di user_company aggiornate con successo.")
+    
+
+
