@@ -131,6 +131,9 @@ class UserRecord:
             if load_fields:
                 self._fetch_field_definitions_from_db()
                 self._populate_fields_with_values() # Questo ora chiamerà il _convert_display_value aggiornato
+        
+        # Salviamo lo stato originale pre-modifiche (Zero overhead)
+        self._original_values = self.values.copy() if self.values else {}
 
     def _populate_fields_with_values(self):
         """ Popola il campo 'value' e 'convertedvalue' in self.fields usando self.values (logica di fallback) """
@@ -522,6 +525,11 @@ class UserRecord:
                     if not self.values:
                         return True
 
+                    # --- AUDIT LOG: RECUPERO VECCHI VALORI ---
+                    old_values = getattr(self, '_original_values', {})
+                    is_creating = getattr(self, '_is_creating', False)
+                    # ------------------------------------------
+
                     fields_sql = []
                     params_list = []
 
@@ -541,6 +549,51 @@ class UserRecord:
                     params_list.append(self.recordid)
 
                     HelpderDB.sql_execute_safe(sql, params_list)
+                    
+                    # --- AUDIT LOG E CALCOLO DELTA ---
+                    try:
+                        true_old = {}
+                        true_new = {}
+                        
+                        for k, new_v in self.values.items():
+                            if k in ('id', 'recordid_', 'linkedorder_'):
+                                continue
+                                
+                            old_v = old_values.get(k)
+                            
+                            # Normalizzazione stringa per confronto robusto (evita falsi positivi 1 vs '1')
+                            str_old = str(old_v).strip() if old_v is not None else ""
+                            str_new = str(new_v).strip() if new_v is not None else ""
+                            
+                            if str_old != str_new:
+                                # Gestione float (0.0 vs 0)
+                                try:
+                                    if float(str_old) == float(str_new):
+                                        continue
+                                except ValueError:
+                                    pass
+                                
+                                true_old[k] = old_v
+                                true_new[k] = new_v
+
+                        if is_creating or true_old:
+                            from commonapp.logs.audit_logger import log_audit_event
+                            action = 'CREATE' if is_creating else 'UPDATE'
+                            log_audit_event(
+                                action_type=action,
+                                table_name=f"user_{self.tableid}",
+                                record_id=self.recordid,
+                                old_values=true_old,
+                                new_values=true_new if not is_creating else self.values.copy(),
+                                user_id=self.userid
+                            )
+                        
+                        if is_creating:
+                            self._is_creating = False
+                    except Exception as e:
+                        print(f"Errore scrittura audit log: {e}")
+                    # --------------------------------
+
                     
                     # =====================================================
                     # GESTIONE SINCRONIZZAZIONE SCADENZE (Bidirezionale)
@@ -599,6 +652,8 @@ class UserRecord:
                     self.recordid = next_recordid
                     self.values['id'] = next_id
                     self.values['linkedorder_'] = next_order
+                    
+                    self._is_creating = True
 
                     self.save()
 

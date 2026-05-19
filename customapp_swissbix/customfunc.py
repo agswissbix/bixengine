@@ -663,18 +663,15 @@ def stampa_offerta(request):
     data = json.loads(request.body)
     recordid_deal = data.get('recordid')
     
-
-    tableid= 'deal'
+    tableid = 'deal'
   
     # Percorso al template Word
     base_dir = os.path.dirname(os.path.abspath(__file__))
     template_path = os.path.join(base_dir, 'templates', 'template.docx')
 
-
     if not os.path.exists(template_path):
         return HttpResponse("File non trovato", status=404)
 
-    
     deal_record = UserRecord(tableid, recordid_deal)
     reference = deal_record.values.get('reference', 'N/A')
     dealname = deal_record.values.get('dealname', 'N/A')
@@ -683,75 +680,52 @@ def stampa_offerta(request):
     
     filename = re.sub(r'[^a-zA-Z0-9\-_]', '', reference.replace(' ', '_')) if reference else f"offerta_{recordid_deal}"
 
+    # Inizializzazione variabili per evitare NameError
+    companyname = 'N/A'
+    address = 'N/A'
+    cap = 'N/A'
+    city = 'N/A'
+
     companyid = deal_record.values.get('recordidcompany_')
     if companyid:
-        company_record = UserRecord('company', deal_record.values.get('recordidcompany_'))
+        company_record = UserRecord('company', companyid)
         companyname = company_record.values.get('companyname', 'N/A')
         address = company_record.values.get('address', 'N/A')
         cap = company_record.values.get('cap', 'N/A')
         city = company_record.values.get('city', 'N/A')
 
-    user_record=HelpderDB.sql_query_row(f"SELECT * FROM sys_user WHERE id ='{dealuser1}'")
-    user = user_record['firstname'] + ' ' + user_record['lastname']
+    user_record = HelpderDB.sql_query_row(f"SELECT * FROM sys_user WHERE id ='{dealuser1}'")
+    user = f"{user_record['firstname']} {user_record['lastname']}" if user_record else 'N/A'
     
-    # Definizione economica
+    # Estrazione prodotti (Solo lista items e totale)
     dealline_records = deal_record.get_linkedrecords_dict('dealline')
-    lines = []
+    items = []
     total = 0.0
+    from customapp_swissbix.templatetags.swissbix_filters import format_price
 
     for idx, line in enumerate(dealline_records, 1):
         name = line.get('name', 'N/A')
         quantity = line.get('quantity', 0)
         unit_price = line.get('unitprice', 0.0)
         price = line.get('price', 0.0)
+        
         total += price
         
-        from customapp_swissbix.templatetags.swissbix_filters import format_price
-        
-        # Formatta i numeri in stile svizzero
+        # Formattazione svizzera/italiana per i singoli valori nel dizionario
         qty_str = f"{quantity:.0f}"
-        unit_str = f"CHF {format_price(unit_price)}"
-        price_str = f"CHF {format_price(price)}"
+        unit_str = format_price(unit_price)
+        price_str = format_price(price)
         
-        # Crea RichText per questa riga prodotto
-        rt_prodotto = RichText()
-        rt_prodotto.add(f"{name}:\n", size=20, underline=True)
-        rt_prodotto.add("\tQuantità: ", size=20)
-        rt_prodotto.add(qty_str, bold=True, size=20)
-        rt_prodotto.add("\t|\tPrezzo unitario: ", size=20)
-        rt_prodotto.add(unit_str, bold=True, size=20)
-        rt_prodotto.add("\t|\tTotale: ", size=20)
-        rt_prodotto.add(price_str, bold=True, size=20)
-        rt_prodotto.add("\n\n", size=20)
+        items.append({
+            "index": idx,
+            "descrizione": name,
+            "qt": qty_str,
+            "prezzo_unitario": unit_str,
+            "prezzo_totale": price_str,
+        })
 
-        lines.append(rt_prodotto)
-
-    # Crea il titolo
-    # Crea il separatore
-    separatore = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-    # Crea il totale finale
-    total_str = f"CHF {format_price(total)}"
-    rt_totale = RichText()
-    rt_totale.add('TOTALE COMPLESSIVO: ', bold=True, size=22)
-    rt_totale.add(total_str, bold=True, size=22)
-
-    # Combina tutti i prodotti in un unico RichText
-    rt_all_products = RichText()
-    for rt_prod in lines:
-        # Aggiungi il contenuto di ogni prodotto
-        rt_all_products.add(rt_prod)
-
-    # Crea il documento completo
-    tabella_completa = RichText()
-    tabella_completa.add(separatore, color='gray', size=18)
-    tabella_completa.add('\n\n')
-    tabella_completa.add(rt_all_products)
-    tabella_completa.add(separatore, color='gray', size=18)
-    tabella_completa.add('\n\n')
-    tabella_completa.add(rt_totale)
-    tabella_completa.add('\n\n')
-    tabella_completa.add(separatore, color='gray', size=18)
+    # Formattazione del totale complessivo
+    total_str = format_price(total)
 
     dati_trattativa = {
         "indirizzo": f"{address}, {cap} {city}",
@@ -760,9 +734,9 @@ def stampa_offerta(request):
         "venditore": user,
         "data_chiusura_vendita": closedata.strftime("%d/%m/%Y") if isinstance(closedata, datetime.date) else closedata,
         "data_attuale": datetime.datetime.now().strftime("%d/%m/%Y"),
-        'tabella_prodotti': tabella_completa,
+        "items": items,
+        "totale_complessivo": total_str,
     }
-
 
     # Carica il template e fai il rendering
     doc = DocxTemplate(template_path)

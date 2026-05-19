@@ -1002,11 +1002,16 @@ class UserSystemLog(BaseUserTable):
 
 
 class UserUserLog(BaseUserTable):
+    log_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
     date = models.DateField(null=True, blank=True)
     time = models.TimeField(null=True, blank=True)
     user = models.ForeignKey(SysUser, models.DO_NOTHING, null=True, blank=True)
-    function = models.CharField(max_length=255, null=True, blank=True)
-    output = models.TextField(null=True, blank=True)
+    action_type = models.CharField(max_length=50, null=True, blank=True)
+    tableid = models.CharField(max_length=255, null=True, blank=True)
+    recordidtable = models.CharField(max_length=255, null=True, blank=True)
+    old_values = models.JSONField(null=True, blank=True)
+    new_values = models.JSONField(null=True, blank=True)
+    ip_address = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
         db_table = 'user_user_log'

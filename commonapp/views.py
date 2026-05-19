@@ -661,9 +661,28 @@ def delete_record(request):
                 return JsonResponse({'error': 'You have not permissions for this request.'}, status=400)
 
 
+        # --- AUDIT LOG: RECUPERO VECCHI VALORI ---
+        old_record = UserRecord(tableid, recordid)
+        old_values = old_record.values.copy() if old_record.values else {}
+        
         # Esegui l'UPDATE marcando il record come cancellato
         sql = f"UPDATE user_{tableid} SET deleted_='Y' WHERE recordid_={recordid}"
         HelpderDB.sql_execute(sql)  # usa i parametri per evitare SQL injection
+
+        # --- AUDIT LOG: SCRITTURA ---
+        try:
+            from commonapp.logs.audit_logger import log_audit_event
+            log_audit_event(
+                action_type='DELETE',
+                table_name=f"user_{tableid}",
+                record_id=recordid,
+                old_values=old_values,
+                new_values={},
+                user_id=userid
+            )
+        except Exception as e:
+            print(f"Errore scrittura audit log DELETE: {e}")
+        # ----------------------------
 
         custom_delete_record(tableid, recordid)
         custom_function_delete_record(tableid, recordid)

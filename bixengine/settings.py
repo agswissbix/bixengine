@@ -93,10 +93,43 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'commonapp.utils.middleware.ImpersonateMiddleware',
     'commonapp.utils.middleware.PerformanceLoggingMiddleware',
+    'commonapp.utils.middleware.CurrentRequestMiddleware',
     # 'django_user_agents.middleware.UserAgentMiddleware',  # Scommenta se lo usi ancora
 ]
 
 ROOT_URLCONF = 'bixengine.urls'
+
+LOGS_DIR = os.path.join(BASE_DIR, '..', 'logs') if not IN_DOCKER else os.path.join(BASE_DIR, 'logs')
+os.makedirs(LOGS_DIR, exist_ok=True)
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'audit_json': {
+            '()': 'commonapp.logs.log_formatters.AuditJsonFormatter',
+            'format': '%(timestamp)s %(level)s %(user_id)s %(action_type)s %(table_name)s %(record_id)s %(old_values)s %(new_values)s %(ip_address)s',
+        },
+    },
+    'handlers': {
+        'audit_file': {
+            'level': 'INFO',
+            'class': 'concurrent_log_handler.ConcurrentRotatingFileHandler',
+            'filename': os.path.join(LOGS_DIR, 'user-audit.log'),
+            'maxBytes': 10 * 1024 * 1024, # 10 MB
+            'backupCount': 30,
+            'formatter': 'audit_json',
+            'encoding': 'utf-8',
+        },
+    },
+    'loggers': {
+        'audit_logger': {
+            'handlers': ['audit_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
 
 TEMPLATES = [
     {
