@@ -765,7 +765,7 @@ def sync_freshdesk_tickets(request):
     api_key = os.environ.get('FRESHDESK_APIKEY')
     password = "x"
 
-    url = f"https://swissbix.freshdesk.com/api/v2/tickets?include=requester,description,stats&updated_since=2025-01-01&per_page=10"
+    url = f"https://swissbix.freshdesk.com/api/v2/tickets?include=requester,description,stats&updated_since=2026-01-01&per_page=10"
 
     response = requests.get(url, auth=(api_key, password))
 
