@@ -7,8 +7,12 @@ ENV IN_DOCKER=1
 
 WORKDIR /app
 
+# Timezone
+ENV TZ=Europe/Rome
+
 # Installazione dipendenze di sistema (Base per il progetto)
 RUN apt-get update && apt-get install -y \
+    tzdata \
     build-essential \
     pkg-config \
     git \
