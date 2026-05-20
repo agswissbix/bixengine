@@ -13,10 +13,20 @@ class TaskService:
         da salvare a cascata.
         """
         tableid = 'task'
-        task = UserRecord(tableid, recordid)
+        task = UserRecord(tableid, recordid, load_fields=True)
         creator_id = task.values.get('creator')       # creatore
         assigned_to = task.values.get('user')         # assegnato a
         status = task.values.get('status')            # stato attuale
+
+        company = task.fields.get('recordidcompany_').get('convertedvalue')
+        description = task.values.get('description')
+
+        if company:
+            task.values["reference"] = f"{company} - {description}"
+        else:
+            task.values["reference"] = f"{description}"
+
+        task.save()
 
         records_to_save = []
 
