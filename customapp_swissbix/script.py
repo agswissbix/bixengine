@@ -650,13 +650,16 @@ def update_deals():
     result_log = []
 
     # Aggiornamento dello stato dal server di Adiuto
-    driver = "SQL Server"
+    if os.environ.get('IN_DOCKER', False):
+        driver = "{ODBC Driver 18 for SQL Server}"
+    else:
+        driver = "{SQL Server}"
     server = os.environ.get('ADIUTO_DB_SERVER')
     database = os.environ.get('ADIUTO_DB_NAME')
     username =  os.environ.get('ADIUTO_DB_USER')
     password =  os.environ.get('ADIUTO_DB_PASSWORD')
     
-    connection_string = f'DRIVER={driver};SERVER={server};DATABASE={database};UID={username};PWD={password}'
+    connection_string = f'DRIVER={driver};SERVER={server};DATABASE={database};UID={username};PWD={password};TrustServerCertificate=yes;'
 
     try:
         cnxn = pyodbc.connect(connection_string)

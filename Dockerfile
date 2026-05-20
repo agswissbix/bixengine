@@ -29,6 +29,22 @@ RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     && rm -rf /var/lib/apt/lists/*
 
+# --- INSTALLAZIONE DRIVER MICROSOFT SQL SERVER ---
+RUN apt-get update && apt-get install -y curl apt-transport-https gnupg2
+
+# 1. Scarica la chiave e salvala nella cartella TRADIZIONALE dei certificati fidati
+RUN curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/microsoft-prod.gpg
+
+# 2. Aggiungi il repository per Debian 11
+RUN curl -fsSL https://packages.microsoft.com/config/debian/11/prod.list > /etc/apt/sources.list.d/mssql-release.list
+
+# 3. Installa il driver accettando la licenza
+RUN apt-get update && ACCEPT_EULA=Y apt-get install -y msodbcsql18
+
+# 4. Pulisci la cache per mantenere l'immagine leggera
+RUN rm -rf /var/lib/apt/lists/*
+# --------------------------------------------------
+
 # Installazione dipendenze Python
 COPY requirements.txt /app/
 RUN pip install --upgrade pip && pip install -r requirements.txt
