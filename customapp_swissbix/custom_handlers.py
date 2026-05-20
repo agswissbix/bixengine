@@ -251,8 +251,7 @@ def duplicate_record(tableid, recordid):
     excluded_fields = []
     record = UserRecord(tableid, recordid, load_fields=False)
     if tableid == 'deal':
-        excluded_fields = ['dealstatus']
-        excluded_fields = ['dealstage']
+        excluded_fields = ['dealstatus', 'dealstage']
 
     for fildname, value in record.values.items():
         if fildname in excluded_fields:
