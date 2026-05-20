@@ -252,6 +252,7 @@ def duplicate_record(tableid, recordid):
     record = UserRecord(tableid, recordid, load_fields=False)
     if tableid == 'deal':
         excluded_fields = ['dealstatus']
+        excluded_fields = ['dealstage']
 
     for fildname, value in record.values.items():
         if fildname in excluded_fields:
