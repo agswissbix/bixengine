@@ -930,6 +930,10 @@ class TableSettings:
         except (ValueError, TypeError):
             current_uid = userid
 
+        is_admin = False
+        if current_uid == 0 or 0 in group_user_ids:
+            is_admin = True
+
         if settingids and isinstance(settingids, str):
             settingids = [settingids]
 
@@ -968,6 +972,25 @@ class TableSettings:
                     merged_settings.append(s)
                 elif sid in t_admin:
                     merged_settings.append(t_admin[sid])
+
+            if is_admin:
+                admin_overrides = ['edit', 'add', 'delete', 'view', 'duplicate', 'add_linked', 'edit_linked']
+                if settingids:
+                    admin_overrides = [sid for sid in admin_overrides if sid in settingids]
+                    
+                existing_sids = {ms['settingid']: ms for ms in merged_settings}
+                for setting_id in admin_overrides:
+                    if setting_id in existing_sids:
+                        existing_sids[setting_id]['value'] = 'true'
+                        existing_sids[setting_id]['conditions'] = None
+                        existing_sids[setting_id]['source'] = 'system_admin'
+                    else:
+                        merged_settings.append({
+                            'settingid': setting_id,
+                            'value': 'true',
+                            'conditions': None,
+                            'source': 'system_admin'
+                        })
 
             for ms in merged_settings:
                 sid = ms['settingid']
