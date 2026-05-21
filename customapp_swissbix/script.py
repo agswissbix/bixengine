@@ -1949,7 +1949,10 @@ def sync_adiuto_assenze():
     HelpderDB.sql_execute(sql)
 
     # Aggiornamento dello stato dal server di Adiuto
-    driver = "SQL Server"
+    if os.environ.get('IN_DOCKER', False):
+        driver = "{ODBC Driver 18 for SQL Server}"
+    else:
+        driver = "{SQL Server}"
     server = os.environ.get('ADIUTO_DB_SERVER')
     database = os.environ.get('ADIUTO_DB_NAME')
     username =  os.environ.get('ADIUTO_DB_USER')
@@ -2042,7 +2045,13 @@ def sync_bixdata_assenze():
         """
         HelpderDB.sql_execute(sql)
 
-        dipendenti_records=UserTable('dipendente').get_records(conditions_list=["deleted_='N'"])
+        assenze_records=UserTable('assenze', userid=0).get_records(conditions_list=["deleted_='N'"], limit=50)
+        for assenza in assenze_records:
+            print(f"update assenza: {assenza.get('user_bixdata')} - {assenza.get('dal')} - {assenza.get('al')}")
+            recordid_assenza=assenza.get('recordid_')
+            save_record_fields('assenze', recordid_assenza)
+
+        dipendenti_records=UserTable('dipendente', userid=0).get_records(conditions_list=["deleted_='N'"])
         for dipendente in dipendenti_records:
             recordid_dipendente=dipendente.get('recordid_')
             save_record_fields('dipendente', recordid_dipendente)

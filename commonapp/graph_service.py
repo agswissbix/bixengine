@@ -4,34 +4,45 @@ import msal
 import requests
 from django.conf import settings
 
-__token_cache = {}
+__msal_app = None
 
 def get_graph_access_token():
     """
     Ottiene un token di accesso per l'API Graph usando il flusso Client Credentials.
     Utilizza una cache in-memory semplice.
     """
-    global __token_cache
+    global __msal_app
 
-    if "access_token" in __token_cache:
-        return __token_cache.get("access_token")
+    # 1. Recupera la configurazione in modo sicuro (evita AttributeError se MS_GRAPH non esiste)
+    config = getattr(settings, 'MS_GRAPH', {})
+    if not config:
+        print("Errore: settings.MS_GRAPH non è definito.")
+        return None
 
-    config = settings.MS_GRAPH
+    # 2. Usa .get() per evitare KeyError se le chiavi mancano
+    client_id = config.get('AZURE_CLIENT_ID')
+    authority = config.get('AUTHORITY')
+    client_secret = config.get('CLIENT_SECRET')
+    scope = config.get('SCOPE')
 
-    app = msal.ConfidentialClientApplication(
-        config['AZURE_CLIENT_ID'],
-        authority=config['AUTHORITY'],
-        client_credential=config['CLIENT_SECRET'],
-    )
+    # 3. Verifica che tutti i parametri obbligatori siano effettivamente valorizzati
+    if not all([client_id, authority, client_secret, scope]):
+        print("Errore: Mancano parametri fondamentali (CLIENT_ID, AUTHORITY, SECRET o SCOPE) nella configurazione.")
+        return None
 
-    result = app.acquire_token_silent(config['SCOPE'], account=None)
+    # 4. Inizializza l'applicazione MSAL solo se non esiste già
+    if __msal_app is None:
+        __msal_app = msal.ConfidentialClientApplication(
+            client_id,
+            authority=authority,
+            client_credential=client_secret,
+        )
 
-    if not result:
-        print("Nessun token in cache, ne richiedo uno nuovo a Entra ID...")
-        result = app.acquire_token_for_client(scopes=config['SCOPE'])
+    # 5. Richiede il token. MSAL verificherà automaticamente la sua cache interna
+    # e farà una chiamata a Entra ID solo se il token manca o sta per scadere.
+    result = __msal_app.acquire_token_for_client(scopes=scope)
 
     if "access_token" in result:
-        __token_cache = result
         return result['access_token']
     else:
         print(f"Errore nell'ottenere il token: {result.get('error')}")

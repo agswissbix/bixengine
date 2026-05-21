@@ -1946,7 +1946,6 @@ def sync_graph_calendar(request):
         "detail": f"Sincronizzazione Delta Batch completata. {total_users_synced} utenti processati."
     })
     
-@login_required_api
 def create_event(event_data):
     """
     Crea un nuovo evento su Microsoft Graph.
@@ -1990,12 +1989,11 @@ def create_event(event_data):
     )
 
     if "error" in result:
-        print(f"Errore durante la creazione dell'evento su Graph: {result['details']}")
+        print(f"Errore durante la creazione dell'evento su Graph: {result.get('details')}")
         return result
 
     return result
 
-@login_required_api
 def update_event(event_data):
     """
     Aggiorna un evento esistente su Microsoft Graph.
