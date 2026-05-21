@@ -205,8 +205,23 @@ class TableSettings:
         },
         'table_planner_default_view': {
             'type': 'select',
+            'options': ['calendar', 'planner'],
+            'value': 'calendar'
+        },
+        'table_planner_default_view_calendar': {
+            'type': 'select',
+            'options': ['day', 'week', 'month'],
+            'value': 'month'
+        },
+        'table_planner_default_view_matrix': {
+            'type': 'select',
             'options': ['day', 'week', 'month'],
             'value': 'week'
+        },
+        'table_planner_show_unplanned': {
+            'type': 'select',
+            'options': ['true', 'false'],
+            'value': 'false'
         },
         'default_orderby': {
             'type': 'select',
