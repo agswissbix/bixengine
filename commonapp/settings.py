@@ -245,15 +245,17 @@ def get_master_linked_tables(request):
     return JsonResponse({"linked_tables": linked_tables})
 
 
+@login_required_api
 def settings_table_settings(request):
     tableid = json.loads(request.body).get('tableid')
     userid = json.loads(request.body).get('userid')
+    with_option = json.loads(request.body).get('with_option', False)
 
     if not userid:
         userid = Helper.get_userid(request)
 
     tablesettings_obj = TableSettings(tableid=tableid, userid=userid)
-    tablesettings = tablesettings_obj.get_settings(with_option=True)
+    tablesettings = tablesettings_obj.get_settings(with_option=with_option)
 
     return JsonResponse({"tablesettings": tablesettings})
 
