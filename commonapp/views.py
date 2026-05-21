@@ -2408,7 +2408,7 @@ def matrixcalendar_save_record(request):
             record.values[date_to_field] = end_dt
 
         # Campi opzionali: orari
-        if time_from_field:
+        if time_from_field and start_dt:
             record.values[time_from_field] = start_dt.strftime('%H:%M')
         if time_to_field and end_dt:
             record.values[time_to_field] = end_dt.strftime('%H:%M')
