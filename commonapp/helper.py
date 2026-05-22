@@ -461,6 +461,22 @@ class Helper:
         return dt.isoformat()
 
     @classmethod
+    def parse_to_date(cls, date_input):
+        """Verifica il tipo e restituisce sempre un oggetto datetime.date"""
+        if isinstance(date_input, str):
+            # Se è una stringa, la converte
+            return datetime.datetime.strptime(date_input, "%Y-%m-%d").date()
+        elif isinstance(date_input, datetime.datetime):
+            # Se è un datetime (con data e ora), estrae solo la data
+            return date_input.date()
+        elif isinstance(date_input, datetime.date):
+            # Se è già un date, lo lascia così com'è
+            return date_input
+        else:
+            # Blocca tipi di dato completamente errati
+            raise TypeError(f"Tipo non supportato per la data: {type(date_input)}")
+
+    @classmethod
     def evaluate_and_conditions(cls,fieldmap: Dict[str, Any], conds: List[Tuple[str,str,Any]]) -> bool:
         """
         fieldmap: mappa fieldid -> valore del record (già estratto)

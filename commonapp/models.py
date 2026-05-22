@@ -1005,7 +1005,7 @@ class UserUserLog(BaseUserTable):
     log_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
     date = models.DateField(null=True, blank=True)
     time = models.TimeField(null=True, blank=True)
-    user = models.ForeignKey(SysUser, models.DO_NOTHING, null=True, blank=True)
+    user = models.ForeignKey(SysUser, models.DO_NOTHING, null=True, blank=True, db_column='user')
     action_type = models.CharField(max_length=50, null=True, blank=True)
     tableid = models.CharField(max_length=255, null=True, blank=True)
     recordidtable = models.CharField(max_length=255, null=True, blank=True)

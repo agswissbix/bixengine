@@ -33,16 +33,17 @@ def save_record_fields(tableid,recordid, old_values=""):
     # ---ASSENZE---
     if tableid == 'assenze':
         assenza_record = UserRecord('assenze', recordid)
-        tipo_assenza=assenza_record.values['tipo_assenza']
+        tipo_assenza=assenza_record.values.get('tipo_assenza')
         if tipo_assenza!='Malattia':
-            dipendente_recordid = assenza_record.values['recordiddipendente_']
+            dipendente_recordid = assenza_record.values.get('recordiddipendente_')
             save_record_fields(tableid='dipendente', recordid=dipendente_recordid)
 
-        employee_record = UserRecord('dipendente', assenza_record.values['recordiddipendente_'])
-        assenza_record.userid = employee_record.values['utente']
+        employee_record = UserRecord('dipendente', assenza_record.values.get('recordiddipendente_'))
+        assenza_record.userid = employee_record.values.get('utente')
         event_record = assenza_record.save_record_for_event()
 
-        save_record_fields('events', event_record.recordid)
+        if event_record and event_record.recordid:
+            save_record_fields('events', event_record.recordid)
     
     
     # ---ACCREDITO FERIE---
@@ -174,8 +175,11 @@ def save_record_fields(tableid,recordid, old_values=""):
     if tableid == 'dipendente':
         dipendente_record = UserRecord('dipendente', recordid)
         print(f"dipendente_record: {dipendente_record.values}")
+        if not dipendente_record or not hasattr(dipendente_record, 'values') or not dipendente_record.values:
+            print("ERRORE: Impossibile calcolare saldo vacanze. Record dipendente non trovato.")
+            return
         #calcolo saldo vacanze
-        saldovacanze_iniziale= Helper.safe_float(dipendente_record.values['saldovacanze_iniziale'])
+        saldovacanze_iniziale= Helper.safe_float(dipendente_record.values.get('saldovacanze_iniziale'))
         saldovacanze=saldovacanze_iniziale
         assenze_dict_list=dipendente_record.get_linkedrecords_dict('assenze')
         for assenza in assenze_dict_list:
@@ -251,7 +255,7 @@ def duplicate_record(tableid, recordid):
     excluded_fields = []
     record = UserRecord(tableid, recordid, load_fields=False)
     if tableid == 'deal':
-        excluded_fields = ['dealstatus']
+        excluded_fields = ['dealstatus', 'dealstage']
 
     for fildname, value in record.values.items():
         if fildname in excluded_fields:

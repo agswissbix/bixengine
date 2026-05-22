@@ -1,7 +1,21 @@
-version: '3.8'
-
 services:
-# Gunicorn
+  
+  # Servizio Redis (Aggiunto)
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    env_file:
+      - ./bixengine/.env
+    # Questo comando avvia Redis imponendo l'uso della password definita nel file .env
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    environment:
+      - TZ=Europe/Rome
+
+  # Gunicorn
   web:
     build: .
     restart: unless-stopped
@@ -11,9 +25,15 @@ services:
       - .:/app
       - ../uploads:/app/uploads
       - ../xml:/app/xml
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     ports:
       - "8000:8000"
     command: gunicorn --bind 0.0.0.0:8000 bixengine.wsgi:application
+    depends_on:
+      - redis # Dice a Docker di avviare prima Redis e poi il Worker
+    environment:
+      - TZ=Europe/Rome
 
   # Servizio worker per i processi in backend
   qcluster:
@@ -25,4 +45,13 @@ services:
       - .:/app
       - ../uploads:/app/uploads
       - ../xml:/app/xml
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     command: python manage.py qcluster
+    depends_on:
+      - redis # Dice a Docker di avviare prima Redis e poi il Worker
+    environment:
+      - TZ=Europe/Rome
+
+volumes:
+  redis_data:

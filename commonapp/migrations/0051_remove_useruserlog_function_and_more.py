@@ -57,6 +57,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='useruserlog',
             name='user',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.DO_NOTHING, to='commonapp.sysuser'),
+            field=models.ForeignKey(blank=True, null=True, db_column='user', on_delete=django.db.models.deletion.DO_NOTHING, to='commonapp.sysuser'),
         ),
     ]

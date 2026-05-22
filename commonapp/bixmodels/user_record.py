@@ -302,8 +302,8 @@ class UserRecord:
                     start_str = "08:00"
                     end_str = "17:00"
 
-                start_date = datetime.datetime.strptime(from_date, "%Y-%m-%d").date()
-                end_date = datetime.datetime.strptime(to_date, "%Y-%m-%d").date()
+                start_date = Helper.parse_to_date(from_date)
+                end_date = Helper.parse_to_date(to_date)
 
                 start_time = None
                 end_time = None

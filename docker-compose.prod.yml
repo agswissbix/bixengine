@@ -1,6 +1,21 @@
 version: '3.8'
 
 services:
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    env_file:
+      - .env
+    # Questo comando avvia Redis imponendo l'uso della password definita nel file .env
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    networks:
+      - bix-network
+    volumes:
+      - redis_data:/data
+    environment:
+      - TZ=Europe/Rome
+
   web:
     image: ghcr.io/${GITHUB_USER}/bixengine-${CLIENT_ID}:latest
     restart: always
@@ -15,6 +30,10 @@ services:
     ports:
       - "8000:8000"
     command: gunicorn --bind 0.0.0.0:8000 bixengine.wsgi:application
+    depends_on:
+      - redis # Dice a Docker di avviare prima Redis e poi il Worker
+    environment:
+      - TZ=Europe/Rome
 
   qcluster:
     image: ghcr.io/${GITHUB_USER}/bixengine-${CLIENT_ID}:latest
@@ -27,6 +46,13 @@ services:
       - ./uploads:/app/uploads
       - ./xml:/app/xml
     command: python manage.py qcluster
+    depends_on:
+      - redis # Dice a Docker di avviare prima Redis e poi il Worker
+    environment:
+      - TZ=Europe/Rome
+
+volumes:
+  redis_data:
 
 networks:
   bix-network:

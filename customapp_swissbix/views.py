@@ -17,7 +17,7 @@ from commonapp.bixmodels.user_table import *
 from commonapp.bixmodels.helper_db import *
 from commonapp.helper import *
 import shutil
-from customapp_swissbix.custom_handlers import save_record_fields
+from customapp_swissbix.custom_handlers import save_record_fields, get_input_linked_conditions
 from types import SimpleNamespace
 from commonapp.models import SysUser
 from customapp_swissbix.utils.browser_manager import BrowserManager
@@ -1696,7 +1696,15 @@ def get_timetracking(request):
             timetrackings.append(timetracking_data)
 
         # Clienti
-        companies_list = UserTable('company').get_records(limit=10000000)
+        conditions=["true"]
+        custom_cond = get_input_linked_conditions(
+            linkedmaster_tableid='company',
+            tableid='',
+            fieldid='',
+            form_values={},
+        )
+        conditions.append(custom_cond.replace("AND", ""))
+        companies_list = UserTable('company', userid=userid).get_records(conditions_list=conditions, limit=10000000)
         companies = []
         for company in companies_list:
             company_data = {
@@ -2401,6 +2409,15 @@ def search_timesheet_entities(request):
         conditions.append(f"recordidcompany_ = '{azienda_id}'")
         conditions.append(f"(completed != 'Si' OR completed IS NULL)")
 
+    custom_conditions = get_input_linked_conditions(
+        linkedmaster_tableid=table_name,
+        tableid='',
+        fieldid=name_field,
+        form_values={},
+    )
+    if custom_conditions:
+        conditions.append(custom_conditions.replace("AND", ""))
+
     try:
         records = UserTable(table_name).get_records(conditions_list=conditions, limit=20)
         
@@ -2815,7 +2832,12 @@ def get_lenovo_device_info(request):
 
         s = requests.Session()
         # Request home first to get possible required cookies (though it works for some just with POST, safer to do this)
-        s.get("https://pcsupport.lenovo.com/ch/it", timeout=5)
+        try:
+            api_res = s.get("https://pcsupport.lenovo.com/ch/it", timeout=5)
+            if api_res.status_code != 200:
+                return JsonResponse({'success': True, 'data': {'data': {}, 'error': 'SUPPORT LENOVO NON RAGGIUNGIBILE, la garanzia e il modello non saranno compilati automaticamente.'}}, status=200)
+        except Exception as e:
+            return JsonResponse({'success': True, 'data': {'data': {}, 'error': 'SUPPORT LENOVO NON RAGGIUNGIBILE, la garanzia e il modello non saranno compilati automaticamente.'}}, status=200)
 
         res = s.post(
             "https://pcsupport.lenovo.com/ch/it/api/v4/upsell/redport/getIbaseInfo",

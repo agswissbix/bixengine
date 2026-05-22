@@ -1720,7 +1720,7 @@ def _map_and_save_event(event_data, user_email):
         return None, False
 
 @login_required_api
-def initial_graph_calendar_sync(request):
+def initial_graph_calendar_sync():
     """
     Sincronizzazione iniziale degli eventi del calendario con il DB Bixdata.
     Da utilizzare solo quando il DB è vuoto.
@@ -1826,8 +1826,7 @@ def initial_graph_calendar_sync(request):
         "detail": f"Merge completato. {total_events_merged} locali promossi. Scaricati/Aggiornati {total_events_downloaded} eventi M365 ({users_synced_count} utenti)."
     })
 
-@login_required_api
-def sync_graph_calendar(request):
+def sync_graph_calendar():
     """
     Sincronizza gli eventi del calendario di un utente Outlook con il DB Bixdata
     usando i delta query.
@@ -1946,7 +1945,6 @@ def sync_graph_calendar(request):
         "detail": f"Sincronizzazione Delta Batch completata. {total_users_synced} utenti processati."
     })
     
-@login_required_api
 def create_event(event_data):
     """
     Crea un nuovo evento su Microsoft Graph.
@@ -1990,12 +1988,11 @@ def create_event(event_data):
     )
 
     if "error" in result:
-        print(f"Errore durante la creazione dell'evento su Graph: {result['details']}")
+        print(f"Errore durante la creazione dell'evento su Graph: {result.get('details')}")
         return result
 
     return result
 
-@login_required_api
 def update_event(event_data):
     """
     Aggiorna un evento esistente su Microsoft Graph.
@@ -2410,7 +2407,7 @@ def matrixcalendar_save_record(request):
             record.values[date_to_field] = end_dt
 
         # Campi opzionali: orari
-        if time_from_field:
+        if time_from_field and start_dt:
             record.values[time_from_field] = start_dt.strftime('%H:%M')
         if time_to_field and end_dt:
             record.values[time_to_field] = end_dt.strftime('%H:%M')

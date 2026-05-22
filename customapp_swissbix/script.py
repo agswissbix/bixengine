@@ -650,13 +650,16 @@ def update_deals():
     result_log = []
 
     # Aggiornamento dello stato dal server di Adiuto
-    driver = "SQL Server"
+    if os.environ.get('IN_DOCKER', False):
+        driver = "{ODBC Driver 18 for SQL Server}"
+    else:
+        driver = "{SQL Server}"
     server = os.environ.get('ADIUTO_DB_SERVER')
     database = os.environ.get('ADIUTO_DB_NAME')
     username =  os.environ.get('ADIUTO_DB_USER')
     password =  os.environ.get('ADIUTO_DB_PASSWORD')
     
-    connection_string = f'DRIVER={driver};SERVER={server};DATABASE={database};UID={username};PWD={password}'
+    connection_string = f'DRIVER={driver};SERVER={server};DATABASE={database};UID={username};PWD={password};TrustServerCertificate=yes;'
 
     try:
         cnxn = pyodbc.connect(connection_string)
@@ -1271,7 +1274,7 @@ def get_scheduler_logs(request):
     return monitor_values
     
 @task_monitor(data_type="sync")
-def sync_graph_calendar_task(request):
+def sync_graph_calendar_task():
     """
     Coordinatore della sincronizzazione: decide se eseguire 
     la sincronizzazione iniziale o quella delta.
@@ -1284,11 +1287,11 @@ def sync_graph_calendar_task(request):
     if is_empty:
         print("-> Database vuoto: Avvio Sincronizzazione Iniziale")
         # Chiamata alla funzione (che ora deve restituire un dict)
-        result = views.initial_graph_calendar_sync(request)
+        result = views.initial_graph_calendar_sync()
     else:
         print(f"-> Eventi presenti: Avvio Sincronizzazione Delta")
         # Chiamata alla funzione (che ora deve restituire un dict)
-        result = views.sync_graph_calendar(request)
+        result = views.sync_graph_calendar()
 
     try:
         data = json.loads(result.content.decode('utf-8'))
@@ -1985,7 +1988,10 @@ def sync_adiuto_assenze():
     HelpderDB.sql_execute(sql)
 
     # Aggiornamento dello stato dal server di Adiuto
-    driver = "SQL Server"
+    if os.environ.get('IN_DOCKER', False):
+        driver = "{ODBC Driver 18 for SQL Server}"
+    else:
+        driver = "{SQL Server}"
     server = os.environ.get('ADIUTO_DB_SERVER')
     database = os.environ.get('ADIUTO_DB_NAME')
     username =  os.environ.get('ADIUTO_DB_USER')
@@ -2078,7 +2084,13 @@ def sync_bixdata_assenze():
         """
         HelpderDB.sql_execute(sql)
 
-        dipendenti_records=UserTable('dipendente').get_records(conditions_list=["deleted_='N'"])
+        assenze_records=UserTable('assenze', userid=0).get_records(conditions_list=["deleted_='N'"], limit=50)
+        for assenza in assenze_records:
+            print(f"update assenza: {assenza.get('user_bixdata')} - {assenza.get('dal')} - {assenza.get('al')}")
+            recordid_assenza=assenza.get('recordid_')
+            save_record_fields('assenze', recordid_assenza)
+
+        dipendenti_records=UserTable('dipendente', userid=0).get_records(conditions_list=["deleted_='N'"])
         for dipendente in dipendenti_records:
             recordid_dipendente=dipendente.get('recordid_')
             save_record_fields('dipendente', recordid_dipendente)
