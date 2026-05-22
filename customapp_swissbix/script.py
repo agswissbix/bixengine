@@ -764,7 +764,7 @@ def update_deals():
 
 
 @task_monitor(data_type="sync")
-def sync_freshdesk_tickets(request):
+def sync_freshdesk_tickets():
     api_key = os.environ.get('FRESHDESK_APIKEY')
     password = "x"
 
@@ -809,8 +809,11 @@ def sync_freshdesk_tickets(request):
     return {"message": "Sincronizzazione freshdesk tickets completata", "updated_tickets": updated_tickets, "new_tickets": new_tickets}
 
 @task_monitor(data_type="sync")
-def sync_bexio_contacts():
-    url = "https://api.bexio.com/2.0/contact?order_by=id_desc&limit=10&offset=0"
+def sync_bexio_contacts(): 
+    sql="DELETE FROM user_bexio_contact"
+    HelpderDB.sql_execute(sql)
+
+    url = "https://api.bexio.com/2.0/contact?order_by=id_desc&limit=2000&offset=0"
     accesstoken=os.environ.get('BEXIO_ACCESSTOKEN')
     headers = {
         'Accept': "application/json",
@@ -853,8 +856,16 @@ def sync_bexio_contacts():
         # record.fields['status'] = contact['status']: Status field does not exists in contact
 
         record.save()
-
+    sql="UPDATE user_bexio_contact SET status='Active'"
+    HelpderDB.sql_execute(sql)
     return {"message": "Sincronizzazione bexio contacts completata", "updated_contacts": updated_contacts, "new_contacts": new_contacts}
+
+@task_monitor(data_type="sync")
+def sync_bixdata_company():
+    print("sync_company")
+    sql="UPDATE user_company SET bexio_status='Deleted'"
+    HelpderDB.sql_execute(sql)
+    sync_output = sync_table('company')
 
 @task_monitor(data_type="sync")
 def sync_bexio_orders():
@@ -1516,6 +1527,10 @@ def sync_bixdata_salesorders():
     return {"message": "Sincronizzazione salesorder completata"}
 
 
+    
+    
+
+
 @task_monitor(data_type="sync")
 def sync_bixdata_invoices():
     import time
@@ -1559,6 +1574,30 @@ def sync_servicecontract():
     return {"message": "Sincronizzazione servicecontract completata"}
 
 
+
+@task_monitor(data_type="sync")
+def sync_bixdata_tickets():
+    print("sync_tickets")
+    sync_output = sync_table('ticket')
+    
+    sql = """
+    UPDATE user_ticket ut
+    JOIN (
+        SELECT c.recordid_, SUBSTRING_INDEX(c.email, '@', -1) AS domain
+        FROM user_company c
+        JOIN (
+            SELECT MAX(id) as max_id
+            FROM user_company
+            WHERE bexio_status = 'Active' AND email LIKE '%@%'
+            GROUP BY SUBSTRING_INDEX(email, '@', -1)
+        ) latest ON c.id = latest.max_id
+    ) comp ON SUBSTRING_INDEX(ut.email, '@', -1) = comp.domain
+    SET ut.recordidcompany_ = comp.recordid_
+    WHERE ut.email LIKE '%@%';
+    """
+    HelpderDB.sql_execute(sql)
+    
+    return {"message": "Sincronizzazione tickets completata"}
     
 @task_monitor(data_type="logs")
 def get_monitoring():
