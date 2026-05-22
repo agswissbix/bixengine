@@ -2832,7 +2832,12 @@ def get_lenovo_device_info(request):
 
         s = requests.Session()
         # Request home first to get possible required cookies (though it works for some just with POST, safer to do this)
-        s.get("https://pcsupport.lenovo.com/ch/it", timeout=5)
+        try:
+            api_res = s.get("https://pcsupport.lenovo.com/ch/it", timeout=5)
+            if api_res.status_code != 200:
+                return JsonResponse({'success': True, 'data': {'data': {}, 'error': 'SUPPORT LENOVO NON RAGGIUNGIBILE, la garanzia e il modello non saranno compilati automaticamente.'}}, status=200)
+        except Exception as e:
+            return JsonResponse({'success': True, 'data': {'data': {}, 'error': 'SUPPORT LENOVO NON RAGGIUNGIBILE, la garanzia e il modello non saranno compilati automaticamente.'}}, status=200)
 
         res = s.post(
             "https://pcsupport.lenovo.com/ch/it/api/v4/upsell/redport/getIbaseInfo",
