@@ -65,13 +65,53 @@ def calculate_dependent_fields(request):
         if recordid_prodotto:
             prodotto=UserRecord('prodotto', recordid_prodotto, load_fields=False )
             prezzo_vendita=prodotto.values.get('prezzo_vendita')
+            descrizione=prodotto.values.get('descrizione')
             updated_fields['prezzo_vendita'] = prezzo_vendita
-        
+            updated_fields['descrizione'] = descrizione
+
+        sconto = fields.get('sconto')
+        recordid_fattura = fields.get('recordidfattura_')
+        if recordid_fattura:
+            fattura = UserRecord('fattura', recordid_fattura, load_fields=False)
+            if fattura and fattura.values:
+                tipo_fattura = fattura.values.get('tipo')
+                if tipo_fattura == 'Assistenza tecnica':
+                    recordid_azienda = fattura.values.get('recordidazienda_')
+                    if recordid_azienda:
+                        # Cerca il relativo contratto dell'azienda nella tabella "manutenzione"
+                        sql_manutenzione = f"SELECT sconto FROM user_manutenzione WHERE recordidazienda_='{recordid_azienda}' AND deleted_='N' LIMIT 1"
+                        manutenzione_row = HelpderDB.sql_query_row(sql_manutenzione)
+                        
+                        sconto_val = None
+                        if manutenzione_row:
+                            sconto_val = manutenzione_row.get('sconto')
+                        
+                        if sconto_val is None:
+                            azienda = UserRecord('azienda', recordid_azienda, load_fields=False)
+                            if azienda and azienda.values:
+                                sconto_val = azienda.values.get('sconto')
+                                
+                        if sconto_val is not None:
+                            updated_fields['sconto'] = sconto_val
+                            sconto = sconto_val
+
         if quantita and prezzo_vendita:
             try:
                 q = float(quantita)
                 p = float(prezzo_vendita)
-                updated_fields['totale_prezzo_vendita'] = p * q
+                totale = p * q
+                updated_fields['totale_prezzo_vendita'] = totale
+                
+                if sconto is not None and str(sconto).strip() != "":
+                    try:
+                        s_str = str(sconto).replace('%', '').strip()
+                        s_val = float(s_str)
+                        totale_scontato = totale * (1 - (s_val / 100.0))
+                        updated_fields['totale_prezzo_scontato'] = totale_scontato
+                    except (ValueError, TypeError):
+                        updated_fields['totale_prezzo_scontato'] = totale
+                else:
+                    updated_fields['totale_prezzo_scontato'] = totale
             except (ValueError, TypeError):
                 pass
 
@@ -172,3 +212,16 @@ def save_record_fields(tableid,recordid, old_record=""):
             
             manutenzione.values['protocollo'] = new_protocollo
             manutenzione.save()
+            
+    elif tableid == 'prodotto':
+        prodotto = UserRecord(tableid, recordid)
+        if prodotto and isinstance(prodotto.values, dict):
+            codicefornitore = prodotto.values.get('codicefornitore')
+            nomeprodotto = prodotto.values.get('nomeprodotto')
+            
+            codice_str = str(codicefornitore).strip() if codicefornitore is not None else ""
+            nome_str = str(nomeprodotto).strip() if nomeprodotto is not None else ""
+            
+            prodotto.values['riferimento'] = f"{codice_str} {nome_str}".strip()
+            prodotto.save()
+    
