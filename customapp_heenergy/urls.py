@@ -5,4 +5,5 @@ from .customfunc import *
 urlpatterns = [
     path('print_pdf_heenergy/', print_pdf_heenergy, name='print_pdf_heenergy'),
     path('heenergy_print_deal/', print_deal, name='print_deal'),
+    path('heenergy_export_excel/', heenergy_export_excel, name='heenergy_export_excel'),
 ]
