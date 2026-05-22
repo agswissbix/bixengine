@@ -1720,7 +1720,7 @@ def _map_and_save_event(event_data, user_email):
         return None, False
 
 @login_required_api
-def initial_graph_calendar_sync(request):
+def initial_graph_calendar_sync():
     """
     Sincronizzazione iniziale degli eventi del calendario con il DB Bixdata.
     Da utilizzare solo quando il DB è vuoto.
@@ -1826,8 +1826,7 @@ def initial_graph_calendar_sync(request):
         "detail": f"Merge completato. {total_events_merged} locali promossi. Scaricati/Aggiornati {total_events_downloaded} eventi M365 ({users_synced_count} utenti)."
     })
 
-@login_required_api
-def sync_graph_calendar(request):
+def sync_graph_calendar():
     """
     Sincronizza gli eventi del calendario di un utente Outlook con il DB Bixdata
     usando i delta query.

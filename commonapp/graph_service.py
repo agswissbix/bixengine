@@ -20,7 +20,7 @@ def get_graph_access_token():
         return None
 
     # 2. Usa .get() per evitare KeyError se le chiavi mancano
-    client_id = config.get('AZURE_CLIENT_ID')
+    client_id = config.get('CLIENT_ID')
     authority = config.get('AUTHORITY')
     client_secret = config.get('CLIENT_SECRET')
     scope = config.get('SCOPE')

@@ -1263,7 +1263,7 @@ def get_scheduler_logs(request):
     return monitor_values
     
 @task_monitor(data_type="sync")
-def sync_graph_calendar_task(request):
+def sync_graph_calendar_task():
     """
     Coordinatore della sincronizzazione: decide se eseguire 
     la sincronizzazione iniziale o quella delta.
@@ -1276,11 +1276,11 @@ def sync_graph_calendar_task(request):
     if is_empty:
         print("-> Database vuoto: Avvio Sincronizzazione Iniziale")
         # Chiamata alla funzione (che ora deve restituire un dict)
-        result = views.initial_graph_calendar_sync(request)
+        result = views.initial_graph_calendar_sync()
     else:
         print(f"-> Eventi presenti: Avvio Sincronizzazione Delta")
         # Chiamata alla funzione (che ora deve restituire un dict)
-        result = views.sync_graph_calendar(request)
+        result = views.sync_graph_calendar()
 
     try:
         data = json.loads(result.content.decode('utf-8'))
