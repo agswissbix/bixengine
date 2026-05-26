@@ -5293,6 +5293,10 @@ def export_excel(request):
                     field = fields.get(fieldid, {})  # Prendi il campo se esiste, altrimenti dict vuoto
 
                     value = field.get('convertedvalue', field.get('value', ''))
+                    
+                    if isinstance(value, str):
+                        value = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', value)
+
                     fieldtype = field.get('fieldtypewebid', 'standard')
                     cssClass = ''
 
@@ -5349,8 +5353,8 @@ def export_excel(request):
             # Restituisci il file come response (usando lo stesso pattern di stampa_bollettini)
             try:
                 with open(filename_with_path, 'rb') as fh:
-                    response = HttpResponse(fh.read(), content_type="application/pdf")
-                    response['Content-Disposition'] = f'inline; filename={filename}'
+                    response = HttpResponse(fh.read(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                    response['Content-Disposition'] = f'attachment; filename={filename}'
                     return response
 
             finally:
