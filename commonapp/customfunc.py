@@ -265,7 +265,7 @@ def import_csv_data(request):
                                 
                                 if query_conditions and len(query_conditions) == len(unique_fields):
                                     where_clause = " AND ".join(query_conditions)
-                                    check_query = f"SELECT recordid_ FROM user_{tableid} WHERE {where_clause} LIMIT 1"
+                                    check_query = f"SELECT recordid_ FROM user_{tableid} WHERE {where_clause} AND deleted_='N' LIMIT 1"
                                     try:
                                         existing = HelpderDB.sql_query(check_query)
                                         if existing and len(existing) > 0:
