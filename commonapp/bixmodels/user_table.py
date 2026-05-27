@@ -126,8 +126,10 @@ class UserTable:
 
     def get_condition_map(self):
         return {
-            "Text": self.TEXT_CONDITIONS,
             "Memo": self.TEXT_CONDITIONS,
+            "html": self.TEXT_CONDITIONS,
+            "Markdown": self.TEXT_CONDITIONS,
+            "SimpleMarkdown": self.TEXT_CONDITIONS,
             "Ora": self.TIME_CONDITIONS,
             "Parola": self.TEXT_CONDITIONS,
             "lookup": self.LOOKUP_CONDITIONS,
@@ -178,6 +180,8 @@ class UserTable:
             if not cond_i:
                 if filter_type == 'Ora':
                     cond_i = "Tra"
+                elif filter_type in ["Parola", "Memo", "html", "Markdown", "SimpleMarkdown"]:
+                    cond_i = "Contiene"
                 else:
                     cond_i = "Valore esatto"
 
@@ -282,7 +286,7 @@ class UserTable:
                 continue
 
             # --- TIPO Text / Parola ---
-            if filter_type in ["Text", "Parola", "linkedmaster"]:
+            if filter_type in ["Memo", "Parola", "linkedmaster", "html", "Markdown", "SimpleMarkdown"]:
                 # se val_i è lista -> ogni elemento è un valore singolo (1:1 non list-vs-cond handled above)
                 if isinstance(val_i, list):
                     # comportamento: per la singola coppia (cond_i, val_i_as_list) combiniamo i subvalori
