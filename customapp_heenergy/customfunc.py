@@ -13,6 +13,10 @@ from django.views.decorators.csrf import csrf_exempt
 from django.template.loader import render_to_string
 from bixengine.settings import BASE_DIR
 from commonapp.bixmodels.user_record import UserRecord
+from commonapp.bixmodels.user_table import UserTable
+from commonapp.helper import Helper
+from typing import List
+import pandas as pd
 from customapp_swissbix.utils.browser_manager import BrowserManager
 from docxtpl import DocxTemplate
 
@@ -336,3 +340,125 @@ def print_deal(request):
     )
     response['Content-Disposition'] = f'attachment; filename="{filename}.docx"'
     return response
+
+
+
+@csrf_exempt
+def heenergy_export_excel(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            tableid = data.get('tableid', 'export')
+            searchTerm = data.get('searchTerm')
+            viewid = data.get('view')
+            filters = data.get('filters', {})
+            mastertableid = data.get('mastertableid', '')
+            masterrecordid = data.get('masterrecordid', '')
+            order=data.get("order", {"fieldid": "recordid_", "direction": "desc"})
+            order_fieldid= order.get("fieldid", "recordid_")
+            order_direction= order.get("direction", "desc")
+        
+            table = UserTable(tableid,Helper.get_userid(request), typepreference='report_fields')
+            if viewid == '':
+                viewid=table.get_default_viewid()
+
+            if not order_fieldid:
+                if viewid == 'linked':
+                    order_fieldid = 'linkedorder_'
+                else:
+                    order_fieldid = 'recordid_'
+            if not order_direction:
+                order_direction = 'desc'
+
+            records: List[UserRecord]
+            conditions_list=list()
+            records=table.get_table_records_obj(viewid=viewid,searchTerm=searchTerm, conditions_list=conditions_list, filters_list=filters, master_tableid=mastertableid, master_recordid=masterrecordid, orderby=f"{order_fieldid} {order_direction}", limit=10000)
+            counter=table.get_total_records_count()
+            table_columns=table.get_results_columns()
+            rows=[]
+            for record in records:
+                row = {
+                    'recordid': record.recordid,
+                    'css': '#',
+                    'fields': []
+                }
+
+                # Dizionario dei campi effettivi nel record
+                fields = record.fields or {}
+
+                # Cicla su tutte le colonne previste dalla tabella
+                for table_column in table_columns:
+                    fieldid = table_column.get('fieldid')
+                    field = fields.get(fieldid, {})  # Prendi il campo se esiste, altrimenti dict vuoto
+
+                    value = field.get('convertedvalue', field.get('value', ''))
+                    fieldtype = field.get('fieldtypewebid', 'standard')
+                    cssClass = ''
+
+                    # Crea la cella
+                    field_data = {
+                        'recordid': record.recordid,
+                        'css': cssClass,
+                        'type': fieldtype,
+                        'value': value,
+                        'fieldid': fieldid
+                    }
+
+                    row['fields'].append(field_data)
+
+                rows.append(row)
+
+            # (Opzionale) Costruisci anche la lista colonne
+            columns = [
+                {'fieldtypeid': col['fieldtypeid'], 'desc': col['description']}
+                for col in table_columns
+            ]
+
+            # Prepara i dati ristrutturati per il DataFrame
+
+
+            # Crea il DataFrame
+            df = pd.DataFrame({
+                'recordid': [row['recordid'] for row in rows],
+                **{f"{col['desc']}": [row['fields'][i]['value'] for row in rows] for i, col in enumerate(columns)}
+            }) 
+            buffer = io.BytesIO()
+
+            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Sheet1', index=False)
+       
+            buffer.seek(0)
+
+            # Genera filename e path completo
+            filename = f'{tableid}_{uuid.uuid4().hex}.xlsx'
+            
+            # Costruisci il path completo seguendo il pattern di stampa_bollettini
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            filename_with_path = script_dir.rsplit('customapp_heenergy', 1)[0]
+            filename_with_path = os.path.join(filename_with_path, 'commonapp', 'static', 'excel', filename)
+            print("filename_with_path:")
+            print(filename_with_path)
+            # Crea la directory se non esiste
+            os.makedirs(os.path.dirname(filename_with_path), exist_ok=True)
+
+            # Salva il file Excel
+            with open(filename_with_path, 'wb') as f:
+                f.write(buffer.getvalue())
+
+            # Restituisci il file come response (usando lo stesso pattern di stampa_bollettini)
+            try:
+                with open(filename_with_path, 'rb') as fh:
+                    response = HttpResponse(fh.read(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                    response['Content-Disposition'] = f'inline; filename={filename}'
+                    return response
+
+            finally:
+                # Rimuovi il file temporaneo dopo aver inviato la response
+                if os.path.exists(filename_with_path):
+                    os.remove(filename_with_path)
+
+        except Exception as e:
+            print(f"Errore durante l'esportazione: {str(e)}")
+            return JsonResponse({'error': str(e)}, status=500)
+    else:
+        return JsonResponse({'error': 'Metodo non consentito'}, status=405)

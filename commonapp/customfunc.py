@@ -206,8 +206,9 @@ def import_csv_data(request):
             normalized_fields[field['description'].lower()] = field
             
         success_count = 0
+        updated_records = 0
+        inserted_records = 0
         error_count = 0
-        skipped_count = 0
         
         encodings_to_try = ['utf-8-sig', 'latin-1', 'cp1252']
         file_opened = False
@@ -248,6 +249,7 @@ def import_csv_data(request):
                                 
                         if record_values:
                             is_duplicate = False
+                            existing_recordid = None
                             if unique_fields:
                                 query_conditions = []
                                 for u_field in unique_fields:
@@ -263,27 +265,29 @@ def import_csv_data(request):
                                 
                                 if query_conditions and len(query_conditions) == len(unique_fields):
                                     where_clause = " AND ".join(query_conditions)
-                                    check_query = f"SELECT recordid_ FROM user_{tableid} WHERE {where_clause} LIMIT 1"
+                                    check_query = f"SELECT recordid_ FROM user_{tableid} WHERE {where_clause} AND deleted_='N' LIMIT 1"
                                     try:
                                         existing = HelpderDB.sql_query(check_query)
                                         if existing and len(existing) > 0:
                                             is_duplicate = True
+                                            existing_recordid = existing[0]['recordid_']
                                     except Exception as e:
                                         print(f"DEBUG: Error checking duplicate: {e}")
                                         
-                            if is_duplicate:
-                                print(f"DEBUG: Row {row_idx} skipped (duplicate)")
-                                skipped_count += 1
-                                continue
-                                
                             try:
                                 _save_record_data(
                                     tableid,
-                                    None,
+                                    existing_recordid,
                                     record_values,
                                     None,
                                 )
                                 success_count += 1
+                                if is_duplicate:
+                                    updated_records += 1
+                                    print(f"DEBUG: Row {row_idx} updated (duplicate)")
+                                else:
+                                    inserted_records += 1
+                                    print(f"DEBUG: Row {row_idx} inserted (new)")
                             except Exception as e:
                                 print(f"DEBUG: Error saving row: {e}")
                                 error_count += 1
@@ -311,12 +315,12 @@ def import_csv_data(request):
             print("DEBUG: Failed to remove file")
             pass
             
-        print(f"DEBUG: Finished. Imported: {success_count}, Errors: {error_count}, Skipped: {skipped_count}")
+        print(f"DEBUG: Finished. Inserted: {inserted_records}, Updated: {updated_records}, Errors: {error_count}")
         return JsonResponse({
             'success': True,
-            'imported': success_count,
-            'errors': error_count,
-            'skipped': skipped_count
+            'inserted': inserted_records,
+            'updated': updated_records,
+            'errors': error_count
         })
         
     except Exception as e:
