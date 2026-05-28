@@ -204,6 +204,8 @@ def print_pdf_heenergy(request):
                "imposta": fattura_data.get('imposta', 0),
                "totale": fattura_data.get('totale', 0),
                "status": fattura_data.get('stato', ''),
+               "riferimento1": fattura_data.get('riferimento1', ''),
+               "riferimento2": fattura_data.get('riferimento2', ''),
            })
 
         # 3. Render HTML

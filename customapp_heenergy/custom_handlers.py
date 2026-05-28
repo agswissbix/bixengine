@@ -217,7 +217,7 @@ def save_record_fields(tableid,recordid, old_record=""):
         prodotto = UserRecord(tableid, recordid)
         if prodotto and isinstance(prodotto.values, dict):
             codicefornitore = prodotto.values.get('codicefornitore')
-            nomeprodotto = prodotto.values.get('nomeprodotto')
+            nomeprodotto = prodotto.values.get('nome')
             
             codice_str = str(codicefornitore).strip() if codicefornitore is not None else ""
             nome_str = str(nomeprodotto).strip() if nomeprodotto is not None else ""

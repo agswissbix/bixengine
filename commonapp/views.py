@@ -5095,8 +5095,9 @@ def send_emails(request):
                 full_path_attachment = None
 
               
+        email_record = UserRecord('email', email['recordid_'])
         try:
-            result = EmailSender.send_email(
+            success, log_info = EmailSender.send_email(
                 emails=email['recipients'],
                 subject=email['subject'],
                 html_message=email['mailbody'],
@@ -5104,16 +5105,28 @@ def send_emails(request):
                 bcc=email['ccn'],
                 recordid=email['recordid_'],
                 attachment=full_path_attachment,
-                attachment_name=email['attachment_name']
+                attachment_name=email['attachment_name'],
+                return_log=True
             )
-            email_record=UserRecord('email',email['recordid_'])
-            email_record.values['status']='Inviata'
+            
+            if success:
+                email_record.values['status'] = 'Inviata'
+            else:
+                email_record.values['status'] = 'Errore'
+            
             email_record.values['date'] = datetime.datetime.now().strftime("%Y-%m-%d")  # formato aaaa-mm-gg
             email_record.values['sent_timestamp'] = datetime.datetime.now().strftime("%H:%M:%S")
+            email_record.values['note'] = log_info
             email_record.save()
         except Exception as e:
-            print(str(e))
-            return HttpResponse(f"Errore invio: {str(e)}")
+            import traceback
+            error_log = f"Eccezione imprevista durante l'invio:\n{str(e)}\n\nTraceback:\n{traceback.format_exc()}"
+            print(error_log)
+            email_record.values['status'] = 'Errore'
+            email_record.values['date'] = datetime.datetime.now().strftime("%Y-%m-%d")
+            email_record.values['sent_timestamp'] = datetime.datetime.now().strftime("%H:%M:%S")
+            email_record.values['note'] = error_log
+            email_record.save()
 
 
     return HttpResponse("Email inviate con successo!")
@@ -5549,11 +5562,6 @@ def save_favorite_tables(request):
     return JsonResponse({'success': True})
 
 
-def script_test(request):
-    domain = "off-horizon.ch"
-    domain_info=get_domain_info(domain)
-
-    return JsonResponse({'response': domain_info})
 
 #TODO
 #CUSTOM WINTELER
@@ -5573,168 +5581,6 @@ def script_winteler_load_t_wip(request):
         HelpderDB.sql_execute(sql)
 
     return JsonResponse({'response': 'ok'})
-
-def get_domain_info(domain):
-    allowed_tlds = (".com", ".it", ".net", ".ch")
-
-    result = {
-        "domain": domain,
-        "registrar": None,
-        "nameservers": [],
-        "a_records": []
-    }
-
-    if not domain.endswith(allowed_tlds):
-        return {
-            "registrar": "TLD non supportato",
-            "nameservers": [],
-            "a_records": []
-        }
-
-    # 1. DNS Lookup - A Record
-    try:
-        answers = dns.resolver.resolve(domain, 'A', lifetime=5)
-        result["a_records"] = [rdata.address for rdata in answers]
-    except Exception as e:
-        result["a_records"] = []
-
-    # 2. DNS Lookup - NS
-    try:
-        ns_answers = dns.resolver.resolve(domain, 'NS', lifetime=5)
-        result["nameservers"] = [ns.to_text().strip().lower() for ns in ns_answers]
-    except Exception as e:
-        result["nameservers"] = []
-
-    # 3. RDAP Lookup (registrar)
-    try:
-        rdap_url = f"https://rdap.org/domain/{domain}"
-        rdap_resp = requests.get(rdap_url, timeout=5)
-        if rdap_resp.status_code == 200:
-            rdap_data = rdap_resp.json()
-            registrar = rdap_data.get('registrar', {}).get('name')
-            if registrar:
-                result["registrar"] = registrar
-    except Exception as e:
-        result["registrar"] = None
-
-    # 4. WHOIS fallback se mancano info
-    if not result["registrar"] or not result["nameservers"]:
-        try:
-            time.sleep(1.2)  # throttle manuale
-            info = whois.whois(domain)
-
-            # Registrar
-            registrar = info.registrar
-            if isinstance(registrar, list):
-                result["registrar"] = registrar[0]
-            elif registrar:
-                result["registrar"] = str(registrar)
-
-            # Nameservers
-            nameservers = info.name_servers
-            if isinstance(nameservers, (list, set)):
-                result["nameservers"] = sorted([ns.strip().lower() for ns in nameservers])
-            elif isinstance(nameservers, str):
-                result["nameservers"] = [nameservers.strip().lower()]
-        except Exception as e:
-            if not result["registrar"]:
-                result["registrar"] = f"WHOIS Error: {str(e)}"
-            if not result["nameservers"]:
-                result["nameservers"] = [f"WHOIS Error: {str(e)}"]
-
-    return result
-
-
-def script_update_serviceandasset_domains_info(request, dominio=None):
-    counter=0
-    try:
-        query = """
-            SELECT * FROM user_serviceandasset 
-            WHERE (type='Hosting' OR type='Hosting - Alias' OR type='Hosting - Forward')  AND deleted_='N' 
-            AND description IS NOT NULL AND description != ''
-        """
-
-        # Se viene passato un dominio, aggiungilo come filtro
-        if dominio:
-            query += f" AND description = '{dominio}'"
-
-        records = HelpderDB.sql_query(query)
-
-        report_lines = []
-
-        for record in records:
-            counter=counter+1
-            recordid=record['recordid_']
-            domain = record['description'].strip()
-            print(f"{counter} - {domain}")
-            if not domain:
-                continue
-
-            domain_info = get_domain_info(domain)
-
-            registrar = domain_info.get('registrar', 'N/A')
-            nameservers = domain_info.get('nameservers', [])
-            a_records = domain_info.get('a_records', [])
-
-            record_update = UserRecord('serviceandasset', recordid)
-            record_update.values['sector'] = 'Hosting'
-            record_update.values['quantity'] = '1'
-
-            # Inizializza status e provider
-            status = ''
-            provider = ''
-
-            #TODO
-            
-
-            # Controlla quale IP è presente e assegna il provider corrispondente
-            if '212.237.209.213' in a_records:
-                record_update.values['provider'] = 'Pleskn01'
-            elif '194.56.189.185' in a_records:
-                record_update.values['provider'] = 'Plesk03'
-            elif '82.220.34.22' in a_records:
-                record_update.values['provider'] = 'Plesk 330'
-
-
-            # IP da controllare
-            known_ips = ['212.237.209.213', '194.56.189.185', '82.220.34.22']
-
-            # Verifica se nessun nameserver contiene 'swissbix.com'
-            ns_ok = any('swissbix.com' in ns for ns in nameservers)
-
-            # Verifica se almeno uno degli IP è presente negli A record
-            ip_found = any(ip in a_records for ip in known_ips)
-
-            record_update.values['status'] = 'Active'
-            # Imposta lo status se i nameserver non sono swissbix ma l'IP è uno dei noti
-            if not ns_ok and ip_found:
-                record_update.values['status'] = 'CHECK - DNS'
-
-            # Controlla se nessuno dei tre IP è presente
-            if not any(ip in a_records for ip in ['212.237.209.213', '194.56.189.185', '82.220.34.22']):
-                record_update.values['status'] = 'CHECK'
-
-            autonote = f"""
-                <b>Registrar:</b> {registrar}<br>
-                <b>DNS Nameserver:</b> {', '.join(nameservers) if nameservers else 'N/A'}<br>
-                <b>Hosting (A Record):</b> {', '.join(a_records) if a_records else 'N/A'}<br>
-            """
-
-            
-            # Pulizia
-            autonote = autonote.replace("\n", "").replace("\t", "").strip()
-            record_update.values['autonote'] = autonote
-            record_update.values['note'] = 'updated'
-            print(f"{counter} Save: {domain}")
-            record_update.save()
-
-            report_lines.append(f"<b>Dominio:</b> {domain}<br>"+autonote+" <br/><br/>")
-
-        final_report = "<html><body><h2>Report domini</h2>" + "\n".join(report_lines) + "</body></html>"
-        return HttpResponse(final_report)
-
-    except Exception as e:
-        return HttpResponse(f"Errore invio: {str(e)}")
 
 
 

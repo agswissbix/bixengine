@@ -11,7 +11,7 @@ from django_q.models import Schedule, Task
 from django.db import connection
 import psutil, shutil
 from django.views.decorators.csrf import csrf_exempt
-
+import whois
 import requests
 from bixsettings.models import *
 from commonapp.bixmodels.user_record import UserRecord
@@ -24,6 +24,7 @@ import xml.etree.ElementTree as ET
 import json
 from django.http import JsonResponse
 from bixscheduler.decorators.safe_schedule_task import safe_schedule_task
+import dns.resolver
 
 import pyodbc
 from cryptography.fernet import Fernet, InvalidToken
@@ -2183,3 +2184,237 @@ def update_company_statistics():
     
 
 
+
+
+@task_monitor(data_type="update")
+@safe_schedule_task(stop_on_error=True)
+def update_serviceandasset_domains_info(dominio=None):
+    def get_domain_info(domain):
+        import socket
+        from urllib.parse import urlparse
+
+        # Pulizia dell'input per ottenere l'host
+        domain_str = domain.strip().lower()
+        if not domain_str.startswith(('http://', 'https://')):
+            if '/' in domain_str:
+                domain_str = 'http://' + domain_str
+            else:
+                domain_str = domain_str.split('/')[0]
+
+        parsed = urlparse(domain_str)
+        host = parsed.netloc or parsed.path
+        # Rimuove eventuale porta
+        host = host.split(':')[0]
+
+        if not host:
+            host = domain.strip().lower()
+
+        # Euristica per ricavare il dominio registrato (es. da www.google.ch a google.ch)
+        parts = host.split('.')
+        if len(parts) >= 2:
+            if len(parts[-2]) <= 3 and parts[-1] in ('uk', 'za', 'nz', 'au', 'jp', 'cn', 'br'):
+                registered_domain = '.'.join(parts[-3:])
+            else:
+                registered_domain = '.'.join(parts[-2:])
+        else:
+            registered_domain = host
+
+        result = {
+            "domain": host,
+            "registrar": None,
+            "nameservers": [],
+            "a_records": []
+        }
+
+        # 1. DNS Lookup - A Record (per l'host esatto)
+        a_records = []
+        for name in (host, registered_domain):
+            try:
+                answers = dns.resolver.resolve(name, 'A', lifetime=5)
+                a_records = [rdata.address for rdata in answers if rdata.address]
+                if a_records:
+                    break
+            except Exception:
+                pass
+
+        # Fallback tramite socket (simile a ping)
+        if not a_records:
+            try:
+                ip = socket.gethostbyname(host)
+                if ip:
+                    a_records = [ip]
+            except Exception:
+                pass
+        result["a_records"] = a_records
+
+        # 2. DNS Lookup - NS (sempre sul dominio registrato principale)
+        ns_records = []
+        for name in (registered_domain, host):
+            try:
+                ns_answers = dns.resolver.resolve(name, 'NS', lifetime=5)
+                ns_records = [ns.to_text().strip().lower() for ns in ns_answers if ns.to_text()]
+                if ns_records:
+                    break
+            except Exception:
+                pass
+        result["nameservers"] = ns_records
+
+        # 3. RDAP Lookup (registrar)
+        registrar = None
+        try:
+            rdap_url = f"https://rdap.org/domain/{registered_domain}"
+            rdap_resp = requests.get(rdap_url, timeout=5)
+            if rdap_resp.status_code == 200:
+                rdap_data = rdap_resp.json()
+                registrar = rdap_data.get('registrar', {}).get('name')
+        except Exception:
+            pass
+
+        # 4. WHOIS fallback
+        if not registrar or not result["nameservers"]:
+            try:
+                time.sleep(1.2)  # throttle manuale
+                info = whois.whois(registered_domain)
+
+                # Registrar
+                if not registrar and info.registrar:
+                    if isinstance(info.registrar, list):
+                        registrar = info.registrar[0]
+                    else:
+                        registrar = str(info.registrar)
+
+                # Nameservers
+                if not result["nameservers"] and info.name_servers:
+                    nameservers = info.name_servers
+                    if isinstance(nameservers, (list, set)):
+                        result["nameservers"] = sorted([ns.strip().lower() for ns in nameservers])
+                    elif isinstance(nameservers, str):
+                        result["nameservers"] = [nameservers.strip().lower()]
+            except Exception:
+                pass
+
+        result["registrar"] = registrar or "N/A"
+        return result
+
+    def get_php_version_via_http(domain):
+        """Tenta di recuperare la versione di PHP dagli header HTTP."""
+        # Rimuove eventuali spazi e assicura il protocollo
+        url = f"http://{domain.strip()}"
+        try:
+            # Inviamo una richiesta HEAD (più leggera di GET) con un timeout di 3 secondi
+            response = requests.head(url, timeout=3, allow_redirects=True)
+            
+            # 1. Cerca nell'header standard X-Powered-By
+            php_version = response.headers.get('X-Powered-By')
+            if php_version and 'PHP' in php_version:
+                return php_version
+            
+            # 2. Alternativa: a volte è scritto dentro l'header 'Server' (es. Apache/2.4.41 (Ubuntu) PHP/7.4.3)
+            server_header = response.headers.get('Server', '')
+            if 'PHP' in server_header:
+                # Estrae la parte relativa a PHP si presente
+                parts = server_header.split()
+                for part in parts:
+                    if 'PHP/' in part:
+                        return part
+                        
+            return "Non rilevata (Nascosta)"
+        except requests.RequestException:
+            return "Errore connessione HTTP"
+
+    rows_counter = 0
+    result_log = []
+    try:
+        query = """
+            SELECT * FROM user_serviceandasset 
+            WHERE (type='Hosting' OR type='Hosting - Alias' OR type='Hosting - Forward')  
+            AND description IS NOT NULL AND description != '' 
+            AND deleted_='N' 
+            ORDER BY recordid_ desc
+        """
+
+        # Se viene passato un dominio, aggiungilo come filtro
+        if dominio:
+            query += f" AND description = '{dominio}'"
+
+        records = HelpderDB.sql_query(query)
+
+        for record in records:
+            rows_counter = rows_counter + 1
+            recordid = record['recordid_']
+            domain = record['description'].strip()
+            print(f"{rows_counter} - {domain}")
+            if not domain:
+                continue
+
+            domain_info = get_domain_info(domain)
+
+            registrar = domain_info.get('registrar', 'N/A')
+            nameservers = domain_info.get('nameservers', [])
+            a_records = domain_info.get('a_records', [])
+
+            record_update = UserRecord('serviceandasset', recordid)
+            record_update.values['sector'] = 'Hosting'
+            record_update.values['quantity'] = '1'
+
+            # Inizializza status e provider
+            status = ''
+            provider = ''
+
+            # Controlla quale IP è presente e assegna il provider corrispondente
+            if '212.237.209.213' in a_records:
+                record_update.values['provider'] = 'Pleskn01'
+            elif '194.56.189.185' in a_records:
+                record_update.values['provider'] = 'Plesk03'
+            elif '82.220.34.22' in a_records:
+                record_update.values['provider'] = 'Plesk 330'
+
+            # IP da controllare
+            known_ips = ['212.237.209.213', '194.56.189.185', '82.220.34.22']
+
+            # Verifica se nessun nameserver contiene 'swissbix.com'
+            ns_ok = any('swissbix.com' in ns for ns in nameservers)
+
+            # Verifica se almeno uno degli IP è presente negli A record
+            ip_found = any(ip in a_records for ip in known_ips)
+
+            record_update.values['status'] = 'ATTIVO CON DNS'
+            # Imposta lo status se i nameserver non sono swissbix ma l'IP è uno dei noti
+            if not ns_ok and ip_found:
+                record_update.values['status'] = 'ATTIVO SENZA DNS'
+
+            # Controlla se nessuno dei tre IP è presente
+            if not any(ip in a_records for ip in ['212.237.209.213', '194.56.189.185', '82.220.34.22']):
+                record_update.values['status'] = 'HOST ESTERNO'
+                record_update.values['flag'] = 'Verifica hosting'
+
+            php_detected = get_php_version_via_http(domain)
+
+            autonote = f"""
+                <b>Registrar:</b> {registrar}<br>
+                <b>DNS Nameserver:</b> {', '.join(nameservers) if nameservers else 'N/A'}<br>
+                <b>Hosting (A Record):</b> {', '.join(a_records) if a_records else 'N/A'}<br>
+                <b>PHP Version:</b> {php_detected}<br>
+            """
+
+            # Pulizia
+            autonote = autonote.replace("\n", "").replace("\t", "").strip()
+            record_update.values['autonote'] = autonote
+            print(f"{rows_counter} Save: {domain}")
+            record_update.save()
+
+            result_log.append(f"Dominio: {domain} - Registrar: {registrar} - IP: {', '.join(a_records)} - Status: {record_update.values['status']}")
+
+        return {
+            "rows_counter": rows_counter,
+            "message": f"Sincronizzazione completata: {rows_counter} righe",
+        }, {
+            "details": "\n".join(result_log)
+        }
+
+    except Exception as e:
+        result_message = f"Errore durante la sincronizzazione: {str(e)}"
+        result_log.append(result_message)
+        print(result_message)
+        raise Exception(result_message)
+        

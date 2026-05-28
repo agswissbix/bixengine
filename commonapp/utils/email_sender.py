@@ -34,7 +34,19 @@ class EmailSender:
         recordid=None,
         attachment=None,
         attachment_name=None,
+        return_log=False,
     ):
+        import time
+        import traceback
+        from django.conf import settings
+        from datetime import datetime
+
+        smtp_host = getattr(settings, 'EMAIL_HOST', 'N/A')
+        smtp_port = getattr(settings, 'EMAIL_PORT', 'N/A')
+        smtp_user = getattr(settings, 'EMAIL_HOST_USER', 'N/A')
+        use_tls = getattr(settings, 'EMAIL_USE_TLS', False)
+        use_ssl = getattr(settings, 'EMAIL_USE_SSL', False)
+
         cc      = cls.ensure_list(cc)
         bcc     = cls.ensure_list(bcc)
         to_list = cls.ensure_list(emails)
@@ -42,10 +54,12 @@ class EmailSender:
         # Corpo testuale minimo
         text_message = ""
 
+        from_email = "segreteria@pitservice.ch"
+
         msg = EmailMultiAlternatives(
             subject    = subject,
             body       = text_message,
-            from_email = "segreteria@pitservice.ch",
+            from_email = from_email,
             to         = to_list,
             cc         = cc,
             bcc        = bcc,
@@ -63,11 +77,50 @@ class EmailSender:
                 filename = attachment_name or Path(attachment).name
                 msg.attach(filename, f.read(), mime)
 
-        msg.send(fail_silently=False)
+        # Costruiamo il log iniziale
+        log_lines = [
+            "=== LOG DI INVIO EMAIL ===",
+            f"Data/Ora tentativo: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            f"Configurazione SMTP: Host={smtp_host}, Port={smtp_port}, User={smtp_user}, TLS={use_tls}, SSL={use_ssl}",
+            f"Mittente: {from_email}",
+            f"Destinatari (To): {', '.join(to_list)}",
+        ]
+        if cc:
+            log_lines.append(f"CC: {', '.join(cc)}")
+        if bcc:
+            log_lines.append(f"BCC: {', '.join(bcc)}")
+        log_lines.append(f"Oggetto: {subject}")
+        if attachment:
+            log_lines.append(f"Allegato: {attachment_name or Path(attachment).name} (Path: {attachment})")
 
-  
+        start_time = time.time()
+        success = False
+        error_msg = None
+        error_trace = None
 
-        return True
+        if return_log:
+            try:
+                msg.send(fail_silently=False)
+                success = True
+            except Exception as e:
+                error_msg = str(e)
+                error_trace = traceback.format_exc()
+
+            duration = time.time() - start_time
+            log_lines.append(f"Durata connessione/invio: {duration:.3f}s")
+
+            if success:
+                log_lines.append("Stato invio: SUCCESSO")
+            else:
+                log_lines.append("Stato invio: ERRORE")
+                log_lines.append(f"Errore: {error_msg}")
+                log_lines.append(f"Dettagli errore (Traceback):\n{error_trace}")
+
+            log_text = "\n".join(log_lines)
+            return success, log_text
+        else:
+            msg.send(fail_silently=False)
+            return True
     
     @classmethod
     def save_email(cls, tableid, recordid, email_data):
