@@ -145,7 +145,8 @@ urlpatterns = [
     
 
     path('sync_monitoring/', sync_monitoring, name='sync_monitoring'),
-    
+    path('create_partial/', create_partial, name='create_partial'),
+    path('delete_partial/', delete_partial, name='delete_partial'),
 ]
 
 

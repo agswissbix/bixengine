@@ -802,6 +802,14 @@ class SysChart(models.Model):
     def __str__(self):
         return f"{self.name} ({self.layout})"
 
+class SysPartial(models.Model):
+    link_recordid = models.CharField(max_length=255, blank=True, null=True)
+    tableid = models.CharField(max_length=255, blank=True, null=True)
+    userid = models.IntegerField(default=1)
+    description = models.CharField(max_length=255, blank=True, null=True)
+
+    class Meta:
+        db_table = 'sys_partial'
 
 
 class SysStep(models.Model):

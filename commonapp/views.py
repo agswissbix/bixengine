@@ -935,8 +935,40 @@ def get_table_records(request):
             }
             row["fields"].append(field_data)
 
-        
         rows.append(row)
+
+    # --- INJECT PARTIALS ---
+    if hasattr(table, '_partial_sums') and table._partial_sums:
+        new_rows = []
+        for row in rows:
+            new_rows.append(row)
+            rec_id = str(row['recordid'])
+            if rec_id in table._partial_sums:
+                p_data = table._partial_sums[rec_id]
+                partial_row = {
+                    "recordid": f"partial_{rec_id}",
+                    "css": "bg-gray-100 dark:bg-gray-800 font-bold",
+                    "linkedorder": row.get('linkedorder'),
+                    "is_partial": True,
+                    "fields": []
+                }
+                for i, column in enumerate(table_columns):
+                    fieldid = column.get('fieldid')
+                    ftype = column.get('fieldtypewebid', '').lower()
+                    if ftype == 'numero':
+                        val = round(p_data['sums'].get(fieldid, 0.0), 2)
+                    else:
+                        val = p_data['description'] if i == 0 else ""
+                    
+                    partial_row["fields"].append({
+                        "recordid": f"partial_{rec_id}",
+                        "css": "font-bold",
+                        "type": "numero" if ftype == 'numero' else "standard",
+                        "value": val,
+                        "fieldid": fieldid,
+                    })
+                new_rows.append(partial_row)
+        rows = new_rows
 
     # --- Risposta Finale (invariata) ---
     final_columns = [{'fieldtypeid': c['fieldtypewebid'], 'desc': c['description'], 'fieldid': c['fieldid']} for c in table_columns]
@@ -9248,3 +9280,45 @@ def sync_monitoring(request):
             "details": str(e),
             "server_response": server_response
         }, status=500)
+
+
+@login_required_api
+def create_partial(request):
+    try:
+        data = json.loads(request.body)
+        tableid = data.get('tableid')
+        link_recordid = data.get('recordid')
+        description = data.get('description', 'Nuovo Parziale')
+        userid = Helper.get_userid(request)
+
+        if not tableid or not link_recordid:
+            return JsonResponse({'error': 'Dati mancanti'}, status=400)
+            
+        sql = "INSERT INTO sys_partial (link_recordid, tableid, userid, description) VALUES (%s, %s, %s, %s)"
+        with connection.cursor() as cursor:
+            cursor.execute(sql, [link_recordid, tableid, userid, description])
+
+        return JsonResponse({'success': True, 'message': 'Parziale creato'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+@login_required_api
+def delete_partial(request):
+    try:
+        data = json.loads(request.body)
+        tableid = data.get('tableid')
+        link_recordid = data.get('recordid')
+
+        if not tableid or not link_recordid:
+            return JsonResponse({'error': 'Dati mancanti'}, status=400)
+            
+        if str(link_recordid).startswith('partial_'):
+            link_recordid = str(link_recordid).replace('partial_', '')
+
+        sql = "DELETE FROM sys_partial WHERE tableid=%s AND link_recordid=%s"
+        with connection.cursor() as cursor:
+            cursor.execute(sql, [tableid, link_recordid])
+
+        return JsonResponse({'success': True, 'message': 'Parziale eliminato'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)

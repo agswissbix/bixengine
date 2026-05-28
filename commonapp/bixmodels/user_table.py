@@ -668,6 +668,39 @@ class UserTable:
 
         self._numeric_totals = totals
 
+        # --- PARZIALI (SUBTOTALS) ---
+        self._partial_sums = {}
+        is_default_sort = orderby.startswith("recordid_") or orderby.startswith("linkedorder_")
+        if is_default_sort and numeric_fields:
+            try:
+                partials_db = HelpderDB.sql_query(f"SELECT link_recordid, description FROM sys_partial WHERE tableid='{self.tableid}'")
+                if partials_db:
+                    partial_map = {str(p['link_recordid']): p['description'] for p in partials_db}
+                    numeric_cols_str = ", ".join(f"user_{self.tableid}.{f}" for f in numeric_fields)
+                    full_records_sql = f"SELECT user_{self.tableid}.recordid_, {numeric_cols_str} {from_sql_string} WHERE {where_sql_string} ORDER BY linkedorder_ asc"
+                    full_numeric_data = HelpderDB.sql_query(full_records_sql)
+                    
+                    running_sums = {f: 0.0 for f in numeric_fields}
+                    for row_data in full_numeric_data:
+                        rec_id = str(row_data['recordid_'])
+                        for f in numeric_fields:
+                            val = row_data.get(f)
+                            if val is not None:
+                                try:
+                                    running_sums[f] += float(val)
+                                except:
+                                    pass
+                        if rec_id in partial_map:
+                            self._partial_sums[rec_id] = {
+                                'description': partial_map[rec_id],
+                                'sums': dict(running_sums)
+                            }
+                            # Reset for next block
+                            running_sums = {f: 0.0 for f in numeric_fields}
+            except Exception as e:
+                print(f"Errore calcolo parziali: {e}")
+
+
         return records
     
     def _get_fields_definitions(self):
