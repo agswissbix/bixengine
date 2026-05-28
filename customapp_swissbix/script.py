@@ -2418,3 +2418,48 @@ def update_serviceandasset_domains_info(dominio=None):
         print(result_message)
         raise Exception(result_message)
         
+@task_monitor(data_type="no_output")
+def invoice_completed_projects_timesheets():
+    """
+    Cicla i timesheet con invoicestatus = 'To invoice when Project Completed' e 'To Invoice'
+    e in base allo stato del progetto, richiama save_record_fields.
+    """
+    timesheet_table = UserTable('timesheet', userid=0)
+    
+    # 1. Controllo per i progetti che sono passati a completato
+    condition_list_completed = ["invoicestatus='To invoice when Project Completed'"]
+    timesheets_completed = timesheet_table.get_records(conditions_list=condition_list_completed)
+    
+    # 2. Controllo inverso per i progetti che sono stati riaperti (No o NULL)
+    condition_list_not_completed = ["invoicestatus='To Invoice'", "recordidproject_ IS NOT NULL", "recordidproject_ != ''"]
+    timesheets_not_completed = timesheet_table.get_records(conditions_list=condition_list_not_completed)
+    
+    updated_count = 0
+    result_log = []
+    
+    for ts in timesheets_completed:
+        project_recordid = ts.get('recordidproject_')
+        if project_recordid:
+            project = HelpderDB.sql_query_row(f"SELECT completed FROM user_project WHERE recordid_='{project_recordid}' AND deleted_='N'")
+            if project and project.get('completed') == 'Si':
+                save_record_fields('timesheet', ts['recordid_'])
+                updated_count += 1
+                result_log.append(f"Timesheet {ts['recordid_']} aggiornato per progetto completato.")
+                
+    for ts in timesheets_not_completed:
+        project_recordid = ts.get('recordidproject_')
+        if project_recordid:
+            project = HelpderDB.sql_query_row(f"SELECT completed FROM user_project WHERE recordid_='{project_recordid}' AND deleted_='N'")
+            if project:
+                completed_status = project.get('completed')
+                if not completed_status or completed_status == 'No':
+                    save_record_fields('timesheet', ts['recordid_'])
+                    updated_count += 1
+                    result_log.append(f"Timesheet {ts['recordid_']} aggiornato per progetto NON completato (inverso).")
+                
+    return {
+        "message": f"Elaborazione completata: {updated_count} timesheet aggiornati.",
+        "updated_count": updated_count
+    }, {
+        "details": "\n".join(result_log)
+    }
