@@ -673,7 +673,8 @@ class UserTable:
         is_default_sort = orderby.startswith("recordid_") or orderby.startswith("linkedorder_")
         if is_default_sort and numeric_fields:
             try:
-                partials_db = HelpderDB.sql_query(f"SELECT link_recordid, description FROM sys_partial WHERE tableid='{self.tableid}'")
+                master_cond = f" AND mastertableid='{self.master_tableid}'" if getattr(self, 'master_tableid', None) else " AND (mastertableid IS NULL OR mastertableid='')"
+                partials_db = HelpderDB.sql_query(f"SELECT link_recordid, description FROM sys_partial WHERE tableid='{self.tableid}'{master_cond}")
                 if partials_db:
                     partial_map = {str(p['link_recordid']): p['description'] for p in partials_db}
                     numeric_cols_str = ", ".join(f"user_{self.tableid}.{f}" for f in numeric_fields)

@@ -9288,15 +9288,16 @@ def create_partial(request):
         data = json.loads(request.body)
         tableid = data.get('tableid')
         link_recordid = data.get('recordid')
+        mastertableid = data.get('mastertableid', '')
         description = data.get('description', 'Nuovo Parziale')
         userid = Helper.get_userid(request)
 
         if not tableid or not link_recordid:
             return JsonResponse({'error': 'Dati mancanti'}, status=400)
             
-        sql = "INSERT INTO sys_partial (link_recordid, tableid, userid, description) VALUES (%s, %s, %s, %s)"
+        sql = "INSERT INTO sys_partial (link_recordid, tableid, mastertableid, userid, description) VALUES (%s, %s, %s, %s, %s)"
         with connection.cursor() as cursor:
-            cursor.execute(sql, [link_recordid, tableid, userid, description])
+            cursor.execute(sql, [link_recordid, tableid, mastertableid, userid, description])
 
         return JsonResponse({'success': True, 'message': 'Parziale creato'})
     except Exception as e:
@@ -9308,6 +9309,7 @@ def delete_partial(request):
         data = json.loads(request.body)
         tableid = data.get('tableid')
         link_recordid = data.get('recordid')
+        mastertableid = data.get('mastertableid', '')
 
         if not tableid or not link_recordid:
             return JsonResponse({'error': 'Dati mancanti'}, status=400)
@@ -9315,9 +9317,9 @@ def delete_partial(request):
         if str(link_recordid).startswith('partial_'):
             link_recordid = str(link_recordid).replace('partial_', '')
 
-        sql = "DELETE FROM sys_partial WHERE tableid=%s AND link_recordid=%s"
+        sql = "DELETE FROM sys_partial WHERE tableid=%s AND link_recordid=%s AND (mastertableid=%s OR mastertableid IS NULL)"
         with connection.cursor() as cursor:
-            cursor.execute(sql, [tableid, link_recordid])
+            cursor.execute(sql, [tableid, link_recordid, mastertableid])
 
         return JsonResponse({'success': True, 'message': 'Parziale eliminato'})
     except Exception as e:

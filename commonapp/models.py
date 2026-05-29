@@ -805,6 +805,7 @@ class SysChart(models.Model):
 class SysPartial(models.Model):
     link_recordid = models.CharField(max_length=255, blank=True, null=True)
     tableid = models.CharField(max_length=255, blank=True, null=True)
+    mastertableid = models.CharField(max_length=255, blank=True, null=True)
     userid = models.IntegerField(default=1)
     description = models.CharField(max_length=255, blank=True, null=True)
 
