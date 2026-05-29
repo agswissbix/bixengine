@@ -93,7 +93,11 @@ def import_user_audit_logs():
     current_id_int = int(max_id) if max_id else 0
     current_order_int = int(max_order) if max_order else 0
 
+    # Recupero i log_id esistenti per saltarli ed evitare cicli infiniti sulle stesse righe
+    existing_log_ids = set(UserUserLog.objects.exclude(log_id__isnull=True).exclude(log_id='').values_list('log_id', flat=True))
+
     logs_to_insert = []
+    MAX_LOGS_PER_RUN = 2000
     
     # Controlla se esistono i file
     if not os.path.exists(logs_dir):
@@ -101,12 +105,18 @@ def import_user_audit_logs():
         return {"status": "error", "message": "Cartella log non trovata", "details": stats}
         
     for filename in os.listdir(logs_dir):
+        if len(logs_to_insert) >= MAX_LOGS_PER_RUN:
+            break
+            
         if 'user-audit.log' in filename:
             stats["files_processed"] += 1
             file_path = os.path.join(logs_dir, filename)
             
             with open(file_path, 'r', encoding='utf-8') as f:
                 for line in f:
+                    if len(logs_to_insert) >= MAX_LOGS_PER_RUN:
+                        break
+                        
                     line = line.strip()
                     if not line:
                         continue
@@ -115,6 +125,15 @@ def import_user_audit_logs():
                     
                     try:
                         data = json.loads(line)
+                        
+                        # Se il log_id esiste già, lo salto direttamente
+                        log_id = data.get('log_id')
+                        if log_id and log_id in existing_log_ids:
+                            continue
+                            
+                        # Se manca, ne genero uno nuovo (come prima)
+                        if not log_id:
+                            log_id = str(uuid.uuid4())
 
                         bixid = data.get('user_id')
                         if not bixid or bixid == 1 or bixid == 0:
@@ -126,9 +145,6 @@ def import_user_audit_logs():
                         # Calcola tableid (senza 'user_')
                         table_name = data.get('table_name', '')
                         tableid = table_name[5:] if table_name.startswith('user_') else table_name
-                            
-                        # log_id per ignorare duplicati
-                        log_id = data.get('log_id') or str(uuid.uuid4())
 
                         timestamp = data.get('timestamp')
                         log_date = None
@@ -177,7 +193,7 @@ def import_user_audit_logs():
                     
     if logs_to_insert:
         try:
-            UserUserLog.objects.bulk_create(logs_to_insert, ignore_conflicts=True)
+            UserUserLog.objects.bulk_create(logs_to_insert, batch_size=200, ignore_conflicts=True)
             msg = f"Elaborazione completata. Preparati {len(logs_to_insert)} log per l'inserimento."
             print(msg)
             return {
