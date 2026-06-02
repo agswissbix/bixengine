@@ -108,195 +108,42 @@ class DealService:
 
     @staticmethod
     def _process_deal_calculations(deal_record: UserRecord, dealline_records: list, project_recordid: str):
-        usedhours = 0
-        residualhours = 0
-        expectedhours = deal_record.values.get('expectedhours') or 0
-        travelhours = 0
-        travelcost = 0
-        fixedpricehours = 0
-        servicecontracthours = 0
-        bankhours = 0
-        deductedhoursamount = 0
-        deductedhoursmargin = 0
-        deductedhourscost = 0
-        invoicedhours = 0
-        invoicedhoursamount = 0
-        toinvoicehours = 0
-        toinvoicehoursamount = 0
-        laborcost = 0
-        nonbillablehours = 0
-        nonbillablecost = 0
-        saleshours = 0
-        salescost = 0
-        laborhours = 0
-        totalhours = 0
+        import math
         
-        timesheets_dict = {}
-        
-        if project_recordid:
-            project_record = UserRecord('project', project_recordid, load_fields=False)
-            # expectedhours = project_record.values.get('expectedhours') or 0
-            for ts in project_record.get_linkedrecords_dict('timesheet'):
-                timesheets_dict[ts.get('recordid_')] = ts
-                
-        for ts in deal_record.get_linkedrecords_dict('timesheet'):
-            ts_id = ts.get('recordid_')
-            if ts_id in timesheets_dict:
-                del timesheets_dict[ts_id]
-                
-            hours = ts.get('totaltime_decimal') or 0
-            price = hours * 60
-            try:
-                _h = float(hours)
-            except (ValueError, TypeError):
-                _h = 0
-            totalhours += _h
-            saleshours += hours
-            salescost += price
-            
-        for ts_dict in timesheets_dict.values():
-            invoicestatus = ts_dict.get('invoicestatus')
-            hours = ts_dict.get('totaltime_decimal') or 0
-            price = ts_dict.get('totalprice') or 0
-            worktime = ts_dict.get('worktime_decimal') or 0
-            travel_hours = ts_dict.get('traveltime_decimal') or 0
-            travel_price = ts_dict.get('travelprice') or 0
-
-            try:
-                hours = float(hours)
-            except ValueError:
-                hours = 0
-            
-            try:
-                price = float(price)
-            except ValueError:
-                price = 0
-                
-            try:
-                worktime = float(worktime)
-            except ValueError:
-                worktime = 0
-            
-            try:
-                travel_hours = float(travel_hours)
-            except ValueError:
-                travel_hours = 0
-            
-            try:
-                travel_price = float(travel_price)
-            except ValueError:
-                travel_price = 0
-
-            laborhours += worktime
-            usedhours += hours
-            totalhours += hours
-
-            travelhours += travel_hours
-            travelcost += travel_price
-
-            if not invoicestatus or not str(invoicestatus).strip():
-                nonbillablehours += hours
-                nonbillablecost += hours * 60
-                continue
-
-            invoicestatus = str(invoicestatus).strip().lower()
-            
-            if invoicestatus == 'fixed price project':
-                fixedpricehours += hours
-            elif invoicestatus == 'service contract: monte ore':
-                bankhours += hours
-                deductedhoursamount += hours * 100
-                deductedhourscost += hours * 60
-            elif invoicestatus == 'attività non fatturabile':
-                nonbillablehours += hours
-                nonbillablecost += hours * 60
-            elif invoicestatus == 'invoiced':
-                invoicedhours += hours
-                invoicedhoursamount += price
-                laborcost += hours * 60
-            elif invoicestatus and invoicestatus.startswith('to invoice'):
-                toinvoicehours += hours
-                toinvoicehoursamount += price
-                laborcost += hours * 60
-            else:
-                nonbillablehours += hours
-                nonbillablecost += hours * 60
-                
-        if expectedhours:
-            residualhours = expectedhours - usedhours
-                
-        deal_record.values['usedhours'] = usedhours
-        deal_record.values['residualhours'] = residualhours
-        deal_record.values['travelhours'] = travelhours
-        deal_record.values['travelcost'] = travelcost
-        deal_record.values['fixedpricehours'] = fixedpricehours
-        deal_record.values['servicecontracthours'] = servicecontracthours
-        deal_record.values['bankhours'] = bankhours
-        deal_record.values['deductedhours'] = bankhours
-        deal_record.values['deductedhoursamount'] = deductedhoursamount
-        deal_record.values['deductedhourscost'] = deductedhourscost
-        deal_record.values['deductedhoursmargin'] = deductedhoursamount - deductedhourscost
-        deal_record.values['invoicedhours'] = invoicedhours
-        deal_record.values['invoicedhoursamount'] = invoicedhoursamount
-        deal_record.values['saleshours'] = saleshours
-        deal_record.values['salescost'] = salescost
-        deal_record.values['nonbillablehours'] = nonbillablehours
-        deal_record.values['nonbillablecost'] = nonbillablecost
-        deal_record.values['unbilledhours'] = toinvoicehours
-        deal_record.values['unbilledhoursamount'] = toinvoicehoursamount
-        deal_record.values['laborhours'] = laborhours
-        deal_record.values['totalhours'] = totalhours +saleshours
-
-        deal_record.values['actuallaborcost'] = laborcost
-
-        # Generazione nota HTML riepilogativa formattata in modo leggibile anche per i tooltip
-        hoursnote = f"""<div class="deal-summary" style="font-size: 1em;color: black;"><strong>{expectedhours:.0f}/{laborhours:.0f}/{totalhours:.0f}</strong></div>
-<div class="deal-details" style="font-family: system-ui, sans-serif; line-height: 1.5; color: #1f2937;">
-<div style="font-size: 1.1em; color: #1e40af; margin-bottom: 8px; border-bottom: 1px solid #bfdbfe; padding-bottom: 4px;"><b>Dettaglio Tempistiche</b></div>
-&bull; Ore Previste: <b>{expectedhours}</b><br/>
-&bull; Ore Utilizzate: <b>{usedhours}</b><br/>
-&bull; Totale Generale Ore: <b>{totalhours}</b><br/>
-&bull; Ore Lavorate (Labor): {laborhours}<br/>
-&bull; Ore Residue: <span style="font-weight: 700; color: {'#15803d' if float(residualhours or 0) >= 0 else '#b91c1c'};">{residualhours}</span><br/>
-<div style="margin-top: 12px; margin-bottom: 4px;"><i>Ripartizione:</i></div>
-&bull; Ore Progetto (Fixed Price): {fixedpricehours}<br/>
-&bull; Ore Contratto/Monte Ore: {bankhours}<br/>
-&bull; Ore Fatturate: <span style="color: #047857; font-weight: 500;">{invoicedhours}</span><br/>
-&bull; Ore da Fatturare: <span style="color: #d97706; font-weight: 500;">{toinvoicehours}</span><br/>
-&bull; Ore Non Fatturabili: <span style="color: #b91c1c; font-weight: 500;">{nonbillablehours}</span><br/>
-&bull; Ore di Viaggio: {travelhours}<br/>
-&bull; Ore Commerciali (Sales): {saleshours}<br/>
-
-</div>"""
-        deal_record.values['hoursnote'] = hoursnote.strip()
-
-        deal_fixedpricehours = deal_record.values.get('fixedpricehours') or 0
-        
+        # --- INIT ACCUMULATORI ---
+        # Hardware/Servizi dealline
         totals = {
             'amount_sum': 0,
+            'expectedcost': 0,
             'totalcontractvalue': 0,
             'totalcontractmargin_act': 0,
             'totalcontractexpectedcost': 0,
-            'expectedcost': 0,
-            'expectedhours': 0,
-            'actualcost': 0,
-            'effectivemargin': 0,
-            'annualprice': 0,
-            'annualcost': 0,
-            'annualmargin': 0,
+            
+            'expectedhwserviceprice': 0,
             'expectedhwservicecost': 0,
             'expectedhwservicemargin': 0,
             'actualhwservicecost': 0,
             'actualhwservicemargin': 0,
-            'expectedhwserviceprice': 0,
+            
+            'expectedlaborprice': 0,
             'expectedlaborcost': 0,
             'expectedlabormargin': 0,
-            'actuallaborcost': 0,
-            'actuallabormargin': 0,
-            'expectedlaborprice': 0
+            
+            'expectedhours': 0,
+            
+            'annualprice': 0,
+            'annualcost': 0,
+            'annualmargin': 0,
+            
+            'actualcost': 0,
+            'effectivemargin': 0,
         }
+        
+        actual_labor_cost_deallines = 0
+        actual_labor_margin_deallines = 0
+        deal_fixedpricehours = deal_record.values.get('fixedpricehours') or 0
 
-
+        # --- 1. LETTURA DEALLINES ---
         for dl_dict in dealline_records:
             dl_recordid = dl_dict['recordid_']
             dl_record = UserRecord('dealline', dl_recordid, load_fields=False)
@@ -309,6 +156,32 @@ class DealService:
             dl_expectedmargin = dl_dict.get('expectedmargin') or 0
             dl_unitactualcost = dl_dict.get('uniteffectivecost') or 0
             dl_frequency = dl_dict.get('frequency')
+            expectedhours = dl_dict.get('expectedhours') or 0
+
+            product_fixedprice = 'No'
+            if product_recordid:
+                product_record = UserRecord('product', product_recordid, load_fields=False)
+                if not Helper.isempty(product_record.recordid) and not Helper.isempty(product_record.values):
+                    product_fixedprice = product_record.values.get('fixedprice', 'No')
+
+            if product_fixedprice == 'Si':
+                deal_record.values['fixedprice'] = 'Si'
+                if Helper.isempty(dl_record.values.get('expectedhours')):
+                    dl_record.values['expectedhours'] = dl_price / 140
+                    expectedhours = dl_record.values['expectedhours']
+
+            totals['expectedhours'] += expectedhours
+            dl_actualcost = dl_unitactualcost * dl_quantity
+
+            if product_fixedprice == 'Si' and deal_fixedpricehours != 0:
+                dl_record.values['usedhours'] = deal_fixedpricehours
+                dl_actualcost = deal_fixedpricehours * 60
+                deal_fixedpricehours = 0
+
+            dl_actualmargin = (dl_price - dl_actualcost) if dl_actualcost != 0 else dl_expectedmargin
+                
+            dl_record.values['effectivecost'] = dl_actualcost
+            dl_record.values['margin_actual'] = dl_actualmargin
 
             # Multiplier freq
             multiplier = 1
@@ -331,47 +204,9 @@ class DealService:
                 totals['totalcontractvalue'] += (monthly_price * contract_ob)
                 monthly_expcost = (dl_expectedcost * multiplier) / 12.0
                 totals['totalcontractexpectedcost'] += (monthly_expcost * contract_ob)
-            else:
-                totals['totalcontractvalue'] += dl_price
-                totals['totalcontractexpectedcost'] += dl_expectedcost
-
-            dl_actualcost = dl_unitactualcost * dl_quantity
-            
-            product_fixedprice = 'No'
-            if product_recordid:
-                product_record = UserRecord('product', product_recordid, load_fields=False)
-                if not Helper.isempty(product_record.recordid) and not Helper.isempty(product_record.values):
-                    product_fixedprice = product_record.values.get('fixedprice', 'No')
-
-            expectedhours = dl_dict.get('expectedhours') or 0
-            totals['expectedhours'] += expectedhours
-            
-            if product_fixedprice == 'Si':
-                deal_record.values['fixedprice'] = 'Si'
-                if Helper.isempty(dl_record.values.get('expectedhours')):
-                    dl_record.values['expectedhours'] = dl_price / 140
-                    
-                if deal_fixedpricehours != 0:
-                    dl_record.values['usedhours'] = deal_fixedpricehours
-                    dl_actualcost = deal_fixedpricehours * 60
-                    deal_fixedpricehours = 0
-
-                    
-            if dl_actualcost != 0:
-                dl_actualmargin = dl_price - dl_actualcost
-            else:
-                dl_actualmargin = dl_expectedmargin
-                
-            dl_record.values['effectivecost'] = dl_actualcost
-            dl_record.values['margin_actual'] = dl_actualmargin
-
-            if not Helper.isempty(dl_frequency):
                 monthly_marg_act = (dl_actualmargin * multiplier) / 12.0
                 totals['totalcontractmargin_act'] += (monthly_marg_act * contract_ob)
-            else:
-                totals['totalcontractmargin_act'] += dl_actualmargin
-
-            if not Helper.isempty(dl_frequency):
+                
                 dl_record.values['annualprice'] = dl_price * multiplier
                 dl_record.values['annualcost'] = dl_actualcost * multiplier if dl_actualcost != 0 else dl_expectedcost * multiplier
                 dl_record.values['annualmargin'] = dl_record.values['annualprice'] - dl_record.values['annualcost']
@@ -379,101 +214,240 @@ class DealService:
                 totals['annualprice'] += dl_record.values['annualprice']
                 totals['annualcost'] += dl_record.values['annualcost']
                 totals['annualmargin'] += dl_record.values['annualmargin']
+            else:
+                totals['totalcontractvalue'] += dl_price
+                totals['totalcontractexpectedcost'] += dl_expectedcost
+                totals['totalcontractmargin_act'] += dl_actualmargin
             
             dl_record.save()
 
             if product_fixedprice == 'Si':
+                totals['expectedlaborprice'] += dl_price
                 totals['expectedlaborcost'] += dl_expectedcost
                 totals['expectedlabormargin'] += dl_expectedmargin
-                totals['actuallaborcost'] += dl_actualcost
-                totals['actuallabormargin'] += dl_actualmargin
-                totals['expectedlaborprice'] += dl_price
             else:
-                totals['expectedhwservicecost'] += dl_expectedcost
-                totals['expectedhwservicemargin'] += dl_expectedmargin
-                totals['actualhwservicecost'] += dl_actualcost
-                totals['actualhwservicemargin'] += dl_actualmargin
                 totals['expectedhwserviceprice'] += dl_price
+                totals['expectedhwservicecost'] += dl_expectedcost
+                totals['expectedhwservicemargin'] += dl_price - dl_expectedcost
+                totals['actualhwservicecost'] += dl_actualcost
+                totals['actualhwservicemargin'] += dl_price - dl_actualcost
 
             totals['actualcost'] += dl_actualcost
-            totals['effectivemargin'] += dl_actualmargin
+            totals['effectivemargin'] += dl_price - dl_actualcost
 
 
-        amount = deal_record.values.get('amount') or 0
-        expectedcost = deal_record.values.get('expectedcost') or 0
+        # --- 2. LETTURA TIMESHEETS ---
+        usedhours = 0
+        residualhours = 0
+        travelhours = 0
+        travelcost = 0
+        fixedpricehours = 0
+        servicecontracthours = 0
+        bankhours = 0
+        deductedhoursamount = 0
+        deductedhourscost = 0
+        invoicedhours = 0
+        invoicedhoursamount = 0
+        toinvoicehours = 0
+        toinvoicehoursamount = 0
+        laborcost_timesheets = 0
+        nonbillablehours = 0
+        nonbillablecost = 0
+        saleshours = 0
+        salescost = 0
+        laborhours = 0
+        totalhours = 0
         
+        timesheets_dict = {}
+
+        if project_recordid:
+            project_record = UserRecord('project', project_recordid, load_fields=False)
+            for ts in project_record.get_linkedrecords_dict('timesheet'):
+                ts_id = ts.get('recordid_')
+                if ts_id:
+                    timesheets_dict[ts_id] = ts
+
+        for ts in deal_record.get_linkedrecords_dict('timesheet'):
+            ts_id = ts.get('recordid_')
+            if ts_id:
+                timesheets_dict[ts_id] = ts
+
+        for ts_dict in timesheets_dict.values():
+            invoicestatus = ts_dict.get('invoicestatus')
+            try: hours = float(ts_dict.get('totaltime_decimal') or 0)
+            except ValueError: hours = 0
+            try: price = float(ts_dict.get('totalprice') or 0)
+            except ValueError: price = 0
+            try: worktime = float(ts_dict.get('worktime_decimal') or 0)
+            except ValueError: worktime = 0
+            try: travel_hours = float(ts_dict.get('traveltime_decimal') or 0)
+            except ValueError: travel_hours = 0
+            try: travel_price = float(ts_dict.get('travelprice') or 0)
+            except ValueError: travel_price = 0
+
+            
+
+            
+            
+            travelhours += travel_hours
+            travelcost += travelhours *60
+            totalhours += hours
+            
+
+            service = ts_dict.get('service')
+            invoicestatus = str(invoicestatus).strip().lower()
+
+            service_lower = str(service).strip().lower() if service else ''
+            
+            if service_lower == 'commerciale':
+                saleshours += worktime
+                salescost += worktime * 60
+            elif service_lower in ['formazione e test', 'interno', 'amministrazione', 'riunione']:
+                usedhours += worktime
+                nonbillablehours += worktime
+                nonbillablecost += worktime * 60
+            else:
+                usedhours += worktime
+                laborhours += worktime
+                laborcost_timesheets += worktime * 60
+                
+
+
+            
+            if invoicestatus == 'fixed price project':
+                fixedpricehours += worktime
+            elif invoicestatus == 'service contract: monte ore':
+                bankhours += worktime
+                deductedhoursamount += worktime * 100
+                deductedhourscost += worktime * 60
+            elif invoicestatus == 'invoiced':
+                invoicedhours += worktime
+                invoicedhoursamount += price
+            elif invoicestatus and invoicestatus.startswith('to invoice'):
+                toinvoicehours += worktime
+                toinvoicehoursamount += price
+                
+
+
+        expectedhours_total = totals['expectedhours'] or deal_record.values.get('expectedhours') or 0
+        if expectedhours_total:
+            residualhours = expectedhours_total - usedhours
+                
+        # Salvataggio totali ore su record
+        deal_record.values['expectedhours'] = expectedhours_total
+        deal_record.values['usedhours'] = usedhours
+        deal_record.values['residualhours'] = residualhours
+        deal_record.values['travelhours'] = travelhours
+        deal_record.values['travelcost'] = travelcost
+        deal_record.values['fixedpricehours'] = fixedpricehours
+        deal_record.values['servicecontracthours'] = servicecontracthours
+        deal_record.values['bankhours'] = bankhours
+        deal_record.values['deductedhours'] = bankhours
+        deal_record.values['deductedhoursamount'] = deductedhoursamount
+        deal_record.values['deductedhourscost'] = deductedhourscost
+        deal_record.values['deductedhoursmargin'] = deductedhoursamount - deductedhourscost
+        deal_record.values['invoicedhours'] = invoicedhours
+        deal_record.values['invoicedhoursamount'] = invoicedhoursamount
+        deal_record.values['saleshours'] = saleshours
+        deal_record.values['salescost'] = salescost
+        deal_record.values['nonbillablehours'] = nonbillablehours
+        deal_record.values['nonbillablecost'] = nonbillablecost
+        deal_record.values['unbilledhours'] = toinvoicehours
+        deal_record.values['unbilledhoursamount'] = toinvoicehoursamount
+        deal_record.values['laborhours'] = laborhours
+        deal_record.values['totalhours'] = totalhours
+
+        # --- 3. CALCOLO FINALE CAMPI (Margini, Costi, Differenze) ---
+        
+        # A. Hardware / Servizi Base
         amount = totals['amount_sum']
         expectedcost = totals['expectedcost']
-            
         deal_expectedmargin = amount - expectedcost
         
-        # Recupero costo e ricavo ore fatturabili generati dai timesheet 
-        invoiced_laborcost = deal_record.values.get('actuallaborcost') or 0
-        invoiced_amount = deal_record.values.get('invoicedhoursamount') or 0
-        invoiced_margin = invoiced_amount - invoiced_laborcost
-        salescost = deal_record.values.get('salescost') or 0
-        nonbillablecost = deal_record.values.get('nonbillablecost') or 0
+        deal_record.values['expectedhwserviceprice'] = totals['expectedhwserviceprice']
+        deal_record.values['expectedhwservicecost'] = totals['expectedhwservicecost']
+        deal_record.values['expectedhwservicemargin'] = totals['expectedhwservicemargin']
+        deal_record.values['actualhwservicecost'] = totals['actualhwservicecost']
+        deal_record.values['actualhwservicemargin'] = totals['actualhwservicemargin']
+        deal_record.values['hwservicedifference'] = totals['actualhwservicemargin'] - totals['expectedhwservicemargin']
 
-        #recupero costo e ricavo ore monte ore
-        deductedhours = deal_record.values.get('deductedhours') or 0
-        deductedhoursamount = deal_record.values.get('deductedhoursamount') or 0
-        deductedhoursmargin = deal_record.values.get('deductedhoursmargin') or 0
+        # B. Lavoro Uomo (Labor) - Integrato con actuallaborprice
+        actuallaborprice = invoicedhoursamount + toinvoicehoursamount + totals['expectedlaborprice']
+        actuallaborcost = laborcost_timesheets
+        actual_labor_cost_deallines = actuallaborcost
+        actuallabormargin = actuallaborprice - actuallaborcost
 
-        # effectivemargin NON include invoiced_margin
-        actualcost = totals['actualcost']
-        effectivemargin = totals['effectivemargin']
-
-        if actualcost == 0:
-            effectivemargin = deal_expectedmargin
-
-        # actualgrossmargin include invoiced_margin
-        actualgrossmargin = effectivemargin + invoiced_margin
+        deal_record.values['expectedlaborprice'] = totals['expectedlaborprice']
+        deal_record.values['expectedlaborcost'] = totals['expectedlaborcost']
+        deal_record.values['expectedlabormargin'] = totals['expectedlabormargin']
+        deal_record.values['actuallaborprice'] = actuallaborprice
+        deal_record.values['actuallaborcost'] = actuallaborcost
         
-        # actualnetmargin include invoiced_margin e sottrae salescost e nonbillablecost
-        actualnetmargin = actualgrossmargin - salescost - nonbillablecost
-
-        contract_expectedmargin = totals['totalcontractvalue'] - totals['totalcontractexpectedcost']
-        contract_effectivemargin = totals['totalcontractmargin_act']
-        
-        if actualcost == 0:
-            contract_effectivemargin = contract_expectedmargin
+        if expectedhours_total > 0:
+            deal_record.values['actuallabormargin'] = actuallabormargin
+        else:
+            deal_record.values['actuallabormargin'] = None
             
-        contract_grossmargin = contract_effectivemargin + invoiced_margin
-        totalcontractnetmargin = contract_grossmargin - salescost - nonbillablecost
+        if totals['expectedlaborprice'] > 0:
+            deal_record.values['laborcostdifference'] = totals['expectedlaborcost'] - actuallaborcost
+        else:
+            deal_record.values['laborcostdifference'] = None
+            
+        if expectedhours_total > 0:
+            deal_record.values['laborhoursdifference'] = expectedhours_total - laborhours
+        else:
+            deal_record.values['laborhoursdifference'] = None
 
-        price_safe = amount if amount else 1
-        expectedmargin_perc = round((deal_expectedmargin / price_safe) * 100, 2) if amount else 0
-        effectivemargin_perc = round((effectivemargin / price_safe) * 100, 2) if amount else 0
-        actualgrossmargin_perc = round((actualgrossmargin / price_safe) * 100, 2) if amount else 0
-        actualnetmargin_perc = round((actualnetmargin / price_safe) * 100, 2) if amount else 0
-
+        # C. Valori Globali (Hardware + Labor)
+        # effectivemargin = hardware actual margin + labor fixed price actual margin (NO timesheets)
+        # Ma logicamente i costi reali globali devono includere i timesheet
+        actualcost = totals['actualcost'] + laborcost_timesheets
+        actualgrossmargin = totals['actualhwservicemargin'] + actuallabormargin
+        
         deal_record.values['amount'] = round(amount, 2)
-        deal_record.values['totalcontractvalue'] = round(totals['totalcontractvalue'], 2)
-        deal_record.values['totalcontractnetmargin'] = round(totalcontractnetmargin, 2)
-        deal_record.values['grossamount'] = round(amount + invoiced_amount, 2)
+        deal_record.values['grossamount'] = round(amount + invoicedhoursamount + toinvoicehoursamount, 2)
         deal_record.values['expectedcost'] = round(expectedcost, 2)
         deal_record.values['expectedmargin'] = round(deal_expectedmargin, 2)
-        deal_record.values['expectedmargin_perc'] = expectedmargin_perc
-        deal_record.values['expectedhours'] = totals['expectedhours'] if totals['expectedhours'] > 0 else deal_record.values.get('expectedhours')
         
-        deal_record.values['actualcost'] = round(actualcost + invoiced_laborcost, 2)
+        price_safe = amount if amount else 1
+        deal_record.values['expectedmargin_perc'] = round((deal_expectedmargin / price_safe) * 100, 2) if amount else 0
         
-        deal_record.values['effectivemargin'] = round(effectivemargin, 2)
-        deal_record.values['effectivemargin_perc'] = effectivemargin_perc
-        deal_record.values['margindifference'] = round(effectivemargin - deal_expectedmargin, 2)
+        deal_record.values['actualcost'] = round(actualcost, 2)
+        
+        # Effectivemargin viene usato storico per indicare il margine "base", ma qui impostiamo quello calcolato globalmente
+        deal_record.values['effectivemargin'] = round(totals['effectivemargin'], 2)
+        deal_record.values['effectivemargin_perc'] = round((totals['effectivemargin'] / price_safe) * 100, 2) if amount else 0
+        deal_record.values['margindifference'] = round(actualgrossmargin - deal_expectedmargin, 2)
 
         deal_record.values['actualgrossmargin'] = round(actualgrossmargin, 2)
-        deal_record.values['actualgrossmargin_perc'] = actualgrossmargin_perc
+        gross_rev = amount + invoicedhoursamount + toinvoicehoursamount
+        gross_rev_safe = gross_rev if gross_rev else 1
+        deal_record.values['actualgrossmargin_perc'] = round((actualgrossmargin / gross_rev_safe) * 100, 2) if gross_rev else 0
         deal_record.values['actualgrossmargindifference'] = round(actualgrossmargin - deal_expectedmargin, 2)
 
+        # D. Margine Netto (Sottrae sales & non billable & travel cost)
+        actualnetmargin = actualgrossmargin - salescost - nonbillablecost - travelcost
         deal_record.values['actualnetmargin'] = round(actualnetmargin, 2)
-        deal_record.values['actualnetmargin_perc'] = actualnetmargin_perc
+        deal_record.values['actualnetmargin_perc'] = round((actualnetmargin / gross_rev_safe) * 100, 2) if gross_rev else 0
         deal_record.values['actualnetmargindifference'] = round(actualnetmargin - deal_expectedmargin, 2)
 
-        if deductedhours > 0:
-            virtualgrossmargin = actualgrossmargin + deductedhoursmargin
-            virtualnetmargin = actualnetmargin + deductedhoursmargin
-            deal_record.values['virtualamount'] = round(amount + invoiced_amount + deductedhoursamount, 2)
+        # E. Valori di Contratto
+        contract_expectedmargin = totals['totalcontractvalue'] - totals['totalcontractexpectedcost']
+        contract_effectivemargin = totals['totalcontractmargin_act']
+        if totals['actualcost'] == 0:
+            contract_effectivemargin = contract_expectedmargin
+            
+        contract_grossmargin = contract_effectivemargin + (invoicedhoursamount + toinvoicehoursamount - laborcost_timesheets)
+        totalcontractnetmargin = contract_grossmargin - salescost - nonbillablecost - travelcost
+        
+        deal_record.values['totalcontractvalue'] = round(totals['totalcontractvalue'], 2)
+        deal_record.values['totalcontractnetmargin'] = round(totalcontractnetmargin, 2)
+
+        # F. Valori Integrati Monte Ore
+        if bankhours > 0:
+            virtualgrossmargin = actualgrossmargin + deal_record.values['deductedhoursmargin']
+            virtualnetmargin = actualnetmargin + deal_record.values['deductedhoursmargin']
+            deal_record.values['virtualamount'] = round(gross_rev + deductedhoursamount, 2)
             deal_record.values['virtualgrossmargin'] = round(virtualgrossmargin , 2)
             deal_record.values['virtualgrossmargindifference'] = round(virtualgrossmargin - deal_expectedmargin, 2)
             deal_record.values['virtualnetmargin'] = round(virtualnetmargin, 2)
@@ -488,71 +462,12 @@ class DealService:
         deal_record.values['annualprice'] = totals['annualprice']
         deal_record.values['annualcost'] = totals['annualcost']
         deal_record.values['annualmargin'] = totals['annualmargin']
-        deal_record.values['expectedhwserviceprice'] = totals['expectedhwserviceprice']
-        deal_record.values['expectedhwservicecost'] = totals['expectedhwservicecost']
-        deal_record.values['expectedhwservicemargin'] = totals['expectedhwservicemargin']
-        deal_record.values['actualhwservicecost'] = totals['actualhwservicecost']
-        deal_record.values['actualhwservicemargin'] = totals['actualhwservicemargin']
-        
-        deal_record.values['hwservicedifference'] = totals['actualhwservicemargin'] - totals['expectedhwservicemargin']
 
-        deal_record.values['expectedlaborprice'] = totals['expectedlaborprice']
-        deal_record.values['expectedlaborcost'] = totals['expectedlaborcost']
-        deal_record.values['expectedlabormargin'] = totals['expectedlabormargin']
-        
-        actuallaborcost = totals['actuallaborcost'] + invoiced_laborcost
-        deal_record.values['actuallaborcost'] = actuallaborcost
-        
-        if totals['expectedhours'] > 0:
-            deal_record.values['actuallabormargin'] = totals['actuallabormargin'] + invoiced_margin
-        else:
-            deal_record.values['actuallabormargin'] = None
 
-        if totals['expectedlaborprice'] > 0:
-            deal_record.values['laborcostdifference'] = totals['expectedlaborcost'] - actuallaborcost
-        else:
-            deal_record.values['laborcostdifference'] = None
-            
-        laborhours = deal_record.values.get('laborhours') or 0
-        if totals['expectedhours'] > 0:
-            deal_record.values['laborhoursdifference'] = totals['expectedhours'] - laborhours
-        else:
-            deal_record.values['laborhoursdifference'] = None
+        # --- 4. GENERAZIONE NOTA ESPLICATIVA (HTML) ---
 
-        # Formattazione per la nota inline svizzera (con ' per migliaia e . per decimali)
         def f_ch(val):
             return f"{float(val or 0):,.2f}".replace(",", "'")
-            
-        hw_rev = deal_record.values.get('expectedhwserviceprice') or 0
-        hw_cost_exp = deal_record.values.get('expectedhwservicecost') or 0
-        hw_cost_act = deal_record.values.get('actualhwservicecost') or 0
-        hw_marg_exp = deal_record.values.get('expectedhwservicemargin') or 0
-        hw_marg_act = deal_record.values.get('actualhwservicemargin') or 0
-        hw_marg_exp_perc = (hw_marg_exp / hw_rev * 100) if hw_rev else 0
-        hw_marg_act_perc = (hw_marg_act / hw_rev * 100) if hw_rev else 0
-        
-        lab_rev_deal = deal_record.values.get('expectedlaborprice') or 0
-        lab_rev = lab_rev_deal + (deal_record.values.get('invoicedhoursamount') or 0)
-        lab_cost_exp = deal_record.values.get('expectedlaborcost') or 0
-        lab_cost_act = deal_record.values.get('actuallaborcost') or 0
-        lab_marg_exp = deal_record.values.get('expectedlabormargin') or 0
-        # Inseriamo il margine di lavoro calcolato per allinearci ai fallback del backend
-        lab_marg_act = totals['actuallabormargin'] + invoiced_margin 
-        lab_marg_exp_perc = (lab_marg_exp / lab_rev * 100) if lab_rev else 0
-        lab_marg_act_perc = (lab_marg_act / lab_rev * 100) if lab_rev else 0
-        
-        tot_rev = deal_record.values.get('grossamount') or 0
-        tot_cost_exp = deal_record.values.get('expectedcost') or 0
-        tot_cost_act = deal_record.values.get('actualcost') or 0
-        tot_marg_exp = deal_record.values.get('expectedmargin') or 0
-        tot_marg_act = deal_record.values.get('actualgrossmargin') or 0
-        
-        expectedmargin_perc = deal_record.values.get('expectedmargin_perc') or 0
-        actualgrossmargin_perc = deal_record.values.get('actualgrossmargin_perc') or 0
-        actualnetmargin = deal_record.values.get('actualnetmargin') or 0
-        actualnetmargin_perc = deal_record.values.get('actualnetmargin_perc') or 0
-
-        # Funzioni di utilità per formattazione HTML e Colori
         def c_rev(v): return f'<span style="color: #047857; font-weight: 500;">{f_ch(v)}</span>'
         def c_cost(v): return f'<span style="color: #b91c1c; font-weight: 500;">{f_ch(v)}</span>'
         def c_marg(v): 
@@ -562,158 +477,88 @@ class DealService:
             c = "#15803d" if (v and float(v) >= 0) else "#b91c1c"
             return f'<span style="color: {c}; font-weight: 700;">{f_ch(v)}%</span>'
 
-        # Helper per generare nota discorsiva sulle discrepanze
-        def diff_note(title, rev_exp, rev_act, cost_exp, cost_act, marg_exp, marg_act):
-            diff_marg = marg_act - marg_exp
-            if abs(diff_marg) < 0.01 and abs(cost_exp - cost_act) < 0.01 and abs(rev_exp - rev_act) < 0.01:
-                return ""
+        hoursnote = f"""<div class="deal-summary" style="font-size: 1em;color: black;"><strong>{usedhours:.0f}/{expectedhours_total:.0f}</strong></div>
+            <div class="deal-details" style="font-family: system-ui, sans-serif; line-height: 1.5; color: #1f2937;">
+            <div style="font-size: 1.1em; color: #1e40af; margin-bottom: 8px; border-bottom: 1px solid #bfdbfe; padding-bottom: 4px;"><b>Dettaglio Tempistiche</b></div>
+            &bull; Ore Previste: <b>{expectedhours_total}</b><br/>
+            &bull; Ore Utilizzate: <b>{usedhours}</b><br/>
+            &bull; Ore Residue: <span style="font-weight: 700; color: {'#15803d' if float(residualhours or 0) >= 0 else '#b91c1c'};">{residualhours}</span><br/>
+            &bull; Ore di Viaggio: {travelhours}<br/>
+            &bull; Totale Generale Ore: <b>{totalhours}</b><br/>
+            <div style="margin-top: 12px; margin-bottom: 4px;"><i>Ripartizione:</i></div>
+            &bull; Ore Progetto (Fixed Price): {fixedpricehours}<br/>
+            &bull; Ore Contratto/Monte Ore: {bankhours}<br/>
+            &bull; Ore Fatturate / da Fatturare: <span style="color: #047857; font-weight: 500;">{invoicedhours} / {toinvoicehours}</span><br/>
+            &bull; Ore Non Fatturabili: <span style="color: #b91c1c; font-weight: 500;">{nonbillablehours}</span><br/>
+            &bull; Ore Commerciali (Sales): {saleshours}<br/>
             
-            trend = "in <span style='color: #b91c1c; font-weight: bold;'>calo</span>" if diff_marg < 0 else "in <span style='color: #15803d; font-weight: bold;'>crescita</span>"
-            border_color = "#b91c1c" if diff_marg < 0 else "#15803d"
-            
-            s = f"<div style='margin-top: 8px; padding: 8px; background-color: #f9fafb; border-left: 4px solid {border_color}; border-radius: 4px; font-size: 0.9em;'>"
-            s += f"<b>Nota {title}</b>:<br/> L'utile reale ({c_marg(marg_act)}) risulta {trend} di <b>{f_ch(abs(diff_marg))}</b> rispetto al budget iniziale ({f_ch(marg_exp)})."
-            
-            reasons = []
-            if abs(rev_act - rev_exp) >= 0.01:
-                dir_rev = "maggiori" if rev_act > rev_exp else "minori"
-                reasons.append(f"<b>{dir_rev} ricavi effettivi</b> ({c_rev(rev_act)} contro {f_ch(rev_exp)})")
-                
-            if abs(cost_act - cost_exp) >= 0.01:
-                dir_cost = "incremento" if cost_act > cost_exp else "risparmio"
-                reasons.append(f"un <b>{dir_cost} dei costi</b> ({c_cost(cost_act)} reali contro {f_ch(cost_exp)} previsti)")
-                
-            if reasons:
-                s += f"<br/><span style='color: #4b5563;'>Lo scostamento è causato da: {' e da '.join(reasons)}.</span>"
-            s += "</div>"
-            return s
+            </div>"""
+        deal_record.values['hoursnote'] = hoursnote.strip()
 
-        # Generazione nota HTML riepilogativa per Totali e Margini
         lines = []
-        if totalcontractnetmargin != actualnetmargin:
-            lines.append(f'<div class="deal-summary" style="font-size: 1em;color: black"><strong>Marg: {c_marg(actualnetmargin)}  ({c_perc(actualnetmargin_perc)}%) --> {c_marg(totalcontractnetmargin)} </strong></div>')
-        else:
-            lines.append(f'<div class="deal-summary" style="font-size: 1em;color: black"><strong>Marg: {c_marg(actualnetmargin)}  ({c_perc(actualnetmargin_perc)}%)</strong></div>')
+        lines.append(f'<div class="deal-summary" style="font-size: 1em;color: black"><strong>Marg: {c_marg(actualnetmargin)}  ({c_perc(deal_record.values["actualnetmargin_perc"])})</strong></div>')
         lines.append('<div class="deal-details" style="font-family: system-ui, sans-serif; line-height: 1.5; color: #1f2937;">')
-        lines.append(f'<div style="font-size: 0.9em; color: #4b5563; margin-top: 4px; margin-bottom: 8px;">Margine Netto: <b>{c_marg(actualnetmargin)}  ({c_perc(actualnetmargin_perc)}%)</b></div>')
+        lines.append(f'<div style="font-size: 0.9em; color: #4b5563; margin-top: 4px; margin-bottom: 8px;">Margine Netto: <b>{c_marg(actualnetmargin)}  ({c_perc(deal_record.values["actualnetmargin_perc"])})</b></div>')
         lines.append(f'<div style="font-size: 0.9em; color: #4b5563; margin-top: 4px; margin-bottom: 8px;">Margine Netto fino a fine contratto: <b>{c_marg(totalcontractnetmargin)}</b></div>')
-        # 1. Analisi HARDWARE
+
+        # 1. Base Preventivo
         lines.append('<div style="margin-bottom: 20px;">')
-        lines.append('<div style="font-size: 1.1em; color: #1e40af; margin-bottom: 8px; border-bottom: 1px solid #bfdbfe; padding-bottom: 4px;"><b>1. Analisi HARDWARE</b></div>')
-        lines.append(f"Ricavo: {c_rev(hw_rev)}<br/>")
-        lines.append(f"Costo Previsto: {f_ch(hw_cost_exp)}<br/>")
-        lines.append(f"Costo Reale: {c_cost(hw_cost_act)}<br/>")
-        
-        lines.append('<div style="margin-top: 8px;">')
-        lines.append("<i>Marginalità Prevista:</i><br/>")
-        lines.append(f"Utile Previsto: {f_ch(hw_rev)} - {f_ch(hw_cost_exp)} = <b>{f_ch(hw_marg_exp)}</b><br/>")
-        if hw_rev > 0:
-            lines.append(f"Margine % Previsto: ({f_ch(hw_marg_exp)} / {f_ch(hw_rev)}) * 100 = <b>{f_ch(hw_marg_exp_perc)}%</b><br/>")
-        else:
-            lines.append("Margine % Previsto: <span style='color:#6b7280;'>N/A (Ricavo HW assente)</span><br/>")
-        lines.append("</div>")
-            
-        lines.append('<div style="margin-top: 8px;">')
-        lines.append("<i>Marginalità Reale:</i><br/>")
-        lines.append(f"Utile / Perdita Reale: {c_rev(hw_rev)} - {c_cost(hw_cost_act)} = {c_marg(hw_marg_act)}<br/>")
-        if hw_rev > 0:
-            lines.append(f"Margine % Reale: ({c_marg(hw_marg_act)} / {c_rev(hw_rev)}) * 100 = {c_perc(hw_marg_act_perc)}<br/>")
-        else:
-            lines.append("Margine % Reale: <span style='color:#6b7280;'>N/A (Ricavo HW assente)</span><br/>")
-        lines.append("</div>")
-            
-        hw_note = diff_note("Hardware", hw_rev, hw_rev, hw_cost_exp, hw_cost_act, hw_marg_exp, hw_marg_act)
-        if hw_note: lines.append(hw_note)
+        lines.append('<div style="font-size: 1.1em; color: #1e40af; margin-bottom: 8px; border-bottom: 1px solid #bfdbfe; padding-bottom: 4px;"><b>1. Base Preventivo (Deallines)</b></div>')
+        lines.append(f"Ricavo HW: {f_ch(totals['expectedhwserviceprice'])} &nbsp;|&nbsp; Ricavo Lavoro: {f_ch(totals['expectedlaborprice'])}<br/>")
+        lines.append(f"Costo Prev. HW: {f_ch(totals['expectedhwservicecost'])} &nbsp;|&nbsp; Costo Prev. Lavoro: {f_ch(totals['expectedlaborcost'])}<br/>")
         lines.append('</div>')
 
-        # 2. Analisi LAVORO UOMO
+        # 2. Analisi Hardware
         lines.append('<div style="margin-bottom: 20px;">')
-        lines.append('<div style="font-size: 1.1em; color: #1e40af; margin-bottom: 8px; border-bottom: 1px solid #bfdbfe; padding-bottom: 4px;"><b>2. Analisi LAVORO UOMO</b></div>')
-            
-        lines.append(f"Ricavo <span style='font-size:0.85em; color:#6b7280;'>(Ordine + Fatture)</span>: {c_rev(lab_rev)}<br/>")
-        lines.append(f"Costo Previsto: {f_ch(lab_cost_exp)}<br/>")
-        lines.append(f"Costo Reale (Labor): {c_cost(lab_cost_act)}<br/>")
-        
-        lines.append('<div style="margin-top: 8px;">')
-        lines.append("<i>Marginalità Prevista:</i><br/>")
-        lines.append(f"Utile Previsto: {f_ch(lab_rev_deal)} - {f_ch(lab_cost_exp)} = <b>{f_ch(lab_marg_exp)}</b><br/>")
-        if lab_rev_deal > 0:
-            lines.append(f"Margine % Previsto: ({f_ch(lab_marg_exp)} / {f_ch(lab_rev_deal)}) * 100 = <b>{f_ch(lab_marg_exp_perc)}%</b><br/>")
-        else:
-            lines.append("Margine % Previsto: <span style='color:#6b7280;'>N/A (Nessun ricavo labor preventivato)</span><br/>")
-        lines.append("</div>")
-            
-        lines.append('<div style="margin-top: 8px;">')
-        lines.append("<i>Marginalità Reale:</i><br/>")
-        lines.append(f"Utile / Perdita Reale: {c_rev(lab_rev)} - {c_cost(lab_cost_act)} = {c_marg(lab_marg_act)}<br/>")
-        if lab_rev > 0:
-            lines.append(f"Margine % Reale: ({c_marg(lab_marg_act)} / {c_rev(lab_rev)}) * 100 = {c_perc(lab_marg_act_perc)}<br/>")
-        else:
-            lines.append("Margine % Reale: <span style='color:#6b7280;'>N/A (Pura spesa non coperta da ricavi dedicati)</span><br/>")
-        lines.append("</div>")
-            
-        lab_note = diff_note("Lavoro Uomo", lab_rev_deal, lab_rev, lab_cost_exp, lab_cost_act, lab_marg_exp, lab_marg_act)
-        if lab_note: lines.append(lab_note)
+        lines.append('<div style="font-size: 1.1em; color: #1e40af; margin-bottom: 8px; border-bottom: 1px solid #bfdbfe; padding-bottom: 4px;"><b>2. Analisi HARDWARE</b></div>')
+        lines.append(f"Ricavo Previsto/Reale: {c_rev(totals['expectedhwserviceprice'])}<br/>")
+        lines.append(f"Costo Previsto: {f_ch(totals['expectedhwservicecost'])} &nbsp;>&nbsp; Costo Reale: {c_cost(totals['actualhwservicecost'])}<br/>")
+        lines.append(f"<i>Margine Reale:</i> {c_rev(totals['expectedhwserviceprice'])} - {c_cost(totals['actualhwservicecost'])} = <b>{c_marg(totals['actualhwservicemargin'])}</b><br/>")
         lines.append('</div>')
 
-        # 3. Prospetto TOTALE
+        # 3. Analisi Lavoro
         lines.append('<div style="margin-bottom: 20px;">')
-        lines.append('<div style="font-size: 1.1em; color: #1e40af; margin-bottom: 8px; border-bottom: 1px solid #bfdbfe; padding-bottom: 4px;"><b>3. Prospetto GLOBALE</b></div>')
-        lines.append(f"Ricavi Totali: {c_rev(tot_rev)} <span style='font-size:0.85em; color:#6b7280;'>({f_ch(hw_rev)} hw + {f_ch(lab_rev)} uomo)</span><br/>")
-        lines.append(f"Costi Previsti Totali: {f_ch(tot_cost_exp)} <span style='font-size:0.85em; color:#6b7280;'>({f_ch(hw_cost_exp)} hw + {f_ch(lab_cost_exp)} uomo)</span><br/>")
-        lines.append(f"Costi Reali Totali: {c_cost(tot_cost_act)} <span style='font-size:0.85em; color:#6b7280;'>({f_ch(hw_cost_act)} hw + {f_ch(lab_cost_act)} uomo)</span><br/>")
+        lines.append('<div style="font-size: 1.1em; color: #1e40af; margin-bottom: 8px; border-bottom: 1px solid #bfdbfe; padding-bottom: 4px;"><b>3. Analisi LAVORO UOMO</b></div>')
+        lines.append(f"Ricavo Previsto Base: {f_ch(totals['expectedlaborprice'])}<br/>")
+        lines.append(f"Extra Ricavo (Timesheet fatturati e da fat.): {f_ch(invoicedhoursamount + toinvoicehoursamount)}<br/>")
+        lines.append(f"Ricavo Reale Totale: {c_rev(actuallaborprice)}<br/><br/>")
         
-        lines.append('<div style="margin-top: 8px;">')
-        lines.append("<i>Marginalità GLOBALE Prevista:</i><br/>")
-        lines.append(f"Utile Previsto Totale: {f_ch(tot_rev)} - {f_ch(tot_cost_exp)} = <b>{f_ch(tot_marg_exp)}</b><br/>")
-        lines.append(f"Margine % Previsto Totale: <b>{f_ch(expectedmargin_perc)}%</b><br/>")
-        lines.append("</div>")
+        lines.append(f"Costo Previsto Base: {f_ch(totals['expectedlaborcost'])}<br/>")
+        lines.append(f"Costo Reale (Da preventivo): {f_ch(actual_labor_cost_deallines)}<br/>")
+        lines.append(f"Costo Reale (Extra Timesheet): {f_ch(laborcost_timesheets)}<br/>")
+        lines.append(f"Costo Reale Totale: {c_cost(actuallaborcost)}<br/><br/>")
         
-        lines.append('<div style="margin-top: 8px;">')
-        lines.append("<i>Marginalità GLOBALE Reale:</i><br/>")
-        real_sum_marg = hw_marg_act + lab_marg_act
-        import math
-        if not math.isclose(real_sum_marg, tot_marg_act, abs_tol=0.01):
-            lines.append(f"Perdita / Utile Matematico: {f_ch(hw_marg_act)} (hw) + {f_ch(lab_marg_act)} (uomo) = {f_ch(real_sum_marg)}<br/>")
-            lines.append(f"👉 <span style='color:#d97706; font-weight:500;'>Valore Riproporzionato a {c_marg(tot_marg_act)}</span> <span style='font-size:0.85em; color:#6b7280;'>(Assenza Costi Reali inseriti)</span><br/>")
-        else:
-            lines.append(f"Perdita / Utile Reale: {c_marg(hw_marg_act)} (hw) + {c_marg(lab_marg_act)} (uomo) = <span style='font-size:1.1em;'>{c_marg(tot_marg_act)}</span><br/>")
-        lines.append(f"Margine % Reale Totale: <span style='font-size:1.1em;'>{c_perc(actualgrossmargin_perc)}</span><br/>")
-        lines.append("</div>")
+        lines.append(f"<i>Margine Reale:</i> {c_rev(actuallaborprice)} - {c_cost(actuallaborcost)} = <b>{c_marg(actuallabormargin)}</b><br/>")
+        lab_marg_exp_perc = (totals['expectedlabormargin'] / totals['expectedlaborprice'] * 100) if totals['expectedlaborprice'] else 0
+        lab_marg_act_perc = (actuallabormargin / actuallaborprice * 100) if actuallaborprice else 0
+        lines.append(f"Margine Previsto %: {f_ch(lab_marg_exp_perc)}% &nbsp;>&nbsp; Margine Reale %: {c_perc(lab_marg_act_perc)}<br/>")
         lines.append('</div>')
 
-        # 4. Analisi aggiuntiva
+        # 4. Analisi Globale
         lines.append('<div style="margin-bottom: 20px;">')
-        lines.append('<div style="font-size: 1.1em; color: #1e40af; margin-bottom: 8px; border-bottom: 1px solid #bfdbfe; padding-bottom: 4px;"><b>4. Analisi aggiuntiva</b></div>')
-        lines.append(f"Margine Lordo Reale: {c_marg(tot_marg_act)}<br/>")
+        lines.append('<div style="font-size: 1.1em; color: #1e40af; margin-bottom: 8px; border-bottom: 1px solid #bfdbfe; padding-bottom: 4px;"><b>4. Margine GLOBALE e NETTO</b></div>')
+        lines.append(f"Ricavo Lordo Totale: {c_rev(gross_rev)} <span style='font-size:0.85em; color:#6b7280;'>(HW + Lavoro)</span><br/>")
+        lines.append(f"Costo Reale Totale: {c_cost(actualcost)} <span style='font-size:0.85em; color:#6b7280;'>(HW + Lavoro)</span><br/>")
+        lines.append(f"Margine Lordo Reale: {c_marg(actualgrossmargin)}<br/><br/>")
+        
         lines.append(f"Costi Commerciali (Sales): {c_cost(salescost)}<br/>")
-        lines.append(f"Costi Non Fatturabili: {c_cost(nonbillablecost)}<br/>")
-        
-        lines.append('<div style="margin-top: 8px;">')
-        lines.append(f"<b>Margine Netto Reale</b> <span style='color:#6b7280;'>(Lordo - Sales - Non Fat.)</span>: <span style='font-size:1.1em;'>{c_marg(actualnetmargin)}</span> ({c_perc(actualnetmargin_perc)})<br/>")
-        lines.append("</div>")
+        lines.append(f"Costi Non Fatturabili: {c_cost(nonbillablecost)}<br/><br/>")
+        lines.append(f"<b>Margine Netto Reale</b> <span style='color:#6b7280;'>(Lordo - Sales - Non Fat.)</span>: <span style='font-size:1.1em;'>{c_marg(actualnetmargin)}</span> ({c_perc(deal_record.values['actualnetmargin_perc'])})<br/>")
+        lines.append('</div>')
 
-        if deductedhours > 0:
+        if bankhours > 0:
             lines.append(f"<div style='margin-top:8px; padding-top:8px; border-top:1px dashed #d1d5db;'>")
             lines.append(f"<span style='color:#4b5563; font-weight:600;'>Integrazione Monte Ore (Virtuale):</span><br/>")
-            lines.append(f"&bull; Fatturato Virtuale: {c_rev(deal_record.values.get('virtualamount') or 0)}<br/>")
-            lines.append(f"&bull; Margine Lordo Virtuale: {c_marg(deal_record.values.get('virtualgrossmargin') or 0)}<br/>")
             lines.append(f"&bull; Margine Netto Virtuale: {c_marg(deal_record.values.get('virtualnetmargin') or 0)}<br/>")
             lines.append("</div>")
             
-        an_price = deal_record.values.get('annualprice') or 0
-        an_cost = deal_record.values.get('annualcost') or 0
-        if an_price > 0 or an_cost > 0:
+        if totals['annualprice'] > 0 or totals['annualcost'] > 0:
             lines.append(f"<div style='margin-top:8px; padding-top:8px; border-top:1px dashed #d1d5db;'>")
             lines.append(f"<span style='color:#4b5563; font-weight:600;'>Valori Ricorrenti (Annuity):</span><br/>")
-            lines.append(f"&bull; Ricavo Annuo: {c_rev(an_price)}<br/>")
-            lines.append(f"&bull; Costo Annuo: {c_cost(an_cost)}<br/>")
             lines.append(f"&bull; Margine Annuo: {c_marg(deal_record.values.get('annualmargin') or 0)}<br/>")
             lines.append("</div>")
 
         lines.append('</div>')
-        lines.append('</div>')
-        
         deal_record.values['totalsnote'] = ''.join(lines)
 
 
