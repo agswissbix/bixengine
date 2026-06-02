@@ -927,27 +927,44 @@ class UserRecord:
             SELECT f.*
             FROM sys_user_field_order AS fo
             LEFT JOIN sys_field AS f ON fo.tableid=f.tableid AND fo.fieldid=f.id
-            WHERE fo.tableid='{self.tableid}'
-            AND fo.typepreference='{typepreference}'
+            WHERE fo.tableid=%(tableid)s
+            AND fo.typepreference=%(typepreference)s
             {step_condition}
             AND fo.fieldorder IS NOT NULL
-            AND fo.userid={self.userid}
+            AND fo.userid=%(userid)s
             ORDER BY fo.fieldorder
         """
-        fields=HelpderDB.sql_query(sql)
+        
+        # 1. Tentativo con l'utente corrente
+        params = {
+            'tableid': self.tableid,
+            'typepreference': typepreference,
+            'userid': self.userid
+        }
+        fields = HelpderDB.sql_query(sql, params=params)
+        
+        # 2. Tentativo con i gruppi (ordinati per priorità globale)
         if not fields:
-            sql = f"""
-                SELECT f.*
-                FROM sys_user_field_order AS fo
-                LEFT JOIN sys_field AS f ON fo.tableid=f.tableid AND fo.fieldid=f.id
-                WHERE fo.tableid='{self.tableid}'
-                AND fo.typepreference='{typepreference}'
-                {step_condition}
-                AND fo.fieldorder IS NOT NULL
-                AND fo.userid=1
-                ORDER BY fo.fieldorder
+            group_sql = """
+                SELECT g.idmanager
+                FROM sys_group_user gu
+                JOIN sys_group g ON gu.groupid = g.id
+                WHERE gu.userid = %(userid)s AND (gu.disabled IS NULL OR gu.disabled != 'Y')
+                ORDER BY COALESCE(g.priority, 9999) ASC
             """
-            fields = HelpderDB.sql_query(sql)
+            groups = HelpderDB.sql_query(group_sql, params={'userid': self.userid})
+            if groups:
+                for group in groups:
+                    if group.get('idmanager'):
+                        params['userid'] = group['idmanager']
+                        fields = HelpderDB.sql_query(sql, params=params)
+                        if fields:
+                            break
+                            
+        # 3. Fallback al superuser (userid = 1)
+        if not fields:
+            params['userid'] = 1
+            fields = HelpderDB.sql_query(sql, params=params)
 
 
         # ==============================================================================
