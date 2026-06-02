@@ -63,6 +63,7 @@ class DealService:
                     dl_rec = UserRecord('dealline', found_dl['recordid_'], load_fields=False)
                     dl_rec.values['price'] = 10000
                     dl_rec.save()
+                    found_dl['price'] = 10000
             else:
                 dl_rec = UserRecord('dealline', load_fields=False)
                 dl_rec.values['recordiddeal_'] = recordid
@@ -71,11 +72,21 @@ class DealService:
                 dl_rec.values['price'] = 10000
                 dl_rec.values['quantity'] = 1
                 dl_rec.save()
+                dealline_records.append({
+                    'recordid_': dl_rec.recordid,
+                    'recordiddeal_': recordid,
+                    'recordidproduct_': fixedprice_product,
+                    'name': 'Installazione e configurazione a progetto',
+                    'price': 10000,
+                    'quantity': 1,
+                    'deleted_': 'N'
+                })
         else:
             if found_dl:
                 dl_rec = UserRecord('dealline', found_dl['recordid_'], load_fields=False)
                 dl_rec.values['deleted_'] = 'Y'
                 dl_rec.save()
+                found_dl['deleted_'] = 'Y'
 
     @staticmethod
     def _update_reference(deal_record: UserRecord):
@@ -148,6 +159,9 @@ class DealService:
             dl_recordid = dl_dict['recordid_']
             dl_record = UserRecord('dealline', dl_recordid, load_fields=False)
             dl_record.values['recordidproject_'] = project_recordid
+
+            if dl_dict.get('deleted_') == 'Y':
+                continue
             
             product_recordid = dl_dict.get('recordidproduct_')
             dl_quantity = dl_dict.get('quantity') or 0
