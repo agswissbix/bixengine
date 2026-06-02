@@ -398,6 +398,7 @@ def settings_table_tablefields_save(request):
     tableid = data.get('tableid')
     userid = data.get('userid')
     fields = data.get('fields', [])
+    master_tableid = data.get('master_tableid', None)
     typepreference = data.get('typepreference', None)
 
     if typepreference is None or typepreference not in type_preference_options:
@@ -422,20 +423,20 @@ def settings_table_tablefields_save(request):
         if not field:
             continue
 
+        filter_kwargs = {
+            'userid': user,
+            'tableid': table,
+            'fieldid': field,
+            'typepreference': typepreference,
+        }
+        
+        if typepreference == "linked_columns":
+            filter_kwargs['master_tableid_id'] = master_tableid
+
         if order is None:
-            SysUserFieldOrder.objects.filter(
-                userid=user,
-                tableid=table,
-                fieldid=field,
-                typepreference=typepreference,
-            ).delete()
+            SysUserFieldOrder.objects.filter(**filter_kwargs).delete()
         else:
-            user_table_order, created = SysUserFieldOrder.objects.get_or_create(
-                userid=user,
-                tableid=table,
-                fieldid=field,
-                typepreference=typepreference,
-            )
+            user_table_order, created = SysUserFieldOrder.objects.get_or_create(**filter_kwargs)
             user_table_order.fieldorder = order
             user_table_order.save()
 
