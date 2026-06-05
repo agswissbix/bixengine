@@ -1,7 +1,7 @@
 def get_badges_map():
     return {
-        'company': ['company'],
+        'company': ['company', 'no_money'],
         'project': ['project'],
         'timesheet': ['timesheet'],
-        'deal': ['deal', 'marginality']
+        'deal': ['deal']
     }
