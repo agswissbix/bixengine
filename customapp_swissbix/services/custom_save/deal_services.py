@@ -192,7 +192,9 @@ class DealService:
                 dl_actualcost = deal_fixedpricehours * 60
                 deal_fixedpricehours = 0
 
-            dl_actualmargin = (dl_price - dl_actualcost) if dl_actualcost != 0 else dl_expectedmargin
+            dl_calc_actualcost = dl_actualcost if dl_actualcost != 0 else dl_expectedcost
+
+            dl_actualmargin = dl_price - dl_calc_actualcost
                 
             dl_record.values['effectivecost'] = dl_actualcost
             dl_record.values['margin_actual'] = dl_actualmargin
@@ -222,7 +224,7 @@ class DealService:
                 totals['totalcontractmargin_act'] += (monthly_marg_act * contract_ob)
                 
                 dl_record.values['annualprice'] = dl_price * multiplier
-                dl_record.values['annualcost'] = dl_actualcost * multiplier if dl_actualcost != 0 else dl_expectedcost * multiplier
+                dl_record.values['annualcost'] = dl_calc_actualcost * multiplier
                 dl_record.values['annualmargin'] = dl_record.values['annualprice'] - dl_record.values['annualcost']
                 
                 totals['annualprice'] += dl_record.values['annualprice']
@@ -243,11 +245,11 @@ class DealService:
                 totals['expectedhwserviceprice'] += dl_price
                 totals['expectedhwservicecost'] += dl_expectedcost
                 totals['expectedhwservicemargin'] += dl_price - dl_expectedcost
-                totals['actualhwservicecost'] += dl_actualcost
-                totals['actualhwservicemargin'] += dl_price - dl_actualcost
+                totals['actualhwservicecost'] += dl_calc_actualcost
+                totals['actualhwservicemargin'] += dl_price - dl_calc_actualcost
 
-            totals['actualcost'] += dl_actualcost
-            totals['effectivemargin'] += dl_price - dl_actualcost
+            totals['actualcost'] += dl_calc_actualcost
+            totals['effectivemargin'] += dl_price - dl_calc_actualcost
 
 
         # --- 2. LETTURA TIMESHEETS ---
