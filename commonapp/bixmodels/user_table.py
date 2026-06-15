@@ -523,20 +523,13 @@ class UserTable:
         return records
     
     @timing_decorator
-    def get_records(self, viewid='', searchTerm='', conditions_list=None, fields=None, offset=0, limit=None, orderby='recordid_ desc', columns=None):
-        """
-        Ottieni elenco record in base ai parametri di ricerca.
-        Versione migliorata per gestire filtri complessi e JOIN dinamiche.
-        """
+    def get_query_conditions(self, viewid='', searchTerm='', conditions_list=None, columns=None):
         if conditions_list is None:
             conditions_list = []
         
-        # Inizializza le parti della query
-        select_fields = [f"user_{self.tableid}.*"]
         from_clauses = [f"FROM user_{self.tableid}"]
         where_clauses = [f"user_{self.tableid}.deleted_='N'"]
         
-        # 1. Gestione del termine di ricerca
         if searchTerm and columns:
             searchTerm_conditions = []
             for column in columns:
@@ -544,19 +537,13 @@ class UserTable:
                 if not fieldid:
                     continue
                 fieldtypeid = column.get('fieldtypewebid')
-                # NOTA: Per unire le tabelle in base al recordid_ del campo collegato
-                # l'approccio migliore è estrarre l'ID della tabella collegata
-                # dal nome del campo (es. recordidclienti_)
-                # o dalla definizione del campo.
                 tablelink = column.get('tablelink')
                 keyfieldlink = column.get('keyfieldlink')
                 
                 if tablelink and keyfieldlink:
-                    # Aggiunge il JOIN alla lista di clausole
                     from_clauses.append(
                         f"LEFT JOIN user_{tablelink} ON user_{self.tableid}.recordid{tablelink}_ = user_{tablelink}.recordid_ "
                     )
-                    # Aggiunge la condizione di ricerca
                     sanitized_term = searchTerm.replace("'", "''")
                     searchTerm_conditions.append(
                         f"user_{tablelink}.{keyfieldlink} LIKE '%{sanitized_term}%'"
@@ -576,15 +563,12 @@ class UserTable:
                         f"({user_alias}.firstname LIKE '%{sanitized_term}%' OR {user_alias}.lastname LIKE '%{sanitized_term}%')"
                     )
                 
-            
             if searchTerm_conditions:
                 where_clauses.append(f"({' OR '.join(searchTerm_conditions)})")
 
-        # 2. Aggiungi le condizioni della conditions_list
         if conditions_list:
             where_clauses.extend(conditions_list)
 
-        # 3. Gestione della vista
         if viewid:
             view_query_conditions = HelpderDB.sql_query_value(
                 sql=f"SELECT query_conditions FROM sys_view WHERE id='{viewid}' AND tableid='{self.tableid}'",
@@ -593,8 +577,6 @@ class UserTable:
             if view_query_conditions:
                 view_query_conditions = str(view_query_conditions)
                 view_query_conditions = view_query_conditions.replace('$userid$', str(self.userid))
-                today = datetime.date.today().strftime("%Y-%m-%d")
-                # view_query_conditions = view_query_conditions.replace('$today$', today) # Rimuovi se non usato
                 where_clauses.append(view_query_conditions)
 
         tablesettings = TableSettings(self.tableid, self.userid)
@@ -605,12 +587,6 @@ class UserTable:
         elif can_view['value'] == 'false':
             where_clauses.append(f" false")
 
-        # 4. Aggiungi i campi specifici se richiesti
-        if fields:
-            select_fields = [f"user_{self.tableid}.{field}" for field in fields]
-            select_fields.insert(0, f"user_{self.tableid}.recordid_")
-        
-        # 5. Costruisci la query finale
         seen_elements = set()
         ordered_unique_clauses = []
 
@@ -621,6 +597,30 @@ class UserTable:
 
         from_sql_string = " ".join(ordered_unique_clauses)
         where_sql_string = " AND ".join(where_clauses)
+        
+        return from_sql_string, where_sql_string
+
+    def get_records(self, viewid='', searchTerm='', conditions_list=None, fields=None, offset=0, limit=None, orderby='recordid_ desc', columns=None):
+        """
+        Ottieni elenco record in base ai parametri di ricerca.
+        Versione migliorata per gestire filtri complessi e JOIN dinamiche.
+        """
+        if conditions_list is None:
+            conditions_list = []
+        
+        select_fields = [f"user_{self.tableid}.*"]
+        
+        from_sql_string, where_sql_string = self.get_query_conditions(viewid, searchTerm, conditions_list, columns)
+        
+        # Save query conditions for external usage
+        self._last_from_sql = from_sql_string
+        self._last_where_sql = where_sql_string
+        
+        # 4. Aggiungi i campi specifici se richiesti
+        if fields:
+            select_fields = [f"user_{self.tableid}.{field}" for field in fields]
+            select_fields.insert(0, f"user_{self.tableid}.recordid_")
+            
         select_sql_string = ", ".join(select_fields)
         
         # 6. Calcola e salva il numero totale dei record

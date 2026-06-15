@@ -1,6 +1,7 @@
 from commonapp.bixmodels.user_record import UserRecord
 from commonapp.models import SysUser
 from commonapp.utils.email_sender import EmailSender
+from datetime import datetime, date
 
 class TaskService:
     @staticmethod
@@ -17,6 +18,26 @@ class TaskService:
         creator_id = task.values.get('creator')       # creatore
         assigned_to = task.values.get('user')         # assegnato a
         status = task.values.get('status')            # stato attuale
+
+        duedate = task.values.get('duedate')
+        if status != 'Chiuso' and duedate:
+            try:
+                if isinstance(duedate, str):
+                    dt_duedate = datetime.strptime(duedate[:10], "%Y-%m-%d").date()
+                else:
+                    dt_duedate = duedate.date() if hasattr(duedate, 'date') else duedate
+                
+                today = date.today()
+                delta_days = (dt_duedate - today).days
+
+                if delta_days < 0:
+                    status = 'Scaduto'
+                    task.values['status'] = status
+                elif 0 <= delta_days <= 2:
+                    status = 'In Scadenza'
+                    task.values['status'] = status
+            except Exception:
+                pass
 
         company = task.fields.get('recordidcompany_').get('convertedvalue')
         description = task.values.get('description')

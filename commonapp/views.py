@@ -971,6 +971,15 @@ def get_table_records(request):
         rows = new_rows
 
     # --- Risposta Finale (invariata) ---
+    if tableid == 'deal' and hasattr(table, '_last_from_sql') and hasattr(table, '_last_where_sql'):
+        try:
+            from customapp_swissbix.services.custom_save.deal_services import calculate_deal_global_metrics
+            custom_metrics = calculate_deal_global_metrics(table._last_from_sql, table._last_where_sql)
+            if custom_metrics:
+                totals.update(custom_metrics)
+        except Exception as e:
+            print(f"Errore calcolo custom metrics deal: {e}")
+
     final_columns = [{'fieldtypeid': c['fieldtypewebid'], 'desc': c['description'], 'fieldid': c['fieldid']} for c in table_columns]
     totalPages= (counter + pagination_limit - 1) // pagination_limit  
     response_data = {
@@ -6192,7 +6201,7 @@ def get_dashboard_charts(request):
             if chart_ids:
                 ids_str = ",".join([f"'{cid}'" for cid in chart_ids])
                 
-                sc_query = f"SELECT id, name, config FROM sys_chart WHERE id IN ({ids_str})"
+                sc_query = f"SELECT id, name, layout, config FROM sys_chart WHERE id IN ({ids_str})"
                 sys_charts = dbh.sql_query(sc_query)
                 for sc in sys_charts:
                     chart_info[str(sc['id'])] = {'name': sc['name'], 'config': sc.get('config')}
@@ -6244,18 +6253,21 @@ def get_chart_data(request):
         chart_id = request_data.get("chart_id")
         viewid = request_data.get("viewid", "")
         filters = request_data.get("filters", None)
+        
+        filtersList = request_data.get("filtersList", [])
+        searchTerm = request_data.get("searchTerm", "")
 
         if not chart_id:
             return JsonResponse({"error": "chart_id is required"}, status=400)
 
-        chart_info = build_chart_data(request, chart_id, viewid, filters)
+        chart_info = build_chart_data(request, chart_id, viewid, filters, filtersList=filtersList, searchTerm=searchTerm)
         return JsonResponse(chart_info)
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
 
 
-def build_chart_data(request, chart_id, viewid=None, filters=None, block_category=None, viewMode=None, referenceYear=None):
+def build_chart_data(request, chart_id, viewid=None, filters=None, block_category=None, viewMode=None, referenceYear=None, filtersList=None, searchTerm=""):
     userid = Helper.get_userid(request)
     cliente_id = Helper.get_cliente_id()
     request_data = json.loads(request.body)
@@ -6299,14 +6311,49 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
         ) or ""
 
     # ----------------------------------------------------------
-    # 3) Query conditions della view
+    # 3) Query conditions della view & Frontend Filters
     # ----------------------------------------------------------
     query_conditions = ""
-    if viewid:
-        view = HelpderDB.sql_query_row(f"SELECT * FROM sys_view WHERE id='{viewid}'")
-        if not view:
-            raise ValueError(f"View with id {viewid} not found")
-        query_conditions = (view.get("query_conditions") or "").replace("$userid$", str(userid))
+    if from_table:
+        table = UserTable(from_table, userid)
+        
+        conditions_list = []
+        if filtersList:
+            for filter_item in filtersList:
+                field_id = filter_item.get('fieldid')
+                filter_type = filter_item.get('type')
+                filter_value = filter_item.get('value')
+                filter_condition = filter_item.get('conditions', [])
+                
+                if not field_id or filter_value is None:
+                    continue
+
+                if field_id.startswith('_'):
+                    field_id = field_id[1:] + "_"
+
+                aliased_field_id = f"user_{from_table}.{field_id}"
+
+                if filter_value == "NULL_VALUE":
+                    sql_condition = f"({aliased_field_id} IS NULL OR {aliased_field_id} = '')"
+                else:
+                    sql_condition = table.build_condition(filter_type, aliased_field_id, filter_value, filter_condition)
+
+                if sql_condition:
+                    conditions_list.append(sql_condition)
+                    
+        columns = table.get_results_columns()
+        from_sql_string, query_conditions = table.get_query_conditions(
+            viewid=viewid, 
+            searchTerm=searchTerm, 
+            conditions_list=conditions_list,
+            columns=columns
+        )
+    else:
+        if viewid:
+            view = HelpderDB.sql_query_row(f"SELECT * FROM sys_view WHERE id='{viewid}'")
+            if view:
+                query_conditions = ((view.get("query_conditions") or "").replace("$userid$", str(userid)))
+
 
     # ----------------------------------------------------------
     # 4) Pre-elaborazione filtri comuni (CLUB e ANNI)
@@ -6480,7 +6527,7 @@ def build_chart_data(request, chart_id, viewid=None, filters=None, block_categor
     # ----------------------------------------------------------
     # 5) Ottenimento dati dinamici del chart
     # ----------------------------------------------------------
-    chart_data = get_dynamic_chart_data(request, chart_id, query_conditions or "1=1", viewMode, referenceYear, dashboard_category)
+    chart_data = get_dynamic_chart_data(request, chart_id, query_conditions or "1=1", viewMode, referenceYear, dashboard_category, from_sql_string=from_sql_string)
     if "datasets" in chart_data and chart_data["datasets"]:
         chart_data["datasets"][0]["view"] = viewid
     
@@ -6774,7 +6821,7 @@ def _build_chart_context_base(chart_id, chart_record, labels, datasets, datasets
 
 # === SPECIFIC IMPLEMENTATIONS ==============================================
 
-def _handle_record_pivot_chart(request, config, chart_id, chart_record, query_conditions,viewMode=None, referenceYear=None, dashboard_category=None):
+def _handle_record_pivot_chart(request, config, chart_id, chart_record, query_conditions,viewMode=None, referenceYear=None, dashboard_category=None, from_sql_string=""):
     """Gestisce la generazione di dati per grafici 'record_pivot'."""
     pivot_fields_map = {item['alias']: item for item in config['pivot_fields']}
     aliases = list(pivot_fields_map.keys())
@@ -6796,7 +6843,15 @@ def _handle_record_pivot_chart(request, config, chart_id, chart_record, query_co
             select_clauses.append(f"{expr} AS {item['alias']}")
 
     from_table = f"user_{config['from_table']}"
-    query = f"SELECT {', '.join(select_clauses)} FROM {from_table} WHERE {query_conditions} LIMIT 1"
+    extra_joins = ""
+    if from_sql_string:
+        base_from = f"FROM {from_table}"
+        if from_sql_string.startswith(base_from):
+            raw_joins = from_sql_string[len(base_from):].strip()
+            if raw_joins:
+                extra_joins = " " + raw_joins
+
+    query = f"SELECT {', '.join(select_clauses)} FROM {from_table}{extra_joins} WHERE {query_conditions} LIMIT 1"
     record_data = HelpderDB.sql_query_row(query)
     dataset_label = config.get('dataset_label', 'Dati')
 
@@ -6869,7 +6924,7 @@ def _handle_record_pivot_chart(request, config, chart_id, chart_record, query_co
         if currency_aliases:
             clubid = record_data.get('recordidgolfclub_')
             if not clubid:
-                clubid = HelpderDB.sql_query_value(f"SELECT recordidgolfclub_ FROM {from_table} WHERE {query_conditions} LIMIT 1", "recordidgolfclub_")
+                clubid = HelpderDB.sql_query_value(f"SELECT recordidgolfclub_ FROM {from_table}{extra_joins} WHERE {query_conditions} LIMIT 1", "recordidgolfclub_")
 
             target_currency = 'CHF'
             if clubid:
@@ -6889,7 +6944,7 @@ def _handle_record_pivot_chart(request, config, chart_id, chart_record, query_co
 
             if not source_currency:
                 try:
-                    src = HelpderDB.sql_query_value(f"SELECT valuta FROM {from_table} WHERE {query_conditions} LIMIT 1", 'valuta')
+                    src = HelpderDB.sql_query_value(f"SELECT valuta FROM {from_table}{extra_joins} WHERE {query_conditions} LIMIT 1", 'valuta')
                     source_currency = normalize_currency(src) if src else None
                 except Exception:
                     source_currency = None
@@ -6915,7 +6970,7 @@ def _handle_record_pivot_chart(request, config, chart_id, chart_record, query_co
     return _build_chart_context_base(chart_id, chart_record, final_labels, datasets)
 
 
-def _handle_aggregate_chart(request, config, chart_id, chart_record, query_conditions, viewMode=None, referenceYear=None, dashboard_category=None):
+def _handle_aggregate_chart(request, config, chart_id, chart_record, query_conditions, viewMode=None, referenceYear=None, dashboard_category=None, from_sql_string=""):
     # --- IMPORT E SETTAGGI ---
     from decimal import Decimal
     import json
@@ -6975,10 +7030,21 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
     qc = ""
     is_national_avg_special = False
 
-    # ---- Branch LOOKUP ----
     if has_lookup:
         lookup_cfg = group_by_config['lookup']
         lookup_table = f"user_{lookup_cfg['from_table']}"
+
+    extra_joins = ""
+    if from_sql_string:
+        base_from = f"FROM {main_table}"
+        if from_sql_string.startswith(base_from):
+            raw_joins = from_sql_string[len(base_from):].strip()
+            if raw_joins:
+                extra_joins = " " + _aliasize_conditions(raw_joins, main_table, has_lookup, lookup_table)
+
+    # ---- Branch LOOKUP ----
+    if has_lookup:
+        lookup_cfg = group_by_config['lookup']
         main_alias, lookup_alias = 't1', 't2'
         
         if dashboard_category == 'nationalAvg' and is_primary_club and priority_id:
@@ -7000,6 +7066,7 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
             f"FROM {main_table} AS {main_alias} "
             f"JOIN {lookup_table} AS {lookup_alias} "
             f"ON {main_alias}.{group_by_config['field']} = {lookup_alias}.{lookup_cfg['on_key']}"
+            f"{extra_joins}"
         )
         qc = _aliasize_conditions(query_conditions, main_table, True, lookup_table)
 
@@ -7021,10 +7088,11 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
                 f"FROM {main_table} AS t1 "
                 f"JOIN sys_user "
                 f"ON t1.{fieldid} = sys_user.id"
+                f"{extra_joins}"
             )
         else:
             select_group_field = f"t1.{fieldid} AS {group_by_alias}"
-            from_clause = f"FROM {main_table} AS t1"
+            from_clause = f"FROM {main_table} AS t1{extra_joins}"
 
         group_by_clause = f"GROUP BY t1.{fieldid}"
 
@@ -7688,7 +7756,7 @@ def _aliasize_conditions(query_conditions, main_table, has_lookup=False, lookup_
     return qc
 
 
-def get_dynamic_chart_data(request, chart_id, query_conditions='1=1', viewMode=None, referenceYear=None,dashboard_category=None):
+def get_dynamic_chart_data(request, chart_id, query_conditions='1=1', viewMode=None, referenceYear=None,dashboard_category=None, from_sql_string=""):
     """Genera dinamicamente i dati per un grafico leggendo la configurazione JSON dal database."""
     chart_record = HelpderDB.sql_query_row(f"SELECT * FROM sys_chart WHERE id={chart_id}")
     if not chart_record:
@@ -7728,7 +7796,7 @@ def get_dynamic_chart_data(request, chart_id, query_conditions='1=1', viewMode=N
     if not handler:
         return {'error': f'Unknown chart type: {chart_type}'}
 
-    return handler(request, config, chart_id, chart_record, query_conditions,viewMode, referenceYear, dashboard_category)
+    return handler(request, config, chart_id, chart_record, query_conditions,viewMode, referenceYear, dashboard_category, from_sql_string)
 
 
 @login_required_api
@@ -9324,3 +9392,35 @@ def delete_partial(request):
         return JsonResponse({'success': True, 'message': 'Parziale eliminato'})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required_api
+def get_table_charts(request):
+    try:
+        import json
+        request_data = json.loads(request.body)
+        tableid = request_data.get('tableid')
+        if not tableid:
+            return JsonResponse({'error': 'tableid is required'}, status=400)
+            
+        dbh = HelpderDB()
+        charts = []
+        
+        sc_query = "SELECT id, name, layout, config FROM sys_chart"
+        sys_charts = dbh.sql_query(sc_query)
+        for sc in sys_charts:
+            config_raw = sc.get('config', '')
+            if not config_raw:
+                continue
+            try:
+                config_json = json.loads(config_raw)
+                if config_json.get('from_table') == tableid:
+                    charts.append({'id': sc['id'], 'name': sc['name'], 'layout': sc.get('layout', '')})
+            except Exception:
+                if f'"from_table": "{tableid}"' in config_raw or f'from_table={tableid}' in config_raw or f'from_table;{tableid}' in config_raw:
+                    charts.append({'id': sc['id'], 'name': sc['name'], 'layout': sc.get('layout', '')})
+                    
+        return JsonResponse({'charts': charts}, safe=False)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+

@@ -155,6 +155,7 @@ class DealService:
         deal_fixedpricehours = deal_record.values.get('fixedpricehours') or 0
 
         # --- 1. LETTURA DEALLINES ---
+        
         for dl_dict in dealline_records:
             dl_recordid = dl_dict['recordid_']
             dl_record = UserRecord('dealline', dl_recordid, load_fields=False)
@@ -170,19 +171,23 @@ class DealService:
             dl_expectedmargin = dl_dict.get('expectedmargin') or 0
             dl_unitactualcost = dl_dict.get('uniteffectivecost') or 0
             dl_frequency = dl_dict.get('frequency')
-            expectedhours = dl_dict.get('expectedhours') or 0
+            expectedhours =  0
 
             product_fixedprice = 'No'
-            if product_recordid:
-                product_record = UserRecord('product', product_recordid, load_fields=False)
-                if not Helper.isempty(product_record.recordid) and not Helper.isempty(product_record.values):
-                    product_fixedprice = product_record.values.get('fixedprice', 'No')
+            #if product_recordid:
+               # product_record = UserRecord('product', product_recordid, load_fields=False)
+              #  if not Helper.isempty(product_record.recordid) and not Helper.isempty(product_record.values):
+             #       product_fixedprice = product_record.values.get('fixedprice', 'No')
 
-            if product_fixedprice == 'Si':
+            #if product_fixedprice == 'Si':
+            if product_recordid=='00000000000000000000000000000180':
+                product_fixedprice = 'Si'
                 deal_record.values['fixedprice'] = 'Si'
                 if Helper.isempty(dl_record.values.get('expectedhours')):
-                    dl_record.values['expectedhours'] = dl_price / 140
+                    dl_record.values['expectedhours'] = round(dl_price / 140, 2)
                     expectedhours = dl_record.values['expectedhours']
+                else:
+                    expectedhours = dl_record.values.get('expectedhours')
 
             totals['expectedhours'] += expectedhours
             dl_actualcost = dl_unitactualcost * dl_quantity
@@ -192,7 +197,11 @@ class DealService:
                 dl_actualcost = deal_fixedpricehours * 60
                 deal_fixedpricehours = 0
 
-            dl_calc_actualcost = dl_actualcost if dl_actualcost != 0 else dl_expectedcost
+            if dl_actualcost == 0:
+                dl_actualcost = dl_expectedcost
+                dl_record.values['uniteffectivecost'] = dl_dict.get('unitexpectedcost') or 0
+
+            dl_calc_actualcost = dl_actualcost
 
             dl_actualmargin = dl_price - dl_calc_actualcost
                 
@@ -325,10 +334,9 @@ class DealService:
             else:
                 usedhours += worktime
                 laborhours += worktime
-                laborcost_timesheets += worktime * 60
+                if invoicestatus != 'service contract: monte ore':
+                    laborcost_timesheets += worktime * 60
                 
-
-
             
             if invoicestatus == 'fixed price project':
                 fixedpricehours += worktime
@@ -345,9 +353,13 @@ class DealService:
                 
 
 
-        expectedhours_total = totals['expectedhours'] or deal_record.values.get('expectedhours') or 0
+        if deal_record.values.get('fixedprice') == 'Si':
+            expectedhours_total = round(totals['expectedhours'], 2)
+        else:
+            expectedhours_total = round(deal_record.values.get('expectedhours') or 0, 2)
+
         if expectedhours_total:
-            residualhours = expectedhours_total - usedhours
+            residualhours = round(expectedhours_total - usedhours, 2)
                 
         # Salvataggio totali ore su record
         deal_record.values['expectedhours'] = expectedhours_total
@@ -399,10 +411,7 @@ class DealService:
         deal_record.values['actuallaborprice'] = actuallaborprice
         deal_record.values['actuallaborcost'] = actuallaborcost
         
-        if expectedhours_total > 0:
-            deal_record.values['actuallabormargin'] = actuallabormargin
-        else:
-            deal_record.values['actuallabormargin'] = None
+        deal_record.values['actuallabormargin'] = actuallabormargin
             
         if totals['expectedlaborprice'] > 0:
             deal_record.values['laborcostdifference'] = totals['expectedlaborcost'] - actuallaborcost
@@ -718,3 +727,37 @@ class DealService:
 
         if deal_type == 'Rinnovo Monte ore':
             deal_record.values['purchaseorder'] = 'No'
+
+def calculate_deal_global_metrics(from_sql, where_sql):
+    try:
+        from commonapp.bixmodels.helper_db import HelpderDB
+        sql = f"""
+            SELECT 
+                SUM(user_deal.grossamount) AS total_actual_sales,
+                SUM(user_deal.amount) AS total_planned_sales,
+                SUM(user_deal.actualnetmargin) AS total_actual_margin_net,
+                SUM(user_deal.expectedmargin) AS total_planned_margin,
+                SUM(user_deal.actualgrossmargin) AS total_actual_margin_gross,
+                AVG(CASE WHEN user_deal.actualnetmargin_perc > 0 THEN user_deal.actualnetmargin_perc ELSE NULL END) AS avg_efficacy_sql
+            {from_sql}
+            WHERE {where_sql} AND user_deal.deleted_='N'
+        """
+        row = HelpderDB.sql_query(sql)
+        if row and len(row) > 0:
+            result = row[0]
+            
+            total_sales = float(result.get('total_actual_sales') or 0)
+            total_net_margin = float(result.get('total_actual_margin_net') or 0)
+            avg_margin_pct = (total_net_margin / total_sales) * 100 if total_sales else 0
+            
+            return {
+                'total_actual_sales': round(total_sales, 2),
+                'total_planned_sales': round(float(result.get('total_planned_sales') or 0), 2),
+                'total_actual_margin_net': round(total_net_margin, 2),
+                'total_planned_margin': round(float(result.get('total_planned_margin') or 0), 2),
+                'total_actual_margin_gross': round(float(result.get('total_actual_margin_gross') or 0), 2),
+                'avg_margin_pct': round(avg_margin_pct, 2)
+            }
+    except Exception as e:
+        print(f"Errore nel calcolo dei metrics deal: {e}")
+    return {}

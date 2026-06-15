@@ -150,13 +150,14 @@ class TableSettings:
                 {'name': 'Calendario', 'selected': True},
                 {'name': 'Gallery', 'selected': True},
                 {'name': 'TabellaRaggruppata', 'selected': True},
+                {'name': 'Grafici', 'selected': True},
                 {'name': 'Custom', 'selected': False},
             ],
             'value': 'Tabella'
         },
         'table_active_tab': {
             'type': 'select',
-            'options': ['Tabella', 'Report', 'Kanban', 'Pivot', 'Calendario','MatrixCalendar', 'Planner' , 'Gallery', 'TabellaRaggruppata', 'Custom'],
+            'options': ['Tabella', 'Report', 'Kanban', 'Pivot', 'Calendario','MatrixCalendar', 'Planner' , 'Gallery', 'TabellaRaggruppata','Grafici', 'Custom'],
             'value': 'Tabella'
         },
         "table_custom_tab_name": {
