@@ -1585,6 +1585,10 @@ def get_satisfation(request):
     from customapp_swissbix.script import get_satisfaction
     return get_satisfaction()
 
+def get_viewfeedback(request):
+    from customapp_swissbix.script import get_feedback
+    return get_feedback()
+
 def update_deals(request):
     from customapp_swissbix.script import update_deals
     return update_deals(request)

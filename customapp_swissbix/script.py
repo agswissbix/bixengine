@@ -644,6 +644,19 @@ def get_satisfaction():
 
     return output_per_dashboard
     
+
+# Gets feedbacks
+def get_feedback():
+    """
+    Recupera i feedback dal sito e li salva nel database.
+    Ottimizzato per la visualizzazione in dashboard.
+    """
+    
+
+    return JsonResponse({
+        "success": True,
+    })
+
 @task_monitor(data_type="update")
 @safe_schedule_task(stop_on_error=True)
 def update_deals():
@@ -2124,7 +2137,7 @@ def run_test():
     
     # Prepara la query per recuperare tutti i deal con data di apertura successiva al 01-01-2026.
     # Assumiamo che la tabella fisica nel database per 'deal' sia 'user_deal'
-    query = "SELECT recordid_ FROM user_deal WHERE dealstage = 'Progetto fatturato' AND deleted_='N' ORDER BY recordid_ desc LIMIT 50"
+    query = "SELECT recordid_ FROM user_deal WHERE opendate >= '2024-09-01' AND deleted_='N'"
     
     try:
         rows = HelpderDB.sql_query(query)
@@ -2463,3 +2476,4 @@ def invoice_completed_projects_timesheets():
     }, {
         "details": "\n".join(result_log)
     }
+

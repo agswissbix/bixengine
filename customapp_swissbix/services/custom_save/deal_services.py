@@ -327,29 +327,33 @@ class DealService:
             if service_lower == 'commerciale':
                 saleshours += worktime
                 salescost += worktime * 60
-            elif service_lower in ['formazione e test', 'interno', 'amministrazione', 'riunione']:
-                usedhours += worktime
-                nonbillablehours += worktime
-                nonbillablecost += worktime * 60
+            
             else:
                 usedhours += worktime
-                laborhours += worktime
                 if invoicestatus != 'service contract: monte ore':
                     laborcost_timesheets += worktime * 60
                 
             
-            if invoicestatus == 'fixed price project':
-                fixedpricehours += worktime
-            elif invoicestatus == 'service contract: monte ore':
-                bankhours += worktime
-                deductedhoursamount += worktime * 100
-                deductedhourscost += worktime * 60
-            elif invoicestatus == 'invoiced':
-                invoicedhours += worktime
-                invoicedhoursamount += price
-            elif invoicestatus and invoicestatus.startswith('to invoice'):
-                toinvoicehours += worktime
-                toinvoicehoursamount += price
+            if service_lower != 'commerciale':
+                if invoicestatus == 'fixed price project':
+                    fixedpricehours += worktime
+                    laborhours += worktime
+                elif invoicestatus == 'service contract: monte ore':
+                    bankhours += worktime
+                    laborhours += worktime
+                    deductedhoursamount += worktime * 100
+                    deductedhourscost += worktime * 60
+                elif invoicestatus == 'invoiced':
+                    invoicedhours += worktime
+                    laborhours += worktime
+                    invoicedhoursamount += price
+                elif invoicestatus and invoicestatus.startswith('to invoice'):
+                    toinvoicehours += worktime
+                    laborhours += worktime
+                    toinvoicehoursamount += price
+                elif invoicestatus in ['attività non fatturabile','under warranty','commercial support']:
+                    nonbillablehours += worktime
+                    nonbillablecost += worktime * 60
                 
 
 
