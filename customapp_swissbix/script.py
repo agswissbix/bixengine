@@ -602,12 +602,12 @@ def get_satisfaction():
 
         # Controllo se il record esiste già
         existing = HelpderDB.sql_query_row(
-            f"SELECT id FROM user_ticketfeedback WHERE ticketid = '{ticketid}'"
+            f"SELECT recordid_ FROM user_ticketfeedback WHERE ticketid = '{ticketid}'"
         )
 
         if existing:
             # Aggiornamento
-            recordid = existing['id']
+            recordid = existing['recordid_']
             record = UserRecord(tableid, recordid)
             record.values['level'] = level
             record.values['comment'] = comment
@@ -651,11 +651,79 @@ def get_feedback():
     Recupera i feedback dal sito e li salva nel database.
     Ottimizzato per la visualizzazione in dashboard.
     """
-    
 
-    return JsonResponse({
-        "success": True,
-    })
+    url = "https://bixdata.swissbix.com/feedbackRetriever.php"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    }
+
+    password = os.environ.get('FEEDBACK_RETRIEVAL_PASSWORD')
+
+    try:
+        response = requests.post(url, headers=headers, data={'password': password}, timeout=10)
+        if not response.ok:
+            print(f"DEBUG Feedback status={response.status_code} body={response.text[:500]}")
+        response.raise_for_status()
+        data = response.json()
+    except Exception as e:
+        raise Exception(f"Errore connessione Feedback: {str(e)}")
+
+    tableid = 'ticketfeedback'
+    results = []        
+
+    feedbackCount = 0
+
+    for feedback in data:
+
+        #feedbackCount += 1
+
+        id = feedback.get("id")
+        ticketid = feedback.get("ticketid")
+        level = feedback.get("level")
+        comment = feedback.get("comment", "")
+        technician = feedback.get("technician")
+        dateinsert_str = feedback.get("dateinsert")
+
+        #print(f"Saving feedback number {feedbackCount}, with ticketid {ticketid}")
+
+        try:
+            dateinsert = datetime.datetime.strptime(dateinsert_str, "%Y-%m-%d")
+        except (ValueError, TypeError):
+            dateinsert = None
+
+        # Controllo se il record esiste già
+        existing = HelpderDB.sql_query_row(
+            f"SELECT recordid_ FROM user_ticketfeedback WHERE ticketid = '{ticketid}'"
+        )
+
+        if existing:
+            # Aggiornamento
+            recordid = existing['recordid_']
+            record = UserRecord(tableid, recordid)
+
+            created = False
+        else:
+            # Creazione
+            record = UserRecord(tableid)
+            created = True
+
+        record.values['id'] = id
+        record.values['level'] = level
+        record.values['comment'] = comment
+        record.values['technician'] = technician
+        record.values['dateinsert'] = dateinsert
+        record.values['ticketid'] = ticketid
+        record.save()
+        
+        results.append({
+            "ticketid": ticketid,
+            "created": created,
+            "level": level
+        })
+
+    #print("out of the foreach")
+    return JsonResponse({"status": "ok"}, safe=False)
+
 
 @task_monitor(data_type="update")
 @safe_schedule_task(stop_on_error=True)
@@ -768,12 +836,12 @@ def update_deals():
     finally:
         cnxn.close()
 
-        return {
-            "updated_count": updated_deal_counter,
-            "message": f"Sincronizzazione completata: {updated_deal_counter} trattative",
-        }, {
-            "details": "\n".join([str(item) for item in result_log])
-        }
+    return {
+        "updated_count": updated_deal_counter,
+        "message": f"Sincronizzazione completata: {updated_deal_counter} trattative",
+    }, {
+        "details": "\n".join([str(item) for item in result_log])
+    }
 
 
 
