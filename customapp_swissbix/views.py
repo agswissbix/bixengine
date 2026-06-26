@@ -3760,3 +3760,48 @@ def get_timesheet_ai_summary(timesheets_per_user_data):
         
     except Exception as e:
         return f"Errore di comunicazione: {str(e)}"
+
+@csrf_exempt
+def get_company_details(request):
+    try:
+        recordid = request.POST.get('id', '')
+        
+        # Dati di esempio
+        response_data = {
+            "record": {
+                "id": recordid if recordid else "example_123",
+                "name": "BixData Demo Company SA",
+                "descrizione": "Azienda di test restituita dall'endpoint dedicato",
+                "indirizzo": "Via Sviluppo 42, 6900 Lugano"
+            }
+        }
+        return JsonResponse(response_data)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Si è verificato un errore inatteso: {str(e)}'
+        }, status=500)
+
+@csrf_exempt
+def get_company_by_contact(request):
+    try:
+        email = request.POST.get('email', '')
+        telefono = request.POST.get('telefono', '')
+        
+        # Dati di esempio
+        if email or telefono:
+            response_data = {
+                "recordid": "example_456",
+                "name": f"Azienda trovata per {email or telefono}"
+            }
+        else:
+            response_data = {}
+            
+        return JsonResponse(response_data)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Si è verificato un errore inatteso: {str(e)}'
+        }, status=500)
+
+
