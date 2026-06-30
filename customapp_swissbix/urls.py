@@ -94,4 +94,6 @@ urlpatterns = [
     path('save_lenovo_signature/', save_lenovo_signature, name='save_lenovo_signature'),
     path('check_deadlines/', check_deadlines, name='check_deadlines'),
     path('get_viewfeedback/', get_viewfeedback, name='get_feedback'),
+
+    path('get_company_by_contact/', get_company_by_contact, name='get_company_by_contact'),
 ]

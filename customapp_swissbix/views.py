@@ -3785,23 +3785,48 @@ def get_company_details(request):
 @csrf_exempt
 def get_company_by_contact(request):
     try:
-        email = request.POST.get('email', '')
-        telefono = request.POST.get('telefono', '')
+        email = request.POST.get('email', '').strip()
+        telefono = request.POST.get('telefono', '').strip()
         
-        # Dati di esempio
-        if email or telefono:
-            response_data = {
-                "recordid": "example_456",
-                "name": f"Azienda trovata per {email or telefono}"
-            }
-        else:
-            response_data = {}
+        conditions = []
+        or_conditions = []
+
+        # 1. Gestione della ricerca per dominio email
+        if email and '@' in email:
+            # Estraiamo il dominio (es. "gmail.com", "azienda.ch")
+            dominio = email.split('@')[-1]
+            if dominio:
+                # Usiamo '%@dominio' per assicurarci di colpire esattamente il dominio email
+                or_conditions.append(f"email LIKE '%@{dominio}'")
+        
+        # 2. Gestione del telefono
+        if telefono:
+            or_conditions.append(f"phonenumber LIKE '%{telefono}'")
+        
+        # Se abbiamo almeno una condizione di ricerca (email o telefono)
+        if or_conditions:
+            search_clause = f"({ ' OR '.join(or_conditions) })"
             
-        return JsonResponse(response_data)
+            conditions = [search_clause, "bexio_status = 'Active'"]
+            
+            companies = UserTable('company', userid=Helper.get_userid(request)).get_records(conditions_list=conditions)
+            
+            if companies:
+                response_data = []
+                for company in companies:
+                    response_data.append({
+                        "recordid": company.get('recordid_'),
+                        "name": company.get('companyname'), 
+                    })
+                return JsonResponse(response_data, safe=False)
+
+        # Se non viene trovato nulla o i parametri sono vuoti
+        return JsonResponse({}, status=404) # Un 404 o dizionario vuoto a seconda di cosa si aspetta il frontend
+        
     except Exception as e:
         return JsonResponse({
             'success': False,
             'message': f'Si è verificato un errore inatteso: {str(e)}'
         }, status=500)
-
+        
 
