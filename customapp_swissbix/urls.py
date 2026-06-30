@@ -96,4 +96,5 @@ urlpatterns = [
     path('get_viewfeedback/', get_viewfeedback, name='get_feedback'),
 
     path('get_company_by_contact/', get_company_by_contact, name='get_company_by_contact'),
-]
+    path('save_mail_ticket/', save_mail_ticket, name="save_mail_ticket"),
+]   

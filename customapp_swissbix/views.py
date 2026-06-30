@@ -3809,7 +3809,7 @@ def get_company_by_contact(request):
             
             conditions = [search_clause, "bexio_status = 'Active'"]
             
-            companies = UserTable('company', userid=Helper.get_userid(request)).get_records(conditions_list=conditions)
+            companies = UserTable('company', userid=0).get_records(conditions_list=conditions)
             
             if companies:
                 response_data = []
@@ -3828,5 +3828,10 @@ def get_company_by_contact(request):
             'success': False,
             'message': f'Si è verificato un errore inatteso: {str(e)}'
         }, status=500)
-        
+
+def save_mail_ticket(request):
+    #Cambiare nome da ticket a task
+    data = json.loads(request.body)
+    company_id = data.get('companyId', '').strip()
+    return JsonResponse({"id":company_id}, safe=False)
 
