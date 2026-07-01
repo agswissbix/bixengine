@@ -2386,7 +2386,7 @@ def search_timesheet_entities(request):
     Endpoint dinamico via POST per cercare entità.
     """
     target = request.POST.get('target')
-    query = request.POST.get('q', '').strip()
+    query = request.POST.get('searchTerm', '').strip()
     azienda_id = request.POST.get('azienda_id')
     record_id = request.POST.get('id')
     
@@ -3765,16 +3765,23 @@ def get_timesheet_ai_summary(timesheets_per_user_data):
 def get_company_details(request):
     try:
         recordid = request.POST.get('id', '')
+
+        company = UserRecord('company', recordid)
+        if not company.recordid:
+            return JsonResponse({'success': False, 'message': 'Azienda non trovata.'}, status=404)
         
-        # Dati di esempio
         response_data = {
-            "record": {
-                "id": recordid if recordid else "example_123",
-                "name": "BixData Demo Company SA",
-                "descrizione": "Azienda di test restituita dall'endpoint dedicato",
-                "indirizzo": "Via Sviluppo 42, 6900 Lugano"
-            }
+            "id": recordid,
+            "companyName": company.values.get('companyname'),
+            "phonenumber": company.values.get('phonenumber'),
+            "email": company.values.get('email'),
+            "state": company.values.get('state'),
+            "city": company.values.get('city'),
+            "address": company.values.get('address'),
+            "cap": company.values.get('cap'),
+
         }
+
         return JsonResponse(response_data)
     except Exception as e:
         return JsonResponse({
@@ -3829,9 +3836,59 @@ def get_company_by_contact(request):
             'message': f'Si è verificato un errore inatteso: {str(e)}'
         }, status=500)
 
-def save_mail_ticket(request):
-    #Cambiare nome da ticket a task
-    data = json.loads(request.body)
-    company_id = data.get('companyId', '').strip()
-    return JsonResponse({"id":company_id}, safe=False)
+@csrf_exempt
+def save_mail_task(request):
+    # --- Lettura e parsing dei dati in ingresso ---
+    try:
+        data = json.loads(request.body)
+
+        priority = str(data.get('priority', '')).strip()
+        description = str(data.get('description', '')).strip()
+        expiration = str(data.get('expiration', '')).strip()
+        planned_date = str(data.get('plannedDate', '')).strip()
+        duration = str(data.get('duration', '')).strip()
+        company_id = str(data.get('companyId', '')).strip()
+        subject = str(data.get('object', '')).strip()
+        mail_sender = str(data.get('mailSender', '')).strip()
+        user_sender = str(data.get('userSender', '')).strip()
+        received_date = str(data.get('receivedDate', '')).strip()
+        link_to_mail = str(data.get('linkToMail', '')).strip()
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Errore nella lettura dei dati: {str(e)}'
+        }, status=400)
+
+    # --- Salvataggio del task nel DB ---
+    try:
+        rec = UserRecord('task')
+        rec.values['priorita'] = priority
+        rec.values['description'] = description
+        rec.values['duedate'] = expiration
+        rec.values['planneddate'] = planned_date
+        rec.values['duration'] = duration
+        rec.values['oggetto'] = subject
+        rec.values['recordidcompany_'] = company_id
+        rec.values['mailsender'] = mail_sender
+        rec.values['mailuser'] = user_sender
+        rec.values['emailreceiveddate'] = received_date
+        rec.values['linktomail'] = link_to_mail
+
+        # save() non solleva eccezioni: ritorna False in caso di errore
+        if not rec.save():
+            return JsonResponse({
+                'success': False,
+                'message': 'Errore durante il salvataggio del task.' 
+            }, status=500)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Errore durante il salvataggio: {str(e)}'
+        }, status=500)
+
+    return JsonResponse({
+        'success': True,
+        'message': 'Task salvato con successo.',
+        'recordid': rec.recordid
+    }, status=201)
 
