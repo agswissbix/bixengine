@@ -26,6 +26,8 @@ from django.core.files.storage import default_storage
 import time
 import requests
 from cryptography.fernet import Fernet
+import phonenumbers
+from phonenumbers import PhoneNumberFormat, NumberParseException
 
 logger = logging.getLogger(__name__)
 
@@ -3837,6 +3839,65 @@ def get_company_by_contact(request):
         }, status=500)
 
 @csrf_exempt
+def get_contact_by_phone(request):
+    try:
+        raw_input = request.POST.get('phone', '').strip()
+        if not raw_input:
+            return JsonResponse({}, status=400)
+
+        # Normalizziamo il numero cercato (E.164) e ne ricaviamo le cifre significative.
+        target = normalize_phone_value(raw_input)              # es. '+41791770046' o None
+        target_digits = re.sub(r"\D", "", target or raw_input)
+        # Ultime 9 cifre = numero nazionale, presente in qualsiasi formato salvato.
+        significant = target_digits[-9:] if len(target_digits) >= 9 else target_digits
+        if not significant:
+            return JsonResponse({}, status=400)
+
+        # --- Pre-filtro SQL: togliamo separatori dal valore in DB (senza modificarlo)
+        #     e confrontiamo sulle cifre significative, per restringere i candidati.
+        def strip_sql(col):
+            return f"REPLACE(REPLACE(REPLACE(REPLACE({col}, ' ', ''), '-', ''), '(', ''), ')', '')"
+
+        conditions = [
+            f"({strip_sql('phone')} LIKE '%{significant}%' "
+            f"OR {strip_sql('mobilephone')} LIKE '%{significant}%')"
+        ]
+
+        candidates = UserTable('contact', userid=0).get_records(conditions_list=conditions, limit=500)
+
+        # --- Conferma in Python: normalizziamo ogni candidato e confrontiamo col target.
+        chosen = None
+        for c in candidates:
+            if target is None:
+                # Numero cercato non normalizzabile: ci affidiamo al pre-filtro sulle cifre.
+                chosen = c
+                break
+            if (normalize_phone_value(c.get('phone')) == target or
+                    normalize_phone_value(c.get('mobilephone')) == target):
+                chosen = c
+                break
+
+        if chosen:
+            return JsonResponse({
+                "recordid": chosen.get('recordid_'),
+                "name": chosen.get('name'),
+                "surname": chosen.get('surname'),
+                "email": chosen.get('email'),
+                "phone": chosen.get('phone'),
+                "mobilePhone": chosen.get('mobilephone'),
+                "companyRecordId": chosen.get('recordidcompany_'),
+            })
+
+        # Nessun contatto trovato
+        return JsonResponse({}, status=404)
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Si è verificato un errore inatteso: {str(e)}'
+        }, status=500)
+
+@csrf_exempt
 def save_mail_task(request):
     # --- Lettura e parsing dei dati in ingresso ---
     try:
@@ -3890,5 +3951,75 @@ def save_mail_task(request):
         'success': True,
         'message': 'Task salvato con successo.',
         'recordid': rec.recordid
+    }, status=201)
+
+
+
+# Versione "pura" della normalizzazione: ritorna la stringa E.164 (o None)
+# invece di un JsonResponse. Usata per i confronti in-code (es. ricerca contatti).
+def normalize_phone_value(raw, default_region="CH"):
+    """
+    Normalizza un numero di telefono nel formato E.164 ('+41791770046').
+
+    Ritorna None per i casi impossibili da recuperare in modo affidabile
+    (es. notazione scientifica '3.93334E+11' o stringhe non valide).
+    `raw` può essere str, int, float o None.
+    """
+    if raw is None:
+        return None
+
+    s = str(raw).strip()
+    if not s:
+        return None
+
+    # 1. Scarta la notazione scientifica (Excel): irrecuperabile.
+    if re.search(r"[eE][+\-]?\d", s):
+        return None
+
+    # 2. Intero salvato come float: "41765739365.0" -> "41765739365"
+    float_int = re.fullmatch(r"(\d+)\.0+", s)
+    if float_int:
+        s = float_int.group(1)
+
+    # 3. Rimuove lettere e caratteri estranei tenendo solo i caratteri utili al numero.
+    s = re.sub(r"[^\d+()\s\-]", "", s)
+
+    # 4. Rimuove il prefisso trunk opzionale "(0)" (es. "+41 (0) 79...").
+    s = re.sub(r"\(\s*0\s*\)", "", s)
+
+    # 5. Prova piu' interpretazioni e tiene la prima VALIDA.
+    candidates = [s]
+    digits = re.sub(r"\D", "", s)
+    if not s.startswith("+") and digits:
+        candidates.append("+" + digits)
+
+    for candidate in candidates:
+        try:
+            parsed = phonenumbers.parse(candidate, default_region)
+        except NumberParseException:
+            continue
+        if phonenumbers.is_valid_number(parsed):
+            return phonenumbers.format_number(parsed, PhoneNumberFormat.E164)
+
+    return None
+
+
+#Normalizzazione numeri di telefono
+@csrf_exempt
+def normalize_phone(request, default_region="CH"):
+    raw = request.POST.get('phone', '')
+
+    if not raw:
+        return JsonResponse({'success': False, 'normalizedPhone': None})
+    
+    normalized_phone = normalize_phone_value(raw, default_region)
+
+    if not normalized_phone:
+        return JsonResponse({'success': False, 'normalizedPhone': None})
+
+    return JsonResponse({
+        'success': True,
+        'message': 'Numero di telefono normalizzato',
+        'normalizedPhone': normalized_phone
     }, status=201)
 
