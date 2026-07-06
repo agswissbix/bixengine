@@ -4066,7 +4066,7 @@ def save_record_fields(request):
         # =======================
         else:
             datasets = []
-            for field in fields.split(","):
+            for field in (fields or "").split(","):
                 field = field.strip()
                 if not field:
                     continue
