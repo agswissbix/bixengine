@@ -26,6 +26,8 @@ from django.core.files.storage import default_storage
 import time
 import requests
 from cryptography.fernet import Fernet
+import phonenumbers
+from phonenumbers import PhoneNumberFormat, NumberParseException
 
 logger = logging.getLogger(__name__)
 
@@ -2386,7 +2388,7 @@ def search_timesheet_entities(request):
     Endpoint dinamico via POST per cercare entità.
     """
     target = request.POST.get('target')
-    query = request.POST.get('q', '').strip()
+    query = request.POST.get('searchTerm', '').strip()
     azienda_id = request.POST.get('azienda_id')
     record_id = request.POST.get('id')
     
@@ -3765,16 +3767,23 @@ def get_timesheet_ai_summary(timesheets_per_user_data):
 def get_company_details(request):
     try:
         recordid = request.POST.get('id', '')
+
+        company = UserRecord('company', recordid)
+        if not company.recordid:
+            return JsonResponse({'success': False, 'message': 'Azienda non trovata.'}, status=404)
         
-        # Dati di esempio
         response_data = {
-            "record": {
-                "id": recordid if recordid else "example_123",
-                "name": "BixData Demo Company SA",
-                "descrizione": "Azienda di test restituita dall'endpoint dedicato",
-                "indirizzo": "Via Sviluppo 42, 6900 Lugano"
-            }
+            "id": recordid,
+            "companyName": company.values.get('companyname'),
+            "phonenumber": company.values.get('phonenumber'),
+            "email": company.values.get('email'),
+            "state": company.values.get('state'),
+            "city": company.values.get('city'),
+            "address": company.values.get('address'),
+            "cap": company.values.get('cap'),
+
         }
+
         return JsonResponse(response_data)
     except Exception as e:
         return JsonResponse({
@@ -3785,23 +3794,232 @@ def get_company_details(request):
 @csrf_exempt
 def get_company_by_contact(request):
     try:
-        email = request.POST.get('email', '')
-        telefono = request.POST.get('telefono', '')
+        email = request.POST.get('email', '').strip()
+        telefono = request.POST.get('telefono', '').strip()
         
-        # Dati di esempio
-        if email or telefono:
-            response_data = {
-                "recordid": "example_456",
-                "name": f"Azienda trovata per {email or telefono}"
-            }
-        else:
-            response_data = {}
+        conditions = []
+        or_conditions = []
+
+        # 1. Gestione della ricerca per dominio email
+        if email and '@' in email:
+            # Estraiamo il dominio (es. "gmail.com", "azienda.ch")
+            dominio = email.split('@')[-1]
+            if dominio:
+                # Usiamo '%@dominio' per assicurarci di colpire esattamente il dominio email
+                or_conditions.append(f"email LIKE '%@{dominio}'")
+        
+        # 2. Gestione del telefono
+        if telefono:
+            or_conditions.append(f"phonenumber LIKE '%{telefono}'")
+        
+        # Se abbiamo almeno una condizione di ricerca (email o telefono)
+        if or_conditions:
+            search_clause = f"({ ' OR '.join(or_conditions) })"
             
-        return JsonResponse(response_data)
+            conditions = [search_clause, "bexio_status = 'Active'"]
+            
+            companies = UserTable('company', userid=0).get_records(conditions_list=conditions)
+            
+            if companies:
+                response_data = []
+                for company in companies:
+                    response_data.append({
+                        "recordid": company.get('recordid_'),
+                        "name": company.get('companyname'), 
+                    })
+                return JsonResponse(response_data, safe=False)
+
+        # Se non viene trovato nulla o i parametri sono vuoti
+        return JsonResponse({}, status=404) # Un 404 o dizionario vuoto a seconda di cosa si aspetta il frontend
+        
     except Exception as e:
         return JsonResponse({
             'success': False,
             'message': f'Si è verificato un errore inatteso: {str(e)}'
         }, status=500)
 
+@csrf_exempt
+def get_contact_by_phone(request):
+    try:
+        raw_input = request.POST.get('phone', '').strip()
+        if not raw_input:
+            return JsonResponse({}, status=400)
+
+        # Normalizziamo il numero cercato (E.164) e ne ricaviamo le cifre significative.
+        target = normalize_phone_value(raw_input)              # es. '+41791770046' o None
+        target_digits = re.sub(r"\D", "", target or raw_input)
+        # Ultime 9 cifre = numero nazionale, presente in qualsiasi formato salvato.
+        significant = target_digits[-9:] if len(target_digits) >= 9 else target_digits
+        if not significant:
+            return JsonResponse({}, status=400)
+
+        # --- Pre-filtro SQL: togliamo separatori dal valore in DB (senza modificarlo)
+        #     e confrontiamo sulle cifre significative, per restringere i candidati.
+        def strip_sql(col):
+            return f"REPLACE(REPLACE(REPLACE(REPLACE({col}, ' ', ''), '-', ''), '(', ''), ')', '')"
+
+        conditions = [
+            f"({strip_sql('phone')} LIKE '%{significant}%' "
+            f"OR {strip_sql('mobilephone')} LIKE '%{significant}%')"
+        ]
+
+        candidates = UserTable('contact', userid=0).get_records(conditions_list=conditions, limit=500)
+
+        # --- Conferma in Python: normalizziamo ogni candidato e confrontiamo col target.
+        chosen = None
+        for c in candidates:
+            if target is None:
+                # Numero cercato non normalizzabile: ci affidiamo al pre-filtro sulle cifre.
+                chosen = c
+                break
+            if (normalize_phone_value(c.get('phone')) == target or
+                    normalize_phone_value(c.get('mobilephone')) == target):
+                chosen = c
+                break
+
+        if chosen:
+            return JsonResponse({
+                "recordid": chosen.get('recordid_'),
+                "name": chosen.get('name'),
+                "surname": chosen.get('surname'),
+                "email": chosen.get('email'),
+                "phone": chosen.get('phone'),
+                "mobilePhone": chosen.get('mobilephone'),
+                "companyRecordId": chosen.get('recordidcompany_'),
+            })
+
+        # Nessun contatto trovato
+        return JsonResponse({}, status=404)
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Si è verificato un errore inatteso: {str(e)}'
+        }, status=500)
+
+@csrf_exempt
+def save_mail_task(request):
+    # --- Lettura e parsing dei dati in ingresso ---
+    try:
+        data = json.loads(request.body)
+
+        priority = str(data.get('priority', '')).strip()
+        description = str(data.get('description', '')).strip()
+        expiration = str(data.get('expiration', '')).strip()
+        planned_date = str(data.get('plannedDate', '')).strip()
+        duration = str(data.get('duration', '')).strip()
+        company_id = str(data.get('companyId', '')).strip()
+        subject = str(data.get('object', '')).strip()
+        mail_sender = str(data.get('mailSender', '')).strip()
+        user_sender = str(data.get('userSender', '')).strip()
+        received_date = str(data.get('receivedDate', '')).strip()
+        link_to_mail = str(data.get('linkToMail', '')).strip()
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Errore nella lettura dei dati: {str(e)}'
+        }, status=400)
+
+    # --- Salvataggio del task nel DB ---
+    try:
+        rec = UserRecord('task')
+        rec.values['priorita'] = priority
+        rec.values['description'] = description
+        rec.values['duedate'] = expiration
+        rec.values['planneddate'] = planned_date
+        rec.values['duration'] = duration
+        rec.values['oggetto'] = subject
+        rec.values['recordidcompany_'] = company_id
+        rec.values['mailsender'] = mail_sender
+        rec.values['mailuser'] = user_sender
+        rec.values['emailreceiveddate'] = received_date
+        rec.values['linktomail'] = link_to_mail
+
+        # save() non solleva eccezioni: ritorna False in caso di errore
+        if not rec.save():
+            return JsonResponse({
+                'success': False,
+                'message': 'Errore durante il salvataggio del task.' 
+            }, status=500)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Errore durante il salvataggio: {str(e)}'
+        }, status=500)
+
+    return JsonResponse({
+        'success': True,
+        'message': 'Task salvato con successo.',
+        'recordid': rec.recordid
+    }, status=201)
+
+
+
+# Versione "pura" della normalizzazione: ritorna la stringa E.164 (o None)
+# invece di un JsonResponse. Usata per i confronti in-code (es. ricerca contatti).
+def normalize_phone_value(raw, default_region="CH"):
+    """
+    Normalizza un numero di telefono nel formato E.164 ('+41791770046').
+
+    Ritorna None per i casi impossibili da recuperare in modo affidabile
+    (es. notazione scientifica '3.93334E+11' o stringhe non valide).
+    `raw` può essere str, int, float o None.
+    """
+    if raw is None:
+        return None
+
+    s = str(raw).strip()
+    if not s:
+        return None
+
+    # 1. Scarta la notazione scientifica (Excel): irrecuperabile.
+    if re.search(r"[eE][+\-]?\d", s):
+        return None
+
+    # 2. Intero salvato come float: "41765739365.0" -> "41765739365"
+    float_int = re.fullmatch(r"(\d+)\.0+", s)
+    if float_int:
+        s = float_int.group(1)
+
+    # 3. Rimuove lettere e caratteri estranei tenendo solo i caratteri utili al numero.
+    s = re.sub(r"[^\d+()\s\-]", "", s)
+
+    # 4. Rimuove il prefisso trunk opzionale "(0)" (es. "+41 (0) 79...").
+    s = re.sub(r"\(\s*0\s*\)", "", s)
+
+    # 5. Prova piu' interpretazioni e tiene la prima VALIDA.
+    candidates = [s]
+    digits = re.sub(r"\D", "", s)
+    if not s.startswith("+") and digits:
+        candidates.append("+" + digits)
+
+    for candidate in candidates:
+        try:
+            parsed = phonenumbers.parse(candidate, default_region)
+        except NumberParseException:
+            continue
+        if phonenumbers.is_valid_number(parsed):
+            return phonenumbers.format_number(parsed, PhoneNumberFormat.E164)
+
+    return None
+
+
+#Normalizzazione numeri di telefono
+@csrf_exempt
+def normalize_phone(request, default_region="CH"):
+    raw = request.POST.get('phone', '')
+
+    if not raw:
+        return JsonResponse({'success': False, 'normalizedPhone': None})
+    
+    normalized_phone = normalize_phone_value(raw, default_region)
+
+    if not normalized_phone:
+        return JsonResponse({'success': False, 'normalizedPhone': None})
+
+    return JsonResponse({
+        'success': True,
+        'message': 'Numero di telefono normalizzato',
+        'normalizedPhone': normalized_phone
+    }, status=201)
 
