@@ -1535,3 +1535,42 @@ def renew_servicecontract(request):
     except Exception as e:
         logger.error(f"Errore nel rinnovo: {str(e)}")
         return JsonResponse({'error': f'Errore nel rinnovo: {str(e)}'}, status=500)
+
+def read(request):
+    try:
+        data = json.loads(request.body)
+        politicid = data.get('politicid')
+        userid = Helper.get_userid(request)
+        if userid == 0:
+            return JsonResponse({
+                'success': False,
+                'error': f'L\'utente non è loggato con nessun account'}, 
+            status=403)
+
+        # TODO: sostituire 'nometabella' con il nome reale della tabella e
+        #       'politicid' / 'userid' con i nomi reali delle colonne.
+        records = UserTable('nometabella', userid=userid).get_records(
+            conditions_list=[
+                f"politicid = '{politicid}'",
+                f"userid = '{userid}'",
+            ]
+        )
+
+        # Il risultato deve essere sempre uno solo: prendiamo il primo (o None se vuoto)
+        record = records[0] if records else None
+
+        if not record:
+            return JsonResponse({
+                'success': False,
+                'error': 'Nessun record trovato'
+            }, status=404)
+
+        # Aggiorniamo il record impostando statoLettura a true (persistito nel DB)
+        rec = UserRecord('nometabella', record['recordid_'])
+        rec.values['statoLettura'] = True
+        rec.save()
+
+        return JsonResponse({'success': True, 'record': record})
+
+    except Exception as e:
+        print("todo")
