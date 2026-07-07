@@ -1535,13 +1535,48 @@ def renew_servicecontract(request):
     except Exception as e:
         logger.error(f"Errore nel rinnovo: {str(e)}")
         return JsonResponse({'error': f'Errore nel rinnovo: {str(e)}'}, status=500)
-
+    
 def disposizione_conferma_lettura(request):
     try:
         post_data = json.loads(request.body)
         params = post_data.get('params', None)
         recordid = params.get('recordid', None)
-        return HttpResponse(f"Conferma lettura disposizione")
+        userid = Helper.get_userid(request)
+
+        if userid == 0:
+            return JsonResponse({
+                'success': False,
+                'error': f'L\'utente non è loggato con nessun account'}, 
+            status=403)
+
+        records = UserTable('disposizioni_aziendali_letture', userid=userid).get_records(
+            conditions_list=[
+                f"recordiddisposizioni_aziendali_ = '{recordid}'",
+                f"dipendente = '{userid}'",
+            ]
+        )
+
+        # Il risultato deve essere sempre uno solo: prendiamo il primo (o None se vuoto)
+        record = records[0] if records else None
+
+        if not record:
+            return JsonResponse({
+                'success': False,
+                'error': 'Nessun record trovato'
+            }, status=404)
+        
+        today = datetime.date.today().strftime('%Y-%m-%d')
+
+        # Aggiorniamo il record impostando statoLettura a true (persistito nel DB)
+        rec = UserRecord('disposizioni_aziendali_letture', record['recordid_'])
+        rec.values['letto'] = "Si"
+        rec.values['data_lettura'] = today
+        rec.save()
+
+        
+
+        return JsonResponse({'success': True, 'record': record})
+
     except Exception as e:
-        logger.error(f"Errore nella conferma lettura: {str(e)}")
-        return JsonResponse({'error': f'Errore nella conferma lettura: {str(e)}'}, status=500)  
+        logger.error(f"Errore nella lettura: {str(e)}")
+        return JsonResponse({'error': f'Errore nella lettura: {str(e)}'}, status=500)
