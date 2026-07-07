@@ -1535,3 +1535,13 @@ def renew_servicecontract(request):
     except Exception as e:
         logger.error(f"Errore nel rinnovo: {str(e)}")
         return JsonResponse({'error': f'Errore nel rinnovo: {str(e)}'}, status=500)
+
+def disposizione_conferma_lettura(request):
+    try:
+        post_data = json.loads(request.body)
+        params = post_data.get('params', None)
+        recordid = params.get('recordid', None)
+        return HttpResponse(f"Conferma lettura disposizione")
+    except Exception as e:
+        logger.error(f"Errore nella conferma lettura: {str(e)}")
+        return JsonResponse({'error': f'Errore nella conferma lettura: {str(e)}'}, status=500)  

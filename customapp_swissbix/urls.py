@@ -48,7 +48,7 @@ urlpatterns = [
     
     path('print_servicecontract/', print_servicecontract, name='print_servicecontract'),
     path('renew_servicecontract/', renew_servicecontract, name='renew_servicecontract'),
-    
+    path('disposizione_conferma_lettura/',disposizione_conferma_lettura,name='disposizione_conferma_lettura'),
     path('sync_contacts/', sync_contacts, name='sync_contacts'),
     
     # TEMPORARY
