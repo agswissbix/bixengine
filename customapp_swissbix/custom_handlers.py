@@ -218,6 +218,13 @@ def save_record_fields(tableid,recordid, old_values=""):
 
         notification_record.save()
 
+    # --- DISPOSIZIONI AZIENDALI ---
+    if tableid == 'disposizioni_aziendali':
+        disposizione_record = UserRecord('disposizioni_aziendali', recordid)
+        disposizione_record.save()
+        print(f"Save record disposizioni_aziendali eseguita")
+
+            
 def delete_record(tableid, recordid):    
     # ---TIMESHEET---
     if tableid == 'timesheet':
