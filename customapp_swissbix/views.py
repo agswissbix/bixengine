@@ -4023,3 +4023,50 @@ def normalize_phone(request, default_region="CH"):
         'normalizedPhone': normalized_phone
     }, status=201)
 
+@csrf_exempt
+def save_contact(request):
+    id = request.POST.get('id')
+    name = request.POST.get('name') 
+    surname = request.POST.get('surname')
+    email = request.POST.get('email')
+    phone = normalize_phone_value(request.POST.get('phone'))
+    mobilePhone = normalize_phone_value(request.POST.get('mobilePhone'))
+    companyRecordId = request.POST.get('companyRecordId')
+
+    if phone == None and mobilePhone == None:
+        return JsonResponse({
+            'success': False,
+            'message': f'Ogni contatto deve avere un numero di telefono'
+        }, status=500)
+    
+    try:
+        # Se l'id esiste è una modifica, altrimenti un nuovo contatto
+        contact = UserRecord('contact', id) if id else UserRecord('contact')
+
+        contact.values['name'] = name
+        contact.values['surname'] = surname
+        contact.values['email'] = email
+        contact.values['phone'] = phone
+        contact.values['mobilephone'] = mobilePhone
+        contact.values['recordidcompany_'] = companyRecordId
+
+        # save() non solleva eccezioni: ritorna False in caso di errore
+        if not contact.save():
+            return JsonResponse({
+                'success': False,
+                'message': 'Errore durante il salvataggio del contatto.'
+            }, status=500)
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Contatto salvato con successo.',
+            'recordid': contact.recordid
+        }, status=201)
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Si è verificato un errore inatteso: {str(e)}'
+        }, status=500)
+
+
