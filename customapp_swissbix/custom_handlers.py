@@ -221,6 +221,34 @@ def save_record_fields(tableid,recordid, old_values=""):
     # --- DISPOSIZIONI AZIENDALI ---
     if tableid == 'disposizioni_aziendali':
         disposizione_record = UserRecord('disposizioni_aziendali', recordid)
+
+        str_gruppi = disposizione_record.values['destinatari']
+        gruppi = str_gruppi.split(',') if str_gruppi else []
+
+        # Utenti dei dipendenti che appartengono ad almeno uno dei gruppi.
+        # Il campo 'gruppo' è a sua volta una lista separata da virgole.
+        gruppi_set = {g.strip() for g in gruppi}
+        dipendenti = HelpderDB.sql_query("SELECT utente, gruppo FROM user_dipendente WHERE deleted_='N' AND stato='Attivo'")
+
+        utenti = []
+        for dipendente in dipendenti:
+            dip_gruppi = [g.strip() for g in (dipendente.get('gruppo') or '').split(',')]
+            if gruppi_set.intersection(dip_gruppi):
+                utenti.append(dipendente.get('utente'))
+
+        # Crea le letture solo la prima volta: se esistono già per questa
+        # disposizione, non le ricreiamo (evita duplicati sui salvataggi successivi).
+        letture_esistenti = HelpderDB.sql_query(
+            f"SELECT recordid_ FROM user_disposizioni_aziendali_letture WHERE recordiddisposizioni_aziendali_ = '{recordid}' LIMIT 1"
+        )
+        if not letture_esistenti and disposizione_record.values.get('stato') == 'Pubblicato':
+            for utente in utenti:
+                lettura_record = UserRecord('disposizioni_aziendali_letture')
+                lettura_record.values['recordiddisposizioni_aziendali_'] = recordid
+                lettura_record.values['dipendente'] = utente
+                lettura_record.values['letto'] = 'No'
+                lettura_record.save()
+
         disposizione_record.save()
         print(f"Save record disposizioni_aziendali eseguita")
 
