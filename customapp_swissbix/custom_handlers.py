@@ -249,13 +249,23 @@ def save_record_fields(tableid,recordid, old_values=""):
                 lettura_record.values['letto'] = 'No'
                 lettura_record.save()
 
+            # Le letture ora esistono: aggiorniamo il flag così il blocco
+            # di conteggio qui sotto viene eseguito subito (non solo al salvataggio dopo).
+            letture_esistenti = True
+
         stato_letture = None
         letture = None
 
         if letture_esistenti:
-            quantita = HelpderDB.sql_query(f"SELECT COUNT(*) FROM user_disposizioni_aziendali_letture")
-            quantita_lette = HelpderDB.sql_query(f"SELECT COUNT(*) FROM user_disposizioni_aziendali_letture WHERE letto = 'Si'")
-            letture = quantita_lette + "/" + quantita
+            quantita = HelpderDB.sql_query_value(
+                f"SELECT COUNT(*) AS total FROM user_disposizioni_aziendali_letture WHERE recordiddisposizioni_aziendali_ = '{recordid}'",
+                'total'
+            )
+            quantita_lette = HelpderDB.sql_query_value(
+                f"SELECT COUNT(*) AS total FROM user_disposizioni_aziendali_letture WHERE letto = 'Si' AND recordiddisposizioni_aziendali_ = '{recordid}'",
+                'total'
+            )
+            letture = str(quantita_lette) + "/" + str(quantita)
 
             if(quantita_lette == quantita):
                 stato_letture = "Letto da tutti"
@@ -270,6 +280,11 @@ def save_record_fields(tableid,recordid, old_values=""):
         disposizione_record.save()
         print(f"Save record disposizioni_aziendali eseguita")
 
+    # --- DISPOSIZIONI AZIENDALI ---
+    if tableid == 'disposizioni_aziendali_letture':
+        rec = UserRecord('disposizioni_aziendali_letture', recordid)
+        recordid_disposizione= rec.values['recordiddisposizioni_aziendali_']
+        save_record_fields('disposizioni_aziendali', recordid_disposizione)
             
 def delete_record(tableid, recordid):    
     # ---TIMESHEET---
