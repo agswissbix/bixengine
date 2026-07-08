@@ -7057,7 +7057,7 @@ def _handle_aggregate_chart(request, config, chart_id, chart_record, query_condi
              # Query 2: Nazioni (Tutte, incluso il club loggato)
              select_group_field_2 = f"1 as sort_col, {lookup_alias}.nazione AS {group_by_alias}"
              group_by_clause_2 = f"GROUP BY {lookup_alias}.nazione"
-             where_extra_2 = ""
+             where_extra_2 = f"AND {lookup_alias}.nazione IS NOT NULL AND {lookup_alias}.nazione <> ''"
         else:
              select_group_field = f"{lookup_alias}.{lookup_cfg['display_field']} AS {group_by_alias}"
              group_by_clause = f"GROUP BY {lookup_alias}.{lookup_cfg['display_field']}"

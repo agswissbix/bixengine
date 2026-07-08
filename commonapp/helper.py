@@ -220,7 +220,7 @@ class Helper:
         field_mappings = []
         for i, label in enumerate(labels):
             # Normalizzazione per il DB
-            clean_name = label.strip().replace('-', '').lower()
+            clean_name = "".join(label.split()).replace('-', '').lower()
             field_name = f"prog_{clean_name}"
             
             # Localizzazione per l'output (fallback alla label originale se manca la traduzione)
