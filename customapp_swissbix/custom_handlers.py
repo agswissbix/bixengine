@@ -249,6 +249,24 @@ def save_record_fields(tableid,recordid, old_values=""):
                 lettura_record.values['letto'] = 'No'
                 lettura_record.save()
 
+        stato_letture = None
+        letture = None
+
+        if letture_esistenti:
+            quantita = HelpderDB.sql_query(f"SELECT COUNT(*) FROM user_disposizioni_aziendali_letture")
+            quantita_lette = HelpderDB.sql_query(f"SELECT COUNT(*) FROM user_disposizioni_aziendali_letture WHERE letto = 'Si'")
+            letture = quantita_lette + "/" + quantita
+
+            if(quantita_lette == quantita):
+                stato_letture = "Letto da tutti"
+            elif(quantita_lette == 0):
+                stato_letture = "Nessuno"
+            else:
+                stato_letture = "Alcuni mancanti"
+
+        disposizione_record.values['nrletture'] = letture
+        disposizione_record.values['stato_letture'] = stato_letture
+
         disposizione_record.save()
         print(f"Save record disposizioni_aziendali eseguita")
 
