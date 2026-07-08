@@ -1574,6 +1574,7 @@ def disposizione_conferma_lettura(request):
         rec.values['letto'] = "Si"
         rec.values['data_lettura'] = today
         rec.save()
+        
         recordid_disposizione= rec.values['recordiddisposizioni_aziendali_']
         save_record_fields('disposizioni_aziendali', recordid_disposizione)
 
