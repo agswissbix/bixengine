@@ -586,20 +586,23 @@ def get_projects(request):
         categories = []
         categories.append(project.get('categoria', ''))
 
-        documents = project.get('documents', [])
+        project_id = project.get('recordid_', '')
+        attachments = HelpderDB.sql_query(f"SELECT * FROM user_attachment WHERE recordidprojects_='{project_id}' AND deleted_ = 'N'")
 
         formatted_documents = []
-        for document in documents:
-            document_categories = []
-            document_categories.append(document.get('categoria', ''))
-
-            file = document.get('file', '')
+        for attachment in attachments:
+            file = attachment.get('file', '')
+            filename = attachment.get('filename', '')
+            
+            # fallback in case filename is empty but file is not
+            if not filename and file:
+                filename = file.split('/')[-1]
 
             file_type = ""
             if file:
                 file_type = file.split('.')[-1]
 
-            document_date = document.get('data')
+            document_date = attachment.get('data') or attachment.get('creation_')
         
             if document_date:
                 if hasattr(document_date, 'date'):
@@ -612,12 +615,12 @@ def get_projects(request):
                 document_date = ""
 
             formatted_documents.append({
-                'id': document.get('recordid_', ''),
-                'title': document.get('titolo', ''),
-                'description': document.get('descrizione', ''),
+                'id': attachment.get('recordid_', ''),
+                'title': filename or '',
+                'description': attachment.get('note', '') or '',
                 'fileType': file_type,
-                'categories': document_categories,
-                'record_id': file,
+                'categories': [],
+                'record_id': file or '',
                 'data': document_date,
             })
 
