@@ -42,6 +42,8 @@ from django.http import FileResponse
 import logging
 from xhtml2pdf import pisa
 from .views import link_callback
+from customapp_swissbix.custom_handlers import save_record_fields
+
 # Initialize environment variables
 env = environ.Env()
 environ.Env.read_env()
@@ -1572,8 +1574,8 @@ def disposizione_conferma_lettura(request):
         rec.values['letto'] = "Si"
         rec.values['data_lettura'] = today
         rec.save()
-
-        
+        recordid_disposizione= rec.values['recordiddisposizioni_aziendali_']
+        save_record_fields('disposizioni_aziendali', recordid_disposizione)
 
         return JsonResponse({'success': True, 'record': record})
 
