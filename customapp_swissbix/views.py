@@ -3795,7 +3795,7 @@ def get_company_details(request):
 def get_company_by_contact(request):
     try:
         email = request.POST.get('email', '').strip()
-        telefono = request.POST.get('telefono', '').strip()
+        telefono = normalize_phone(request.POST.get('telefono', '').strip())
         
         conditions = []
         or_conditions = []
