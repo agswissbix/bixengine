@@ -10,8 +10,51 @@ from django.contrib.auth.models import User
 import pyotp
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from django.db.models import F, OuterRef, Subquery, Value, IntegerField
+from django.db.models import F, OuterRef, Subquery, Value, IntegerField, Case, When
 from django.db.models.functions import Coalesce
+
+def get_user_priority_list(userid):
+    if not userid:
+        return [1]
+    
+    try:
+        userid = int(userid)
+    except (ValueError, TypeError):
+        return [1]
+
+    user_ids = [userid]
+    
+    # Lazy imports to prevent issues
+    from commonapp.models import SysGroup, SysGroupUser
+    
+    group_priority_sq = SysGroup.objects.filter(id=OuterRef('groupid')).values('priority')[:1]
+    group_manager_sq = SysGroup.objects.filter(id=OuterRef('groupid')).values('idmanager')[:1]
+
+    manager_ids = (
+        SysGroupUser.objects
+        .filter(userid=userid)
+        .exclude(disabled='Y')
+        .annotate(
+            sort_priority=Coalesce(Subquery(group_priority_sq), Value(9999), output_field=IntegerField()),
+            manager_id=Subquery(group_manager_sq)
+        )
+        .order_by('sort_priority')
+        .values_list('manager_id', flat=True)
+    )
+
+    for mid in manager_ids:
+        if mid is not None:
+            try:
+                mid_val = int(mid)
+                if mid_val not in user_ids:
+                    user_ids.append(mid_val)
+            except (ValueError, TypeError):
+                pass
+            
+    if 1 not in user_ids:
+        user_ids.append(1)
+        
+    return user_ids
 
 
 class AuthUser(models.Model):
@@ -392,8 +435,18 @@ class SysTable(models.Model):
 
     @classmethod
     def get_user_tables(cls, userid):
-        # Subquery per prendere info dal workspace in base al nome
-        workspace_qs = SysTableWorkspace.objects.filter(name=OuterRef('workspace'))
+        user_ids = get_user_priority_list(userid)
+        
+        # Subquery per prendere info dal workspace in base al nome e utente risolto con priorità
+        whens = [When(userid=uid, then=Value(index)) for index, uid in enumerate(user_ids)]
+        priority_expr = Case(*whens, default=Value(9999), output_field=IntegerField())
+
+        workspace_qs = (
+            SysTableWorkspace.objects
+            .filter(name=OuterRef('workspace'), userid__in=user_ids)
+            .annotate(priority=priority_expr)
+            .order_by('priority')
+        )
 
         # Funzione di appoggio per evitare di duplicare la query ORM
         def _fetch_tables_for_user(target_userid):

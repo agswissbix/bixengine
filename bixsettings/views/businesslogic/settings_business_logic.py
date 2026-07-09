@@ -52,9 +52,33 @@ class SettingsBusinessLogic:
         # Subquery fallback
         fallback_order_subquery, fallback_id_subquery = _user_order_subqueries(1)
 
-        workspace_rows = SysTableWorkspace.objects.all()
+        from commonapp.models import get_user_priority_list, SysTableWorkspace
+        from django.db.models import Case, When, Value, IntegerField
 
-        for workspace_row in workspace_rows:
+        user_ids = get_user_priority_list(userid)
+        whens = [When(userid=uid, then=Value(index)) for index, uid in enumerate(user_ids)]
+        priority_expr = Case(*whens, default=Value(9999), output_field=IntegerField())
+
+        # Otteniamo tutti i nomi distinti dei workspace
+        workspace_names = list(SysTableWorkspace.objects.values_list('name', flat=True).distinct())
+
+        # Risolviamo per ogni workspace il record con priorità maggiore per l'utente/gruppo/default
+        resolved_workspaces = []
+        for name in workspace_names:
+            ws_row = (
+                SysTableWorkspace.objects
+                .filter(name=name, userid__in=user_ids)
+                .annotate(priority=priority_expr)
+                .order_by('priority')
+                .first()
+            )
+            if ws_row:
+                resolved_workspaces.append(ws_row)
+
+        # Ordiniamo i workspace per l'attributo order (gestendo None)
+        resolved_workspaces.sort(key=lambda x: x.order if x.order is not None else 99999)
+
+        for workspace_row in resolved_workspaces:
             workspaces[workspace_row.name] = dict()
             workspaces[workspace_row.name]['name'] = workspace_row.name
             workspaces[workspace_row.name]['groupOrder'] = workspace_row.order

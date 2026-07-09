@@ -361,10 +361,35 @@ def settings_table_usertables_save(request):
 
     for workspace_key, workspace_data in workspaces.items():
         group_order = workspace_data.get('groupOrder', None)
-        ws = SysTableWorkspace.objects.filter(name=workspace_key).first()
-        if ws:
+        
+        # Cerca il record specifico per l'utente
+        ws = SysTableWorkspace.objects.filter(name=workspace_key, userid_id=userid).first()
+        if not ws:
+            # Recupera l'icona dal record ereditato
+            from commonapp.models import get_user_priority_list
+            user_ids = get_user_priority_list(userid)
+            whens = [When(userid=uid, then=Value(index)) for index, uid in enumerate(user_ids)]
+            priority_expr = Case(*whens, default=Value(9999), output_field=IntegerField())
+            
+            inherited_ws = (
+                SysTableWorkspace.objects
+                .filter(name=workspace_key, userid__in=user_ids)
+                .annotate(priority=priority_expr)
+                .order_by('priority')
+                .first()
+            )
+            icon = inherited_ws.icon if inherited_ws else 'Home'
+            
+            ws = SysTableWorkspace(
+                name=workspace_key,
+                userid_id=userid,
+                icon=icon,
+                order=group_order
+            )
+        else:
             ws.order = group_order
-            ws.save()
+            
+        ws.save()
 
         tables = workspace_data.get('tables', [])
         for table in tables:
@@ -472,6 +497,11 @@ def settings_table_usertables_order_reset(request):
     SysUserTableOrder.objects.filter(
         userid_id=userid,
     ).delete()
+
+    if str(userid) != '1':
+        SysTableWorkspace.objects.filter(
+            userid_id=userid,
+        ).delete()
 
     return JsonResponse({'success': True})
 
