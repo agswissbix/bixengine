@@ -8518,14 +8518,14 @@ def save_newuser(request):
             )
 
             # Inserisce il profilo commonapp_userprofile con UPSERT
-            cur.execute(
-                """
-                INSERT INTO commonapp_userprofile (user_id, is_2fa_enabled)
-                VALUES (%s, 0)
-                ON DUPLICATE KEY UPDATE user_id = VALUES(user_id)
-                """,
-                [bixid],
-            )
+            # cur.execute(
+            #     """
+            #     INSERT INTO commonapp_userprofile (user_id, is_2fa_enabled)
+            #     VALUES (%s, 0)
+            #     ON DUPLICATE KEY UPDATE user_id = VALUES(user_id)
+            #     """,
+            #     [bixid],
+            # )
     except Exception as e:
         # In caso di errore, la transazione viene annullata automaticamente
         # grazie a @transaction.atomic.
