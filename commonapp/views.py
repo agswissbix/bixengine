@@ -331,6 +331,10 @@ def get_sidebarmenu_items(request):
         if can_view.get("value") == "false":
             continue
 
+        # Se il workspace ha order=None (nascosto), saltiamo la tabella
+        if table.get('workspace_order') is None:
+            continue
+
         workspace_name = table["workspace"]
 
         # Aggiunta ai preferiti se presente
@@ -343,7 +347,19 @@ def get_sidebarmenu_items(request):
 
         # Inizializzazione Workspace se nuovo
         if workspace_name not in workspaces_tables:
-            workspace_record = SysTableWorkspace.objects.filter(name=workspace_name).first()
+            from commonapp.models import get_user_priority_list, SysTableWorkspace
+            from django.db.models import Case, When, Value, IntegerField
+            user_ids = get_user_priority_list(userid)
+            whens = [When(userid=uid, then=Value(index)) for index, uid in enumerate(user_ids)]
+            priority_expr = Case(*whens, default=Value(9999), output_field=IntegerField())
+            
+            workspace_record = (
+                SysTableWorkspace.objects
+                .filter(name=workspace_name, userid__in=user_ids)
+                .annotate(priority=priority_expr)
+                .order_by('priority')
+                .first()
+            )
             
             workspaces_tables[workspace_name] = {
                 "id": workspace_name,
@@ -8544,14 +8560,14 @@ def save_newuser(request):
             )
 
             # Inserisce il profilo commonapp_userprofile con UPSERT
-            cur.execute(
-                """
-                INSERT INTO commonapp_userprofile (user_id, is_2fa_enabled)
-                VALUES (%s, 0)
-                ON DUPLICATE KEY UPDATE user_id = VALUES(user_id)
-                """,
-                [bixid],
-            )
+            # cur.execute(
+            #     """
+            #     INSERT INTO commonapp_userprofile (user_id, is_2fa_enabled)
+            #     VALUES (%s, 0)
+            #     ON DUPLICATE KEY UPDATE user_id = VALUES(user_id)
+            #     """,
+            #     [bixid],
+            # )
     except Exception as e:
         # In caso di errore, la transazione viene annullata automaticamente
         # grazie a @transaction.atomic.
