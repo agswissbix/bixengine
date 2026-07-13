@@ -6193,6 +6193,41 @@ def get_dashboard_charts(request):
             """.format(category_field=category_field, dashboard_id=dashboard_id, userid=bixid, check_status=check_status)
             all_blocks = dbh.sql_query(sql)
 
+            if str(active_server).lower() == 'wegolf':
+                try:
+                    order_sql = """
+                        SELECT f.label 
+                        FROM sys_user_field_order AS fo 
+                        JOIN sys_field f ON (fo.tableid=f.tableid AND fo.fieldid=f.id) 
+                        WHERE fo.tableid='metrica_annuale' 
+                          AND f.explanation is not null 
+                          AND f.label != 'Dati' 
+                          AND fo.typepreference='view_fields' 
+                          AND fo.fieldorder IS NOT NULL 
+                        GROUP BY f.label 
+                        ORDER BY MIN(fo.fieldorder) ASC
+                    """
+                    category_order_rows = dbh.sql_query(order_sql)
+                    category_order_list = [row.get('label') for row in category_order_rows if row.get('label')]
+
+                    category_index = {}
+                    for idx, label in enumerate(category_order_list):
+                        lbl_lower = label.lower()
+                        category_index[lbl_lower] = idx
+                        translated = WegolfHelper.get_translation("metrica_annuale", label, userid=bixid, translation_type="Label")
+                        if translated:
+                            category_index[translated.lower()] = idx
+
+                    def sort_key(block):
+                        cat = block.get('category_block')
+                        if cat:
+                            return category_index.get(cat.lower(), len(category_order_list))
+                        return len(category_order_list)
+
+                    all_blocks.sort(key=sort_key)
+                except Exception as e:
+                    print(f"Errore durante l'ordinamento dei blocchi della dashboard: {e}")
+
             chart_ids = [str(b['chartid']) for b in all_blocks if b.get('chartid')]
             chart_info = {}
             is_wegolf = str(active_server).lower() == 'wegolf'
@@ -6239,6 +6274,13 @@ def get_dashboard_charts(request):
                         description = WegolfHelper.resolve_localized_chart_field(sys_desc, user_chart_row, user_language, field="description")
                     except Exception:
                         pass
+
+                    cat = block.get('category_block')
+                    if cat:
+                        try:
+                            block['category_block'] = WegolfHelper.get_translation("metrica_annuale", cat, userid=bixid, translation_type="Label")
+                        except Exception:
+                            pass
 
                 block['name'] = name
                 block['description'] = description
