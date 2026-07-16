@@ -1569,7 +1569,7 @@ def disposizione_conferma_lettura(request):
         
         today = datetime.date.today().strftime('%Y-%m-%d')
 
-        # Aggiorniamo il record impostando statoLettura a true (persistito nel DB)
+        # Aggiorniamo il record: 'letto' a "Si" e la data di lettura (persistito nel DB)
         rec = UserRecord('disposizioni_aziendali_letture', record['recordid_'])
         rec.values['letto'] = "Si"
         rec.values['data_lettura'] = today
