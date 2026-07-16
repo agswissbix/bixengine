@@ -100,4 +100,5 @@ urlpatterns = [
     path('normalize_phone/', normalize_phone, name="normalize_phone"),
     path('get_contact_by_phone/', get_contact_by_phone, name="get_contact_by_phone"),
     path('save_contact/', save_contact, name="save_contact"),
-]   
+    path('get_ticket_by_freshdeskid/', get_ticket_by_freshdeskid, name="get_ticket_by_freshdeskid"),
+]
