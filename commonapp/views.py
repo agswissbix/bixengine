@@ -6025,10 +6025,100 @@ def update_user_profile_pic(request):
         default_storage.delete(file_path)
     default_storage.save(file_path, image_file)
 
-    return JsonResponse({'success': True})
+@login_required_api
+def disable_demo_dashboard(request):
+    try:
+        from commonapp.bixmodels.helper_db import HelpderDB
+        from django.db import connection
+        
+        if not request.user.is_authenticated:
+            return JsonResponse({'success': False, 'error': 'Not authenticated'}, status=401)
+            
+        actual_bixid = None
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT id FROM sys_user WHERE bixid = %s", [request.user.id])
+            row = cursor.fetchone()
+            if row:
+                actual_bixid = row[0]
+                
+        if not actual_bixid:
+            return JsonResponse({'success': False, 'error': 'User not found'}, status=404)
+            
+        dbh = HelpderDB()
+        sql_check = f"SELECT recordid_ FROM user_golfclub WHERE utente = '{actual_bixid}'"
+        res_check = dbh.sql_query(sql_check)
+        
+        if res_check and len(res_check) > 0:
+            sql_update = f"UPDATE user_golfclub SET showdemodashboard = 'No' WHERE utente = '{actual_bixid}'"
+            dbh.sql_execute(sql_update)
+        else:
+            sql_insert = f"INSERT INTO user_golfclub (utente, showdemodashboard) VALUES ('{actual_bixid}', 'No')"
+            dbh.sql_execute(sql_insert)
+            
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+def check_and_apply_demo_override(request):
+    """
+    Checks if active server is 'wegolf' and showdemodashboard in user_golfclub is not 'No'.
+    Also ensures this only applies if the requested dashboardCategory is 'myoverview'.
+    If so, sets request.override_userid = 22 and returns True.
+    """
+    try:
+        from commonapp.helper import Helper
+        from commonapp.bixmodels.helper_db import HelpderDB
+        from django.db import connection
+        import json
+        
+        # Estrarre la categoria dal body della richiesta
+        category = None
+        if request.body:
+            try:
+                req_data = json.loads(request.body)
+                category = req_data.get('dashboardCategory') or req_data.get('category')
+            except Exception:
+                pass
+                
+        # Consenti l'override solo se category è 'myoverview'
+        if not category or str(category).strip().lower() != 'myoverview':
+            return False
+            
+        if not request.user.is_authenticated:
+            return False
+            
+        actual_bixid = None
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT id FROM sys_user WHERE bixid = %s", [request.user.id])
+            row = cursor.fetchone()
+            if row:
+                actual_bixid = row[0]
+                
+        if not actual_bixid:
+            return False
+            
+        try:
+            active_server = Helper.get_activeserver(request).get('value')
+        except Exception:
+            active_server = Helper.get_cliente_id()
+            
+        if str(active_server).lower() == 'wegolf':
+            dbh = HelpderDB()
+            sql_demo = f"SELECT showdemodashboard FROM user_golfclub WHERE utente = '{actual_bixid}'"
+            res_demo = dbh.sql_query(sql_demo)
+            if res_demo and len(res_demo) > 0:
+                val = res_demo[0].get('showdemodashboard')
+                if val and str(val).strip().lower() == 'no':
+                    return False
+            request.override_userid = 22
+            return True
+    except Exception as e:
+        print(f"Error in check_and_apply_demo_override: {e}")
+    return False
 
 @login_required_api
 def get_dashboard_blocks(request):
+    is_demo = check_and_apply_demo_override(request)
     request_data = json.loads(request.body)
     #TODO custom wegolf
     filters=request_data.get('filters', None)
@@ -6171,11 +6261,13 @@ def get_dashboard_blocks(request):
                     context['userid'] = bixid
                     context['blocks'].append(block) 
 
+    context['is_demo'] = is_demo
     return JsonResponse(context, safe=False)
 
 
 @login_required_api
 def get_dashboard_charts(request):
+    is_demo = check_and_apply_demo_override(request)
     request_data = json.loads(request.body)
     dashboard_id = request_data.get('dashboardid')
     
@@ -6302,11 +6394,13 @@ def get_dashboard_charts(request):
                 block['description'] = description
                 context['block_list'].append(block)
 
+    context['is_demo'] = is_demo
     return JsonResponse(context, safe=False)
 
 @login_required_api
 def get_chart_data(request):
     try:
+        is_demo = check_and_apply_demo_override(request)
         request_data = json.loads(request.body)
         chart_id = request_data.get("chart_id")
         viewid = request_data.get("viewid", "")
@@ -6319,6 +6413,7 @@ def get_chart_data(request):
             return JsonResponse({"error": "chart_id is required"}, status=400)
 
         chart_info = build_chart_data(request, chart_id, viewid, filters, filtersList=filtersList, searchTerm=searchTerm)
+        chart_info['is_demo'] = is_demo
         return JsonResponse(chart_info)
 
     except Exception as e:

@@ -170,6 +170,8 @@ class Helper:
     
     @classmethod
     def get_userid(cls,request):
+        if hasattr(request, 'override_userid') and request.override_userid is not None:
+            return request.override_userid
         django_userid=request.user.id
         userid = 0
         with connection.cursor() as cursor:

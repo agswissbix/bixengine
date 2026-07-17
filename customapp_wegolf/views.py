@@ -299,7 +299,8 @@ def get_settings_data(request):
             "valuta": club_data.get("valuta", ""),
             "formatoNumerico": club_data.get("formato_numerico", ""),
             "formatoData": club_data.get("formato_data", ""),
-            "logo": club_data.get("Logo", "")
+            "logo": club_data.get("Logo", ""),
+            "showdemodashboard": club_data.get("showdemodashboard", "")
         }
 
         languages = []
@@ -365,6 +366,7 @@ def update_club_settings(request):
         club.values['valuta'] = data.get("valuta", club.values.get('valuta'))
         club.values['formato_numerico'] = data.get("formatoNumerico", club.values.get('formato_numerico'))
         club.values['formato_data'] = data.get("formatoData", club.values.get('formato_data'))
+        club.values['showdemodashboard'] = data.get("showdemodashboard", club.values.get('showdemodashboard'))
 
         # Elimino il file se in delete o update
         if (data.get("logo", None) == "$remove$" and club.values.get('Logo', None)) or (club.values.get('Logo', None) and logo_file):
@@ -416,7 +418,8 @@ def update_club_settings(request):
             "valuta": club.values.get("valuta", ""),
             "formatoNumerico": club.values.get("formato_numerico", ""),
             "formatoData": club.values.get("formato_data", ""),
-            "logo": club.values.get("Logo", "")
+            "logo": club.values.get("Logo", ""),
+            "showdemodashboard": club.values.get("showdemodashboard", "")
         }
 
         languages = []
