@@ -3767,11 +3767,15 @@ def get_timesheet_ai_summary(timesheets_per_user_data):
 def get_company_details(request):
     try:
         recordid = request.POST.get('id', '')
+        if not recordid:
+            return JsonResponse({'success': False, 'message': 'id mancante.'}, status=400)
 
         company = UserRecord('company', recordid)
-        if not company.recordid:
-            return JsonResponse({'success': False, 'message': 'Azienda non trovata.'}, status=404)
-        
+        # .values è {} SOLO se la SELECT non ha trovato la riga.
+        # NON usare company.recordid: contiene sempre l'id passato, anche se il record non esiste.
+        if not company.values:
+            return JsonResponse({'success': False, 'message': 'Nessuna azienda trovata associata a questo ID.'}, status=404)
+
         response_data = {
             "id": recordid,
             "companyName": company.values.get('companyname'),
@@ -3830,7 +3834,10 @@ def get_company_by_contact(request):
                 return JsonResponse(response_data, safe=False)
 
         # Se non viene trovato nulla o i parametri sono vuoti
-        return JsonResponse({}, status=404) # Un 404 o dizionario vuoto a seconda di cosa si aspetta il frontend
+        return JsonResponse({
+            'success': False,
+            'message': 'Nessuna azienda è stata trovata associata a questo contatto'
+        }, status=404) # Un 404 o dizionario vuoto a seconda di cosa si aspetta il frontend
         
     except Exception as e:
         return JsonResponse({
@@ -4069,4 +4076,32 @@ def save_contact(request):
             'message': f'Si è verificato un errore inatteso: {str(e)}'
         }, status=500)
 
+@csrf_exempt
+def get_ticket_by_freshdeskid(request):
+    try:
+        id = request.POST.get('ticketId', '')
+        if not id:
+            return JsonResponse({'success': False, 'message': 'ticketId mancante.'}, status=400)
 
+        # 'ticketId' è il freshdeskid (id esterno di Freshdesk), NON il recordid_ interno:
+        # UserRecord cerca per recordid_, quindi qui non è utilizzabile.
+        # Query parametrizzata (%s): il valore arriva dal frontend.
+        ticket = HelpderDB.sql_query_row(
+            "SELECT * FROM user_ticket WHERE freshdeskid = %s AND deleted_ = 'N' LIMIT 1",
+            [id]
+        )
+
+        if not ticket:
+            return JsonResponse({'success': False, 'message': 'Ticket non trovato.'}, status=404)
+
+        return JsonResponse({'success': True,
+                             'ticketId': id,
+                             'ticket': ticket
+                             })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Si è verificato un errore inatteso: {str(e)}'
+        }, status=500)
+    
