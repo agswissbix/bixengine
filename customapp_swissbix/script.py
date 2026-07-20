@@ -25,12 +25,17 @@ import json
 from django.http import JsonResponse
 from bixscheduler.decorators.safe_schedule_task import safe_schedule_task
 import dns.resolver
+import requests
+from urllib.parse import quote
+import phonenumbers
+from phonenumbers import PhoneNumberFormat, NumberParseException
 
 import pyodbc
 from cryptography.fernet import Fernet, InvalidToken
 
 from commonapp import views
 from commonapp.helper import Helper
+from commonapp.bixmodels.crypto import *
 
 from customapp_swissbix.helper import HelperSwissbix
 
@@ -657,7 +662,7 @@ def get_feedback():
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     }
 
-    password = os.environ.get('FEEDBACK_RETRIEVAL_PASSWORD')
+    password = os.environ.get('PLESK_PASSWORD')
 
     try:
         response = requests.post(url, headers=headers, data={'password': password}, timeout=10)
@@ -2545,3 +2550,230 @@ def invoice_completed_projects_timesheets():
         "details": "\n".join(result_log)
     }
 
+# Normalizzazione numeri di telefono ritorna la stringa E.164 (o None)
+def normalize_phone_value(raw, default_region="CH"):
+    """
+    Normalizza un numero di telefono nel formato E.164 ('+41791770046').
+
+    Ritorna None per i casi impossibili da recuperare in modo affidabile
+    (es. notazione scientifica '3.93334E+11' o stringhe non valide).
+    `raw` può essere str, int, float o None.
+    """
+    if raw is None:
+        return None
+
+    s = str(raw).strip()
+    if not s:
+        return None
+
+    # 1. Scarta la notazione scientifica (Excel): irrecuperabile.
+    if re.search(r"[eE][+\-]?\d", s):
+        return None
+
+    # 2. Intero salvato come float: "41765739365.0" -> "41765739365"
+    float_int = re.fullmatch(r"(\d+)\.0+", s)
+    if float_int:
+        s = float_int.group(1)
+
+    # 3. Rimuove lettere e caratteri estranei tenendo solo i caratteri utili al numero.
+    s = re.sub(r"[^\d+()\s\-]", "", s)
+
+    # 4. Rimuove il prefisso trunk opzionale "(0)" (es. "+41 (0) 79...").
+    s = re.sub(r"\(\s*0\s*\)", "", s)
+
+    # 5. Prova piu' interpretazioni e tiene la prima VALIDA.
+    candidates = [s]
+    digits = re.sub(r"\D", "", s)
+    if not s.startswith("+") and digits:
+        candidates.append("+" + digits)
+
+    for candidate in candidates:
+        try:
+            parsed = phonenumbers.parse(candidate, default_region)
+        except NumberParseException:
+            continue
+        if phonenumbers.is_valid_number(parsed):
+            return phonenumbers.format_number(parsed, PhoneNumberFormat.E164)
+
+    return None
+
+#Serve a importare i dati di company verso Plesk
+def export_company_to_plesk():
+    password = os.environ.get('PLESK_PASSWORD')
+
+    try:
+        # Tutte le aziende NON cancellate. Query raw perché UserTable ha un LIMIT
+        # di default di 100 e applica i permessi utente: qui servono TUTTE le righe.
+        rows = HelpderDB.sql_query(
+            "SELECT recordid_, companyname, phonenumber, email, city, address "
+            "FROM user_company WHERE deleted_ = 'N'"
+        )
+
+        # Mappiamo sulle chiavi che si aspetta oldDataGetter.php.
+        # stateCode non esiste ancora
+        companies = [
+            {
+                "recordid":    row.get('recordid_'),
+                "name":        row.get('companyname'),
+                "phonenumber": row.get('phonenumber'),
+                "email":       row.get('email'),
+                "stateCode":   None,
+                "city":        row.get('city'),
+                "address":     row.get('address'),
+            }
+            for row in rows
+        ]
+
+        resp = requests.post(
+            "https://bixdata.swissbix.com/companyUpdater/oldDataGetter.php",
+            headers={
+                "Content-Type": "application/json",
+                "X-Auth-Token": password,   # The python <--> Plesk password
+            },
+            json={"companies": companies},
+            timeout=300,
+        )
+
+        result = resp.json()   # { ok, inserted, updated, skipped, errors }
+        return {
+            'success': resp.ok and result.get('ok', False),
+            'sent': len(companies),
+            'plesk': result,
+            'message': 'companies exported successfully',
+        }
+
+    except Exception as e:
+        return {
+            'success': False,
+            'message': f"Errore durante l'export verso Plesk: {str(e)}",
+        }
+    
+def retrieve_company_from_plesk():
+    password = os.environ.get('PLESK_PASSWORD')
+
+    try:
+        resp = requests.post(
+            "https://bixdata.swissbix.com/companyUpdater/newDataExporter.php",
+            headers={
+                "Content-Type": "application/json",
+                "X-Auth-Token": password,   # The python <--> Plesk password
+            },
+            timeout=300,
+        )
+
+        # Il PHP risponde { ok, count, companies: [...] }: le aziende sono in 'companies'.
+        result = resp.json()
+        if not result.get('ok'):
+            return {
+                'success': False,
+                'message': f"Plesk ha risposto ok=false: {result.get('error')}",
+            }
+
+        companies = result.get('companies', [])
+
+        saved = 0
+        for company in companies:
+            user_company = UserRecord('company', company['recordid'])
+
+            # I dati sono già decriptati lato PHP su Plesk
+            user_company.values['name']        = company['name']
+            user_company.values['phonenumber'] = normalize_phone_value(company['phonenumber'])
+            user_company.values['email']       = company['email']
+            user_company.values['state']       = company['state']
+            user_company.values['stateCode']   = company['stateCode']
+            user_company.values['city']        = company['city']
+            user_company.values['address']     = company['address']
+            user_company.values['updateDate']  = company['updateDate']
+
+            # .save() NON solleva: ritorna False in caso di errore. E scarta in
+            # silenzio le colonne inesistenti (es. stateCode se non c'è ancora).
+            if user_company.save():
+                saved += 1
+
+        return {
+            'success': True,
+            'retrieved': len(companies),
+            'saved': saved,
+        }
+
+    except Exception as e:
+        return {
+            'success': False,
+            'message': f"Errore durante l'import da Plesk: {str(e)}",
+        }
+
+
+#Genera il link per andare alla pagina di Update dell'azienda
+def generate_company_update_link(recordidcompany):
+    try:
+        id = str(recordidcompany)
+        baseUrl = "https://bixdata.swissbix.com/companyUpdater/companyForm.php"
+        key = os.environ.get('PLESK_ENC_MASTER_KEY')
+        encrypter = Crypto(key)
+
+        encryptedId = encrypter.encrypt(id)
+
+        # Il blob base64 contiene +/=, caratteri NON URL-safe: lo percent-encodiamo.
+        # Lato PHP $_GET['token'] lo decodifica in automatico -> ritorna il base64 originale.
+        link = f"{baseUrl}?token={quote(encryptedId, safe='')}"
+
+        return {
+            'success': True,
+            'link': link,
+        }
+
+    except Exception as e:
+        return {
+            'success': False,
+            'message': f"Errore durante la generazione del link: {str(e)}",
+        }
+
+#Genera il link per tutte le aziende e lo manda alla loro mail
+def send_company_update_link():
+    export_res = export_company_to_plesk()
+
+    if not export_res.get('success'):
+        return {
+            'success': False,
+            'message': f"Errore durante l'esportazione dei dati: {export_res.get('message')}",
+        }
+
+    try:
+        # Tutte le aziende non cancellate, con la loro email.
+        rows = HelpderDB.sql_query(
+            "SELECT recordid_, email FROM user_company WHERE deleted_ = 'N'"
+        )
+
+        sent = 0
+        skipped = 0
+        for row in rows:
+            email = row.get('email')
+
+            # Senza email non c'è niente da inviare: saltiamo.
+            if not email:
+                skipped += 1
+                continue
+
+            link_result = generate_company_update_link(row.get('recordid_'))
+            if not link_result.get('success'):
+                skipped += 1
+                continue
+
+            link = link_result['link']
+
+            # TODO: inviare qui la mail a `email` contenente `link`.
+            #       (invio non ancora implementato)
+
+            sent += 1
+
+        return {
+            'success': True,
+            'sent': sent,
+            'skipped': skipped,
+        }
+
+    except Exception as e:
+        return {
+            'success': False,
+            'message': f"Errore durante l'invio dei link: {str(e)}",
+        }

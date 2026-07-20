@@ -26,8 +26,8 @@ from django.core.files.storage import default_storage
 import time
 import requests
 from cryptography.fernet import Fernet
-import phonenumbers
-from phonenumbers import PhoneNumberFormat, NumberParseException
+
+from customapp_swissbix.script import normalize_phone_value
 
 logger = logging.getLogger(__name__)
 
@@ -3961,56 +3961,6 @@ def save_mail_task(request):
     }, status=201)
 
 
-
-# Versione "pura" della normalizzazione: ritorna la stringa E.164 (o None)
-# invece di un JsonResponse. Usata per i confronti in-code (es. ricerca contatti).
-def normalize_phone_value(raw, default_region="CH"):
-    """
-    Normalizza un numero di telefono nel formato E.164 ('+41791770046').
-
-    Ritorna None per i casi impossibili da recuperare in modo affidabile
-    (es. notazione scientifica '3.93334E+11' o stringhe non valide).
-    `raw` può essere str, int, float o None.
-    """
-    if raw is None:
-        return None
-
-    s = str(raw).strip()
-    if not s:
-        return None
-
-    # 1. Scarta la notazione scientifica (Excel): irrecuperabile.
-    if re.search(r"[eE][+\-]?\d", s):
-        return None
-
-    # 2. Intero salvato come float: "41765739365.0" -> "41765739365"
-    float_int = re.fullmatch(r"(\d+)\.0+", s)
-    if float_int:
-        s = float_int.group(1)
-
-    # 3. Rimuove lettere e caratteri estranei tenendo solo i caratteri utili al numero.
-    s = re.sub(r"[^\d+()\s\-]", "", s)
-
-    # 4. Rimuove il prefisso trunk opzionale "(0)" (es. "+41 (0) 79...").
-    s = re.sub(r"\(\s*0\s*\)", "", s)
-
-    # 5. Prova piu' interpretazioni e tiene la prima VALIDA.
-    candidates = [s]
-    digits = re.sub(r"\D", "", s)
-    if not s.startswith("+") and digits:
-        candidates.append("+" + digits)
-
-    for candidate in candidates:
-        try:
-            parsed = phonenumbers.parse(candidate, default_region)
-        except NumberParseException:
-            continue
-        if phonenumbers.is_valid_number(parsed):
-            return phonenumbers.format_number(parsed, PhoneNumberFormat.E164)
-
-    return None
-
-
 #Normalizzazione numeri di telefono
 @csrf_exempt
 def normalize_phone(request, default_region="CH"):
@@ -4104,4 +4054,3 @@ def get_ticket_by_freshdeskid(request):
             'success': False,
             'message': f'Si è verificato un errore inatteso: {str(e)}'
         }, status=500)
-    
