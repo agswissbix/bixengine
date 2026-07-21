@@ -2680,13 +2680,12 @@ def retrieve_company_from_plesk():
             user_company.values['phonenumber'] = normalize_phone_value(company['phonenumber'])
             user_company.values['email']       = company['email']
             user_company.values['state']       = company['state']
-            user_company.values['state_code']   = company['stateCode']
+            user_company.values['state_code']  = company['stateCode']
             user_company.values['city']        = company['city']
             user_company.values['address']     = company['address']
-            user_company.values['update_date']  = company['updateDate']
+            user_company.values['update_date'] = str(company['updateDate'])
 
             # .save() NON solleva: ritorna False in caso di errore. E scarta in
-            # silenzio le colonne inesistenti (es. stateCode se non c'è ancora).
             if user_company.save():
                 saved += 1
 
@@ -2706,6 +2705,16 @@ def retrieve_company_from_plesk():
 #Genera il link per andare alla pagina di Update dell'azienda
 def generate_company_update_link(recordidcompany):
     try:
+        company = UserRecord('company', recordidcompany)
+
+        #Questo controllo è tecnicamente ridondante se il metodo viene chiamato da send_company_update_link()
+        #Se quella funzione è troppo lenta si può rimuovere questo check
+        if not company.values or company.values.get('deleted_') != 'N':
+            return {
+                'success': False,
+                'message': f"Questa azienda non esiste o è stata cancellata",
+            }
+
         id = str(recordidcompany)
         baseUrl = "https://bixdata.swissbix.com/companyUpdater/companyForm.php"
         key = os.environ.get('PLESK_ENC_MASTER_KEY')
@@ -2735,21 +2744,23 @@ def send_company_update_link():
     if not export_res.get('success'):
         return {
             'success': False,
-            'message': f"Errore durante l'esportazione dei dati: {export_res.get('message')}",
+            'message': f"{export_res.get('message')}",
         }
 
     try:
         # Tutte le aziende non cancellate, con la loro email.
         rows = HelpderDB.sql_query(
-            "SELECT recordid_, email FROM user_company WHERE deleted_ = 'N'"
+            "SELECT recordid_, email, companyname FROM user_company WHERE deleted_ = 'N' AND bexio_status = 'Active'"
         )
 
         sent = 0
         skipped = 0
         for row in rows:
             email = row.get('email')
+            name = row.get('companyname')
 
             # Senza email non c'è niente da inviare: saltiamo.
+            #Ale dice che forse possiamo prendere le mail a cui inviare in un altro modo
             if not email:
                 skipped += 1
                 continue
@@ -2761,8 +2772,24 @@ def send_company_update_link():
 
             link = link_result['link']
 
-            # TODO: inviare qui la mail a `email` contenente `link`.
-            #       (invio non ancora implementato)
+            # Non inviamo subito: accodiamo una riga 'email' con status "Da inviare",
+            # così un worker separato le manda a poco a poco (non migliaia in una volta).
+            # Da eseguire ~1 volta l'anno.
+            email_data = {
+                "to":                      email,
+                "subject":                 "Aggiornamento dati aziendali",
+                "text":                    build_email_body(link),   # il corpo HTML
+                "cc":                      "",
+                "bcc":                     "",
+                "attachment_relativepath": "",
+                "attachment_name":         "",
+            }
+
+            try:
+                EmailSender.save_email("company", row.get('recordid_'), email_data)
+            except Exception as e:
+                skipped += 1
+                continue 
 
             sent += 1
 
@@ -2777,3 +2804,16 @@ def send_company_update_link():
             'success': False,
             'message': f"Errore durante l'invio dei link: {str(e)}",
         }
+
+def build_email_body(link):
+    html_message = f"""
+    <html>
+        <body>
+            <p>La preghiamo di compilare il seguente form e aggiungere/aggiornare i dati della propria azienda sia esso necessario:</p>
+            <pre>{link}</pre>
+            <p>La ringraziamo per il suo tempo</p>
+        </body>
+    </html>
+    """
+
+    return html_message

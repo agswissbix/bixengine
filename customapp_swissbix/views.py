@@ -3910,17 +3910,17 @@ def save_mail_task(request):
     try:
         data = json.loads(request.body)
 
-        priority = str(data.get('priority', '')).strip()
-        description = str(data.get('description', '')).strip()
-        expiration = str(data.get('expiration', '')).strip()
-        planned_date = str(data.get('plannedDate', '')).strip()
-        duration = str(data.get('duration', '')).strip()
-        company_id = str(data.get('companyId', '')).strip()
-        subject = str(data.get('object', '')).strip()
-        mail_sender = str(data.get('mailSender', '')).strip()
-        user_sender = str(data.get('userSender', '')).strip()
+        priority =      str(data.get('priority', '')).strip()
+        description =   str(data.get('description', '')).strip()
+        expiration =    str(data.get('expiration', '')).strip()
+        planned_date =  str(data.get('plannedDate', '')).strip()
+        duration =      str(data.get('duration', '')).strip()
+        company_id =    str(data.get('companyId', '')).strip()
+        subject =       str(data.get('object', '')).strip()
+        mail_sender =   str(data.get('mailSender', '')).strip()
+        user_sender =   str(data.get('userSender', '')).strip()
         received_date = str(data.get('receivedDate', '')).strip()
-        link_to_mail = str(data.get('linkToMail', '')).strip()
+        link_to_mail =  str(data.get('linkToMail', '')).strip()
     except Exception as e:
         return JsonResponse({
             'success': False,
