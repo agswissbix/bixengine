@@ -2680,10 +2680,10 @@ def retrieve_company_from_plesk():
             user_company.values['phonenumber'] = normalize_phone_value(company['phonenumber'])
             user_company.values['email']       = company['email']
             user_company.values['state']       = company['state']
-            user_company.values['stateCode']   = company['stateCode']
+            user_company.values['state_code']   = company['stateCode']
             user_company.values['city']        = company['city']
             user_company.values['address']     = company['address']
-            user_company.values['updateDate']  = company['updateDate']
+            user_company.values['update_date']  = company['updateDate']
 
             # .save() NON solleva: ritorna False in caso di errore. E scarta in
             # silenzio le colonne inesistenti (es. stateCode se non c'è ancora).
