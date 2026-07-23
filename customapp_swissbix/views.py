@@ -3904,6 +3904,49 @@ def get_contact_by_phone(request):
             'message': f'Si è verificato un errore inatteso: {str(e)}'
         }, status=500)
 
+
+
+@csrf_exempt
+def get_contact_by_email(request):
+    try:
+        # Confrontiamo sempre in minuscolo su ENTRAMBI i lati: così il match non dipende
+        # dal collation del DB (che potrebbe essere case-sensitive).
+        email = request.POST.get('email', '').strip().lower()
+        if not email:
+            return JsonResponse({}, status=400)
+
+        # Match ESATTO sull'email del contatto. NON sul dominio: il dominio identifica
+        # l'azienda (vedi get_company_by_contact), non la singola persona.
+        # Query parametrizzata: l'email arriva dal frontend.
+        chosen = HelpderDB.sql_query_row(
+            "SELECT recordid_, name, surname, email, phone, mobilephone, recordidcompany_ "
+            "FROM user_contact WHERE LOWER(email) = %s AND deleted_ = 'N' "
+            "ORDER BY recordid_ LIMIT 1",
+            [email]
+        )
+
+        if chosen:
+            # Stessa forma di get_contact_by_phone: il frontend le consuma allo stesso modo.
+            return JsonResponse({
+                "recordid": chosen.get('recordid_'),
+                "name": chosen.get('name'),
+                "surname": chosen.get('surname'),
+                "email": chosen.get('email'),
+                "phone": chosen.get('phone'),
+                "mobilePhone": chosen.get('mobilephone'),
+                "companyRecordId": chosen.get('recordidcompany_'),
+            })
+
+        # Nessun contatto trovato
+        return JsonResponse({}, status=404)
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Si è verificato un errore inatteso: {str(e)}'
+        }, status=500)
+
+
 @csrf_exempt
 def save_mail_task(request):
     # --- Lettura e parsing dei dati in ingresso ---
@@ -3921,6 +3964,12 @@ def save_mail_task(request):
         user_sender =   str(data.get('userSender', '')).strip()
         received_date = str(data.get('receivedDate', '')).strip()
         link_to_mail =  str(data.get('linkToMail', '')).strip()
+        assigned_user = str(data.get('assignedUser', '')).strip()
+
+        creator = Helper.get_userid(request)
+        if not creator or creator == 0:
+            return JsonResponse({'success': False, 'message': 'Utente non autenticato.'}, status=401)
+
     except Exception as e:
         return JsonResponse({
             'success': False,
@@ -3929,18 +3978,23 @@ def save_mail_task(request):
 
     # --- Salvataggio del task nel DB ---
     try:
-        rec = UserRecord('task')
-        rec.values['priorita'] = priority
-        rec.values['description'] = description
-        rec.values['duedate'] = expiration
-        rec.values['planneddate'] = planned_date
-        rec.values['duration'] = duration
-        rec.values['oggetto'] = subject
-        rec.values['recordidcompany_'] = company_id
-        rec.values['mailsender'] = mail_sender
-        rec.values['mailuser'] = user_sender
+        rec = UserRecord('task', userid=creator)
+
+        rec.values['priorita']          = priority
+        rec.values['description']       = description
+        rec.values['duedate']           = expiration
+        rec.values['planneddate']       = planned_date
+        rec.values['duration']          = duration
+        rec.values['oggetto']           = subject
+        rec.values['recordidcompany_']  = company_id
+        rec.values['mailsender']        = mail_sender
+        rec.values['mailuser']          = user_sender
         rec.values['emailreceiveddate'] = received_date
-        rec.values['linktomail'] = link_to_mail
+        rec.values['linktomail']        = link_to_mail
+        rec.values['creator']           = creator
+        # 'user' = a chi è ASSEGNATO il task (id di sys_user). Se il frontend non
+        # lo manda, ripieghiamo su chi lo sta creando.
+        rec.values['user']              = assigned_user or creator
 
         # save() non solleva eccezioni: ritorna False in caso di errore
         if not rec.save():
@@ -4049,6 +4103,65 @@ def get_ticket_by_freshdeskid(request):
                              'ticket': ticket
                              })
 
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Si è verificato un errore inatteso: {str(e)}'
+        }, status=500)
+
+@csrf_exempt
+def get_all_contacts_from_company(request):
+    try:
+        companyId = request.POST.get('companyId', '')
+        if not companyId:
+            return JsonResponse({'success': False, 'message': 'companyId mancante.'}, status=400)
+
+        contacts = HelpderDB.sql_query(
+            "SELECT recordid_, name, surname, email, phone, mobilephone, recordidcompany_ "
+            "FROM user_contact WHERE recordidcompany_ = %s AND deleted_ = 'N' "
+            "ORDER BY surname, name",
+            [companyId]
+        )
+
+        return JsonResponse({
+            'success': True,
+            'contacts': contacts
+        }, status=200)
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Si è verificato un errore inatteso: {str(e)}'
+        }, status=500)
+
+@csrf_exempt
+def get_all_users(request):
+    try:
+        users = list(
+            SysUser.objects
+            .exclude(disabled='Y')
+            .order_by('lastname', 'firstname')
+            .values('id', 'firstname', 'lastname', 'username')
+        )
+
+        currentUserId = Helper.get_userid(request)
+
+        # .values(...).first() -> dict (o None) serializzabile: filter() da solo
+        # ritorna un QuerySet, che JsonResponse non sa convertire.
+        # Stessa forma degli elementi di 'users', così il frontend li tratta uguale.
+        currentUser = (
+            SysUser.objects
+            .filter(id=currentUserId)
+            .values('id', 'firstname', 'lastname', 'username')
+            .first()
+        )
+
+        return JsonResponse({
+            'success': True,
+            'users': users,
+            'currentUser': currentUser,
+        }, status=200)
+    
     except Exception as e:
         return JsonResponse({
             'success': False,
